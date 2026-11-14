@@ -1,0 +1,11 @@
+# The parity lever's case for tests/check-vendored.sh's stalled-proxy proof, moved into its own e2e script (#814; tests/parity/lever.py --help).
+old = "tests/check-vendored.sh"
+old_at = "d62452c4"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none.
+needs = []
+# The new script, as its gate item: `just test` collects no .sh path.
+new = "tests/gate/test_gate.py::test_script[tests/check-vendored-stall.sh]"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit script run by the kit venv's python (just's python3): coverage.py measures it.
+[ran]
+"scripts/check-vendored" = "coverage"

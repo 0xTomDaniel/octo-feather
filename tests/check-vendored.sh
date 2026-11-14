@@ -11,7 +11,6 @@
 #   file) fails naming the skill; a missing cache fails naming `just vendored-fetch`;
 # - --extract spec-chat DEST writes the fetch-only Spec Chat pin offline, exec bits kept;
 #   uncached, it fails naming `just vendored-fetch` (#96);
-# - a fetch through a stalled proxy times out within its bound, naming the fix;
 # - a fetch GitHub refuses for credentials (a private pin) names gh auth login && gh auth setup-git (#463).
 # Needs the warm cache `just vendored-fetch` makes (CI runs it before `just check`).
 set -euo pipefail
@@ -28,13 +27,11 @@ cp -r "$src" "$t/c/octo-feather/"; chmod -R u+w "$t/c"
 gr() { git -C "$r" -c user.name=t -c user.email=t@t "$@"; }
 gr init -q; gr add -A; gr commit -qm base
 export XDG_CACHE_HOME="$t/c"
-# Network-namespace proofs (gate never dials out; stalled proxy) need Linux user namespaces:
-# run them where `unshare` works, else name the skip. Every other case runs everywhere.
+# The network-namespace proof (gate never dials out) needs Linux user namespaces:
+# run it where `unshare` works, else name the skip. Every other case runs everywhere.
 skipped=()
 ns=(); if unshare -Un --map-current-user true 2>/dev/null; then ns=(unshare -Un --map-current-user)
   else skipped+=("offline-namespace gate runs (unshare -Un unavailable)"); fi
-stallok=0; if unshare -rn sh -c 'ip link set lo up' 2>/dev/null; then stallok=1
-  else skipped+=("stalled and dripping proxy fetch (needs unshare -rn and ip)"); fi
 # Portable in-place edit: edit FILE PYTHON-EXPR-ON-s (no sed -i).
 edit() { python3 -c 'import sys; p = sys.argv[1]; s = open(p).read(); s = eval(sys.argv[2]); open(p, "w").write(s)' "$1" "$2"; }
 # run WANT [PREFIX...]: stage every change in the copy (as a commit records it), then the gate; stage=0 skips staging.
@@ -118,40 +115,7 @@ set +e; out="$(PATH="$t/authbin:$PATH" just -f "$r/justfile" vendored-fetch 2>&1
 [[ $rc == 1 ]] || { echo "check-vendored test: fetch refused for credentials: want exit 1, got $rc: $out" >&2; exit 1; }
 has "could not read Username"; has "GitHub wants credentials (a private pin): sign in and let git use gh: gh auth login && gh auth setup-git, then rerun \`just vendored-fetch\`"
 ! grep -qF "check network" <<<"$out" || { echo "check-vendored test: credential refusal blamed on the network: $out" >&2; exit 1; }
-if [[ $stallok == 1 ]]; then
-# Stalled network, two ways: a proxy that accepts and never answers (silent), and one that
-# drips CONNECT response headers every 0.2 s forever (slow progress). Either way the fetch
-# gives up within one total bound. Own network namespace with only loopback up, so it never
-# reaches the real network, online or not.
-cat > "$t/stall.sh" <<'SH'
-ip link set lo up
-python3 -c '
-import socket, sys, threading, time
-s = socket.socket(); s.bind(("127.0.0.1", 0)); s.listen(16)
-open(sys.argv[1], "w").write(str(s.getsockname()[1])); held = []
-def drip(c):
-    try:
-        c.recv(65536); c.sendall(b"HTTP/1.1 200 Connection established\r\n")
-        while True: c.sendall(b"X-Drip: 1\r\n"); time.sleep(0.2)
-    except OSError: pass
-while True:
-    c = s.accept()[0]; held.append(c)
-    if sys.argv[2] == "drip": threading.Thread(target=drip, args=(c,), daemon=True).start()
-' "$1/port" "$3" & lp=$!
-for _ in $(seq 50); do [[ -s "$1/port" ]] && break; sleep 0.1; done
-p="http://127.0.0.1:$(cat "$1/port")"
-HTTPS_PROXY="$p" https_proxy="$p" OCTO_FEATHER_FETCH_TIMEOUT=2 just -f "$2/justfile" vendored-fetch; rc=$?
-kill "$lp"; rm -f "$1/port"; exit "$rc"
-SH
-stall() { local s; s=$SECONDS; set +e; out="$(unshare -rn bash "$t/stall.sh" "$t" "$r" "$1" 2>&1)"; rc=$?; set -e
-  [[ "$rc" == 1 && $((SECONDS - s)) -le 10 ]] || { echo "check-vendored test: $1 proxy fetch want exit 1 within 10s, got $rc after $((SECONDS - s))s: $out" >&2; exit 1; }
-  has "rerun \`just vendored-fetch\`"; }
-for mode in silent drip; do stall "$mode"; has "git fetch of mattpocock/skills@49dd158d1076134a641b33efb035946536778336 timed out after 2s"; done
-rm -rf "$t/c/octo-feather/skillfile/bin"
-for mode in silent drip; do stall "$mode"; has "downloading skillfile v1.9.2 from https://github.com/eljulians/skillfile/releases/download/v1.9.2/"; has "timed out after 2s"; done
-fi
 for x in ${skipped[@]+"${skipped[@]}"}; do echo "check-vendored test: skipped, Linux-only proof: $x"; done
 ran="pinned Spec Chat written and uncached, credentials refused named with gh auth setup-git, drift, committed modes, untracked strays, symlinks, special files and empty folders not committed, poisoned and missing cache"
 [[ ${#ns[@]} -gt 0 ]] && ran="offline-namespace gate, $ran"
-[[ $stallok == 1 ]] && ran="$ran, silent and dripping proxy"
 echo "check-vendored test: ok ($ran)"

@@ -13,14 +13,23 @@ tab_id, agent_status}, and `ready_at` (an epoch time: `unknown` until then, a Pi
 a scenario may write it. `tab create --workspace W` makes tab W:tN, pane W:pN; `tab close T` drops
 T's agents; `workspace close W` drops W's agents, `workspace get W` finds W while an agent is in
 it, as Herdr 0.9.5 prints it (else workspace_not_found on stderr, exit 1, as does a close of
-it); `agent start NAME --pane P` starts NAME there, ready (idle) the seconds in the file
-`ready_after` later (0 without one). `agent get T` (by name or pane), as Herdr 0.9.5 prints it:
+it); `agent start NAME --pane P -- ARGS` starts Pi NAME there, taking input the seconds
+in the file `ready_after` later (0 without one), then reading the state in the file `start-status`
+(idle without one). Until then Herdr reads it `unknown`, and from
+IDLE_FALLBACK s after its start `idle` (Herdr 0.9.5's screen fallback; why that is not ready:
+herdr-comms SKILL.md, Spawn an agent). Pi reports itself only when ARGS load Herdr's Pi
+integration (`--extension F`, F the file `integration install pi` wrote): once it takes input,
+`agent_session` (source herdr:pi).
+`integration install pi` writes that file to $PI_CODING_AGENT_DIR/extensions (else
+$HOME/.pi/agent/extensions); with no agent dir it fails, as Herdr does, and so with a file
+`install-down` (`herdr: integration install failed`); a file `no-report` makes Pi never report.
+`agent get T` (by name or pane), as Herdr 0.9.5 prints it:
 found, the agent on stdout; else agent_not_found on stderr, exit 1; a file `get-down` makes it
 fail plain (`herdr: server not reachable`, exit 1), for the targets it lists, one a line, or for
 every target when it is empty. `agent wait T --until S... --timeout MS`
 returns once T reads a state S, else `timeout`. `agent prompt T TEXT --wait [--until S...]
-[--timeout MS]`: blocked is `agent_blocked`, nothing sent; a booting agent gets TEXT typed,
-unsent (a line in `typed`), `agent_prompt_stalled`; any other gets it submitted (a line
+[--timeout MS]`: blocked is `agent_blocked`, nothing sent; an agent not yet taking input gets
+TEXT typed, unsent (a line in `typed`), `agent_prompt_stalled`; any other gets it submitted (a line
 "PANE<TAB>TEXT" in `prompts`): an idle one turns working, then idle, so the wait matches; a
 working one (busy, as #619 saw it) never matches, so the wait ends only at --timeout
 (`timeout`), else never.
@@ -33,6 +42,9 @@ import shutil
 import sys
 import time
 from pathlib import Path
+
+IDLE_FALLBACK = 0.3  # s: Herdr 0.9.5 reads a booting Pi idle after about 5 s; scaled down
+INTEGRATION = "// installed by herdr\n// HERDR_INTEGRATION_ID=pi\n"  # the file Herdr writes
 
 
 def fail(code: str, rc: int = 1) -> int:
@@ -71,10 +83,16 @@ class World:
         return g if g and g["name"] else None
 
     @staticmethod
-    def status(g: dict[str, object]) -> str:
+    def booting(g: dict[str, object]) -> bool:
         ready = g.get("ready_at")
-        if isinstance(ready, (int, float)) and time.time() < ready:
-            return "unknown"
+        return isinstance(ready, (int, float)) and time.time() < ready
+
+    @staticmethod
+    def status(g: dict[str, object]) -> str:
+        if World.booting(g):
+            started = g.get("started_at")
+            fell_back = isinstance(started, float) and time.time() >= started + IDLE_FALLBACK
+            return "idle" if fell_back else "unknown"
         return str(g["agent_status"])
 
     def tab_create(self, a: list[str]) -> int:
@@ -105,8 +123,32 @@ class World:
         after = self.dir / "ready_after"
         delay = float(after.read_text()) if after.exists() else 0.0
         g = self.agents[opts(a, "--pane")[0]]
-        g |= {"name": a[2], "agent_status": "idle", "ready_at": time.time() + delay}
+        ext = [Path(x) for x in opts(a[a.index("--") :] if "--" in a else [], "--extension")]
+        reports = any(x.is_file() and x.read_text() == INTEGRATION for x in ext)
+        reports = reports and not (self.dir / "no-report").exists()
+        state = self.dir / "start-status"
+        status = state.read_text().strip() if state.exists() else "idle"
+        now = time.time()
+        g |= {"name": a[2], "agent_status": status, "ready_at": now + delay, "started_at": now}
+        g["reports"] = reports
         self.save()
+        return 0
+
+    def integration_install(self, a: list[str]) -> int:
+        if (self.dir / "install-down").exists():
+            sys.stderr.write("herdr: integration install failed\n")
+            return 1
+        if a[2:] != ["pi"]:
+            sys.stderr.write(f"fake herdr: unhandled: {' '.join(a)}\n")
+            return 2
+        agent_dir = Path(os.environ.get("PI_CODING_AGENT_DIR") or Path.home() / ".pi" / "agent")
+        if not agent_dir.is_dir():
+            sys.stderr.write(f"pi extension directory not found at {agent_dir / 'extensions'}\n")
+            return 1
+        f = agent_dir / "extensions" / "herdr-agent-state.ts"
+        f.parent.mkdir(exist_ok=True)
+        f.write_text(INTEGRATION)
+        sys.stdout.write(f"installed pi integration to {f}\n")
         return 0
 
     def agent_get(self, a: list[str]) -> int:
@@ -117,7 +159,10 @@ class World:
         g = self.find(a[2])
         if g is None:
             return fail("agent_not_found")
-        out = {k: v for k, v in g.items() if k != "ready_at"} | {"agent_status": self.status(g)}
+        hidden = ("ready_at", "started_at", "reports")
+        out = {k: v for k, v in g.items() if k not in hidden} | {"agent_status": self.status(g)}
+        if g.get("reports") and not self.booting(g):
+            out["agent_session"] = {"source": "herdr:pi", "agent": "pi", "kind": "id", "value": "s"}
         return say({"agent": out, "type": "agent_info"})
 
     def agent_wait(self, a: list[str]) -> int:
@@ -140,7 +185,7 @@ class World:
         s = self.status(g)
         if s == "blocked":
             return fail("agent_blocked")
-        if s == "unknown":
+        if self.booting(g):
             self.note("typed", f"{g['pane_id']}\t{a[3]}")
             return fail("agent_prompt_stalled")
         self.note("prompts", f"{g['pane_id']}\t{a[3]}")
@@ -168,6 +213,7 @@ class World:
             ("agent", "get"): self.agent_get,
             ("agent", "wait"): self.agent_wait,
             ("agent", "prompt"): self.agent_prompt,
+            ("integration", "install"): self.integration_install,
         }
         if two not in verbs:
             sys.stderr.write(f"fake herdr: unhandled: {' '.join(a)}\n")

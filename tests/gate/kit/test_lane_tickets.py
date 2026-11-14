@@ -10,6 +10,7 @@ from lane_tickets import (
     just_demos,
     just_recipes,
     linear,
+    mcp_demos,
     rules,
     scopes,
     scripts,
@@ -57,3 +58,7 @@ def test_errors(case: Case) -> None:
 
 def test_linear(case: Case) -> None:
     case(linear)
+
+
+def test_mcp_demos(case: Case) -> None:
+    case(mcp_demos)

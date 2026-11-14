@@ -18,10 +18,12 @@ mkdir -p "$t/bin" "$HOME"
 cat >"$t/bin/pi" <<'EOF'
 #!/usr/bin/env python3
 import os, sys
-who = "director" if any("Director reflection" in a for a in sys.argv) else "lane"
+who = "director" if "Director reflection" in sys.stdin.read() else "lane"
 sys.stdout.write(open(f"{os.environ['STUB_DIR']}/reply.{who}").read())
 EOF
-printf '#!/bin/sh\necho "herdr: no server" >&2; exit 1\n' >"$t/bin/herdr"
+export REFLECT_DIRECTOR_FILE="$t/director-source.jsonl"
+cp "$kit/tests/fixtures/reflection-director" "$t/bin/herdr"
+python3 "$kit/tests/fixtures/reflection-director" seed "$XDG_STATE_HOME/octo-feather"
 chmod +x "$t/bin/pi" "$t/bin/herdr"
 export PATH="$t/bin:$kit/tests/fixtures/tracker-gh:$PATH"
 state="$XDG_STATE_HOME/octo-feather"; lanes="$state/lanes"; dlog="$state/director.handoffs.jsonl"
@@ -107,7 +109,8 @@ none; out="$("$L" reflect --director 2>&1)" || fail "reflect --director failed: 
 # Every due subject files, whichever lane's reflection runs: archived gh1 and gh2 hold one dup-rule finding each, the
 # archive of unrelated gh3 files the class in gh1/gh2's target quoting both; a further archive files nothing.
 fresh() { export XDG_STATE_HOME="$t/$1" FAKE_GH_STORE="$t/$1.gh.json"; state="$XDG_STATE_HOME/octo-feather"; lanes="$state/lanes"
-  dlog="$state/director.handoffs.jsonl"; mkdir -p "$lanes/archive"; : >"$dlog"; }
+  dlog="$state/director.handoffs.jsonl"; mkdir -p "$lanes/archive"; : >"$dlog"
+  python3 "$kit/tests/fixtures/reflection-director" seed "$state"; }
 archived() { lane "$@"; mv "$lanes/$1.toml" "$lanes/$1.handoffs.jsonl" "$lanes/archive/"; }
 fresh other
 archived gh1 "$(cr 2026-10-20T00:00:00Z dup-rule "gh1 restated the merge rule")"
