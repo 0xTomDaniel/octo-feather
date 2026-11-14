@@ -419,7 +419,5 @@
   "reviewer-refactor-diff": {"facts": [{"fact": "skill_read_before", "skill": "refactoring", "before": "final_message"}, {"fact": "skill_read_before", "skill": "principle-subtract-before-you-add", "before": "final_message"}, {"fact": "skill_read_before", "skill": "principle-laziness-protocol", "before": "final_message"}, {"fact": "skill_read_before", "skill": "principle-minimize-reader-load", "before": "final_message"}]},
   "reviewer-seam-shallow-unagreed": {"facts": [{"fact": "skill_read", "skill": "tdd"}, {"fact": "declared_includes", "field": "blocking", "items": [{"test": "tests/test_quote.py::test_tax_rate_de"}, {"test": "tests/test_quote.py::test_quote_json_shows_discount"}]}]},
   "reviewer-seam-listed-deep-clear": {"facts": [{"fact": "skill_read", "skill": "tdd"}, {"fact": "field_lines", "field": "Verdict", "includes": [{"text": "clear"}]}]},
-  "implementer-deepen-first": {"facts": []},
-  "implementer-python-edge": {"facts": [{"fact": "branch_paths", "touched": ["pyproject.toml", "uv.lock"]}]},
-  "implementer-typescript-edge": {"facts": [{"fact": "branch_paths", "touched": ["package.json", "pnpm-lock.yaml"]}]}
+  "implementer-deepen-first": {"facts": []}
 }
