@@ -64,8 +64,8 @@
     "acceptance-edge-rejects": {
       "status": "built",
       "pr": 899,
-      "record": "20261113T224606Z-04fe2376",
-      "commit": "d930d0c33887e6d20bdeb051210e7e8245a2ae0f",
+      "record": "20261114T031750Z-b0ff75ef",
+      "commit": "755a1b4f5b877fc4251d1736397d846566586554",
       "tests": []
     }
   }
