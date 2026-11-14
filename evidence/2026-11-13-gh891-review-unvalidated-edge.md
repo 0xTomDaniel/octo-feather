@@ -42,3 +42,16 @@ qa: 2/2 passed (run 20261113T225614Z-26e343)
 ```
 
 Analysis: field_lines Verdict blocking is non-discriminating on the ts case only (the baseline blocks it as reinvented-library); on the py case the baseline clears the head.
+
+## Regression (run 20261113T233523Z-bad082, --runs 3, lane head 9090f90e beside baseline 7bb5c703, runs interleaved, 32 m 34 s wall)
+
+These existing code-reviewer cases could have changed with the Edges paragraph. Pass rates, baseline to head:
+
+| Case | Baseline | Head | Tokens mean | Cost usd mean | Time s mean |
+|---|---|---|---|---|---|
+| prior-art-extends | 3/3 | 3/3 | 113104 to 190578 | 0.0824 to 0.1119 | 94.2 to 108.1 |
+| prior-art-extends-stated | 3/3 (clear) | 3/3 (clear) | 58225 to 139151 | 0.0573 to 0.0971 | 48.7 to 62.4 |
+| prior-art-extends-held-out | 3/3 | 3/3 | 80282 to 145203 | 0.0781 to 0.0984 | 76.7 to 89.2 |
+| reviewer-reinvented-parser | 3/3 | 3/3 | 102837 to 146198 | 0.0745 to 0.1000 | 83.5 to 86.7 |
+
+No regression: prior-art-extends-stated, whose head reads YAML by hand with a stated reason, still clears in every run. The run's analysis flags a cost tradeoff on prior-art-extends, prior-art-extends-stated and prior-art-extends-held-out (pass rate 1.00 on both kits, mean tokens up). reviewer-reinvented-parser is flagged non-discriminating (every run passed on both kits). The cost increase is not attributed: 9090f90e also carries the other gh891 tickets' changes, so not only the Edges paragraph differs from 7bb5c703.
