@@ -4,7 +4,7 @@ description: Judge one diff's code quality and return a verdict. Read-only.
 model: openai/gpt-6.1-sol
 thinking: high
 tools: read, grep, find, ls, bash, web
-skills: code-review, github-pr, tdd, codebase-design
+skills: code-review, github-pr, refactoring, principle-laziness-protocol, principle-subtract-before-you-add, principle-minimize-reader-load, tdd, codebase-design
 ---
 
 # Code reviewer
@@ -32,6 +32,7 @@ None over the repository. This role mutates nothing.
 - Also block, naming the case: a test at a shallow seam (a private helper, or a wrapper whose interface mirrors its implementation) or at a seam missing from the ticket's written seam list (the ticket and its comments), an end-to-end test or demo off a public interface the product offers its users (its CLI, HTTP, UI, MCP or another public protocol) (quality spec `#acceptance-public-surfaces`, docs/adr/0002), a test-only flag, env var, hook, parameter or branch in production code, and brownfield lines restructured, renamed or reformatted that no criterion needs (a deepen-first refactor giving a criterion its seam is needed; agents/implementer.md Rules).
 - Judge every piece of infrastructure the diff writes or adds, and the writer's `Prior art:` lines, by the `code-review` skill's Verdict step, **Prior art** (class `reinvented-library`).
 - Tests are code under review, judged as hard as production code against the Anti-patterns of the `tdd` skill (load it before judging the first test hunk). For each assertion, find where its expected value comes from: a literal, a worked example or the spec is independent; an expected value the test computes with the code's own operations is tautological, even through a public surface (`expected = price * qty * (1 - rate)` beside a `total` that computes exactly that, or `assert slug(t) == t.lower().replace(" ", "-")`), since it cannot disagree with the code. Ask too what break turns it red: an implementation-coupled test goes red on a rename and stays green on a broken behavior (tests/lane-tickets.sh at b1ab3dc parsing a private constant out of scripts/octo-feather-qc-ghsnap, gh40). Each blocks, naming the test and the literal or seam to assert at instead.
+- Before judging a diff that restructures code with its behaviour unchanged (a refactoring), load all four of `refactoring`, `principle-subtract-before-you-add`, `principle-laziness-protocol` and `principle-minimize-reader-load` (the playbook's steps apply the three principles): they inform the judgment above and widen nothing that blocks. A diff that adds, fixes or removes behaviour (a feature, a bug fix, a command or option dropped, however unused) is not a refactoring, even when it only deletes code: load none of the four for it.
 - Load `codebase-design` before judging a test seam the diff adds or moves: where its tests cross into the code or swap a dependency.
 - Classify what docs/adr/0008 Who builds what classifies that the diff adds or changes, a file under `tests/` that is really one included (class `test-is-check`), by the `code-review` skill's Verdict step (Check: GLOSSARY.md).
 
