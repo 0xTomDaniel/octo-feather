@@ -417,6 +417,6 @@
   "reviewer-seam-shallow-unagreed": {"facts": [{"fact": "skill_read", "skill": "tdd"}, {"fact": "declared_includes", "field": "blocking", "items": [{"test": "tests/test_quote.py::test_tax_rate_de"}, {"test": "tests/test_quote.py::test_quote_json_shows_discount"}]}]},
   "reviewer-seam-listed-deep-clear": {"facts": [{"fact": "skill_read", "skill": "tdd"}, {"fact": "field_lines", "field": "Verdict", "includes": [{"text": "clear"}]}]},
   "implementer-deepen-first": {"facts": []},
-  "implementer-python-edge": {"facts": [{"fact": "branch_paths", "touched": ["pyproject.toml", "uv.lock"]}, {"fact": "field_lines", "field": "Prior art"}]},
-  "implementer-typescript-edge": {"facts": [{"fact": "branch_paths", "touched": ["package.json", "pnpm-lock.yaml"]}, {"fact": "field_lines", "field": "Prior art"}]}
+  "implementer-python-edge": {"facts": [{"fact": "branch_paths", "touched": ["pyproject.toml", "uv.lock"]}]},
+  "implementer-typescript-edge": {"facts": [{"fact": "branch_paths", "touched": ["package.json", "pnpm-lock.yaml"]}]}
 }
