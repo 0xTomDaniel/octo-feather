@@ -1,0 +1,43 @@
+diff --git a/src/app/cli.py b/src/app/cli.py
+index d638cdc..a03ca35 100644
+--- a/src/app/cli.py
++++ b/src/app/cli.py
+@@ -17,31 +17,16 @@ def main(argv: list[str] | None = None) -> int:
+     goodbye.add_argument("--json", action="store_true", help="print JSON")
+     args = parser.parse_args(argv)
+ 
+-    if args.command == "hello":
+-        try:
+-            greeting = greet(str(args.name))
+-        except ValueError as err:
+-            if args.json:
+-                sys.stdout.write(json.dumps({"error": str(err)}) + "\n")
+-            else:
+-                sys.stderr.write(f"error: {err}\n")
+-            return 2
+-        sys.stdout.write((json.dumps(asdict(greeting)) if args.json else greeting.text) + "\n")
+-        return 0
+-
++    make = greet if args.command == "hello" else farewell
+     try:
+-        bye = farewell(str(args.name))
+-    except ValueError as e:
+-        if args.json is True:
+-            out = json.dumps({"error": str(e)})
+-            sys.stdout.write(out + "\n")
++        message = make(str(args.name))
++    except ValueError as err:
++        if args.json:
++            sys.stdout.write(json.dumps({"error": str(err)}) + "\n")
+         else:
+-            sys.stderr.write("error: " + str(e) + "\n")
++            sys.stderr.write(f"error: {err}\n")
+         return 2
+-    if args.json is True:
+-        sys.stdout.write(json.dumps(asdict(bye)) + "\n")
+-    else:
+-        sys.stdout.write(bye.text + "\n")
++    sys.stdout.write((json.dumps(asdict(message)) if args.json else message.text) + "\n")
+     return 0
+ 
+ 
