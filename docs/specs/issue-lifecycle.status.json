@@ -53,8 +53,8 @@
     "acceptance-qc-interim": {
       "status": "built",
       "pr": 880,
-      "record": "20261114T003938Z-e5cb6b64",
-      "commit": "55913850475dc803432a11831048af20301c593d",
+      "record": "20261114T005603Z-9ac4d4f6",
+      "commit": "7175d8e59ee4198e07d0e1eee8dbac799b4a1074",
       "tests": [
         "tests/gate/kit/test_qc_one_execution.py"
       ]
