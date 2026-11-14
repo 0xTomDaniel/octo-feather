@@ -13,8 +13,8 @@
     "acceptance-parent-gone": {
       "status": "built",
       "pr": 833,
-      "record": "20261113T052032Z-5cde4a4f",
-      "commit": "6c432ac21220aa2478980a20f38f9750628f83ff",
+      "record": "20261114T035639Z-05147b7a",
+      "commit": "cb4a3f3fc53acb8e46fba0d5c5b0149b38924202",
       "tests": [
         "tests/gate/kit/herdr_messaging.py"
       ]
@@ -22,8 +22,8 @@
     "acceptance-worker-ended": {
       "status": "built",
       "pr": 833,
-      "record": "20261113T052032Z-03587a3a",
-      "commit": "6c432ac21220aa2478980a20f38f9750628f83ff",
+      "record": "20261114T035639Z-1a6bd171",
+      "commit": "cb4a3f3fc53acb8e46fba0d5c5b0149b38924202",
       "tests": [
         "tests/gate/kit/test_handoff_ended.py"
       ]
@@ -47,8 +47,8 @@
     "acceptance-director-worker-resume": {
       "status": "built",
       "pr": 833,
-      "record": "20261113T052032Z-3f834290",
-      "commit": "6c432ac21220aa2478980a20f38f9750628f83ff",
+      "record": "20261114T035639Z-828a32ec",
+      "commit": "cb4a3f3fc53acb8e46fba0d5c5b0149b38924202",
       "tests": [
         "tests/gate/kit/herdr_messaging.py"
       ]
