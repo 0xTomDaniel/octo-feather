@@ -190,10 +190,12 @@
     },
     "acceptance-one-execution": {
       "status": "built",
-      "pr": 546,
-      "record": "20261105T171043Z-b782a451",
-      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
-      "tests": []
+      "pr": 880,
+      "record": "20261113T071650Z-d6cc342d",
+      "commit": "ca9aa83bf4bd8c008c488869395e14e49a87bf6c",
+      "tests": [
+        "tests/gate/kit/test_qc_one_execution.py"
+      ]
     },
     "acceptance-one-execution-incomplete": {
       "status": "built",
