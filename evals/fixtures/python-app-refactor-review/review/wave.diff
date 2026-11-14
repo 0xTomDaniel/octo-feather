@@ -1,0 +1,55 @@
+diff --git a/src/app/cli.py b/src/app/cli.py
+index d638cdc..8b3cbde 100644
+--- a/src/app/cli.py
++++ b/src/app/cli.py
+@@ -15,6 +15,7 @@ def main(argv: list[str] | None = None) -> int:
+     goodbye = commands.add_parser("goodbye", help="say goodbye to someone")
+     goodbye.add_argument("name")
+     goodbye.add_argument("--json", action="store_true", help="print JSON")
++    goodbye.add_argument("--wave", action="store_true", help='end with " o/"')
+     args = parser.parse_args(argv)
+ 
+     if args.command == "hello":
+@@ -30,7 +31,7 @@ def main(argv: list[str] | None = None) -> int:
+         return 0
+ 
+     try:
+-        bye = farewell(str(args.name))
++        bye = farewell(str(args.name), wave=bool(args.wave))
+     except ValueError as e:
+         if args.json is True:
+             out = json.dumps({"error": str(e)})
+diff --git a/src/app/core.py b/src/app/core.py
+index 56e552b..eceac17 100644
+--- a/src/app/core.py
++++ b/src/app/core.py
+@@ -21,10 +21,12 @@ def greet(name: str) -> Greeting:
+     return Greeting(name=clean, text=f"Hello, {clean}")
+ 
+ 
+-def farewell(name: str) -> Farewell:
++def farewell(name: str, *, wave: bool = False) -> Farewell:
+     trimmed = name.strip()
+     if len(trimmed) == 0:
+         error = "name must not be empty"
+         raise ValueError(error)
+     text = "Goodbye, " + trimmed
++    if wave:
++        text += " o/"
+     return Farewell(name=trimmed, text=text)
+diff --git a/tests/test_cli.py b/tests/test_cli.py
+index 0ea0777..e86b56a 100644
+--- a/tests/test_cli.py
++++ b/tests/test_cli.py
+@@ -29,6 +29,11 @@ def test_goodbye_empty_name_is_an_error(capsys: pytest.CaptureFixture[str]) -> N
+     assert capsys.readouterr().err == "error: name must not be empty\n"
+ 
+ 
++def test_goodbye_wave_json(capsys: pytest.CaptureFixture[str]) -> None:
++    assert main(["goodbye", "Ada", "--wave", "--json"]) == 0
++    assert json.loads(capsys.readouterr().out) == {"name": "Ada", "text": "Goodbye, Ada o/"}
++
++
+ def test_installed_command_end_to_end() -> None:
+     app = shutil.which("app")
+     assert app, "run through `uv run` so the app command is on PATH"

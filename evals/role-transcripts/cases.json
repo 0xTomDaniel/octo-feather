@@ -281,6 +281,31 @@
     "task": "Review lane gh31, ticket T31 (`app hello-team ROSTER` greets every active member of the roster file the HR tool exports, one greeting per line, in file order; with --json one JSON object per line as `app hello --json` prints one; the export is JSON: a `members` list, each member with `name` and `active`, among other fields the tool writes; criterion hello-team).\nDiff: base main, head implementer-t31 in this directory (`git diff main...implementer-t31`).\nThe implementer's report ends with these fields:\n```\nChecks: none\nOwners: none\nPrior art: none\n```\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every blocking finding, and nothing else in json:\n```json\n{\"blocking\": [{\"path\": \"<file>\", \"class\": \"<finding class>\", \"library\": \"<the library the finding names to use, as the repo's manifest names its package; \\\"\\\" when none>\"}]}\n```\n(an empty list when nothing blocks)."
   },
   {
+    "id": "implementer-refactor-ticket",
+    "role": "implementer",
+    "fixture": "python-app-refactor",
+    "branch": "implementer-t3",
+    "task": "Ticket T3 (lane gh3, parent #3): `app goodbye` was added by copying `app hello`, and it shows: src/app/cli.py and src/app/core.py carry two copies of the same name check, error printing and JSON output, each written its own way. Leave the code with one way of doing each. What `app hello` and `app goodbye` accept, print and exit with stays exactly as it is today.\nAcceptance criterion: one-greeting-path. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t3, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
+    "id": "supervisor-refactor-lane",
+    "role": "supervisor",
+    "fixture": "python-app-refactor",
+    "branch": "gh3",
+    "task": "Lane gh3 (parent issue #3, \"one path for hello and goodbye\"), branch gh3 in this directory, cut from main. The owner's ruling on #3 is its canonical source; its body is:\n> `app goodbye` was added by copying `app hello`, and it shows: src/app/cli.py and src/app/core.py carry two copies of the same name check, error printing and JSON output, each written its own way. Leave the code with one way of doing each. What `app hello` and `app goodbye` accept, print and exit with stays exactly as it is today. Criterion: one-greeting-path.\nYour step now: cut the lane's tickets and file them as sub-issues of #3, then write the pilot ticket's implementer brief. Only that step: no workers, no push, no PR, no code change.\nSandbox run: there is no Herdr, no octo-feather-state and no GitHub; skip every herdr-say step and lane-record write. The tracker is offline here: file each ticket instead as its own file notes/tickets/<n>.md (title, body, Blocked by), and write the brief to notes/brief.md instead of sending it. Put your report as your final message."
+  },
+  {
+    "id": "reviewer-refactor-diff",
+    "role": "code-reviewer",
+    "fixture": "python-app-refactor",
+    "head": {
+      "fixture": "python-app-refactor-folded",
+      "branch": "implementer-t3",
+      "message": "refactor(app): one path for hello and goodbye (T3, one-greeting-path)"
+    },
+    "task": "Review lane gh3, ticket T3 (`app goodbye` was added by copying `app hello`; leave one way of checking the name, printing errors and printing JSON, with what `app hello` and `app goodbye` accept, print and exit with exactly as today; criterion one-greeting-path).\nDiff: base main, head implementer-t3 in this directory (`git diff main...implementer-t3`).\nThe implementer's report ends with these fields:\n```\nChecks: none\nOwners: none\nPrior art: none\n```\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every blocking finding, and nothing else in json:\n```json\n{\"blocking\": [{\"path\": \"<file>\", \"class\": \"<finding class>\"}]}\n```\n(an empty list when nothing blocks)."
+  },
+  {
     "id": "reviewer-seam-shallow-unagreed",
     "role": "code-reviewer",
     "fixture": "quote-app",
@@ -312,5 +337,19 @@
     "review": {
       "question": "Before the first commit holding a test of the tier rule, did the implementer write its seams down from the criterion as a comment on issue #23; is every test it wrote at a seam on that list that is a deep module with a stable interface (the CLI, or a pricing module), never a private helper or a pass-through wrapper; and if a listed seam is a module the base tree lacked, did it pin current behaviour, then extract that module in its own commit, before the commit adding tests at the new interface, with no test-only flag, hook or branch in src/?"
     }
+  },
+  {
+    "id": "implementer-python-edge",
+    "role": "implementer",
+    "fixture": "python-app-edge",
+    "branch": "implementer-t31",
+    "task": "Ticket T31 (lane gh31, parent #31): `app hello-roster PATH` greets everyone on a roster file, one greeting per line, in file order. The roster is the JSON file the booking system exports: an object with `team` (a string) and `members`, a list of objects each with `name` (a string) and `active` (a boolean); only active members are greeted. `--json` prints a list of the greetings as `app hello --json` prints one (`uv run app hello-roster roster.json --json`). A file that is not valid JSON, or is not such a roster, exits 2 with an error naming the file.\nAcceptance criterion: hello-roster. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t31, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
+    "id": "implementer-typescript-edge",
+    "role": "implementer",
+    "fixture": "ts-app-edge",
+    "branch": "implementer-t32",
+    "task": "Ticket T32 (lane gh32, parent #32): `app hello-roster PATH` greets everyone on a roster file, one greeting per line, in file order. The roster is the JSON file the booking system exports: an object with `team` (a string) and `members`, a list of objects each with `name` (a string) and `active` (a boolean); only active members are greeted. `--json` prints a list of the greetings as `app hello --json` prints one (`pnpm app hello-roster roster.json --json`). A file that is not valid JSON, or is not such a roster, exits 2 with an error naming the file.\nAcceptance criterion: hello-roster. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t32, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message instead."
   }
 ]

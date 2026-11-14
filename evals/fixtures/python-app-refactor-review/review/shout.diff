@@ -1,0 +1,46 @@
+diff --git a/src/app/cli.py b/src/app/cli.py
+index d638cdc..45a6a6c 100644
+--- a/src/app/cli.py
++++ b/src/app/cli.py
+@@ -1,7 +1,7 @@
+ import argparse
+ import json
+ import sys
+-from dataclasses import asdict
++from dataclasses import asdict, replace
+ 
+ from app.core import farewell, greet
+ 
+@@ -12,6 +12,7 @@ def main(argv: list[str] | None = None) -> int:
+     hello = commands.add_parser("hello", help="greet someone")
+     hello.add_argument("name")
+     hello.add_argument("--json", action="store_true", help="print JSON")
++    hello.add_argument("--shout", action="store_true", help="greet in capitals")
+     goodbye = commands.add_parser("goodbye", help="say goodbye to someone")
+     goodbye.add_argument("name")
+     goodbye.add_argument("--json", action="store_true", help="print JSON")
+@@ -20,6 +21,8 @@ def main(argv: list[str] | None = None) -> int:
+     if args.command == "hello":
+         try:
+             greeting = greet(str(args.name))
++            if args.shout:
++                greeting = replace(greeting, text=greeting.text.upper() + "!")
+         except ValueError as err:
+             if args.json:
+                 sys.stdout.write(json.dumps({"error": str(err)}) + "\n")
+diff --git a/tests/test_cli.py b/tests/test_cli.py
+index 0ea0777..57bdfbb 100644
+--- a/tests/test_cli.py
++++ b/tests/test_cli.py
+@@ -19,6 +19,11 @@ def test_empty_name_is_a_json_error(capsys: pytest.CaptureFixture[str]) -> None:
+     assert json.loads(capsys.readouterr().out) == {"error": "name must not be empty"}
+ 
+ 
++def test_hello_shout(capsys: pytest.CaptureFixture[str]) -> None:
++    assert main(["hello", "Ada", "--shout"]) == 0
++    assert capsys.readouterr().out == "HELLO, ADA!\n"
++
++
+ def test_goodbye_json_in_process(capsys: pytest.CaptureFixture[str]) -> None:
+     assert main(["goodbye", " Ada ", "--json"]) == 0
+     assert json.loads(capsys.readouterr().out) == {"name": "Ada", "text": "Goodbye, Ada"}
