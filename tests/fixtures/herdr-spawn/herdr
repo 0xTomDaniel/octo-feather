@@ -5,6 +5,8 @@
 #   keys        every send-keys / send-text payload
 #   closed      tab ids closed
 #   tab-env     the tab's environment: each tab create --env KEY=VALUE, one per line
+# integration install pi writes Herdr's Pi extension to $PI_CODING_AGENT_DIR/extensions (a no-op Pi
+# extension, so a real Pi loads it: tests/web-tools.sh), and agent get reports the agent_session Pi sends through it, as Herdr 0.9.5 (#871).
 # The pane shows Pi's trust dialog (pi-trust-dialog.txt beside this file) when
 # the agent start argv lacks --approve, or when FAKE_HERDR_FORCE_DIALOG=1;
 # otherwise a ready Pi prompt. FAKE_HERDR_FORCE_DIALOG=other shows a non-Pi
@@ -27,7 +29,9 @@ case "$1 $2" in
     shift 2; while (($#)) && [[ "$1" != -- ]]; do shift; done; shift
     printf '%s\n' "$@" >"$d/start-argv"
     if dialog_open; then echo '{"error":{"code":"agent_not_ready"}}' >&2; exit 1; fi ;;
-  "agent get") echo '{"result":{"agent":{"agent_status":"idle","pane_id":"w9:p1"}}}' ;;
+  "integration install")
+    mkdir -p "$PI_CODING_AGENT_DIR/extensions"; printf '// HERDR_INTEGRATION_ID=pi\nexport default function () {}\n' >"$PI_CODING_AGENT_DIR/extensions/herdr-agent-state.ts" ;;
+  "agent get") echo '{"result":{"agent":{"agent_status":"idle","pane_id":"w9:p1","agent_session":{"source":"herdr:pi"}}}}' ;;
   "agent wait") echo '{"result":{"agent_status":"idle"}}' ;;
   "pane read")
     echo x >>"$d/reads"

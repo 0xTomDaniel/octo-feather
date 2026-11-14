@@ -2054,5 +2054,197 @@
     "should_trigger": false,
     "split": "held-out",
     "task": "Do not change any file and do not commit. Do not message anyone. Which files does review/shout.diff touch? Read it only."
+  },
+  {
+    "id": "impl-refactor-fold-goodbye",
+    "role": "implementer",
+    "fixture": "python-app-refactor",
+    "should_trigger": true,
+    "split": "train",
+    "task": "`app goodbye` was made by copy-pasting `app hello`, so src/app/cli.py and src/app/core.py now hold two versions of the same name check, error printing and JSON output, written two different ways. Fold them into one. Anyone running `app` must not be able to tell: same output, same exit codes. Commit."
+  },
+  {
+    "id": "impl-refactor-split-count",
+    "role": "implementer",
+    "fixture": "tally-tiers",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Ticket T5 (lane gh5): tally.count.count opens the file itself, so nothing can count a string without a file on disk. Move the reading out to the CLI and have the counting take text. `tally PATH` and `tally PATH --json` print and exit exactly as they do now, errors included. Commit when done."
+  },
+  {
+    "id": "impl-refactor-near-wave",
+    "role": "implementer",
+    "fixture": "python-app-refactor",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Ticket T6 (lane gh6): `app goodbye NAME --wave` appends \" o/\" to the farewell (`app goodbye Ada --wave` prints `Goodbye, Ada o/`; with --json the \"text\" field carries it). Without --wave nothing changes. Implement it and commit."
+  },
+  {
+    "id": "impl-refactor-near-binary",
+    "role": "implementer",
+    "fixture": "tally-tiers",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Ticket T7 (lane gh7): `tally` on a file that is not UTF-8 text (a PNG, say) dies with a Python traceback. It should fail like a missing file does: exit 2 with `error: cannot read PATH: not UTF-8 text` (and the JSON error object under --json). Fix it and commit."
+  },
+  {
+    "id": "impl-principles-one-result",
+    "role": "implementer",
+    "fixture": "python-app-refactor",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Ticket T8 (lane gh8): app.core has Greeting and Farewell, two frozen dataclasses with the same two fields, and greet and farewell each strip and check the name their own way. Leave core.py with one of each. Nothing outside may notice: `app hello` and `app goodbye`, with and without --json, print and exit exactly as now, errors included. Commit."
+  },
+  {
+    "id": "impl-principles-trace-json",
+    "role": "implementer",
+    "fixture": "tally-tiers",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Ticket T9 (lane gh9): a new contributor asked where tally's JSON comes from and it took them a while to answer: the error object is assembled by hand in cli.py while the counts come from asdict(Counts) in another branch. Reshape it so the answer is obvious. `tally PATH` and `tally PATH --json` must print and exit byte for byte as today. Commit when done."
+  },
+  {
+    "id": "impl-principles-near-retire",
+    "role": "implementer",
+    "fixture": "python-app-refactor",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Ticket T10 (lane gh10): we are retiring `app goodbye`, nobody calls it. Delete the command, its core function and its tests, so `app goodbye Ada` fails the way argparse fails any unknown command. `app hello` stays as it is. Commit."
+  },
+  {
+    "id": "impl-principles-near-lines",
+    "role": "implementer",
+    "fixture": "tally-tiers",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Ticket T11 (lane gh11): add `tally PATH --lines`, which prints the line count instead of the word count (under --json, a \"lines\" field in place of \"words\"). Keep the change small and easy to read; no new module. Commit."
+  },
+  {
+    "id": "sup-refactor-cut-fold",
+    "role": "supervisor",
+    "fixture": "python-app-refactor",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Your lane is parent issue #3: `app goodbye` was made by copying `app hello`, so src/app/cli.py and src/app/core.py hold two versions of the same name check, error printing and JSON output. The issue asks for one way of doing each; what both commands accept, print and exit with stays exactly as today. Cut the lane's tickets and file them as sub-issues of #3."
+  },
+  {
+    "id": "sup-refactor-brief-count",
+    "role": "supervisor",
+    "fixture": "tally-tiers",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Lane gh5, parent issue #5: tally.count.count opens the file itself, so nothing can count a string without a file on disk. The issue asks to move the reading out to the CLI and have the counting take text; `tally PATH` and `tally PATH --json` print and exit exactly as now, errors included. Ticket #6 is that whole change. Write the implementer's brief for #6 into notes/brief-6.md."
+  },
+  {
+    "id": "sup-refactor-near-wave",
+    "role": "supervisor",
+    "fixture": "python-app-refactor",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Your lane is parent issue #6: `app goodbye NAME --wave` appends \" o/\" to the farewell (`app goodbye Ada --wave` prints `Goodbye, Ada o/`; with --json the \"text\" field carries it). Without --wave nothing changes. Cut the lane's tickets and file them as sub-issues of #6."
+  },
+  {
+    "id": "sup-refactor-near-binary",
+    "role": "supervisor",
+    "fixture": "tally-tiers",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Lane gh7, parent issue #7: `tally` on a file that is not UTF-8 text (a PNG, say) dies with a Python traceback. It should fail like a missing file does: exit 2 with `error: cannot read PATH: not UTF-8 text` (and the JSON error object under --json). Ticket #8 is that fix. Write the implementer's brief for #8 into notes/brief-8.md."
+  },
+  {
+    "id": "rev-refactor-fold",
+    "role": "code-reviewer",
+    "fixture": "python-app-refactor-review",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Code review, lane gh3: review/fold.diff answers ticket T3, which said `app hello` and `app goodbye`, one copied from the other, must share one way of checking the name and printing, with what both accept, print and exit with exactly as today. Fit to merge? Verdict with reasons."
+  },
+  {
+    "id": "rev-refactor-name-check",
+    "role": "code-reviewer",
+    "fixture": "python-app-refactor-review",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "lane gh4 wants review/name-check.diff merged: farewell had its own copy of greet's empty-name check and now both go through one. No output is meant to change. Would you let it in? Short verdict."
+  },
+  {
+    "id": "rev-refactor-near-wave",
+    "role": "code-reviewer",
+    "fixture": "python-app-refactor-review",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Code review, lane gh6: review/wave.diff adds `app goodbye NAME --wave`, which appends \" o/\" to the farewell, with one new test. Verdict with reasons."
+  },
+  {
+    "id": "rev-refactor-near-inner-space",
+    "role": "code-reviewer",
+    "fixture": "python-app-refactor-review",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Is review/inner-space.diff fit to merge? It fixes a bug: `app hello \"Ada   Lovelace\"` kept the run of inner spaces; names now collapse it to one. Verdict, with reasons."
+  },
+  {
+    "id": "sup-principles-one-result",
+    "role": "supervisor",
+    "fixture": "python-app-refactor",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Lane gh9, parent issue #9: app.core has Greeting and Farewell, two frozen dataclasses with the same two fields, and greet and farewell each strip and check the name their own way. The issue wants core.py left with one of each; `app hello` and `app goodbye`, with and without --json, print and exit exactly as now, errors included. Ticket #10 is that whole change. Write the implementer's brief for #10 into notes/brief-10.md."
+  },
+  {
+    "id": "sup-principles-trace-json",
+    "role": "supervisor",
+    "fixture": "tally-tiers",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "you've got lane gh11 (parent #11). a new contributor took ages to work out where tally's JSON comes from: the error object is built by hand in cli.py, the counts come from asdict(Counts) in another branch. #11 asks to reshape that so it's obvious, with `tally PATH` and `tally PATH --json` byte for byte as today. Cut the lane's tickets and file them as sub-issues of #11."
+  },
+  {
+    "id": "sup-principles-near-retire",
+    "role": "supervisor",
+    "fixture": "python-app-refactor",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Lane gh12, parent issue #12: we are retiring `app goodbye`, nobody calls it. The issue asks to delete the command, its core function and its tests, so `app goodbye Ada` fails the way argparse fails any unknown command; `app hello` stays as it is. Ticket #13 is that whole change. Write the implementer's brief for #13 into notes/brief-13.md."
+  },
+  {
+    "id": "sup-principles-near-lines",
+    "role": "supervisor",
+    "fixture": "tally-tiers",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Your lane is parent issue #14: add `tally PATH --lines`, which prints the line count instead of the word count (under --json, a \"lines\" field in place of \"words\"). The issue asks for a small change that stays easy to read, no new module. Cut the lane's tickets and file them as sub-issues of #14."
+  },
+  {
+    "id": "rev-principles-one-result",
+    "role": "code-reviewer",
+    "fixture": "python-app-refactor-review",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Code review, lane gh9: review/one-result.diff answers ticket T10, which said Greeting and Farewell in app.core, two frozen dataclasses with the same fields, become one, with `app hello` and `app goodbye` printing and exiting exactly as today. Fit to merge? Verdict with reasons."
+  },
+  {
+    "id": "rev-principles-one-printer",
+    "role": "code-reviewer",
+    "fixture": "python-app-refactor-review",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "can you look at review/one-printer.diff before it goes in? main() had a hello branch and a goodbye branch, each catching the error and printing text or JSON its own way; now both run through one. nothing users see should differ. merge or not, and why?"
+  },
+  {
+    "id": "rev-principles-near-retire",
+    "role": "code-reviewer",
+    "fixture": "python-app-refactor-review",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Code review, lane gh12: review/retire.diff removes `app goodbye` (the command, farewell and Farewell, and its two tests), as ticket T13 asked: nobody calls it, and `app goodbye Ada` must now fail as argparse fails any unknown command. Verdict with reasons."
+  },
+  {
+    "id": "rev-principles-near-shout",
+    "role": "code-reviewer",
+    "fixture": "python-app-refactor-review",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Is review/shout.diff fit to merge? It adds `app hello NAME --shout`, which prints the greeting in capitals with a \"!\" (`HELLO, ADA!`), with one new test; the ticket asked for the smallest change that does it. Verdict, with reasons."
   }
 ]

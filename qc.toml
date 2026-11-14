@@ -119,7 +119,7 @@ covers = ["templates/python/tests", "templates/typescript/tests", "templates/pyt
 [demo."issue-lifecycle#acceptance-merge-ask-full-proof"]
 covers = ["scripts/octo-feather-lane", "scripts/octo-feather-gate", "scripts/octo-feather-integrate"]
 
-# Proven by tests/lane-merge-ask.sh's tagged cases (the rule: issue-lifecycle #lanes-one-head).
+# Proven by tests/gate/kit/test_lane_merge_ask.py's tagged items (the rule: issue-lifecycle #lanes-one-head).
 [demo."issue-lifecycle#acceptance-ci-status-only"]
 covers = ["scripts/octo-feather-lane", ".github/workflows/check.yml", "templates/python/.github/workflows/check.yml", "templates/typescript/.github/workflows/check.yml"]
 
