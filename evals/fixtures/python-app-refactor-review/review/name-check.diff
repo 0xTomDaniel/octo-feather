@@ -1,0 +1,31 @@
+diff --git a/src/app/core.py b/src/app/core.py
+index 56e552b..1d905e8 100644
+--- a/src/app/core.py
++++ b/src/app/core.py
+@@ -13,18 +13,19 @@ class Farewell:
+     text: str
+ 
+ 
+-def greet(name: str) -> Greeting:
++def _clean(name: str) -> str:
+     clean = name.strip()
+     if not clean:
+         msg = "name must not be empty"
+         raise ValueError(msg)
++    return clean
++
++
++def greet(name: str) -> Greeting:
++    clean = _clean(name)
+     return Greeting(name=clean, text=f"Hello, {clean}")
+ 
+ 
+ def farewell(name: str) -> Farewell:
+-    trimmed = name.strip()
+-    if len(trimmed) == 0:
+-        error = "name must not be empty"
+-        raise ValueError(error)
+-    text = "Goodbye, " + trimmed
+-    return Farewell(name=trimmed, text=text)
++    clean = _clean(name)
++    return Farewell(name=clean, text=f"Goodbye, {clean}")
