@@ -63,6 +63,22 @@
     "sha": "0b8e952052d482ee6de06deebf14d590d77b1b34",
     "raw_url": "https://api.github.com/repos/cursor/plugins/contents/pstack/skills/principle-build-the-lever?ref=0b8e952052d482ee6de06deebf14d590d77b1b34"
   },
+  "github/skill/principle-laziness-protocol": {
+    "sha": "0b8e952052d482ee6de06deebf14d590d77b1b34",
+    "raw_url": "https://api.github.com/repos/cursor/plugins/contents/pstack/skills/principle-laziness-protocol?ref=0b8e952052d482ee6de06deebf14d590d77b1b34"
+  },
+  "github/skill/principle-subtract-before-you-add": {
+    "sha": "0b8e952052d482ee6de06deebf14d590d77b1b34",
+    "raw_url": "https://api.github.com/repos/cursor/plugins/contents/pstack/skills/principle-subtract-before-you-add?ref=0b8e952052d482ee6de06deebf14d590d77b1b34"
+  },
+  "github/skill/principle-minimize-reader-load": {
+    "sha": "0b8e952052d482ee6de06deebf14d590d77b1b34",
+    "raw_url": "https://api.github.com/repos/cursor/plugins/contents/pstack/skills/principle-minimize-reader-load?ref=0b8e952052d482ee6de06deebf14d590d77b1b34"
+  },
+  "github/skill/refactoring": {
+    "sha": "0b8e952052d482ee6de06deebf14d590d77b1b34",
+    "raw_url": "https://raw.githubusercontent.com/cursor/plugins/0b8e952052d482ee6de06deebf14d590d77b1b34/pstack/skills/poteto-mode/playbooks/refactoring.md"
+  },
   "github/skill/interrogate": {
     "sha": "0b8e952052d482ee6de06deebf14d590d77b1b34",
     "raw_url": "https://api.github.com/repos/cursor/plugins/contents/pstack/skills/interrogate?ref=0b8e952052d482ee6de06deebf14d590d77b1b34"
