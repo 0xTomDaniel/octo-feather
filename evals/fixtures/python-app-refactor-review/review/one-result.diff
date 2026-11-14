@@ -1,0 +1,39 @@
+diff --git a/src/app/core.py b/src/app/core.py
+index 56e552b..1ff0aa0 100644
+--- a/src/app/core.py
++++ b/src/app/core.py
+@@ -2,29 +2,23 @@ from dataclasses import dataclass
+ 
+ 
+ @dataclass(frozen=True)
+-class Greeting:
++class Message:
+     name: str
+     text: str
+ 
+ 
+-@dataclass(frozen=True)
+-class Farewell:
+-    name: str
+-    text: str
+-
+-
+-def greet(name: str) -> Greeting:
++def greet(name: str) -> Message:
+     clean = name.strip()
+     if not clean:
+         msg = "name must not be empty"
+         raise ValueError(msg)
+-    return Greeting(name=clean, text=f"Hello, {clean}")
++    return Message(name=clean, text=f"Hello, {clean}")
+ 
+ 
+-def farewell(name: str) -> Farewell:
++def farewell(name: str) -> Message:
+     trimmed = name.strip()
+     if len(trimmed) == 0:
+         error = "name must not be empty"
+         raise ValueError(error)
+     text = "Goodbye, " + trimmed
+-    return Farewell(name=trimmed, text=text)
++    return Message(name=trimmed, text=text)

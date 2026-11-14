@@ -6,6 +6,8 @@ For each Skillfile `github` entry, compares .agents/skills/<name>/ as the git in
 holds it (bytes and git file mode) with what `skillfile install` produces from the
 cached upstream at the pin plus .skillfile/patches/ (skillfile's generated .meta
 aside; expected modes: upstream's, per #143). Exit 1 names skill and file.
+A single-file entry (its path names one file, #792) is cached as that file; skillfile
+installs it as <name>/SKILL.md, patched by .skillfile/patches/skills/<name>.patch.
 - Upstream is read from a git object cache keyed by pin SHA and authenticated
   offline: the commit object must hash to the pin, and every tree and blob on the
   way to the entry's files must hash to its object id. Tampered or incomplete: exit 1.
@@ -107,7 +109,7 @@ class Objects:
         self.p = subprocess.Popen(["git", "--git-dir", gd, "cat-file", "--batch"], env=env,
                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
-    def get(self, oid, kind):
+    def get(self, oid: str, kind: str) -> bytes:
         try:
             self.p.stdin.write(oid.encode() + b"\n"); self.p.stdin.flush()
             head = self.p.stdout.readline().split()
@@ -137,9 +139,11 @@ def tree_entries(raw):
         i = nul + 21
 
 
-def upstream(source, path, modes=None):
+def upstream(source: str, path: str, modes: dict[str, str] | None = None,
+             single: set[str] | None = None) -> dict[str, bytes]:
     """rel path -> bytes of the entry's folder at the pin, authenticated from the pin SHA down.
-    modes, when given, gets rel path -> git file mode."""
+    A path naming one file (a single-file entry, #792) gives {its file name: bytes}, as skillfile
+    caches it, and adds the entry's path to single when given. modes, when given, gets rel path -> git file mode."""
     sha = source.split("@", 1)[1]
     o = Objects(gitdir(source))
     try:
@@ -148,12 +152,22 @@ def upstream(source, path, modes=None):
         if len(first) != 2 or first[0] != b"tree":
             raise Unauthentic(f"commit {sha} has no tree")
         tree = first[1].decode()
-        for comp in path.split("/"):
-            hit = [oid for mode, n, oid in tree_entries(o.get(tree, "tree")) if n == comp and mode == "40000"]
+        comps = path.split("/")
+        out: dict[str, bytes] = {}
+        for i, comp in enumerate(comps):
+            ents = list(tree_entries(o.get(tree, "tree")))
+            hit = [oid for mode, n, oid in ents if n == comp and mode == "40000"]
+            blob = [(mode, oid) for mode, n, oid in ents if n == comp and mode in ("100644", "100755")]
+            if not hit and blob and i == len(comps) - 1:
+                out[comp] = o.get(blob[0][1], "blob")
+                if modes is not None:
+                    modes[comp] = blob[0][0]
+                if single is not None:
+                    single.add(path)
+                return out
             if not hit:
-                raise Unauthentic(f"{path} is not a folder at {sha}")
+                raise Unauthentic(f"{path} is neither a folder nor a regular file at {sha}")
             tree = hit[0]
-        out = {}
 
         def walk(t, prefix):
             for mode, n, oid in tree_entries(o.get(t, "tree")):
@@ -342,12 +356,12 @@ def gate(ents, vendored):
         for kind, name, src, _ in ents:  # local entries deploy onto themselves; give them their source
             if kind == "local" and os.path.isdir(os.path.join(root, src)):
                 shutil.copytree(os.path.join(root, src), os.path.join(work, src), symlinks=True)
-        upmodes = {}
+        upmodes, single = {}, set[str]()
         for _, name, source, path in vendored:
             if not os.path.isdir(gitdir(source)):
                 die(f"{name}: upstream {source} is not cached at {gitdir(source)}; {FETCH}")
             try:
-                tree = upstream(source, path, upmodes.setdefault(name, {}))
+                tree = upstream(source, path, upmodes.setdefault(name, {}), single)
             except Unauthentic as e:
                 die(f"{name}: cached upstream {source} {path} fails authentication: {e}; {FETCH}")
             repo, sha = source.split("@", 1)
@@ -373,7 +387,8 @@ def gate(ents, vendored):
         for _, name, source, path in vendored:
             want_files, made_odd = files(os.path.join(work, SKILLS, name))
             have, have_modes, odd = committed(name)
-            origin = f"{source.split('@')[0]}@{source.split('@')[1][:7]} {path} plus .skillfile/patches/skills/{name}/"
+            patches = f".skillfile/patches/skills/{name}" + (".patch" if path in single else "/")  # skillfile's layout
+            origin = f"{source.split('@')[0]}@{source.split('@')[1][:7]} {path} plus {patches}"
             for rel, why in sorted(made_odd.items()):
                 print(f"{TAG}: {name}: skillfile's install of {origin} has {rel}, which {why}", file=sys.stderr); bad += 1
             for rel, why in sorted(odd.items()):
@@ -400,7 +415,8 @@ def gate(ents, vendored):
                 bad += 1
         if bad:
             die(f"{bad} vendored file(s) drift from pin plus patch: change vendored text only through "
-                f".skillfile/patches/skills/<name>/<file>.patch (first line names its ADR), else revert the file")
+                f".skillfile/patches/skills/<name>/<file>.patch, or <name>.patch for a single-file entry "
+                f"(first line names its ADR), else revert the file")
         print(f"vendored: ok ({len(vendored)} skills equal authenticated upstream at pin plus patches; skillfile {VERSION}, offline)")
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -412,7 +428,7 @@ def extract(name, dest):
     if not hit:
         die(f"no `{FETCH_ONLY} github skill {name} ...` line in {os.path.join(root, 'Skillfile')}")
     source, path = hit[0]
-    modes = {}
+    modes: dict[str, str] = {}
     try:
         tree = upstream(source, path, modes)
     except Unauthentic as e:

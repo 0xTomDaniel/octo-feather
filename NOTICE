@@ -60,10 +60,13 @@ Vendored, not from octo-lite, under .agents/skills/ with patches in .skillfile/p
     mattpocock/skills@49dd158, MIT, Copyright Matt Pocock
     correct, principle-prove-it-works, blast-radius, sharpen,
     principle-encode-lessons-in-structure, principle-build-the-lever,
+    principle-laziness-protocol, principle-subtract-before-you-add,
+    principle-minimize-reader-load,
     create-verification-skill,
     maintain-verification-skill, reflect, interrogate (its references
-    code-quality-review.md and lead-judgment.md, read by agents/code-reviewer.md):
-    cursor/plugins@0b8e952
+    code-quality-review.md and lead-judgment.md, read by agents/code-reviewer.md),
+    refactoring (pstack/skills/poteto-mode/playbooks/refactoring.md alone, as
+    its SKILL.md): cursor/plugins@0b8e952
     (pstack), MIT, Copyright 2026 Lauren Tan
     linear-cli (whole folder; no role loads it, the linear tracker skill points
     agents to its references): schpet/linear-cli@02571d3 (release v3.1.0,
