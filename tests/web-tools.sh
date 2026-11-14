@@ -133,10 +133,12 @@ echo "case roles: ok (web roles: their tools plus the web list's, declared and i
 # tab: roles#acceptance-codemode-every-role's tab launches (ADR 0016). The real herdr-spawn, copied so its kit root
 # (four dirs up) is the fixture kit, opens the role's tab through the fake herdr of tests/fixtures/herdr-spawn,
 # which records the agent start argv and the tab's env instead of starting Pi. The argv must be the role's
-# `pi-role --json` args plus herdr-spawn's --session-id; real Pi then starts on exactly that argv in that env
+# `pi-role --json` args plus herdr-spawn's --session-id and Herdr's Pi integration (--extension, the file the fake
+# herdr's `integration install pi` wrote into herdr-spawn's cache dir); real Pi then starts on exactly that argv in that env
 # (the model swapped for the fake provider's, -p for no TUI) and its codemode script reaches the role's tools.
 mkdir -p "$t/kit/.agents/spawn/herdr-comms/assets" "$t/hbin"
-cp "$kit/.agents/skills/herdr-comms/assets/herdr-spawn" "$t/kit/.agents/spawn/herdr-comms/assets/"
+cp "$kit/.agents/skills/herdr-comms/assets/herdr-spawn" "$kit/.agents/skills/herdr-comms/assets/herdr_ready.py" \
+  "$t/kit/.agents/spawn/herdr-comms/assets/"
 cp "$kit/tests/fixtures/herdr-spawn/"* "$t/hbin/"; chmod +x "$t/hbin/herdr"
 tab() {
   local d="$t/tab-$1"; mkdir -p "$d"; : > "$t/log"
@@ -145,8 +147,9 @@ tab() {
     --cwd "$t/repo" >/dev/null 2>"$d/err") || fail "tab: herdr-spawn --role $1 failed: $(cat "$d/err")"
   local want_args; want_args="$(cd "$t/repo" && XDG_CACHE_HOME="$t/cache" XDG_STATE_HOME="$t/state" \
     "$t/kit/scripts/pi-role" --json "$t/kit/agents/$1.md" 2>/dev/null | python3 -c 'import json,sys; print("\n".join(json.load(sys.stdin)["args"]))')"
-  [[ "$(head -n -2 "$d/start-argv")" == "$want_args" && "$(tail -n 2 "$d/start-argv" | head -1)" == --session-id ]] \
-    || fail "tab: $1's tab argv is not its pi-role --json args plus --session-id"
+  [[ "$(head -n -4 "$d/start-argv")" == "$want_args" && "$(tail -n 4 "$d/start-argv" | head -1)" == --session-id \
+    && "$(tail -n 2 "$d/start-argv" | tr '\n' ' ')" == "--extension $t/cache/octo-feather/herdr-pi/herdr-agent-state.ts " ]] \
+    || fail "tab: $1's tab argv is not its pi-role --json args plus --session-id and Herdr's Pi integration: $(cat "$d/start-argv")"
   local argv envs out; mapfile -t argv < "$d/start-argv"; mapfile -t envs < "$d/tab-env"
   out="$(cd "$t/repo" && env -i "${envs[@]}" TMPDIR="$t" XDG_CACHE_HOME="$t/cache" PI_CODING_AGENT_DIR="$t/agent" PI_OFFLINE=1 \
     PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0 XDG_STATE_HOME="$t/state" pi "${argv[@]}" --model fake/fake -p go 2>"$d/pierr")" \
