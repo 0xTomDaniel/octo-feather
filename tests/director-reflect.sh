@@ -151,13 +151,14 @@ after="$(tree)"; [[ "$after" == "$before" ]] || fail "refusal changed files: $(d
 for failure in malformed timeout; do
   if [[ "$failure" == malformed ]]; then
     printf 'Malformed synthetic reply\n' >"$t/reply.director"
-    want="0 Questions lines"; delay=0; deadline=30
+    want="0 Questions lines"; delay=0; deadline=30; cmd=(archive gh5)
   else
+    # The deadline applies to every reflector run: run the director phase alone, so no lane reflection races it (#846).
     printf '%s\nFindings: none\n' "$DQ" >"$t/reply.director"
-    want="reflector ran past"; delay=2; deadline=0.5
+    want="reflector ran past"; delay=2; deadline=0.5; cmd=(reflect --director)
   fi
   set +e
-  out="$(STUB_SLEEP="$delay" OCTO_FEATHER_REFLECT_TIMEOUT="$deadline" "$L" archive gh5 2>&1)"; rc=$?
+  out="$(STUB_SLEEP="$delay" OCTO_FEATHER_REFLECT_TIMEOUT="$deadline" "$L" "${cmd[@]}" 2>&1)"; rc=$?
   set -e
   [[ "$rc" == 1 ]] && grep -qF "director reflection failed" <<<"$out" && grep -qF "$want" <<<"$out" || fail "$failure did not refuse: $out"
   after="$(tree)"; [[ "$after" == "$before" ]] || fail "$failure changed archive state"

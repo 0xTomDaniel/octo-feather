@@ -1,12 +1,15 @@
 """Herdr messaging never fails silently or hangs (#666; #585, #619; owner rulings #585 and #619
 2026-11-05), through the commands with the testkit's Herdr stand-in (testkit/herdr.py, its
-FAKE_HERDR world): herdr-spawn returns only once its agent reads idle on `herdr agent wait`, so
-an agent that turns ready late is not returned early, and a herdr-say right after it is
-delivered; a herdr-say whose `herdr agent get` lookup fails names that lookup (not the up-chain
-refusal, 77); a prompt Herdr reports stalled exits non-zero naming the pane and its state; and
-`octo-feather-lane post-merge` step 4 to a busy (working) supervisor returns within its bound,
-its step 4 line naming the supervisor NOT told (lane, pane, timeout, the re-send command) and going
-on to tell the others (director rule #619). A general worker routes like every worker (roles
+FAKE_HERDR world): herdr-spawn returns only once its Pi takes input (#871: Herdr reads a booting
+Pi idle before that), so an agent that turns ready late is not returned early, and a herdr-say
+right after it is delivered, as is a herdr-say that resumes a parked agent; a spawn whose Pi
+never reports, or whose integration install fails, fails closed naming it, within one readiness
+bound for the report and the idle wait together; a herdr-say whose
+`herdr agent get` lookup fails names that lookup (not the up-chain refusal, 77); a prompt Herdr
+reports stalled exits non-zero naming the pane and its state; and `octo-feather-lane post-merge`
+step 4 to a busy (working) supervisor returns within its bound, its step 4 line naming the
+supervisor NOT told (lane, pane, timeout, the re-send command) and going on to tell the others
+(director rule #619). A general worker routes like every worker (roles
 spec #acceptance-task-worker-route): its parent reached, a peer lane refused (77); and a worker
 never messages the director: its parent proven gone, herdr-say itself sends the director one
 fixed alert, a timeout or a stall none (comms spec #acceptance-parent-gone). director_worker_resume
@@ -64,9 +67,9 @@ def lines(p: Path) -> list[str]:
 
 
 def spawn_ready_late(s: Scratch) -> None:
-    """An agent that turns idle 2 s after its start: herdr-spawn returns only once Herdr reads it
-    idle (never while it still boots), and a herdr-say to its pane right after is delivered,
-    nothing left typed and unsent."""
+    """A Pi that takes input 2 s after its start, read idle by Herdr's fallback before that:
+    herdr-spawn returns only once it takes input (never while it still boots), and a herdr-say to
+    its pane right after is delivered, nothing left typed and unsent."""
     d = herdr_world(s)
     (d / "ready_after").write_text("2")
     s.identity()
@@ -79,6 +82,69 @@ def spawn_ready_late(s: Scratch) -> None:
     assert got["agent_status"] == "idle", f"spawn returned while the agent read {got}"
     s.run([str(ASSETS / "herdr-say"), pane, "the brief"], env=SUPERVISOR)
     assert lines(d / "prompts") == [f"{pane}\tthe brief"], lines(d / "prompts")
+    assert lines(d / "typed") == [], lines(d / "typed")
+
+
+def spawn_fails_closed(s: Scratch) -> None:
+    """Herdr's Pi integration does not install, then Pi never reports through it (read idle by
+    Herdr all along): each spawn exits 69 naming the cause, no tab left, never ready on the
+    screen-idle read alone."""
+    d = herdr_world(s)
+    s.identity()
+    wt = s.root / "wt"
+    wt.mkdir()
+    spawn = [str(ASSETS / "herdr-spawn"), "--workspace", "w1", "--name", "implementer-gh1"]
+    spawn += ["--role", "implementer", "--cwd", str(wt)]
+    (d / "install-down").touch()
+    ran = s.run(spawn, want=69, env=SUPERVISOR)
+    assert "herdr integration install pi failed" in ran.err, ran.err
+    assert "integration install failed" in ran.err, ran.err
+    assert not any(x.startswith("tab create") for x in lines(d / "log")), lines(d / "log")
+    (d / "install-down").unlink()
+    (d / "no-report").touch()
+    ran = s.run(spawn, want=69, env=SUPERVISOR | {"HERDR_SPAWN_READY_TIMEOUT": "1"})
+    assert "never reported to Herdr" in ran.err, ran.err
+    assert json.loads((d / "agents.json").read_text()) == {}, "tab left open"
+
+
+def spawn_one_bound(s: Scratch) -> None:
+    """A Pi that reports 3 s after its start and then stays working: herdr-spawn exits 69 naming
+    it not idle, no tab left, within one HERDR_SPAWN_READY_TIMEOUT for the report and the idle wait
+    together, never a fresh bound for the idle wait after the report."""
+    d = herdr_world(s)
+    (d / "ready_after").write_text("3")
+    (d / "start-status").write_text("working")
+    s.identity()
+    wt = s.root / "wt"
+    wt.mkdir()
+    spawn = [str(ASSETS / "herdr-spawn"), "--workspace", "w1", "--name", "implementer-gh1"]
+    spawn += ["--role", "implementer", "--cwd", str(wt)]
+    t0 = time.monotonic()
+    ran = s.run(spawn, want=69, env=SUPERVISOR | {"HERDR_SPAWN_READY_TIMEOUT": "4"})
+    took = time.monotonic() - t0
+    assert "not idle within 4s" in ran.err, ran.err
+    assert took < 4 + 2, f"took {took:.1f}s, past the 4 s bound"
+    assert json.loads((d / "agents.json").read_text()) == {}, "tab left open"
+
+
+def say_resumes_parked(s: Scratch) -> None:
+    """An owner shell's herdr-say to a parked worker (its parked line in a lane log), whose Pi
+    takes input 2 s after its resume, read idle by Herdr before that: the first send resumes it
+    and lands, exit 0, its new pane= printed, the message delivered with the resume notice, nothing
+    left typed and unsent."""
+    d = herdr_world(s)
+    (d / "ready_after").write_text("2")
+    s.identity()
+    wt = s.root / "wt"
+    wt.mkdir()
+    lanes = s.home / ".local" / "state" / "octo-feather" / "lanes"
+    lanes.mkdir(parents=True)
+    line = {"at": "2026-11-13T00:00:00Z", "kind": "parked", "pane": "w1:p7", "name": "impl1"}
+    line |= {"label": "worker-1", "role": "implementer", "parent": "w1:p0", "cwd": str(wt)}
+    (lanes / "gh1.handoffs.jsonl").write_text(json.dumps(line | {"session": "S1"}) + "\n")
+    ran = s.run([str(ASSETS / "herdr-say"), "w1:p7", "go on"], env={"HERDR_WORKSPACE_ID": "w1"})
+    pane = ran.out.removeprefix("pane=")
+    assert lines(d / "prompts") == [f"{pane}\tResumed from park as pane={pane}. go on"], ran
     assert lines(d / "typed") == [], lines(d / "typed")
 
 
@@ -285,7 +351,7 @@ def resumed_as(d: Path, out: str, space: str, session: str) -> tuple[str, dict[s
     assert g["workspace_id"] == space, (space, g)
     assert g["env"]["OCTO_FEATHER_SESSION_ID"] == session, g
     starts = [x for x in lines(d / "log") if x.startswith(f"agent start {g['name']} ")]
-    assert starts[-1].endswith(f"--session-id {session}"), starts
+    assert f" --session-id {session} " in f"{starts[-1]} ", starts
     return pane, g["env"]
 
 
@@ -465,6 +531,9 @@ def post_merge_busy(s: Scratch) -> None:
 if __name__ == "__main__":
     main(
         spawn_ready_late,
+        spawn_fails_closed,
+        spawn_one_bound,
+        say_resumes_parked,
         say_lookup_fails,
         say_stalled,
         post_merge_busy,
