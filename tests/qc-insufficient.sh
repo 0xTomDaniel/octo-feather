@@ -6,7 +6,7 @@
 # evidence naming what is missing, never fail: exit 2, not 1; both stay planned and the head is unchanged (no status
 # commit when nothing flips). A rerun at the same head with the tool on the sandbox's PATH gives acceptance-a pass and
 # its status-only commit. A dirty worktree is still refused. A kit-style demo (verify-octo-feather run --unreachable-exit 77)
-# whose drive has an unreachable step is insufficient evidence too. The merge ask side: tests/lane-merge-ask.sh.
+# whose drive has an unreachable step is insufficient evidence too. The merge ask side: tests/gate/kit/lane_merge_ask.py failed_triage.
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`), as tests/qc-capture.sh.
 set -euo pipefail
 unset OCTO_FEATHER_CHECK_RUN   # a test harness, as tests/qc.sh: qc refuses only under the gate's marker

@@ -5,9 +5,10 @@ A store, no logic of the kit's: PR N is $FAKE_GH/pr/N.json, as `gh pr view --jso
 (as real gh, every field asked: the stored value, or null), its diff pr/N.diff; issue N
 issue/N.json, workflow run N run/N.json, the repo repo.json, each `--json` answered the same
 way, `issue|pr|run list` every one stored (by number); `gh api [--paginate --slurp] PATH`, a
-GET, prints api/PATH.json (one page; slurped, a list of it), a path not stored is GitHub's 404.
-`gh api -X POST repos/o/r/issues/N/comments` appends a comment, `-X PATCH
-repos/o/r/issues/comments/ID` replaces one's body (PR 7's comments); each prints the comment URL
+GET, prints api/PATH.json (one page; slurped, a list of it), a path not stored is GitHub's 404;
+a stored api/PATH.err fails any call on PATH (a GET or a write) as gh does: its text on stderr,
+exit 1. `gh api -X POST repos/o/r/issues/N/comments` appends a comment, `-X PATCH
+repos/o/r/issues/comments/ID` replaces one's body (any PR's); each prints the comment URL
 (`--jq .html_url`). `gh api repos/o/r/commits?...` prints $FAKE_GH/commits.json (the default
 branch's commits), `gh api repos/o/r/contents/F -H Accept: application/vnd.github.raw`
 $FAKE_GH/contents/F (the default branch's file), each `gh: Not Found (HTTP 404)` when absent. As
@@ -74,8 +75,16 @@ def diff(a: list[str]) -> None:
     sys.stdout.write(p.read_text())
 
 
+def failed(path: str) -> None:
+    """A stored api/PATH.err: gh's error on PATH."""
+    p = STORE / "api" / f"{path.lstrip('/')}.err"
+    if p.is_file():
+        die(p.read_text().strip())
+
+
 def get(a: list[str]) -> None:
     """`api [--paginate --slurp] PATH`, a GET; the default branch's commits and raw files."""
+    failed(a[-1])
     if len(a) == 2 and re.fullmatch(r"repos/o/r/commits(\?.*)?", a[1]):
         served(STORE / "commits.json")
         return
@@ -91,6 +100,7 @@ def get(a: list[str]) -> None:
 
 def write(a: list[str]) -> None:
     """`api -X POST|PATCH PATH --input FILE` on PR comments."""
+    failed(a[a.index("-X") + 2])
     method, path = a[a.index("-X") + 1], a[a.index("-X") + 2].replace("{owner}/{repo}", "o/r")
     body = json.loads(Path(a[a.index("--input") + 1]).read_text())["body"]
     if method == "POST" and (m := re.fullmatch(r"repos/o/r/issues/(\d+)/comments", path)):
@@ -100,10 +110,12 @@ def write(a: list[str]) -> None:
         url = f"https://github.com/o/r/pull/{n}#issuecomment-{cid}"
         d["comments"].append({"author": {"login": "sup"}, "body": body, "url": url})
     elif method == "PATCH" and (m := re.fullmatch(r"repos/o/r/issues/comments/(\d+)", path)):
-        n = "7"
-        d = json.loads(pr_file(n).read_text())
-        c = next((c for c in d["comments"] if c["url"].endswith(f"-{m.group(1)}")), None)
-        if c is None:
+        for f in sorted((STORE / "pr").glob("*.json")):
+            n, d = f.stem, json.loads(f.read_text())
+            c = next((c for c in d["comments"] if c["url"].endswith(f"-{m.group(1)}")), None)
+            if c is not None:
+                break
+        else:
             die("gh: Not Found (HTTP 404)")
             return
         c["body"] = body
