@@ -5,6 +5,8 @@
 #   agents   started agents, one "NAME PANE [TAB]" per line; agent get reports TAB as tab_id
 #   prompts  every delivered prompt, "TARGET<TAB>MESSAGE"
 #   closed   tab ids closed
+# integration install pi writes Herdr's Pi extension to $PI_CODING_AGENT_DIR/extensions, and agent
+# get reports the agent_session Pi sends through it, as Herdr 0.9.5 (#871).
 # A workspace create makes w8 with seed tab w8:t1; a tab create in workspace W
 # makes tab W:t9 with pane W:p9. A prompt reaches only a started agent, by name
 # or pane; any other target is agent_not_found.
@@ -31,11 +33,13 @@ case "$1 $2" in
     w="$(opt --workspace "$@")"
     printf '{"result":{"tab":{"tab_id":"%s:t9"},"root_pane":{"pane_id":"%s:p9"}}}\n' "$w" "$w" ;;
   "tab close") echo "$3" >>"$d/closed" ;;
+  "integration install")
+    mkdir -p "$PI_CODING_AGENT_DIR/extensions"; echo '// HERDR_INTEGRATION_ID=pi' >"$PI_CODING_AGENT_DIR/extensions/herdr-agent-state.ts" ;;
   "agent start") echo "$3 $(opt --pane "$@")" >>"$d/agents" ;;
   "agent get")
     p="$(live "$3")"
     [[ -n "$p" ]] || { echo '{"error":{"code":"agent_not_found"}}'; exit 1; }
-    printf '{"result":{"agent":{"agent_status":"idle","name":"%s","pane_id":"%s","workspace_id":"%s","tab_id":"%s"}}}\n' \
+    printf '{"result":{"agent":{"agent_status":"idle","name":"%s","pane_id":"%s","workspace_id":"%s","tab_id":"%s","agent_session":{"source":"herdr:pi"}}}}\n' \
       "$(named "$3")" "$p" "${p%%:*}" "$(awk -v t="$3" '$1 == t || $2 == t {print $3; exit}' "$d/agents")" ;;
   "agent wait")
     [[ -n "$(live "$3")" ]] || { echo '{"error":{"code":"agent_not_found"}}'; exit 1; }
