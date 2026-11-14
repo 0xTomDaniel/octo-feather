@@ -5,6 +5,8 @@ Change: the python and typescript skills point at quality `#acceptance-edge-vali
 Smoke: .agents/skills/python/SKILL.md (Data At Edges; runs below, case implementer-python-edge)
 Smoke: .agents/skills/typescript/SKILL.md (Data At Edges; runs below, case implementer-typescript-edge)
 
+What the two cases prove: adoption only (dependency added, graded as manifest+lock changed); strictness and edge placement not graded; TS baseline passes too (old skill named Zod 4); strict grading is #910, owner ruling 2026-11-14 via director. This does not meet the brief's fail-before proof of quality #acceptance-edge-validated (validation into a strict model, trusted inside); the observed columns below record strictness per run without grading it.
+
 Graded, as the cases are committed (9930536e): library adoption only, by what the branch changed (`branch_paths` touched `pyproject.toml` + `uv.lock`, `package.json` + `pnpm-lock.yaml`). Earlier runs below also graded `ran uv add pydantic` / `ran pnpm add zod` (dropped in 80d4e62a, 5b03af78: `ran` matches arguments by equality and refused `pnpm add zod@4`) and a `Prior art:` field line (dropped in 9930536e: non-discriminating in every run on both kits, and it failed python run 3 of 20261114T000816Z-d0ef96 on report form, a bulleted line, not on the rule).
 
 ## Fixtures offline

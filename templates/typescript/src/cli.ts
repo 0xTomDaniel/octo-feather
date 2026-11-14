@@ -10,7 +10,7 @@ type Write = (text: string) => void;
 const stdout: Write = (text) => process.stdout.write(text);
 const stderr: Write = (text) => process.stderr.write(text);
 
-// The CLI edge's schemas (octo-feather quality spec #acceptance-edge-validated): strict objects, unknown fields refused.
+// The CLI edge's schemas: octo-feather quality spec #acceptance-edge-validated.
 // `app hello --request`'s JSON request.
 const HelloRequest = z.strictObject({ name: z.string() });
 
