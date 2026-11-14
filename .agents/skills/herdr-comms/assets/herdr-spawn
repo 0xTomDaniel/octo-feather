@@ -91,6 +91,19 @@ mapfile -t launch_argv < <(jq -r '.args[]' <<<"$role_json")
 [[ -z "$model" ]] || launch_argv+=(--append-system-prompt "$model")
 launch_argv+=(--session-id "$session")
 
+# Herdr's own Pi integration (#871): an extension that reports Pi's state and session to Herdr from
+# inside Pi, which Readiness below waits for. Herdr writes it only into a Pi agent dir, so it goes to
+# a kit cache dir, never the user's Pi profile; written aside and moved, so a concurrent launch never
+# loads a half-written file. Each spawn takes the running Herdr's current copy.
+ext="${XDG_CACHE_HOME:-$HOME/.cache}/octo-feather/herdr-pi"; mkdir -p "$ext"
+agent_dir="$(mktemp -d "$ext/install.XXXXXX")"
+if ! err="$(PI_CODING_AGENT_DIR="$agent_dir" herdr integration install pi 2>&1)" \
+  || ! mv -f "$agent_dir/extensions/herdr-agent-state.ts" "$ext/herdr-agent-state.ts"; then
+  rm -rf "$agent_dir"; echo "herdr-spawn: herdr integration install pi failed ($err); not started" >&2; exit 69
+fi
+rm -rf "$agent_dir"
+launch_argv+=(--extension "$ext/herdr-agent-state.ts")
+
 # A tab starts with the Herdr server's environment, not the caller's. HOME is
 # forwarded so the agent and every descendant keep the caller's git identity
 # and sessions; PATH gains the kit commands (herdr-say, octo-feather-state). The rest is the caller's PATH, or
@@ -215,21 +228,11 @@ if [[ "$cleared" != 1 ]]; then
   esac
 fi
 
-# Readiness (#585, #666): idle on Herdr's own `herdr agent wait`, then found by
-# name and by pane; why and the bound: herdr-comms SKILL.md, Spawn an agent.
-ready_s="${HERDR_SPAWN_READY_TIMEOUT:-120}"
-if ! err="$(herdr agent wait "$pane" --until idle --timeout "$((ready_s * 1000))" 2>&1 >/dev/null)"; then
-  [[ -n "$err" ]] && printf '%s\n' "$err" >&2
-  state="$(herdr agent get "$pane" 2>/dev/null | jq -r '.result.agent.agent_status // empty' 2>/dev/null || true)"
-  echo "herdr-spawn: agent $name (pane $pane) not idle within ${ready_s}s (herdr agent wait; state ${state:-unknown}); not ready for prompts; closing tab $tab" >&2
+# Readiness (#585, #666, #871): herdr_ready.py beside this script; what it waits for and the bound:
+# herdr-comms SKILL.md, Spawn an agent.
+if ! "$(dirname "$(readlink -f "$0")")/herdr_ready.py" "$pane" "$name"; then
+  echo "herdr-spawn: closing tab $tab" >&2
   close_orphan_tab; exit 69
 fi
-for t in "$name" "$pane"; do
-  found="$(herdr agent get "$t" 2>&1)" || true
-  if [[ "$(jq -r '.result.agent.pane_id // empty' <<<"$found" 2>/dev/null || true)" != "$pane" ]]; then
-    echo "herdr-spawn: herdr agent get $t does not find pane $pane ($(tail -1 <<<"$found")); closing tab $tab" >&2
-    close_orphan_tab; exit 69
-  fi
-done
 
 echo "name=$name role=$role tab=$tab pane=$pane cwd=$cwd contract=$contract provider_session_id=$session"
