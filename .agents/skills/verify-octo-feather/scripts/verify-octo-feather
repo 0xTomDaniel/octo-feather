@@ -2877,10 +2877,8 @@ def strings(doc: object) -> list[str]:
 
 
 def drive_template_edge(f: Feature) -> None:
-    """A template-born repo's starter edge (templates#acceptance-edge-rejects), per template: `just new-repo`, its
-    packages from the box's caches offline; then its installed `app` given a JSON request holding an unknown field
-    with --json (exit nonzero, one JSON document naming the field), then the same request without it (one JSON
-    document holding the greeting)."""
+    """A template-born repo's starter edge, per template: `just new-repo`, its packages from the box's caches
+    offline, then its installed `app` driven as templates#acceptance-edge-rejects states."""
     sc = RUN_DIR / "scratch" / "template-edge"
     shutil.rmtree(sc, ignore_errors=True)
     sc.mkdir(parents=True)

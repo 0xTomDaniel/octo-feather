@@ -5,9 +5,11 @@ Change: the python and typescript skills point at quality `#acceptance-edge-vali
 Smoke: .agents/skills/python/SKILL.md (Data At Edges; runs below, case implementer-python-edge)
 Smoke: .agents/skills/typescript/SKILL.md (Data At Edges; runs below, case implementer-typescript-edge)
 
-What the two cases prove: adoption only (dependency added, graded as manifest+lock changed); strictness and edge placement not graded; TS baseline passes too (old skill named Zod 4); strict grading is #910, owner ruling 2026-11-14 via director. This does not meet the brief's fail-before proof of quality #acceptance-edge-validated (validation into a strict model, trusted inside); the observed columns below record strictness per run without grading it.
+Removed, not shipped: the cases `implementer-python-edge` and `implementer-typescript-edge` and their fixtures `python-app-edge`, `ts-app-edge` were removed from the lane (owner: ship what is proven). Their last grading, `branch_paths` on manifest and lock, reads path names, not dependency contents, so it is a proxy even for adoption (review round 3, class proxy-check). They are owed, graded strictly by #910's fact, restorable from commit 5b03af78 (docs/owed-evals/891.md).
 
-Graded, as the cases are committed (9930536e): library adoption only, by what the branch changed (`branch_paths` touched `pyproject.toml` + `uv.lock`, `package.json` + `pnpm-lock.yaml`). Earlier runs below also graded `ran uv add pydantic` / `ran pnpm add zod` (dropped in 80d4e62a, 5b03af78: `ran` matches arguments by equality and refused `pnpm add zod@4`) and a `Prior art:` field line (dropped in 9930536e: non-discriminating in every run on both kits, and it failed python run 3 of 20261114T000816Z-d0ef96 on report form, a bulleted line, not on the rule).
+So the runs below are observed owner information, not graded proof: adoption of a schema library, Python 0/6 baseline to 6/6 at the change (proof runs 20261114T000816Z-d0ef96 and 20261114T003444Z-b43af3), TypeScript 3/3 on both kits (the old typescript skill already named Zod 4); strictness and edge placement observed per run in the tables, never graded. The PASS and FAIL verdicts quoted below are what the removed cases' facts gave at the time.
+
+Graded at the last commit holding the cases (9930536e, unchanged to 5b03af78 but for the Prior art fact): library adoption only, by what the branch changed (`branch_paths` touched `pyproject.toml` + `uv.lock`, `package.json` + `pnpm-lock.yaml`). Earlier runs below also graded `ran uv add pydantic` / `ran pnpm add zod` (dropped in 80d4e62a, 5b03af78: `ran` matches arguments by equality and refused `pnpm add zod@4`) and a `Prior art:` field line (dropped in 9930536e: non-discriminating in every run on both kits, and it failed python run 3 of 20261114T000816Z-d0ef96 on report form, a bulleted line, not on the rule).
 
 ## Fixtures offline
 
@@ -105,9 +107,9 @@ qa: 1/2 passed (run 20261114T000816Z-d0ef96)
 
 Reading of this run:
 
-- implementer-python-edge is fail-before proof on adoption: the baseline adds no library in 6 of 6 runs over both proof runs; the change adds pydantic in 6 of 6. Its one current FAIL (run 3) is the report form, a bulleted `Prior art:` line, not adoption: that run added pydantic and built strict extra-forbid models.
-- implementer-typescript-edge is a regression guard, not fail-before proof: the old typescript skill already named Zod 4 for a repo with none, and the baseline adopts zod in 3 of 3 runs. What differed between the kits in these runs is strictness (baseline run 2 `z.object`; current 3 of 3 `z.strictObject`), observed and not graded.
-- This is the typescript case's standing run. Its graded facts changed after it by one (the `Prior art:` field line dropped in 9930536e); its result stands, pass on both kits 3 of 3, since `Prior art:` passed in all its runs and `branch_paths` is unchanged.
+- implementer-python-edge (observed, the case since removed): adoption changes with the skill: the baseline adds no library in 6 of 6 runs over both proof runs; the change adds pydantic in 6 of 6. Its one current FAIL (run 3) is the report form, a bulleted `Prior art:` line, not adoption: that run added pydantic and built strict extra-forbid models.
+- implementer-typescript-edge (observed, the case since removed): no before/after on adoption: the old typescript skill already named Zod 4 for a repo with none, and the baseline adopts zod in 3 of 3 runs. What differed between the kits in these runs is strictness (baseline run 2 `z.object`; current 3 of 3 `z.strictObject`), observed and not graded.
+- This was the typescript case's last run. Its graded facts changed after it by one (the `Prior art:` field line dropped in 9930536e); its result stands, pass on both kits 3 of 3, since `Prior art:` passed in all its runs and `branch_paths` is unchanged.
 
 ## Proof run 20261114T003444Z-b43af3 (kit 9930536e, implementer-python-edge as committed, --runs 3 --baseline 7bb5c703)
 
@@ -134,6 +136,6 @@ qa: 1/1 passed (run 20261114T003444Z-b43af3)
 | current | 2 | pass | `uv add pydantic` | strict extra-forbid base model, `model_validate_json` at the edge |
 | current | 3 | pass | `uv add pydantic` | strict extra-forbid base model, `model_validate_json` at the edge |
 
-Standing result, cases as committed: implementer-python-edge fails before the change (0/3) and passes at it (3/3), run 20261114T003444Z-b43af3; implementer-typescript-edge passes on both kits (3/3 each), run 20261114T000816Z-d0ef96, a regression guard.
+Last results while the cases existed (observed owner information, not graded proof; the cases are removed and owed, see the top): implementer-python-edge 0/3 baseline, 3/3 at the change, run 20261114T003444Z-b43af3; implementer-typescript-edge 3/3 on both kits, run 20261114T000816Z-d0ef96.
 
 Owed eval: docs/owed-evals/891.md.
