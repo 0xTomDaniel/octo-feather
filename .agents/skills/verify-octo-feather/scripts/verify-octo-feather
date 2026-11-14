@@ -2866,19 +2866,22 @@ def drive_template_edge(f: Feature) -> None:
     env = {**os.environ, **f.env}
     valid = {"name": "Ada"}
     unknown = {**valid, "mood": "glad"}
-    # Each template's install, offline from the box's caches, and its installed app command.
-    langs = {"python": (["uv", "sync", "--locked", "--offline", "--quiet"], ".venv/bin/app")}
+    # Each template's install, offline from the box's caches, and its app command (package.json's bin under node).
+    langs: dict[str, tuple[list[str], Callable[[Path], list[str]]]] = {
+        "python": (["uv", "sync", "--locked", "--offline", "--quiet"], lambda r: [str(r / ".venv/bin/app")]),
+        "typescript": (["pnpm", "install", "--offline", "--frozen-lockfile"], lambda r: ["node", str(r / "src/cli.ts")])}
     for lang, (install, app) in langs.items():
         r = sc / lang
         f.run(f"{lang}-new-repo", "just", "--justfile", f"{f.s.repo}/justfile", "new-repo", lang, str(r), "--no-spec-chat")
         code, text = output(install, cwd=r, env=env)
         f.obs(f"{lang}-new-repo", "install", f"{shlex.join(install)}: exit {code}\n{text}")
         f.check(f"{lang}-new-repo", lambda c: c.code == 0 and c.o["install"].split("\n", 1)[0].endswith(": exit 0"))
-        f.run(f"{lang}-unknown-field", str(r / app), "hello", "--request", json.dumps(unknown), "--json")
+        cmd = app(r)
+        f.run(f"{lang}-unknown-field", *cmd, "hello", "--request", json.dumps(unknown), "--json")
         # Named: "mood" is a string value somewhere in the one document stdout holds (each template its own shape).
         f.check(f"{lang}-unknown-field", lambda c: c.code != 0 and "mood" in strings(cast("object", c.j))
                 and "Hello" not in c.out)
-        f.run(f"{lang}-valid", str(r / app), "hello", "--request", json.dumps(valid), "--json")
+        f.run(f"{lang}-valid", *cmd, "hello", "--request", json.dumps(valid), "--json")
         f.check(f"{lang}-valid", lambda c: c.code == 0 and c.j == {"name": "Ada", "text": "Hello, Ada"})
     f.env = {}
     say(f"template-edge evidence: {f.d}")

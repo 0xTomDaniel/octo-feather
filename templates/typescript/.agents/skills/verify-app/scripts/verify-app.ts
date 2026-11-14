@@ -398,6 +398,13 @@ function driveHello(s: State): boolean {
     kase("empty-json", ["hello", "  ", "--json"], (c) => c.code === 2 && c.err === "" && onlyError(c.j)),
     kase("empty-text", ["hello", "  "], (c) => c.code === 2 && c.out === "" && c.err.startsWith("error: ")),
     kase("no-name", ["hello"], (c) => c.code === 64 && c.out === "" && c.err.startsWith("usage: app hello")),
+    kase("request-json", ["hello", "--request", JSON.stringify({ name }), "--json"],
+      (c) => c.code === 0 && c.err === "" && isDeepStrictEqual(c.j, greeted)),
+    kase("request-unknown", ["hello", "--request", JSON.stringify({ name, mood: "glad" }), "--json"],
+      (c) => c.code === 2 && c.err === "" && isDeepStrictEqual(c.j, {
+        error: "invalid request",
+        issues: [{ field: "mood", problem: 'Unrecognized key: "mood"' }],
+      })),
   ];
   say(`hello evidence: ${dir}`);
   return results.every(Boolean);
