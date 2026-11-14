@@ -3,9 +3,11 @@ docstring), each run as that file's command through `case` (tests/gate/kit/conft
 
 from collections.abc import Callable
 
+import pytest
 from lane_post_merge import (
     install_stops,
     kit_refresh,
+    late_run,
     main_ci,
     merged_step,
     no_ci,
@@ -21,6 +23,11 @@ def test_lane_post_merge_merged_step(case: Case) -> None:
 
 def test_lane_post_merge_main_ci(case: Case) -> None:
     case(main_ci)
+
+
+@pytest.mark.e2e  # post-merge's own poll waits on the wall clock (quality spec #test-kinds)
+def test_lane_post_merge_late_run(case: Case) -> None:
+    case(late_run)
 
 
 def test_lane_post_merge_no_ci(case: Case) -> None:

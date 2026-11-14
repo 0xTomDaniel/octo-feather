@@ -261,13 +261,12 @@ def merged_step(s: Scratch) -> None:
 def main_ci(s: Scratch) -> None:
     """Step 2: a run in progress is watched to its end with --exit-status, a second workflow joins;
     every run success: exit 3 (step 5 pending), one line per step and the summary; the PR's repo
-    not the install's leaves it unchanged; a rerun the same. A run appearing within the bound is
-    waited for. A red run stops naming its URL; a watch failing while its run reads unfinished
+    not the install's leaves it unchanged; a rerun the same.
+    A red run stops naming its URL; a watch failing while its run reads unfinished
     stops naming it."""
     lane = Lane(s)
     m = lane.m
     m12 = m[:12]
-    green = run1("check", "completed", "success", 11, m)
     lint = run1("lint", "completed", "success", 12, m)
     busy = run1("check", "in_progress", "", 11, m, completes="success")
     red = run1("check", "completed", "failure", 13, m)
@@ -299,9 +298,6 @@ def main_ci(s: Scratch) -> None:
         assert f"pr view 7 --json {PR_FIELDS} -R o/r" in log, f"pr view: {log}"
         joins()
     lane.repo = ""
-    lane.store([green | {"from_list": 2}])  # created after the first run list
-    r = lane.run(3, "post-merge", "7", H, "--lane", "gh7", "--wait", "3")
-    says(r, "late run", f"step 2 main CI: ok: 1 push run on {m12} concluded success")
     lane.store([red, lint])
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7")
     red_line = f"step 2 main CI: stopped: main CI red on {m12}: check failure "
@@ -314,6 +310,16 @@ def main_ci(s: Scratch) -> None:
         r"step 2 main CI: stopped: gh run watch 11 failed.*https://github.com/o/r/actions/runs/11",
         r.out,
     ), f"watch failed: {r.out}"
+
+
+def late_run(s: Scratch) -> None:
+    """Step 2: a run appearing within the bound, after the first run list, is waited for."""
+    lane = Lane(s)
+    m = lane.m
+    green = run1("check", "completed", "success", 11, m)
+    lane.store([green | {"from_list": 2}])  # created after the first run list
+    r = lane.run(3, "post-merge", "7", H, "--lane", "gh7", "--wait", "3")
+    says(r, "late run", f"step 2 main CI: ok: 1 push run on {m[:12]} concluded success")
 
 
 def no_ci(s: Scratch) -> None:
@@ -551,4 +557,4 @@ def install_stops(s: Scratch) -> None:
 
 
 if __name__ == "__main__":
-    main(merged_step, main_ci, no_ci, superseded, kit_refresh, install_stops)
+    main(merged_step, main_ci, late_run, no_ci, superseded, kit_refresh, install_stops)
