@@ -1,0 +1,5 @@
+# A gone parent is reported by the tool, not the worker
+
+When a worker's supervisor is gone, someone must tell the director so the lane is recovered. Letting the worker send its result to the director opens a worker-to-director route that workers can misuse to bypass their supervisor. Instead `herdr-say` itself, on Herdr proving the parent gone with no parked record, sends the director one fixed alert naming the lane, the gone parent and the worker holding the result; the worker keeps its result and stops, and never messages the director: see [say-parent-gone](../specs/comms.spec.html#say-parent-gone) and [acceptance-parent-gone](../specs/comms.spec.html#acceptance-parent-gone). This supersedes ADR [0015](0015-escalations-go-up-the-chain.md) only where its guard lets a worker target the director pane once its parent is unreachable.
+
+Rejected: the director finding the dead supervisor alone through lane supervision or a watchdog, which needs nothing new but waits for the next sweep; and a Herdr pane-exit listener, which is broader and adds a listener the kit does not have.

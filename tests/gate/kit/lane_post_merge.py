@@ -1,8 +1,8 @@
 """The scenarios of tests/gate/kit/test_lane_post_merge.py (its items), this file their command
 (testkit.main): scripts/octo-feather-lane post-merge, the director's post-merge routine (owner
 ruling 2026-10-29 on issue 206; steps 1-2, issue 396), offline: the testkit's fake gh holds PR #7
-and push runs on main (a run in progress completes when watched; one created later is listed once
-its time comes), and logs every call. Step 1 stops, exit 1, on a PR not merged and on one merged at
+and push runs on main (one in progress completes when watched; one created later is listed from a
+later run list), and logs every call. Step 1 stops, exit 1, on a PR not merged and on one merged at
 another head; step 2 stops on a red run naming its URL, on no run within the --wait bound, and on a
 watch that fails with its run unfinished; all runs concluded success passes. Every run ends with a
 one-line summary of each step's outcome, and only gh reads run (rerun safe), asserted after every
@@ -26,7 +26,6 @@ from __future__ import annotations
 import os
 import re
 import sys
-import time
 from typing import TYPE_CHECKING
 
 from testkit import HERE, ROOT, Ran, Scratch, kit, main, tool_homes
@@ -208,7 +207,8 @@ class Lane:
 def run1(
     name: str, status: str, conclusion: str, i: int, head: str, **more: object
 ) -> dict[str, object]:
-    """A push run on main as gh holds it; MORE: its createdAt, the conclusion it completes with."""
+    """A push run on main as gh holds it; MORE: the run list it appears from, the conclusion it
+    completes with."""
     return {
         "databaseId": i,
         "status": status,
@@ -274,9 +274,8 @@ def main_ci(s: Scratch) -> None:
     lanes = lane.state / "octo-feather" / "lanes"
 
     def joins() -> None:
-        """Busy ends 2-3s on (gh's whole seconds), lint created then: after the first run list."""
-        at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 3))
-        lane.store([busy | {"completesAt": at}, lint | {"createdAt": at}])
+        """Busy ends when watched, lint created then: listed from the second run list on."""
+        lane.store([busy, lint | {"from_list": 2}])
 
     lane.repo = "o/r"
     joins()
@@ -300,10 +299,8 @@ def main_ci(s: Scratch) -> None:
         assert f"pr view 7 --json {PR_FIELDS} -R o/r" in log, f"pr view: {log}"
         joins()
     lane.repo = ""
-    # created 1-2s after the first run list (gh's createdAt, whole seconds), within --wait 4
-    late = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 2))
-    lane.store([green | {"createdAt": late}])
-    r = lane.run(3, "post-merge", "7", H, "--lane", "gh7", "--wait", "4")
+    lane.store([green | {"from_list": 2}])  # created after the first run list
+    r = lane.run(3, "post-merge", "7", H, "--lane", "gh7", "--wait", "3")
     says(r, "late run", f"step 2 main CI: ok: 1 push run on {m12} concluded success")
     lane.store([red, lint])
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7")

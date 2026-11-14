@@ -70,7 +70,7 @@ def over_target(s: Scratch) -> None:
     folder = repo / ".agents/skills/verify-octo-feather"
     (folder / "scripts").mkdir(parents=True)
     drive = folder / "scripts" / DRIVE.name
-    os.link(DRIVE, drive)
+    shutil.copy2(DRIVE, drive)
     (folder / "features").symlink_to(DRIVE.parent.parent / "features")
     workload = repo / "entry.py"
     workload.write_text(

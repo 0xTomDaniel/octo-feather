@@ -1,0 +1,14 @@
+Seeded defect: a dry run naming no recipe (another just's wording) reads as runs no recipe, so no check run marker (check-gate-free just_runs; #240, CI's just 1.59 fail-open).
+diff --git a/scripts/check-gate-free b/scripts/check-gate-free
+index 3e116f2e..62dc94f1 100755
+--- a/scripts/check-gate-free
++++ b/scripts/check-gate-free
+@@ -83,7 +83,7 @@ def just_runs(args, cwd=None):
+     if rc:
+         return None, line
+     names = RUNNING.findall(err)
+-    return (names, "") if names else (None, "its dry run named no recipe it runs (mise.toml pins the just whose answer this reads)")
++    return names, ""
+ 
+ 
+ def argv_of(pid):

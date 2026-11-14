@@ -1,6 +1,6 @@
 {
   "spec": "issue-lifecycle.spec.html",
-  "accepted_commit": "77bae4637869a58a7509c7fecb88e2d17a3e24a5",
+  "accepted_commit": "2f2a4d696acc0fa2ffeb4a69ce4d556b6a86294c",
   "criteria": {
     "acceptance-kickoff-refuses": {
       "status": "planned",
@@ -68,95 +68,6 @@
     "acceptance-integrate-red": {
       "status": "built",
       "pr": 24
-    },
-    "acceptance-merge-ask-evidence": {
-      "status": "built",
-      "pr": 49
-    },
-    "acceptance-merge-ask-no-criterion": {
-      "status": "built",
-      "pr": 180
-    },
-    "acceptance-merge-approved-head": {
-      "status": "built",
-      "pr": 103
-    },
-    "acceptance-merge-main-merged": {
-      "status": "planned",
-      "pr": null
-    },
-    "acceptance-merge-head-moved": {
-      "status": "planned",
-      "pr": null
-    },
-    "acceptance-fresh-review": {
-      "status": "planned",
-      "pr": null
-    },
-    "acceptance-call-listed": {
-      "status": "planned",
-      "pr": null
-    },
-    "acceptance-call-added": {
-      "status": "planned",
-      "pr": null
-    },
-    "acceptance-call-weakens": {
-      "status": "planned",
-      "pr": null
-    },
-    "acceptance-call-many": {
-      "status": "planned",
-      "pr": null
-    },
-    "acceptance-call-denied": {
-      "status": "planned",
-      "pr": null
-    },
-    "acceptance-call-guard": {
-      "status": "built",
-      "pr": 68
-    },
-    "acceptance-call-evidence": {
-      "status": "built",
-      "pr": 68
-    },
-    "acceptance-on-main": {
-      "status": "built",
-      "pr": 24
-    },
-    "acceptance-repeat-lane": {
-      "status": "planned",
-      "pr": null
-    },
-    "acceptance-gate-correction-lane": {
-      "status": "planned",
-      "pr": null
-    },
-    "acceptance-merge-linear": {
-      "status": "planned",
-      "pr": null
-    },
-    "acceptance-pr-tracks": {
-      "status": "planned",
-      "pr": null
-    },
-    "acceptance-no-github-issue": {
-      "status": "planned",
-      "pr": null
-    },
-    "acceptance-reflection-missed-lane": {
-      "status": "built",
-      "pr": 279
-    },
-    "acceptance-writer-route-lane": {
-      "status": "built",
-      "pr": 545,
-      "record": "20261104T220555Z-05d93084",
-      "commit": "de25f6ecc2529c6338b537632c0e618efc8f7e1c",
-      "tests": [
-        "tests/lane-correction.sh"
-      ]
     },
     "acceptance-integrate-fast": {
       "status": "built",
@@ -235,6 +146,95 @@
       "commit": "73bdfabb9f837a9b3e0c08dc7f8435dddb2284f7",
       "tests": [
         "tests/lane-review-resolution.sh"
+      ]
+    },
+    "acceptance-merge-ask-evidence": {
+      "status": "built",
+      "pr": 49
+    },
+    "acceptance-merge-ask-no-criterion": {
+      "status": "built",
+      "pr": 180
+    },
+    "acceptance-merge-approved-head": {
+      "status": "built",
+      "pr": 103
+    },
+    "acceptance-merge-linear": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-pr-tracks": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-no-github-issue": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-merge-main-merged": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-merge-head-moved": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-fresh-review": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-call-listed": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-call-added": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-call-weakens": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-call-many": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-call-denied": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-call-guard": {
+      "status": "built",
+      "pr": 68
+    },
+    "acceptance-call-evidence": {
+      "status": "built",
+      "pr": 68
+    },
+    "acceptance-on-main": {
+      "status": "built",
+      "pr": 24
+    },
+    "acceptance-repeat-lane": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-gate-correction-lane": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-reflection-missed-lane": {
+      "status": "built",
+      "pr": 279
+    },
+    "acceptance-writer-route-lane": {
+      "status": "built",
+      "pr": 545,
+      "record": "20261104T220555Z-05d93084",
+      "commit": "de25f6ecc2529c6338b537632c0e618efc8f7e1c",
+      "tests": [
+        "tests/lane-correction.sh"
       ]
     }
   }
