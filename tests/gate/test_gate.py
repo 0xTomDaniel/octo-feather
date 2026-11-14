@@ -8,7 +8,8 @@ variables a Herdr pane gives its shell (every HERDR_* one, as HERDR_SESSION name
 route pi-role and herdr-spawn export to a pane, so a gate run in a pane of any session runs every item as
 one outside Herdr does. Items share one dir per gate run, GATE_RUN_DIR, where tests/lib/prepared.py prepares the
 template installs several items repeat, once per run (pytest-xdist's documented "session fixture once" pattern: the
-xdist workers' shared tmp dir, the parent of each worker's basetemp; pytest keeps its last 3 basetemps).
+xdist workers' shared tmp dir, the parent of each worker's basetemp; pytest keeps its last 3 basetemps); an item run
+through the qc capture gets none (its sandbox's /tmp is private) and prepares its own.
 Each item's processes carry its name, GATE_ITEM (a recipe, or a tests/*.sh path), unless a gate this item runs
 inside already set it: the coverage map of `just fast-map` files each process under the outermost item.
 A tests/*.sh tagged with a criterion it proves carries one header line (its leading `#` lines) per criterion, `# criterion: <spec>#<anchor>`
@@ -55,7 +56,10 @@ def run(cmd: list[str], run_dir: str, item: str, qc_command: Callable[[list[str]
     env["GATE_RUN_DIR"] = run_dir
     env.setdefault("GATE_ITEM", item)
     env["TMPDIR"] = os.path.realpath(os.environ.get("TMPDIR") or "/tmp")
-    rc = subprocess.run(qc_command(cmd) if qc_command else cmd, cwd=ROOT, env=env).returncode
+    argv = qc_command(cmd) if qc_command else cmd
+    if argv != cmd:   # a captured case runs alone in its qc sandbox, whose /tmp is private: it shares no run dir
+        del env["GATE_RUN_DIR"]
+    rc = subprocess.run(argv, cwd=ROOT, env=env).returncode
     if rc == SKIP:
         pytest.skip(f"{' '.join(cmd)} exited {SKIP}, skipped (why: its output, Captured stdout/stderr)")
     if rc != 0:

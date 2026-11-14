@@ -9,11 +9,13 @@ from qc_one_execution import (
     artifacts_missing,
     capture,
     claims_refused,
+    ids_refused,
     judged_from_records,
     metadata_only,
     partial,
     plain_gate,
     strict,
+    two_specs,
 )
 
 Case = Callable[..., None]
@@ -50,3 +52,13 @@ def test_metadata_only(case: Case) -> None:
 
 def test_artifacts_missing(case: Case) -> None:
     case(artifacts_missing)
+
+
+@pytest.mark.criterion("issue-lifecycle#acceptance-qc-interim", "quality#acceptance-one-execution")
+def test_two_specs(case: Case) -> None:
+    case(two_specs)
+
+
+@pytest.mark.criterion("issue-lifecycle#acceptance-qc-interim")
+def test_ids_refused(case: Case) -> None:
+    case(ids_refused)
