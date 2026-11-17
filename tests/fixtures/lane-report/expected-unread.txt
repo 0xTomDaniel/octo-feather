@@ -14,12 +14,12 @@ lane lane-a: issue gh1 0xTomDaniel/octo-feather "Implementer working"
   log lane-a.handoffs.jsonl: 1 unparsable line (2)
 lane lane-b: issue gh3 0xTomDaniel/octo-feather "Escalated to the director"
   started: 2026-10-21T10:00:00Z (AGE ago)
-  pr: #827 unread: GitHub: gh pr view 827 failed (error connecting to api.github.com): check PR #827 exists in 0xTomDaniel/octo-feather, and gh auth status
+  pr: #946 unread: GitHub: gh pr view 946 failed (error connecting to api.github.com): check PR #946 exists in 0xTomDaniel/octo-feather, and gh auth status
   running: w6:p1 lane-b idle (supervisor)
   waits: waiting_on "director", last hand-off 2026-10-21T11:15:00Z (AGE ago)
   review rounds: 0
   spend: none recorded for lane-b
-  gate time: lane unread: GitHub (PR #827)
+  gate time: lane unread: GitHub (PR #946)
   gate time: main unread: GitHub: gh api repos/0xTomDaniel/octo-feather/commits?per_page=100 failed (error connecting to api.github.com): check 0xTomDaniel/octo-feather exists, and gh auth status
   log lane-b.handoffs.jsonl: none
 lane lane-c: issue gh4 0xTomDaniel/octo-feather "Merge ask awaits the owner"

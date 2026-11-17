@@ -14,12 +14,12 @@ lane lane-a: issue gh1 0xTomDaniel/octo-feather "Implementer working"
   log lane-a.handoffs.jsonl: 1 unparsable line (2)
 lane lane-b: issue gh3 0xTomDaniel/octo-feather "Escalated to the director"
   started: 2026-10-21T10:00:00Z (AGE ago)
-  pr: #827 MERGED ready head 04c0efcd7c82 checks: 1 failure, 1 skipped
+  pr: #946 CLOSED ready head 30466b874223 checks: 1 failure, 2 success
   running: w6:p1 lane-b idle (supervisor)
   waits: waiting_on "director", last hand-off 2026-10-21T11:15:00Z (AGE ago)
   review rounds: 0
   spend: none recorded for lane-b
-  gate time: lane none: no full gate run on a commit of PR #827
+  gate time: lane none: no full gate run on a commit of PR #946
   gate time: main 260.75s exit 0, 2 steps, head b20ee656e6fa, started 2026-10-20T07:00:00Z (AGE ago)
   log lane-b.handoffs.jsonl: none
 lane lane-c: issue gh4 0xTomDaniel/octo-feather "Merge ask awaits the owner"

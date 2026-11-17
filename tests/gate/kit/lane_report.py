@@ -21,11 +21,13 @@ replace the old invented o/a and o/b:
   0xTomDaniel/octo-feather, lane-d (no PR) on 0xTomDaniel/spec-chat, which has no PR at all.
   Lane records and check-runs.jsonl heads bent to real shas: PR 943's head 6f48fa199bd1 for
   aaaa5..., its commit d1473c1968cc for a5c1..., main b20ee656e6fa for 1111a..., main
-  2ea8800580f3 for 0000a..., PR 827's head 04c0efcd7c82 for bbbb5..., spec-chat's one commit
+  2ea8800580f3 for 0000a..., PR 946's head 30466b874223 for bbbb5..., spec-chat's one commit
   09d5286f16b9 for 1111b.... Every head, repo name and PR number in the report changes so.
 - PR states and checks are real: lane-a's PR 943 is a draft with 2 skipped checks (not ready, 1
-  in_progress, 1 success); lane-b's 827 is MERGED, ready, 1 failure, 1 skipped (not OPEN draft,
-  1 failure, 1 success: no StatusContext is counted, as neither repo has one); lane-c's 942
+  in_progress, 1 success); lane-b's 946 (a closed scratch PR) is CLOSED, ready, 1 failure, 2
+  success, the failure a StatusContext (was OPEN draft, 1 failure, 1 success, the success the
+  StatusContext): its commit status gh930-recording, state failure, written once on its head for
+  this recording (director ruling B, 2026-11-17), as neither repo has another; lane-c's 942
   (recorded while its CI ran) is ready with 1 in_progress, 2 skipped, 1 success, and carries the
   in-progress check wait (`waits: check check in_progress`, lane-a's `waits: check e2e
   in_progress` before).
@@ -55,9 +57,10 @@ from testkit import FIXTURES, Scratch, kit, main
 
 FX = FIXTURES / "lane-report"
 # gh 2.102.0, 2026-11-17 (each recording's source): one real `octo-feather-lane report` over these
-# lanes through a recording wrapper around real gh: PR views of 0xTomDaniel/octo-feather#943,
-# #827 and #942, both repos' default-branch commits, octo-feather's gate-budget.toml and
-# spec-chat's 404; plus the one constructed answer (the docstring).
+# lanes through a recording wrapper around real gh: PR views of 0xTomDaniel/octo-feather#943 and
+# #942, both repos' default-branch commits, octo-feather's gate-budget.toml and spec-chat's 404;
+# #946's view from a second run, lane-b alone, after its status was written; plus the one
+# constructed answer (the docstring).
 TAPE = Path(__file__).parent / "testkit" / "recordings" / "lane-report.json"
 KIT, SPEC = "0xTomDaniel/octo-feather", "0xTomDaniel/spec-chat"
 BUDGET = f"api repos/{KIT}/contents/gate-budget.toml -H Accept: application/vnd.github.raw"
