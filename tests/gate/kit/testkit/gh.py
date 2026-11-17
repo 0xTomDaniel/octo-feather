@@ -43,9 +43,13 @@ call alone: the Nth call of a request (its argv, one line as the log writes it) 
 recording of it, its stdout, stderr and exit as gh gave them; a request with no recording left
 exits 2 naming it. A request's `--input FILE` stands as FILE's text, in the log and a recording
 alike: the kit writes its body to a fresh temp file each call (octo-feather-lane post_comment),
-so the path never repeats, and the body sent is what the recording pins.
+so the path never repeats, and the body sent is what the recording pins. So too `--body-file -`
+stands as its stdin's text, one JSON string (the log keeps one line per call: an issue's body
+from issue-create, multi-line), and a call made with GH_REPO set (gh's repo override, the one
+way the github-issues scripts name another repo) is the request after `GH_REPO=R `.
 """
 
+import functools
 import json
 import os
 import re
@@ -170,12 +174,23 @@ def replay(a: list[str]) -> None:
     sys.exit(r["exit"])
 
 
+@functools.cache
+def stdin() -> str:
+    """gh's stdin, read once: a `--body-file -` request's and the body issue_write stores."""
+    return sys.stdin.read()
+
+
 def request(a: list[str]) -> str:
-    """The call as one log line: its argv, `--input FILE` as FILE's text."""
+    """The call as one log line: its argv, `--input FILE` as FILE's text, `--body-file -` as its
+    stdin's as a JSON string, after `GH_REPO=R ` when GH_REPO is set."""
     if "--input" in a[:-1]:
         i = a.index("--input") + 1
         a = [*a[:i], Path(a[i]).read_text(), *a[i + 1 :]]
-    return " ".join(a)
+    if "--body-file" in a[:-1] and a[a.index("--body-file") + 1] == "-":
+        i = a.index("--body-file") + 1
+        a = [*a[:i], json.dumps(stdin()), *a[i + 1 :]]
+    repo = os.environ.get("GH_REPO")
+    return " ".join([f"GH_REPO={repo}", *a] if repo else a)
 
 
 def opt(a: list[str], flag: str) -> str | None:
@@ -284,7 +299,7 @@ def issue_write(a: list[str]) -> None:
             die(f"GraphQL: Could not resolve to an issue or pull request with the number of {n}.")
         d = json.loads((STORE / "issue" / f"{n}.json").read_text())
     f = opt(a, "--body-file")
-    body = sys.stdin.read() if f == "-" else Path(f).read_text() if f else ""
+    body = stdin() if f == "-" else Path(f).read_text() if f else ""
     url = f"https://github.com/o/r/issues/{n}"
     if a[1] == "create":
         d["body"] = body
