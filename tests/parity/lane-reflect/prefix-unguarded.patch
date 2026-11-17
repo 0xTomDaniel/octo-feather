@@ -1,0 +1,14 @@
+Seeded defect: a source prefix changed during the reflector's run is not refused, so the reflection appends over evidence it never saw (spec comms #acceptance-reflect-lane, owner correction #786).
+diff --git a/scripts/octo-feather-reflect b/scripts/octo-feather-reflect
+index 9df66191..9907850b 100755
+--- a/scripts/octo-feather-reflect
++++ b/scripts/octo-feather-reflect
+@@ -465,8 +465,6 @@ class Brief:
+     def verify(self) -> None:
+         if self.director:
+             self.director.verify()
+-        for source in self.guards:
+-            source.verify()
+ 
+ 
+ def transcript_sources(items: list[str]) -> tuple[list[tuple[str, Path]], list[str]]:

@@ -2,7 +2,7 @@
 """gh: an offline fake of the GitHub CLI for the kit's correction-lane and pilot-PR tests.
 
 Never the network. One JSON store, $FAKE_GH_STORE:
-  {"issues": [{"number", "repo", "title", "body", "state" (OPEN|CLOSED), "closedAt"}],
+  {"issues": [{"number", "repo", "title", "body", "state" (OPEN|CLOSED), "closedAt", "comments"}],
    "prs": [{"number", "repo", "title", "body", "isDraft", "headRefName",
             "baseRefName", "url", "comments"}]}
 (created when absent). The repo is --repo, else $GH_REPO, else "local/repo". A PR's head
@@ -108,6 +108,7 @@ elif argv[:2] == ["issue", "create"]:
             "body": body,
             "state": "OPEN",
             "closedAt": None,
+            "comments": [],  # as gh: an issue with no comment lists none
         }
     )
     with STORE.open("w") as out:

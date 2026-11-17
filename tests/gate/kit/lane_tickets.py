@@ -5,9 +5,9 @@ reads tickets only through the target's tracker skill's issue-view (comms
 #octo-lane-record-tickets). GitHub is a snapshot octo-feather-qc-ghsnap takes of the testkit's
 fake gh (testkit/gh.py) and the qc judge's offline gh serves
 (.agents/skills/github-pr/scripts/gh), so the check is proven to work under it and to ask only
-fields the snapshot stores; a Linear target (tracker = "linear") reads the same through the kit's
-offline fake linear (.agents/skills/linear/scripts/linear, a JSON store). The target repo (the
-kit's real specs for #10's ids, a demo spec, its declared surfaces), the snapshot and a
+fields the snapshot stores; a Linear target (tracker = "linear") reads the same through the
+testkit's Linear stand-in (testkit/linear.py) replaying a tape built here (tape). The target
+repo (the kit's real specs for #10's ids, a demo spec, its declared surfaces), the snapshot and a
 hermetic PATH (no host gh reachable) are prepared once per gate run (testkit Scratch.prepare)
 and copied into each item. A group of drafts checked alike is checked in one `tickets` run of
 a Linear parent holding them (Lt.batch: one start of the command for the group), each draft's
@@ -22,7 +22,7 @@ import re
 import shutil
 from typing import TYPE_CHECKING
 
-from testkit import FAKES, FIXTURES, ROOT, Ran, Scratch, fixture, kit, main
+from testkit import FAKES, FIXTURES, HERE, ROOT, Ran, Scratch, fixture, kit, main
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -31,7 +31,7 @@ if TYPE_CHECKING:
 L = kit("octo-feather-lane")
 BODIES = "lane-tickets/bodies"
 F = FIXTURES / BODIES
-LI = ROOT / ".agents" / "skills" / "linear" / "scripts"
+LI = HERE / "linear"  # the PATH dir of the testkit's Linear stand-in
 TOOLS = [
     "bash",
     "python3",
@@ -66,6 +66,72 @@ RF = (
     "fix: write the rule item as `rule: <rule> (<owner>)`, owner kinds: octo-feather-lane --help "
     "(ticket)"
 )
+
+
+# The linear call the linear skill's issue-view makes: its GraphQL document, verbatim.
+VIEW = (
+    "query IssueView($id: String!) { issue(id: $id) { identifier title description url "
+    "state { type }\n  parent { identifier } children(first: 250) { nodes { identifier } "
+    "pageInfo { hasNextPage } }\n  inverseRelations(first: 250) "
+    "{ nodes { type issue { identifier } } } } }"
+)
+
+
+# Linear's answer for a key no issue has (linear-cli v3.1.0 tests/cli/errors.rs ISSUE_NOT_FOUND).
+GONE = {
+    "errors": [
+        {
+            "message": "Entity not found: Issue",
+            "extensions": {
+                "type": "invalid input",
+                "code": "INPUT_ERROR",
+                "statusCode": 400,
+                "userError": True,
+                "userPresentableMessage": "Could not find referenced Issue.",
+            },
+        }
+    ],
+    "data": None,
+}
+
+
+def tape(
+    d: Path, issues: Mapping[str, tuple[str, str | None, str]], gone: Sequence[str] = ()
+) -> Path:
+    """D (made), a FAKE_LINEAR dir whose tape answers issue-view's linear call once for each of
+    ISSUES (key: description, parent key or None, state type), its children the issues naming it
+    parent, and each key of GONE not found, as linear-cli v3.1.0 prints Linear's answer (the
+    shape: tests/fixtures/linear-tracker/tape.json's source). Built, not recorded: LINEAR_API_KEY
+    is not set in the factory (director decision on #921)."""
+
+    def answer(k: str) -> dict[str, object]:
+        if k in gone:
+            return {"rc": 3, "err": "", "json": GONE}
+        desc, parent, state = issues[k]
+        kids = [{"identifier": c} for c, (_, p, _) in issues.items() if p == k]
+        issue: dict[str, object] = {
+            "identifier": k,
+            "title": "t",
+            "description": desc,
+            "url": f"https://linear.app/acme/issue/{k}/t",
+            "state": {"type": state},
+            "parent": {"identifier": parent} if parent else None,
+            "children": {"nodes": kids, "pageInfo": {"hasNextPage": False}},
+            "inverseRelations": {"nodes": []},
+        }
+        return {"rc": 0, "err": "", "json": {"data": {"issue": issue}}}
+
+    calls = [
+        {
+            "argv": ["api", "--no-input", "--variable", f"id={k}", VIEW],
+            "stdin": None,
+            "answers": [answer(k)],
+        }
+        for k in [*issues, *gone]
+    ]
+    d.mkdir()
+    (d / "tape.json").write_text(json.dumps({"source": tape.__doc__, "calls": calls}))
+    return d
 
 
 def body(name: str) -> str:
@@ -230,25 +296,19 @@ class Lt:
     def batch(
         self, drafts: Sequence[Draft], cwd: Path | None = None, env: Mapping[str, str] | None = None
     ) -> None:
-        """The DRAFTS, sub-issues of one parent in a fake Linear store, checked by one `tickets`
+        """The DRAFTS, sub-issues of one parent on a Linear tape (tape), checked by one `tickets`
         run in CWD (the repo, its tracker set to linear): each draft's lines hold what it wants
         and lack what it must not; the run exits 1 when any draft fails, else 0."""
         cwd = cwd or self.repo
         self.n += 1
         team = f"B{self.n}"
         keys = [f"{team}-{i}" for i in range(2, len(drafts) + 2)]
-
-        def i(d: str, parent: str | None) -> dict[str, object]:
-            return {"title": "t", "description": d, "state": "Todo", "parent": parent}
-
-        issues = {f"{team}-1": i("parent", None)} | {
-            k: i(b, f"{team}-1") for k, (b, _, _) in zip(keys, drafts, strict=True)
+        issues = {f"{team}-1": ("parent", None, "unstarted")} | {
+            k: (b, f"{team}-1", "unstarted") for k, (b, _, _) in zip(keys, drafts, strict=True)
         }
-        st = self.s.root / f"store-{team}.json"
-        st.write_text(json.dumps({"workspace": "acme", "issues": issues}))
         (cwd / ".octo-feather.toml").write_text('tracker = "linear"\n')
         e = {
-            "OCTO_FEATHER_LINEAR_STORE": str(st),
+            "FAKE_LINEAR": str(tape(self.s.root / f"linear-{team}", issues)),
             "PATH": f"{LI}:{self.s.env['PATH']}",
             **(env or {}),
         }
@@ -976,27 +1036,22 @@ def errors(s: Scratch) -> None:
 
 def linear(s: Scratch) -> None:
     """A Linear target: the same checks through the linear tracker skill's issue-view against
-    the fake linear: pass and fail, key order, no sub-issues, an unknown key, a GitHub key; no
+    the Linear stand-in: pass and fail, key order, no sub-issues, an unknown key, a GitHub key; no
     gh run."""
     lt = Lt(s)
     (lt.repo / ".octo-feather.toml").write_text('tracker = "linear"\n')
     b101, b10 = body("101.md"), body("10.json")
-
-    def i(t: str, d: str, parent: str | None = None, state: str = "Todo") -> dict[str, object]:
-        return {"title": t, "description": d, "state": state, "parent": parent, "blocked_by": []}
-
-    store = s.root / "store.json"
     issues = {
-        "ENG-123": i("Lane", "parent"),
-        "ENG-124": i("Pass", b101, "ENG-123"),
-        "ENG-125": i("Layer only", b10, "ENG-123"),
-        "ENG-200": i("Lane 2", "parent"),
-        "ENG-210": i("Pass", b101, "ENG-200"),
-        "ENG-201": i("Pass", b101, "ENG-200", "Done"),
-        "ENG-300": i("Empty", "parent"),
+        "ENG-123": ("parent", None, "unstarted"),
+        "ENG-124": (b101, "ENG-123", "unstarted"),
+        "ENG-125": (b10, "ENG-123", "unstarted"),
+        "ENG-200": ("parent", None, "unstarted"),
+        "ENG-210": (b101, "ENG-200", "unstarted"),
+        "ENG-201": (b101, "ENG-200", "completed"),
+        "ENG-300": ("parent", None, "unstarted"),
     }
-    store.write_text(json.dumps({"workspace": "acme", "issues": issues}))
-    s.env |= {"OCTO_FEATHER_LINEAR_STORE": str(store), "PATH": f"{LI}:{s.env['PATH']}"}
+    fl = tape(s.root / "linear", issues, gone=["ENG-999"])
+    s.env |= {"FAKE_LINEAR": str(fl), "PATH": f"{LI}:{s.env['PATH']}"}
     out = lt.lane(1, "tickets", "ENG-123")
     has(
         out,

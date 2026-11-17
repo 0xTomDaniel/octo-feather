@@ -1,0 +1,28 @@
+{
+ "source": "Not recorded: LINEAR_API_KEY is not set in the factory (director decision on #921). Built from schpet/linear-cli v3.1.0's source (the linear skill's cli-version) and Linear's GraphQL schema, as tests/fixtures/linear-tracker/tape.json's source says, stdout and stderr not a terminal: team ENG has no state of type completed (Todo, Canceled only); `issue update --state completed` then fails as write_network.rs state() and refs/workflow_states.rs unknown_state() build it (not found, exit 3), rendered by app.rs report() with update.rs's context `Failed to update issue` and the hint indented below.",
+ "calls": [
+  {"argv": ["api", "--no-input", "--variable", "id=ENG-123", "query IssueView($id: String!) { issue(id: $id) { identifier title description url state { type }\n  parent { identifier } children(first: 250) { nodes { identifier } pageInfo { hasNextPage } }\n  inverseRelations(first: 250) { nodes { type issue { identifier } } } } }"], "stdin": null, "answers": [
+   {"rc": 0, "err": "", "json": {"data": {"issue": {"identifier": "ENG-123", "title": "Lane", "description": "t", "url": "https://linear.app/acme/issue/ENG-123/lane", "state": {"type": "unstarted"}, "parent": null, "children": {"nodes": [{"identifier": "ENG-124"}, {"identifier": "ENG-125"}, {"identifier": "ENG-126"}], "pageInfo": {"hasNextPage": false}}, "inverseRelations": {"nodes": []}}}}},
+   {"rc": 0, "err": "", "json": {"data": {"issue": {"identifier": "ENG-123", "title": "Lane", "description": "t", "url": "https://linear.app/acme/issue/ENG-123/lane", "state": {"type": "unstarted"}, "parent": null, "children": {"nodes": [{"identifier": "ENG-124"}, {"identifier": "ENG-125"}, {"identifier": "ENG-126"}], "pageInfo": {"hasNextPage": false}}, "inverseRelations": {"nodes": []}}}}}
+  ]},
+  {"argv": ["api", "--no-input", "--variable", "id=ENG-124", "query IssueView($id: String!) { issue(id: $id) { identifier title description url state { type }\n  parent { identifier } children(first: 250) { nodes { identifier } pageInfo { hasNextPage } }\n  inverseRelations(first: 250) { nodes { type issue { identifier } } } } }"], "stdin": null, "answers": [
+   {"rc": 0, "err": "", "json": {"data": {"issue": {"identifier": "ENG-124", "title": "T1", "description": "t", "url": "https://linear.app/acme/issue/ENG-124/t1", "state": {"type": "unstarted"}, "parent": {"identifier": "ENG-123"}, "children": {"nodes": [], "pageInfo": {"hasNextPage": false}}, "inverseRelations": {"nodes": []}}}}}
+  ]},
+  {"argv": ["api", "--no-input", "--variable", "id=ENG-125", "query IssueView($id: String!) { issue(id: $id) { identifier title description url state { type }\n  parent { identifier } children(first: 250) { nodes { identifier } pageInfo { hasNextPage } }\n  inverseRelations(first: 250) { nodes { type issue { identifier } } } } }"], "stdin": null, "answers": [
+   {"rc": 0, "err": "", "json": {"data": {"issue": {"identifier": "ENG-125", "title": "T2", "description": "t", "url": "https://linear.app/acme/issue/ENG-125/t2", "state": {"type": "canceled"}, "parent": {"identifier": "ENG-123"}, "children": {"nodes": [], "pageInfo": {"hasNextPage": false}}, "inverseRelations": {"nodes": []}}}}},
+   {"rc": 0, "err": "", "json": {"data": {"issue": {"identifier": "ENG-125", "title": "T2", "description": "t", "url": "https://linear.app/acme/issue/ENG-125/t2", "state": {"type": "canceled"}, "parent": {"identifier": "ENG-123"}, "children": {"nodes": [], "pageInfo": {"hasNextPage": false}}, "inverseRelations": {"nodes": []}}}}}
+  ]},
+  {"argv": ["api", "--no-input", "--variable", "id=ENG-126", "query IssueView($id: String!) { issue(id: $id) { identifier title description url state { type }\n  parent { identifier } children(first: 250) { nodes { identifier } pageInfo { hasNextPage } }\n  inverseRelations(first: 250) { nodes { type issue { identifier } } } } }"], "stdin": null, "answers": [
+   {"rc": 0, "err": "", "json": {"data": {"issue": {"identifier": "ENG-126", "title": "T3", "description": "t", "url": "https://linear.app/acme/issue/ENG-126/t3", "state": {"type": "unstarted"}, "parent": {"identifier": "ENG-123"}, "children": {"nodes": [], "pageInfo": {"hasNextPage": false}}, "inverseRelations": {"nodes": []}}}}}
+  ]},
+  {"argv": ["issue", "update", "ENG-124", "--state", "completed", "--no-input"], "stdin": null, "answers": [
+   {"rc": 3, "out": "", "err": "✗ Failed to update issue: Workflow state not found: 'completed' in team ENG\n  Valid states: \"Todo\" (unstarted), \"Canceled\" (canceled). A state type also works: triage, backlog, unstarted, started, completed, canceled. Run `linear team states ENG` to list them.\n"}
+  ]},
+  {"argv": ["issue", "update", "ENG-126", "--state", "completed", "--no-input"], "stdin": null, "answers": [
+   {"rc": 3, "out": "", "err": "✗ Failed to update issue: Workflow state not found: 'completed' in team ENG\n  Valid states: \"Todo\" (unstarted), \"Canceled\" (canceled). A state type also works: triage, backlog, unstarted, started, completed, canceled. Run `linear team states ENG` to list them.\n"}
+  ]},
+  {"argv": ["issue", "update", "ENG-123", "--state", "completed", "--no-input"], "stdin": null, "answers": [
+   {"rc": 3, "out": "", "err": "✗ Failed to update issue: Workflow state not found: 'completed' in team ENG\n  Valid states: \"Todo\" (unstarted), \"Canceled\" (canceled). A state type also works: triage, backlog, unstarted, started, completed, canceled. Run `linear team states ENG` to list them.\n"}
+  ]}
+ ]
+}
