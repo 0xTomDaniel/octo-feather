@@ -43,7 +43,7 @@ OTHER = "ffee" * 10
 # (/rest/repos/rules#get-rules-for-a-branch), commits/REF/check-runs
 # (/rest/checks/runs#list-check-runs-for-a-git-reference). gh's errors: `gh: <message> (HTTP
 # <status>)` on stderr, exit 1; the plan's 403 message as octo-feather-lane NO_RULESETS records it.
-API = "api/repos/{owner}/{repo}"
+API = "api/repos/o/r"
 CHECK_OK = [
     {"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"},
     {"__typename": "StatusContext", "context": "ci/x", "state": "SUCCESS"},

@@ -14,6 +14,7 @@ from herdr_messaging import (
     spawn_fails_closed,
     spawn_one_bound,
     spawn_ready_late,
+    tell_supervisors,
     worker_route,
 )
 
@@ -46,6 +47,10 @@ def test_say_stalled(case: Case) -> None:
 
 def test_post_merge_busy(case: Case) -> None:
     case(post_merge_busy)
+
+
+def test_post_merge_tell_supervisors(case: Case) -> None:
+    case(tell_supervisors)
 
 
 @pytest.mark.criterion(
