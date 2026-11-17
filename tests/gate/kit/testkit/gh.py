@@ -36,7 +36,9 @@ Recorded answers instead of the store: a $FAKE_GH/tape.json (a list of recording
 testkit/recordings/*.json hold real gh's, each {request, out, err, exit, source}) answers every
 call alone: the Nth call of a request (its argv, one line as the log writes it) replays the Nth
 recording of it, its stdout, stderr and exit as gh gave them; a request with no recording left
-exits 2 naming it.
+exits 2 naming it. A request's `--input FILE` stands as FILE's text, in the log and a recording
+alike: the kit writes its body to a fresh temp file each call (octo-feather-lane post_comment),
+so the path never repeats, and the body sent is what the recording pins.
 """
 
 import json
@@ -152,7 +154,7 @@ def replay(a: list[str]) -> None:
     p = STORE / "tape.json"
     if not p.is_file():
         return
-    req = " ".join(a)
+    req = request(a)
     said = [r for r in json.loads(p.read_text()) if r["request"] == req]
     nth = log().count(req)  # this call already logged
     if nth > len(said):
@@ -161,6 +163,14 @@ def replay(a: list[str]) -> None:
     sys.stdout.write(r["out"])
     sys.stderr.write(r["err"])
     sys.exit(r["exit"])
+
+
+def request(a: list[str]) -> str:
+    """The call as one log line: its argv, `--input FILE` as FILE's text."""
+    if "--input" in a[:-1]:
+        i = a.index("--input") + 1
+        a = [*a[:i], Path(a[i]).read_text(), *a[i + 1 :]]
+    return " ".join(a)
 
 
 def opt(a: list[str], flag: str) -> str | None:
@@ -257,7 +267,7 @@ def write(a: list[str]) -> None:
 
 def main(a: list[str]) -> None:
     with (STORE / "log").open("a") as f:
-        f.write(" ".join(a) + "\n")
+        f.write(request(a) + "\n")
     if (STORE / "down").exists():
         die("error connecting to api.github.com")
     if not os.environ.get("GH_TOKEN"):
