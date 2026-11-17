@@ -228,7 +228,12 @@
     },
     "acceptance-reflection-missed-lane": {
       "status": "built",
-      "pr": 279
+      "pr": 962,
+      "record": "20261117T205924Z-074ffe2c",
+      "commit": "8ae54387da0943f931274c62a2e7d0ab129db3cd",
+      "tests": [
+        "tests/gate/kit/test_lane_correction.py"
+      ]
     },
     "acceptance-writer-route-lane": {
       "status": "built",

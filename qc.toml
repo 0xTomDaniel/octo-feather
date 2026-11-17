@@ -208,6 +208,14 @@ covers = ["scripts/octo-feather-lane", "scripts/octo-feather-reflect"]
 [demo."comms#acceptance-worker-ended"]
 covers = ["scripts/octo-feather-handoff", "scripts/handoff_log.py", "agents/supervisor.md", "tests/gate/kit/handoff_ended.py"]
 
+# Proven by its tagged test, tests/gate/kit/test_lane_correction.py (gh stand-in's store; the scenario prints each archive's output).
+[demo."comms#acceptance-reflect-recurrence-comments"]
+covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane", "tests/gate/kit/lane_correction.py"]
+
+# Proven by its tagged test, tests/gate/kit/test_lane_correction.py (gh stand-in's store; the scenario prints each reflect --director's output).
+[demo."issue-lifecycle#acceptance-reflection-missed-lane"]
+covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane", "tests/gate/kit/lane_correction.py"]
+
 [demo."comms#acceptance-report-owner-caught-headline"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run factory-report"
 covers = ["scripts/octo-feather-lane"]
