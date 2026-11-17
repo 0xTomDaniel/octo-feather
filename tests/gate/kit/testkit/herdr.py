@@ -8,7 +8,8 @@ no agent in Herdr's envelope (as tests/fixtures/lane-report/herdr); any other ca
 {"session": S}.
 
 With FAKE_HERDR set, it stands for Herdr's agents instead (#666): a world in that dir, each call one
-line in its `log`. `agents.json` maps each pane id to its agent, {name, pane_id, workspace_id,
+line in its `log`, and one "SECOND<TAB>CALL" in `times` (SECOND the CLOCK_MONOTONIC second it came
+in). `agents.json` maps each pane id to its agent, {name, pane_id, workspace_id,
 tab_id, agent_status}, and `ready_at` (an epoch time: `unknown` until then, a Pi still booting);
 a scenario may write it. `tab create --workspace W [--label L] [--env K=V]...` makes tab W:tN,
 pane W:pN (N past every earlier tab's), keeping L and the env (its agent's `label`, `env`);
@@ -212,6 +213,7 @@ class World:
 
     def call(self, a: list[str]) -> int:
         """One call A, logged."""
+        self.note("times", f"{time.monotonic()}\t{' '.join(a)}")
         self.note("log", " ".join(a))
         two = (a[0], a[1]) if len(a) > 1 else (" ".join(a), "")
         if two == ("pane", "read"):
