@@ -22,6 +22,7 @@ LEGACY = (
 )
 OLD = "- director 2026-11-05T01:02:03Z director (director-reflection-missed), route r: old gap"
 NONE = "correction lanes: none filed or commented"
+KIT = "0xTomDaniel/octo-feather"
 
 
 def cr(at: str, summary: str) -> str:
@@ -29,9 +30,10 @@ def cr(at: str, summary: str) -> str:
     return json.dumps(d | {"blocking": True, "summary": summary}) + "\n"
 
 
-def lane(top: Path, name: str, log: str = "") -> None:
+def lane(top: Path, name: str, log: str = "", repo: str = "") -> None:
     (top / "lanes" / f"{name}.toml").write_text(
         f'issue = "{name}"\nsupervisor = "w9:p2"\ngoal = "scratch"\n'
+        + (f'repository = "{repo}"\n' if repo else "")
     )
     (top / "lanes" / f"{name}.handoffs.jsonl").write_text(log)
 
@@ -137,5 +139,43 @@ def reflection_missed(s: Scratch) -> None:
         assert want in out, out
 
 
+def kit_lane(s: Scratch) -> None:
+    """A lane of the kit itself (its tracker the director's): its archive, the lane and the
+    director reflection each finding a reflection-missed gap, files one issue in the kit's tracker
+    for the lane's and comments the director's on it, the tracker listed once (the issue this run
+    filed seen in memory, never by a re-list); a next kit lane with no finding does nothing."""
+    top = reflector(s)
+    (top / "lanes").mkdir()
+    lane(top, "gh5", repo=KIT)
+    reply(s, "lane", "class: reflection-missed | question: reflection-missed | route: r1 | "
+          "summary: lane gap")  # fmt: skip
+    reply(s, "director", "class: reflection-missed | question: director-reflection-missed | "
+          "route: r2 | summary: director gap")  # fmt: skip
+    out = run(s, "archive", "gh5")
+    filed = f"correction lane: filed 1 in github-issues {KIT} for reflection-missed (1 finding"
+    assert filed in out, out
+    assert (
+        "correction lane: commented https://github.com/o/r/issues/1#issuecomment-1001 on 1" in out
+    )
+    assert issues(s) == [1], f"filed a second issue: {issues(s)} {out}"
+    assert "lane gap" in str(issue(s, 1)["body"]), issue(s, 1)
+    (c,) = comments(s, 1)
+    assert "route r2: director gap" in c, c
+    assert "lane gap" not in c, c
+    assert "running count 2" in c, c
+    lists = [x for x in s.gh.log() if x.startswith("issue list ")]
+    once = (
+        f'issue list --repo {KIT} --state all --limit 1000 --search "correction-lane"'
+        " in:title --json number,title,state,closedAt,body,comments"
+    )
+    assert lists == [once], lists
+    reply(s, "lane")
+    reply(s, "director")
+    lane(top, "gh6", repo=KIT)
+    out = run(s, "archive", "gh6")
+    assert NONE in out, out
+    assert (issues(s), len(comments(s, 1))) == ([1], 1), f"filed or commented again: {out}"
+
+
 if __name__ == "__main__":
-    main(recurrence, reflection_missed)
+    main(recurrence, reflection_missed, kit_lane)

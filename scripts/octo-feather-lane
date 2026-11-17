@@ -708,6 +708,7 @@ def file_corrections(lanes: Path) -> list[str]:
     except (OSError, UnicodeDecodeError) as e:
         raise Refuse(f"correction lanes: cannot read the hand-off logs ({e}): fix the cause, then rerun") from e
     filed: list[str] = []
+    known: dict[str, list[dict[str, object]]] = {}   # each repo's issues, listed once, plus what this run wrote
     for owner in dict.fromkeys(o for d in due for o in d.owners):
         mine = [d for d in due if owner in d.owners]
         if not mine:
@@ -728,7 +729,9 @@ def file_corrections(lanes: Path) -> list[str]:
                 print(f"correction lane: due, not filed: {d.cls}: tracker skill {skill} offers no search for an existing"
                       f" one; file it by hand through {skill}'s issue-create, title `{d.title()}`, unless one is open")
             continue
-        issues = correction_issues(str(repo) if repo else None, ",body,comments")
+        if str(repo) not in known:   # gh's search index lags a write: this run's own are added in memory
+            known[str(repo)] = correction_issues(str(repo) if repo else None, ",body,comments")
+        issues = known[str(repo)]
         for d in mine:
             if not r.still_due(d, issues):
                 if (again := r.recurrence(d, issues)):   # spec comms #reflection-correction: a comment, never an issue
@@ -739,6 +742,7 @@ def file_corrections(lanes: Path) -> list[str]:
                     except Refuse as e:
                         raise Refuse(f"correction lanes: {e}" + (f" (filed before it: {', '.join(filed)})" if filed else "")) from e
                     filed.append(url)
+                    again[0]["comments"] = [*(again[0].get("comments") or []), {"body": text}]
                     print(f"correction lane: commented {url} on {n} in {where} for {d.cls}:")
                     print("\n".join(f"  {x}" if x else "" for x in text.splitlines()))
                 continue
@@ -748,6 +752,10 @@ def file_corrections(lanes: Path) -> list[str]:
             except Refuse as e:
                 raise Refuse(f"correction lanes: {e}" + (f" (filed before it: {', '.join(filed)})" if filed else "")) from e
             filed.append(key)
+            if not key.isdigit():
+                raise Refuse(f"correction lanes: issue-create printed {key!r}, no issue number: check {skill}, then rerun"
+                             f" (filed: {', '.join(filed)})")
+            issues.append({"number": int(key), "title": d.title(), "state": "OPEN", "body": d.body(), "comments": []})
             print(f"correction lane: filed {key} in {where} for {d.cls} ({len(d.findings)} finding"
                   f"{'s' if len(d.findings) != 1 else ''}; route: {d.route()})")
     if not filed:

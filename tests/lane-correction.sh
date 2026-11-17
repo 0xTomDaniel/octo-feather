@@ -78,30 +78,32 @@ lane gh5 "$(cr 2026-10-24T00:00:00Z dup-rule "gh5 after the close")"; none
 out="$("$L" archive gh5 2>&1)" || fail "archive gh5 failed: $out"
 grep -qF "correction lane: filed 902 in github-issues o/t for dup-rule" <<<"$out" || fail "closed before the latest finding: not filed: $out"
 
-# acceptance-reflection-missed-lane: a reflection-missed finding files at once, the class's one issue in the target of
-# the lane holding its latest lane finding, quoting the director's too; owner-caught classes twice in the director log
-# file nothing. The director's alone in the kit's tracker, and an open issue's comment: tests/gate/kit/lane_correction.py.
+# acceptance-reflection-missed-lane: one lane reflection-missed finding files at once in the target; a director one in
+# the kit's repo; owner-caught classes twice in the director log file nothing. An open issue's comment, and a kit lane's
+# and the director's in one tracker: tests/gate/kit/lane_correction.py.
 printf '%s\n' '{"at":"2026-10-25T00:00:00Z","kind":"finding","class":"owner-caught-stale-pr","summary":"a"}' \
   '{"at":"2026-10-25T01:00:00Z","kind":"finding","class":"owner-caught-stale-pr","summary":"b"}' >>"$dlog"
 lane gh6
 printf '%s\n%s\n' "$LQ" 'Finding: class: reflection-missed | question: reflection-missed | route: reflection/questions.json undetected-rule | summary: gh1 reflection found no gap; gh6 review found the rule broken; reword undetected-rule' >"$t/reply.lane"
 printf '%s\n%s\n' "$DQ" 'Finding: class: reflection-missed | question: director-reflection-missed | route: reflection/questions.json owner-asked | summary: owner caught a stale PR after the last reflection; add a stale-PR question' >"$t/reply.director"
 out="$("$L" archive gh6 2>&1)" || fail "archive gh6 failed: $out"
-grep -qE '^correction lane: filed 903 in github-issues o/t for reflection-missed \(2 findings; ' <<<"$out" || fail "reflection-missed not filed: $out"
+grep -qE '^correction lane: filed 903 in github-issues o/t for reflection-missed \(1 finding; ' <<<"$out" || fail "lane reflection-missed not filed: $out"
+grep -qE '^correction lane: filed 904 in github-issues 0xTomDaniel/octo-feather for reflection-missed \(1 finding; ' <<<"$out" || fail "director reflection-missed not filed: $out"
 python3 - "$(issues)" <<'EOF' || fail "reflection-missed issues wrong: $(issues)"
 import json, sys
 by = {i["number"]: i for i in json.loads(sys.argv[1])}
-assert len(by) == 3, by.keys()
-i = by[903]
-assert i["title"] == "[correction-lane reflection-missed] change the question list: reflection-missed", i
-assert "Changes: the question list, reflection/questions.json" in i["body"], i["body"]
-assert "reword undetected-rule" in i["body"] and "add a stale-PR question" in i["body"], i["body"]
+assert len(by) == 4, by.keys()
+for n, quote, other in ((903, "reword undetected-rule", "add a stale-PR question"), (904, "add a stale-PR question", "reword undetected-rule")):
+    i = by[n]
+    assert i["title"] == "[correction-lane reflection-missed] change the question list: reflection-missed", i
+    assert "Changes: the question list, reflection/questions.json" in i["body"] and quote in i["body"], i["body"]
+    assert other not in i["body"], i["body"]
 assert not any("owner-caught" in i["title"] for i in by.values()), by
 EOF
 
-# Its issue open, quoting both: the director reflection alone, no new finding, files and comments nothing.
+# Their issues open, each quoting its finding: the director reflection alone, no new finding, files and comments nothing.
 none; out="$("$L" reflect --director 2>&1)" || fail "reflect --director failed: $out"
-[[ "$(count)" == 3 ]] && grep -qxF "correction lanes: none filed or commented" <<<"$out" || fail "refiled: $out $(issues)"
+[[ "$(count)" == 4 ]] && grep -qxF "correction lanes: none filed or commented" <<<"$out" || fail "refiled: $out $(issues)"
 
 # Every due subject files, whichever lane's reflection runs: archived gh1 and gh2 hold one dup-rule finding each, the
 # archive of unrelated gh3 files the class in gh1/gh2's target quoting both; a further archive files nothing.
@@ -157,4 +159,4 @@ out="$("$L" archive gh3 2>&1)" || fail "counts: archive gh3 failed: $out"
 grep -qE '^correction lane: filed 901 in github-issues o/t for judged \(2 findings; ' <<<"$out" && [[ "$(count)" == 1 ]] \
   || fail "counts: want only judged filed: $out $(issues)"
 
-echo "lane-correction: ok (only blocking code-review or qc findings in two lanes count, reflection, one-lane and director findings make none due; every due subject files whichever lane reflects, in its own lane's target; director-routed lane class files naming the route; second finding files in the lane's repo with findings and route, key printed; closed-after files nothing, closed-before refiles; reflection-missed files at once, one issue of the class in the latest lane's target, naming the question list, and its rerun files nothing; owner-caught not filed)"
+echo "lane-correction: ok (only blocking code-review or qc findings in two lanes count, reflection, one-lane and director findings make none due; every due subject files whichever lane reflects, in its own lane's target; director-routed lane class files naming the route; second finding files in the lane's repo with findings and route, key printed; closed-after files nothing, closed-before refiles; reflection-missed files at once, lane's in the target, director's in the kit, naming the question list, and its rerun files nothing; owner-caught not filed)"

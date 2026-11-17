@@ -911,8 +911,9 @@ def counts(log: str, d: LogLine) -> bool:
 def corrections(logs: dict[str, list[LogLine]], director: list[LogLine]) -> list[Due]:
     """Each correction lane the rule makes due on the finding lines of the lane hand-off logs LOGS
     ({lane: lines}, archived included) and the DIRECTOR log, before the tracker is asked; a due
-    class names the routes its reflection findings gave."""
-    by: dict[str, list[tuple[str, LogLine]]] = {}
+    class names the routes its reflection findings gave; the director log's reflection-missed
+    findings are a due of their own, the director's."""
+    by: dict[tuple[str, bool], list[tuple[str, LogLine]]] = {}
     routed: dict[str, list[str]] = {}
     for log, lines in [*logs.items(), (DIRECTOR, director)]:
         for d in lines:
@@ -922,9 +923,9 @@ def corrections(logs: dict[str, list[LogLine]], director: list[LogLine]) -> list
             if d.get("route"):
                 routed.setdefault(cls, []).append(str(d["route"]))
             if cls == MISSED or counts(log, d):  # reflection-missed: due at once
-                by.setdefault(cls, []).append((log, d))
+                by.setdefault((cls, cls == MISSED and log == DIRECTOR), []).append((log, d))
     out: list[Due] = []
-    for cls, found in by.items():
+    for (cls, _), found in by.items():
         if cls != MISSED and len({log for log, _ in found}) < REPEAT:
             continue
         latest = max(str(d.get("at") or "") for _, d in found)
@@ -967,7 +968,8 @@ def still_due(due: Due, issues: list[dict[str, Any]]) -> bool:
 def recurrence(due: Due, issues: list[dict[str, Any]]) -> tuple[dict[str, Any], str] | None:
     """The oldest open issue of DUE's class among ISSUES ({..., body, comments: [{body}]}, null
     for none) and the comment to add to it, quoting each of DUE's findings no issue of the class
-    quotes in its body or a comment, with the class's running count; None when none is open or
+    quotes in its body or a comment, with the class's running count (the distinct findings its
+    issues and this comment quote); None when none is open or
     every finding is quoted."""
     mine = of_class(due, issues)
     first = next((i for i in mine if is_open(i)), None)
@@ -979,10 +981,11 @@ def recurrence(due: Due, issues: list[dict[str, Any]]) -> tuple[dict[str, Any], 
     new = [quote(log, d) for log, d in due.findings if not any(quote(log, d) in t for t in said)]
     if not new:
         return None
+    quoted = {q for t in said for q in re.findall(r"(?m)^- \S+ \d{4}-\d\d-\d\dT\S+ .*$", t)}
     head = (
         f"Recurrence of class {due.cls} (comms spec #reflection-correction), added by"
         f" `octo-feather-lane reflect`: {len(new)} new finding{'s' if len(new) != 1 else ''};"
-        f" running count {len(due.findings)}."
+        f" running count {len(quoted | set(new))}."
     )
     return first, "\n".join([head, "", *new])
 
