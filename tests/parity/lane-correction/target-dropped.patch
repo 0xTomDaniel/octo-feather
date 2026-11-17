@@ -1,0 +1,14 @@
+Seeded defect: a lane's correction lane files in the current directory's repo, not the lane record's target (spec comms #reflection-correction).
+diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
+index a9b3c986..7181b3c4 100755
+--- a/scripts/octo-feather-lane
++++ b/scripts/octo-feather-lane
+@@ -719,7 +719,7 @@ def file_corrections(lanes: Path) -> list[str]:
+             except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+                 raise Refuse(f"correction lanes: cannot read lane record {rec} ({e}): fix it, then rerun") from e
+         where = f"{skill} {repo or 'of the current directory'}"
+-        env = {"GH_REPO": str(repo)} if repo else {}
++        env = {}
+         if skill != GITHUB_ISSUES:
+             for d in mine:
+                 print(f"correction lane: due, not filed: {d.subject}: tracker skill {skill} offers no search for an existing"
