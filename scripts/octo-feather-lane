@@ -55,7 +55,9 @@ moves) file the correction lanes due (spec comms #reflection-correction; the rul
 through the tracker skill's `issue-create`: a lane's in its target's tracker (the current directory's tracker skill,
 the lane record's `repository`), the director's in the kit's; each issue's title carries the marker of
 scripts/octo-feather-reflect `MARK`, by which `gh issue list` finds the ones already filed. Prints
-`correction lane: filed <key> in <tracker> for <subject> (...)` per issue, else `correction lanes: none filed`;
+`correction lane: filed <key> in <tracker> for <class> (...)` per issue; a class whose issue is open gets, through
+`issue-comment`, one comment quoting its findings no issue of the class quotes yet, printed as `correction lane:
+commented <url> on <key> ...` then the comment; else `correction lanes: none filed or commented`;
 a tracker other than github-issues gets `correction lane: due, not filed: ...` naming the title to file by hand.
 A tracker that cannot be read or written refuses the archive, its reflections' lines undone, every file in place.
 
@@ -691,7 +693,8 @@ GITHUB_ISSUES = "github-issues"   # the kit's own tracker skill, and the one tra
 
 def file_corrections(lanes: Path) -> list[str]:
     """Spec comms #reflection-correction: file, through the tracker skill's issue-create, every correction lane the
-    rule makes due (scripts/octo-feather-reflect `corrections`, `still_due`), whichever reflection ran, each in its
+    rule makes due (scripts/octo-feather-reflect `corrections`, `still_due`), or comment its new findings on the open
+    one (`recurrence`, issue-comment), whichever reflection ran, each in its
     own owner's tracker: a lane name files in its target's tracker (the current directory's tracker skill, the lane
     record's repository), the director in the kit's. Prints each filed key; Refuse when the tracker cannot be read or written."""
     import tomllib
@@ -722,12 +725,22 @@ def file_corrections(lanes: Path) -> list[str]:
         env = {"GH_REPO": str(repo)} if repo else {}
         if skill != GITHUB_ISSUES:
             for d in mine:
-                print(f"correction lane: due, not filed: {d.subject}: tracker skill {skill} offers no search for an existing"
+                print(f"correction lane: due, not filed: {d.cls}: tracker skill {skill} offers no search for an existing"
                       f" one; file it by hand through {skill}'s issue-create, title `{d.title()}`, unless one is open")
             continue
-        issues = correction_issues(str(repo) if repo else None)
+        issues = correction_issues(str(repo) if repo else None, ",body,comments")
         for d in mine:
             if not r.still_due(d, issues):
+                if (again := r.recurrence(d, issues)):   # spec comms #reflection-correction: a comment, never an issue
+                    n, text = again[0]["number"], again[1]
+                    try:
+                        url = tracker("issue-comment", str(n), "--body-file", "-", err=Refuse, skill=skill, env=env,
+                                      stdin=text).strip()
+                    except Refuse as e:
+                        raise Refuse(f"correction lanes: {e}" + (f" (filed before it: {', '.join(filed)})" if filed else "")) from e
+                    filed.append(url)
+                    print(f"correction lane: commented {url} on {n} in {where} for {d.cls}:")
+                    print("\n".join(f"  {x}" if x else "" for x in text.splitlines()))
                 continue
             try:
                 key = tracker("issue-create", "--title", d.title(), "--body-file", "-", err=Refuse, skill=skill, env=env,
@@ -735,19 +748,20 @@ def file_corrections(lanes: Path) -> list[str]:
             except Refuse as e:
                 raise Refuse(f"correction lanes: {e}" + (f" (filed before it: {', '.join(filed)})" if filed else "")) from e
             filed.append(key)
-            print(f"correction lane: filed {key} in {where} for {d.subject} ({len(d.findings)} finding"
+            print(f"correction lane: filed {key} in {where} for {d.cls} ({len(d.findings)} finding"
                   f"{'s' if len(d.findings) != 1 else ''}; route: {d.route()})")
     if not filed:
-        print("correction lanes: none filed")
+        print("correction lanes: none filed or commented")
     return filed
 
 
-def correction_issues(repo: str | None) -> list[dict[str, object]]:
+def correction_issues(repo: str | None, more: str = "") -> list[dict[str, object]]:
     """Every correction-lane issue, open or closed, of the github-issues tracker REPO (None: the current directory's),
-    found by scripts/octo-feather-reflect `MARK_WORD` in its title: {number, title, state, closedAt, url}."""
+    found by scripts/octo-feather-reflect `MARK_WORD` in its title: {number, title, state, closedAt}, and the gh
+    fields MORE adds (`,body,comments`); Refuse on an issue whose number, body or comments gh's JSON lacks."""
     r = reflect_module()
     out = gh(["issue", "list", *(["--repo", repo] if repo else []), "--state", "all", "--limit", "1000",
-              "--search", f'"{r.MARK_WORD}" in:title', "--json", "number,title,state,closedAt"],
+              "--search", f'"{r.MARK_WORD}" in:title', "--json", "number,title,state,closedAt" + more],
              "check gh auth and network, then rerun")
     try:
         got = json.loads(out)
@@ -755,7 +769,16 @@ def correction_issues(repo: str | None) -> list[dict[str, object]]:
         raise Refuse(f"correction lanes: gh issue list printed no JSON ({e}): rerun") from e
     if not isinstance(got, list):
         raise Refuse("correction lanes: gh issue list printed no list: rerun")
-    return [cast("dict[str, object]", i) for i in cast("list[object]", got) if isinstance(i, dict)]
+    issues = [cast("dict[str, object]", i) for i in cast("list[object]", got) if isinstance(i, dict)]
+    for i in issues:   # null: gh holds none
+        c: object = i.get("comments") or []
+        if not isinstance(i.get("number"), int) or not isinstance(i.get("body"), (str, type(None))) \
+                or not isinstance(c, list) or not all(isinstance(x, dict) and isinstance(cast("dict[str, object]", x).get("body"), str)
+                                                      for x in cast("list[object]", c)):
+            raise Refuse(f"correction lanes: gh issue list printed issue #{i.get('number')} not in gh's form (number an"
+                         f" int, body a string, comments a list of {{body}}): check `gh issue list --json"
+                         f" number,body,comments` on {repo or 'this repo'} and update gh, then rerun")
+    return issues
 
 
 def cmd_intake(args: list[str]) -> int:
@@ -771,7 +794,7 @@ def cmd_intake(args: list[str]) -> int:
     for lane, _, lines in lane_logs(lanes):
         logs[lane] = logs.get(lane, []) + lines
     director = read_log(dlog)[0] if dlog.exists() else []
-    due = {d.subject for d in r.corrections(logs, director)}
+    due = {d.cls for d in r.corrections(logs, director)}
     repos: list[str] = []
     for rec in sorted(lanes.glob("archive/*.toml")) + sorted(lanes.glob("*.toml")):
         try:
@@ -798,9 +821,7 @@ def cmd_intake(args: list[str]) -> int:
         mine = [(log, d) for log, d in found if d["class"] == cls]
         counted = [(log, d) for log, d in mine if r.counts(log, d)]
         lanes_ = sorted({log for log, _ in counted})
-        subjects = {s for _, s, _ in by[cls]}
-        is_due = all(s in due for s in subjects) if cls == r.MISSED else cls in due
-        print(f"class {cls}: due {'yes' if is_due else 'no'}; blocking {len(counted)} in {len(lanes_)} lane(s)"
+        print(f"class {cls}: due {'yes' if cls in due else 'no'}; blocking {len(counted)} in {len(lanes_)} lane(s)"
               + (f" ({', '.join(lanes_)})" if lanes_ else "") + f"; findings {len(mine)}")
         for repo, _, i in by[cls]:
             print(f"  issue {repo}#{i.get('number')}: {i.get('title')}")
