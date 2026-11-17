@@ -29,10 +29,13 @@ stored `completes` conclusion (no line), so the next list reads it completed, as
 the run ends; exit 1 unless it concluded success. A file
 $FAKE_GH/watch-fails makes every run watch fail as gh does on a rejected token, the run unchanged.
 `gh api PATH --jq .F` prints field F of api/PATH.json, a string bare (a compare's status).
-`issue create --title T --body-file F|-` stores issue/N.json (N past every stored issue, state
-OPEN, T and the body) and prints its URL.
 run watch's texts are real gh's (gh 2.102.0 on vuejs/core, 2026-11-13; watch() names each call).
-Anything else exits 2 naming it.
+Issue writes print what gh v2.102.0 prints with stdout not a terminal (cli/cli pkg/cmd/issue:
+create/create.go, close/close.go; pkg/cmd/pr/shared/commentable.go): `issue create --title T
+--body-file F|- ...` stores issue/N.json, N past every stored one, and prints its URL; `issue
+comment N --body-file F|-` appends to issue N's comments and prints the comment URL; `issue close
+N` closes it, on stderr `✓ Closed issue o/r#N (TITLE)`, or `! Issue o/r#N (TITLE) is already
+closed`. Anything else exits 2 naming it.
 """
 
 import json
@@ -143,21 +146,6 @@ def watch(a: list[str]) -> None:
     sys.exit(0 if d["conclusion"] == "success" else 1)
 
 
-def create(a: list[str]) -> None:
-    """`issue create --title T --body-file F|-`: issue N past every stored one, open; its URL,
-    exiting; any other call returns."""
-    if a[:2] != ["issue", "create"]:
-        return
-    f = opt(a, "--body-file")
-    body = sys.stdin.read() if f == "-" else Path(str(f)).read_text()
-    n = 1 + max((int(p.stem) for p in (STORE / "issue").glob("*.json")), default=0)
-    (STORE / "issue").mkdir(exist_ok=True)
-    d = {"number": n, "title": opt(a, "--title"), "body": body, "state": "OPEN"}
-    (STORE / "issue" / f"{n}.json").write_text(json.dumps(d))
-    sys.stdout.write(f"https://github.com/o/r/issues/{n}\n")
-    sys.exit(0)
-
-
 def opt(a: list[str], flag: str) -> str | None:
     return a[a.index(flag) + 1] if flag in a else None
 
@@ -250,6 +238,39 @@ def write(a: list[str]) -> None:
     sys.stdout.write(url + "\n")
 
 
+def issue_write(a: list[str]) -> None:
+    """`issue create|comment|close` (the module docstring), exiting; any other call returns."""
+    if a[:1] != ["issue"] or a[1:2] not in (["create"], ["comment"], ["close"]):
+        return
+    if a[1] == "create":
+        nums = [int(p.stem) for p in (STORE / "issue").glob("*.json")]
+        n = str(max(nums, default=0) + 1)
+        d: dict[str, Any] = {"number": int(n), "title": opt(a, "--title"), "state": "OPEN"}
+    else:
+        n = a[2]
+        if not (STORE / "issue" / f"{n}.json").is_file():
+            die(f"GraphQL: Could not resolve to an issue or pull request with the number of {n}.")
+        d = json.loads((STORE / "issue" / f"{n}.json").read_text())
+    f = opt(a, "--body-file")
+    body = sys.stdin.read() if f == "-" else Path(f).read_text() if f else ""
+    url = f"https://github.com/o/r/issues/{n}"
+    if a[1] == "create":
+        d["body"] = body
+    elif a[1] == "comment":
+        comments: list[object] = d.setdefault("comments", [])
+        url += f"#issuecomment-{1001 + len(comments)}"
+        comments.append({"author": {"login": "sup"}, "body": body, "url": url})
+    elif d["state"] == "CLOSED":
+        die(f"! Issue o/r#{n} ({d['title']}) is already closed", 0)
+    else:
+        d["state"], url = "CLOSED", ""
+        sys.stderr.write(f"✓ Closed issue o/r#{n} ({d['title']})\n")
+    (STORE / "issue").mkdir(exist_ok=True)
+    (STORE / "issue" / f"{n}.json").write_text(json.dumps(d))
+    sys.stdout.write(url + "\n" if url else "")
+    sys.exit(0)
+
+
 def main(a: list[str]) -> None:
     with (STORE / "log").open("a") as f:
         f.write(" ".join(a) + "\n")
@@ -258,7 +279,7 @@ def main(a: list[str]) -> None:
     if not os.environ.get("GH_TOKEN"):
         die("To get started with GitHub CLI, please run:  gh auth login", 4)
     watch(a)
-    create(a)
+    issue_write(a)
     two = tuple(a[:2])
     if two in (("pr", "view"), ("issue", "view")):
         view(a)
