@@ -37,15 +37,26 @@ comment N --body-file F|-` appends to issue N's comments and prints the comment 
 N` closes it, on stderr `✓ Closed issue o/r#N (TITLE)`, or `! Issue o/r#N (TITLE) is already
 closed`. Anything else exits 2 naming it.
 
+Issues are kept per repository, as GitHub's are: those of o/r (no --repo, -R or $GH_REPO, as gh
+falls back to this dir's repo) in issue/N.json, those of OWNER/NAME in
+repos/OWNER/NAME/issue/N.json, each issue command (view, list, create, comment, close) reading and
+writing only its repository's, its URLs naming it; so a caller writing to the wrong repository is
+seen (the correction-lane filing, tests/gate/kit/lane_correction.py, writes to several trackers in
+one run).
+
 Recorded answers instead of the store: a $FAKE_GH/tape.json (a list of recordings, as
 testkit/recordings/*.json hold real gh's, each {request, out, err, exit, source}) answers every
 call alone: the Nth call of a request (its argv, one line as the log writes it) replays the Nth
 recording of it, its stdout, stderr and exit as gh gave them; a request with no recording left
 exits 2 naming it. A request's `--input FILE` stands as FILE's text, in the log and a recording
 alike: the kit writes its body to a fresh temp file each call (octo-feather-lane post_comment),
-so the path never repeats, and the body sent is what the recording pins.
+so the path never repeats, and the body sent is what the recording pins. So too `--body-file -`
+stands as its stdin's text, one JSON string (the log keeps one line per call: an issue's body
+from issue-create, multi-line), and a call made with GH_REPO set (gh's repo override, the one
+way the github-issues scripts name another repo) is the request after `GH_REPO=R `.
 """
 
+import functools
 import json
 import os
 import re
@@ -61,6 +72,12 @@ FILTERS = {
     "--event": "event",
     "--workflow": "workflowName",
 }
+
+
+def issues(a: list[str]) -> tuple[str, Path]:
+    """An issue command's repository (--repo, -R, $GH_REPO, else o/r) and its issue dir."""
+    repo = opt(a, "--repo") or opt(a, "-R") or os.environ.get("GH_REPO") or "o/r"
+    return repo, STORE / "issue" if repo == "o/r" else STORE / "repos" / repo / "issue"
 
 
 def pr_file(n: str) -> Path:
@@ -90,7 +107,7 @@ def served(p: Path) -> None:
 def view(a: list[str]) -> None:
     """`issue|pr view N --json F`."""
     kind = a[0]
-    p = STORE / kind / f"{a[2]}.json"
+    p = (issues(a)[1] if kind == "issue" else STORE / kind) / f"{a[2]}.json"
     if not p.is_file():
         what = "a PullRequest" if kind == "pr" else "an issue or pull request"
         die(f"GraphQL: Could not resolve to {what} with the number of {a[2]}.")
@@ -99,7 +116,10 @@ def view(a: list[str]) -> None:
 
 def listed(a: list[str]) -> None:
     """`issue|pr|run list --json F`: every one stored, by number."""
-    rows = [json.loads(p.read_text()) for p in (STORE / a[0]).glob("*.json")]
+    rows = [
+        json.loads(p.read_text())
+        for p in (issues(a)[1] if a[0] == "issue" else STORE / a[0]).glob("*.json")
+    ]
     if a[0] == "pr":
         base, state = opt(a, "--base"), opt(a, "--state")
         rows = [d for d in rows if base in (None, d.get("baseRefName"))]
@@ -170,12 +190,22 @@ def replay(a: list[str]) -> None:
     sys.exit(r["exit"])
 
 
+@functools.cache
+def stdin() -> str:
+    """gh's stdin, read once: a `--body-file -` request's and the body issue_write stores."""
+    return sys.stdin.read()
+
+
 def request(a: list[str]) -> str:
-    """The call as one log line: its argv, `--input FILE` as FILE's text."""
+    """The call as one log line (the module docstring, Recorded answers)."""
     if "--input" in a[:-1]:
         i = a.index("--input") + 1
         a = [*a[:i], Path(a[i]).read_text(), *a[i + 1 :]]
-    return " ".join(a)
+    if "--body-file" in a[:-1] and a[a.index("--body-file") + 1] == "-":
+        i = a.index("--body-file") + 1
+        a = [*a[:i], json.dumps(stdin()), *a[i + 1 :]]
+    repo = os.environ.get("GH_REPO")
+    return " ".join([f"GH_REPO={repo}", *a] if repo else a)
 
 
 def opt(a: list[str], flag: str) -> str | None:
@@ -274,18 +304,20 @@ def issue_write(a: list[str]) -> None:
     """`issue create|comment|close` (the module docstring), exiting; any other call returns."""
     if a[:1] != ["issue"] or a[1:2] not in (["create"], ["comment"], ["close"]):
         return
+    repo, idir = issues(a)
     if a[1] == "create":
-        nums = [int(p.stem) for p in (STORE / "issue").glob("*.json")]
+        nums = [int(p.stem) for p in idir.glob("*.json")]
         n = str(max(nums, default=0) + 1)
         d: dict[str, Any] = {"number": int(n), "title": opt(a, "--title"), "state": "OPEN"}
+        d |= {"closedAt": None, "comments": []}  # as gh: open, no comment yet
     else:
         n = a[2]
-        if not (STORE / "issue" / f"{n}.json").is_file():
+        if not (idir / f"{n}.json").is_file():
             die(f"GraphQL: Could not resolve to an issue or pull request with the number of {n}.")
-        d = json.loads((STORE / "issue" / f"{n}.json").read_text())
+        d = json.loads((idir / f"{n}.json").read_text())
     f = opt(a, "--body-file")
-    body = sys.stdin.read() if f == "-" else Path(f).read_text() if f else ""
-    url = f"https://github.com/o/r/issues/{n}"
+    body = stdin() if f == "-" else Path(f).read_text() if f else ""
+    url = f"https://github.com/{repo}/issues/{n}"
     if a[1] == "create":
         d["body"] = body
     elif a[1] == "comment":
@@ -293,12 +325,12 @@ def issue_write(a: list[str]) -> None:
         url += f"#issuecomment-{1001 + len(comments)}"
         comments.append({"author": {"login": "sup"}, "body": body, "url": url})
     elif d["state"] == "CLOSED":
-        die(f"! Issue o/r#{n} ({d['title']}) is already closed", 0)
+        die(f"! Issue {repo}#{n} ({d['title']}) is already closed", 0)
     else:
         d["state"], url = "CLOSED", ""
-        sys.stderr.write(f"✓ Closed issue o/r#{n} ({d['title']})\n")
-    (STORE / "issue").mkdir(exist_ok=True)
-    (STORE / "issue" / f"{n}.json").write_text(json.dumps(d))
+        sys.stderr.write(f"✓ Closed issue {repo}#{n} ({d['title']})\n")
+    idir.mkdir(parents=True, exist_ok=True)
+    (idir / f"{n}.json").write_text(json.dumps(d))
     sys.stdout.write(url + "\n" if url else "")
     sys.exit(0)
 
