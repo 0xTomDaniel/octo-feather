@@ -176,6 +176,10 @@
         "tests/lane-correction.sh"
       ]
     },
+    "acceptance-reflect-recurrence-comments": {
+      "status": "planned",
+      "pr": null
+    },
     "acceptance-report-reflection": {
       "status": "built",
       "pr": 279
