@@ -29,6 +29,8 @@ stored `completes` conclusion (no line), so the next list reads it completed, as
 the run ends; exit 1 unless it concluded success. A file
 $FAKE_GH/watch-fails makes every run watch fail as gh does on a rejected token, the run unchanged.
 `gh api PATH --jq .F` prints field F of api/PATH.json, a string bare (a compare's status).
+`issue create --title T --body-file F|-` stores issue/N.json (N past every stored issue, state
+OPEN, T and the body) and prints its URL.
 run watch's texts are real gh's (gh 2.102.0 on vuejs/core, 2026-11-13; watch() names each call).
 Anything else exits 2 naming it.
 """
@@ -141,6 +143,21 @@ def watch(a: list[str]) -> None:
     sys.exit(0 if d["conclusion"] == "success" else 1)
 
 
+def create(a: list[str]) -> None:
+    """`issue create --title T --body-file F|-`: issue N past every stored one, open; its URL,
+    exiting; any other call returns."""
+    if a[:2] != ["issue", "create"]:
+        return
+    f = opt(a, "--body-file")
+    body = sys.stdin.read() if f == "-" else Path(str(f)).read_text()
+    n = 1 + max((int(p.stem) for p in (STORE / "issue").glob("*.json")), default=0)
+    (STORE / "issue").mkdir(exist_ok=True)
+    d = {"number": n, "title": opt(a, "--title"), "body": body, "state": "OPEN"}
+    (STORE / "issue" / f"{n}.json").write_text(json.dumps(d))
+    sys.stdout.write(f"https://github.com/o/r/issues/{n}\n")
+    sys.exit(0)
+
+
 def opt(a: list[str], flag: str) -> str | None:
     return a[a.index(flag) + 1] if flag in a else None
 
@@ -241,6 +258,7 @@ def main(a: list[str]) -> None:
     if not os.environ.get("GH_TOKEN"):
         die("To get started with GitHub CLI, please run:  gh auth login", 4)
     watch(a)
+    create(a)
     two = tuple(a[:2])
     if two in (("pr", "view"), ("issue", "view")):
         view(a)
