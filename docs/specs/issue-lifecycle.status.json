@@ -43,8 +43,13 @@
       "pr": null
     },
     "acceptance-pilot-pr": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 882,
+      "record": "20261117T232028Z-2c601dbf",
+      "commit": "414ea2aa55836bd61037f7df7a56a9e6749c6d3c",
+      "tests": [
+        "tests/lane-pilot-pr.sh"
+      ]
     },
     "acceptance-one-head": {
       "status": "built",

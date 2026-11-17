@@ -117,8 +117,11 @@
       "pr": null
     },
     "acceptance-general-worker-no-implementation": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 882,
+      "record": "20261117T232728Z-093dc7cd",
+      "commit": "414ea2aa55836bd61037f7df7a56a9e6749c6d3c",
+      "tests": []
     },
     "acceptance-supervisor-delegates-execution": {
       "status": "planned",

@@ -29,8 +29,11 @@
       ]
     },
     "acceptance-autonomous-local": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 882,
+      "record": "20261117T233051Z-37b90d48",
+      "commit": "414ea2aa55836bd61037f7df7a56a9e6749c6d3c",
+      "tests": []
     },
     "acceptance-real-blocker": {
       "status": "planned",
@@ -39,13 +42,18 @@
     "acceptance-no-routine-traffic": {
       "status": "built",
       "pr": 882,
-      "record": "20261113T093900Z-9c514334",
-      "commit": "7251e3c7f646f7029a0a0420249328d14343f5c2",
+      "record": "20261117T233417Z-78d74886",
+      "commit": "414ea2aa55836bd61037f7df7a56a9e6749c6d3c",
       "tests": []
     },
     "acceptance-queued-completion": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 882,
+      "record": "20261117T232028Z-edec56a2",
+      "commit": "414ea2aa55836bd61037f7df7a56a9e6749c6d3c",
+      "tests": [
+        "tests/gate/kit/herdr_messaging.py"
+      ]
     },
     "acceptance-director-worker-resume": {
       "status": "built",
