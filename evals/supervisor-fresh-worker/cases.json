@@ -342,6 +342,14 @@
             "--name",
             "implementer-gh15"
           ]
+        },
+        {
+          "args": [
+            "tab",
+            "close"
+          ],
+          "stdout": "{\"id\":\"cli:tab:close\",\"result\":{\"type\":\"ok\"}}\n",
+          "exit": 0
         }
       ],
       "herdr-close": [
@@ -405,7 +413,7 @@
           "args": [
             "--help"
           ],
-          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\n",
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
           "exit": 0
         },
         {
@@ -799,6 +807,14 @@
             "--name",
             "implementer-gh15"
           ]
+        },
+        {
+          "args": [
+            "tab",
+            "close"
+          ],
+          "stdout": "{\"id\":\"cli:tab:close\",\"result\":{\"type\":\"ok\"}}\n",
+          "exit": 0
         }
       ],
       "herdr-close": [
@@ -862,7 +878,7 @@
           "args": [
             "--help"
           ],
-          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\n",
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
           "exit": 0
         },
         {
@@ -1256,6 +1272,14 @@
             "--name",
             "implementer-gh15"
           ]
+        },
+        {
+          "args": [
+            "tab",
+            "close"
+          ],
+          "stdout": "{\"id\":\"cli:tab:close\",\"result\":{\"type\":\"ok\"}}\n",
+          "exit": 0
         }
       ],
       "herdr-close": [
@@ -1319,7 +1343,7 @@
           "args": [
             "--help"
           ],
-          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\n",
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
           "exit": 0
         },
         {
@@ -1713,6 +1737,14 @@
             "--name",
             "implementer-gh15"
           ]
+        },
+        {
+          "args": [
+            "tab",
+            "close"
+          ],
+          "stdout": "{\"id\":\"cli:tab:close\",\"result\":{\"type\":\"ok\"}}\n",
+          "exit": 0
         }
       ],
       "herdr-close": [
@@ -1776,7 +1808,7 @@
           "args": [
             "--help"
           ],
-          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\n",
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
           "exit": 0
         },
         {

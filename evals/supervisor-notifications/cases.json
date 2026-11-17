@@ -193,6 +193,14 @@
           ],
           "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p7\", \"tab_id\": \"w2:t7\", \"workspace_id\": \"w2\"}]}}\n",
           "exit": 0
+        },
+        {
+          "args": [
+            "tab",
+            "close"
+          ],
+          "stdout": "{\"id\":\"cli:tab:close\",\"result\":{\"type\":\"ok\"}}\n",
+          "exit": 0
         }
       ],
       "herdr-close": [
@@ -203,6 +211,13 @@
         }
       ],
       "herdr-spawn": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
+          "exit": 0
+        },
         {
           "args": [],
           "stdout": "name=code-reviewer-gh14 role=code-reviewer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
@@ -388,6 +403,14 @@
           ],
           "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh15\", \"pane_id\": \"w2:p7\", \"tab_id\": \"w2:t7\", \"workspace_id\": \"w2\"}]}}\n",
           "exit": 0
+        },
+        {
+          "args": [
+            "tab",
+            "close"
+          ],
+          "stdout": "{\"id\":\"cli:tab:close\",\"result\":{\"type\":\"ok\"}}\n",
+          "exit": 0
         }
       ],
       "herdr-close": [
@@ -398,6 +421,13 @@
         }
       ],
       "herdr-spawn": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
+          "exit": 0
+        },
         {
           "args": [],
           "stdout": "name=code-reviewer-gh15 role=code-reviewer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
@@ -601,6 +631,14 @@
           ],
           "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p7\", \"tab_id\": \"w2:t7\", \"workspace_id\": \"w2\"}]}}\n",
           "exit": 0
+        },
+        {
+          "args": [
+            "tab",
+            "close"
+          ],
+          "stdout": "{\"id\":\"cli:tab:close\",\"result\":{\"type\":\"ok\"}}\n",
+          "exit": 0
         }
       ],
       "herdr-close": [
@@ -611,6 +649,13 @@
         }
       ],
       "herdr-spawn": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
+          "exit": 0
+        },
         {
           "args": [],
           "stdout": "name=code-reviewer-gh14 role=code-reviewer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
@@ -742,6 +787,14 @@
           ],
           "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh12-3\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}]}}\n",
           "exit": 0
+        },
+        {
+          "args": [
+            "tab",
+            "close"
+          ],
+          "stdout": "{\"id\":\"cli:tab:close\",\"result\":{\"type\":\"ok\"}}\n",
+          "exit": 0
         }
       ],
       "herdr-close": [
@@ -752,6 +805,13 @@
         }
       ],
       "herdr-spawn": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
+          "exit": 0
+        },
         {
           "args": [],
           "stdout": "name=implementer-gh13 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
