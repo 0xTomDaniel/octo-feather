@@ -443,5 +443,221 @@
       ]
     },
     "task": "Goal check-in, lane gh12 (parent issue #12, \"app hello --shout\"; spec docs/specs/hello.spec.html, this lane builds acceptance-shout and acceptance-shout-json), lane branch gh12 checked out in this directory (head {head}), draft PR #12 open for it. Tickets: #13 `--shout` upper-cases the greeting and adds `!`, #14 `--shout` with `--json`, #16 the fix of plain `--shout`; all integrated on gh12 with `just integrate` (head {head}), their implementers closed.\nSince your last check-in:\n- `just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json` on {head} finished: both pass.\n- code-reviewer-gh16 (pane w2:p7) reported DONE: verdict pass on {head}, no blocking finding; you closed it.\n- CI on {head} (PR #12): GitHub started no job; every check reads \"The job was not started because your account is locked due to a billing issue.\" The organization's billing is the owner's alone: no agent can see or change it, and the merge ask needs CI green on its head.\nAct on this check-in.\nSandbox run: GitHub is offline, and the lane record and log under octo-feather-state are absent."
+  },
+  {
+    "id": "implementer-repairs-qc-failure",
+    "role": "implementer",
+    "fixture": "lane-shout-qc-red",
+    "head": {
+      "fixture": "lane-shout-qc-red-lane",
+      "branch": "gh12",
+      "message": "qc(gh12): acceptance-shout fail, acceptance-shout-json pass"
+    },
+    "branch": "gh16",
+    "stand_ins": {
+      "herdr-say": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ]
+    },
+    "task": "GOAL        Make `uv run app hello Ada --shout` print `HELLO, ADA!` (ticket #16, sub-issue of #12), keeping `--shout --json` passing.\nSCOPE       Write: src/, tests/ in worktree {repo}, branch gh16 (based on gh12 @ {head}). May not write: docs/specs/ (spec, status file), justfile, other worktrees, branch gh12.\nCONTEXT     Ticket #16 (GitHub offline in this sandbox: this brief is the ticket). Spec docs/specs/hello.spec.html #acceptance-shout, #acceptance-shout-json. Prior tickets #13 (--shout), #14 (--shout --json) integrated on gh12 @ {head}. QC output on {head}, pasted: \"acceptance-shout-json pass; acceptance-shout FAIL: its demo `uv run app hello Ada --shout` printed `Hello, Ada`, the criterion wants `HELLO, ADA!`.\" Code review on {head}: pass, no blocking finding. Diagnose the cause yourself.\nACCEPTANCE  acceptance-shout: an end-to-end CLI test runs `app hello Ada --shout` and asserts stdout `HELLO, ADA!`.\n            acceptance-shout-json: `app hello Grace --shout --json` still gives text field `HELLO, GRACE!`.\n            acceptance-greet: plain `app hello Ada` unchanged.\n            Demo: `uv run app hello Ada --shout` prints `HELLO, ADA!`.\nVERIFY      `just check` green (hand-off gate, quality spec #acceptance-gate-green); merge gh12 tip into gh16 before reporting; run the demo and paste its output. Tests via CLI subprocess only, no mocks of our code, no test-only branches (AGENTS.md).\nTIMEBOX     45 min; on expiry report partial findings and stop.\nReport DONE to me with the commit sha on gh16.\nSandbox run: GitHub is offline, and the lane record and log under octo-feather-state are absent."
+  },
+  {
+    "id": "merge-ask-on-lane-pr",
+    "role": "supervisor",
+    "fixture": "lane-shout-base",
+    "head": {
+      "fixture": "lane-shout-integrated",
+      "branch": "gh12",
+      "message": "qc: built acceptance-shout acceptance-shout-json"
+    },
+    "origin": true,
+    "stand_ins": {
+      "herdr-say": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr": [
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": []}}\n",
+          "exit": 0
+        }
+      ],
+      "herdr-close": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "gh": [
+        {
+          "args": [
+            "pr",
+            "view"
+          ],
+          "stdout": "{\"body\": \"Closes #12\\n\\nLane gh12: app hello --shout (docs/specs/hello.spec.html).\\n\\n## Merge ask\\n\\nPR #12 (app hello --shout), the lane's one PR.\\nHead: {head}\\nChecks: CI green on {head}\\nJudged: {head:12} is the PR head\\nBuilt: hello#acceptance-shout hello#acceptance-shout-json\\nFailed: none\\nReview verdict: https://github.com/probe/app/pull/12#issuecomment-1001\\n\\n| criterion | qc verdict | judged | evidence |\\n|---|---|---|---|\\n| hello#acceptance-shout | pass | judged {head} | evidence/2026-11-13-gh12-qc.md |\\n| hello#acceptance-shout-json | pass | judged {head} | evidence/2026-11-13-gh12-qc.md |\\n\", \"baseRefName\": \"main\", \"headRefName\": \"gh12\", \"headRefOid\": \"{head}\", \"statusCheckRollup\": [{\"__typename\": \"CheckRun\", \"name\": \"check\", \"workflowName\": \"CI\", \"status\": \"COMPLETED\", \"conclusion\": \"SUCCESS\"}], \"comments\": [{\"url\": \"https://github.com/probe/app/pull/12#issuecomment-1001\", \"body\": \"<!-- octo-feather-review-verdict -->\\nHead: {head}\\nVerdict: clear\\nChecks: none\\n\\n### Findings\\n\\nNone blocking.\\n\", \"author\": {\"login\": \"probe\"}}], \"number\": 12, \"state\": \"OPEN\", \"isDraft\": true, \"title\": \"app hello --shout\", \"url\": \"https://github.com/probe/app/pull/12\"}\n",
+          "exit": 0,
+          "after": [
+            "gh",
+            "pr",
+            "edit"
+          ]
+        },
+        {
+          "args": [
+            "pr",
+            "view"
+          ],
+          "stdout": "{\"body\": \"Closes #12\\n\\nLane gh12: app hello --shout (docs/specs/hello.spec.html).\\n\", \"baseRefName\": \"main\", \"headRefName\": \"gh12\", \"headRefOid\": \"{head}\", \"statusCheckRollup\": [{\"__typename\": \"CheckRun\", \"name\": \"check\", \"workflowName\": \"CI\", \"status\": \"COMPLETED\", \"conclusion\": \"SUCCESS\"}], \"comments\": [{\"url\": \"https://github.com/probe/app/pull/12#issuecomment-1001\", \"body\": \"<!-- octo-feather-review-verdict -->\\nHead: {head}\\nVerdict: clear\\nChecks: none\\n\\n### Findings\\n\\nNone blocking.\\n\", \"author\": {\"login\": \"probe\"}}], \"number\": 12, \"state\": \"OPEN\", \"isDraft\": true, \"title\": \"app hello --shout\", \"url\": \"https://github.com/probe/app/pull/12\"}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "pr",
+            "edit"
+          ],
+          "stdout": "https://github.com/probe/app/pull/12\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "pr",
+            "checks"
+          ],
+          "stdout": "check\tpass\t41s\thttps://github.com/probe/app/actions/runs/7/job/8\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "pr",
+            "list"
+          ],
+          "stdout": "12\tapp hello --shout\tgh12\tDRAFT\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "pr",
+            "create"
+          ],
+          "stdout": "a pull request for branch \"gh12\" into branch \"main\" already exists:\nhttps://github.com/probe/app/pull/12\n",
+          "exit": 1
+        },
+        {
+          "args": [
+            "auth",
+            "status"
+          ],
+          "stdout": "github.com\n  Logged in to github.com account probe (keyring)\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "repo",
+            "view"
+          ],
+          "stdout": "{\"nameWithOwner\":\"probe/app\"}\n",
+          "exit": 0
+        }
+      ]
+    },
+    "task": "Goal check-in, lane gh12 (parent issue #12, \"app hello --shout\"; spec docs/specs/hello.spec.html, this lane builds acceptance-shout and acceptance-shout-json), lane branch gh12 checked out in this directory (head {head}), draft PR #12 open for it. Tickets: #13 `--shout` upper-cases the greeting and adds `!` (plain and `--json`), #14 an end-to-end test for a second name; the lane's last tickets.\nSince your last check-in:\n- implementer-gh13 and implementer-gh14 reported DONE; you consumed both results, integrated them on gh12 with `just integrate` and closed both panes.\n- `just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json` on the integrated head passed both criteria; its status flip is {head} (evidence/2026-11-13-gh12-qc.md).\n- code-reviewer-gh12 reported DONE: verdict clear on {head}, no blocking finding; you posted it with `octo-feather-lane verdict 12 {head} report.md`, comment https://github.com/probe/app/pull/12#issuecomment-1001, and closed it.\n- CI on {head}: green.\nAct on this check-in: take the lane's next step.\nSandbox run: GitHub answers through gh for PR #12 only, and the lane record and log under octo-feather-state are absent."
+  },
+  {
+    "id": "worker-repair-integrated",
+    "role": "supervisor",
+    "fixture": "lane-shout-qc-red",
+    "head": {
+      "fixture": "lane-shout-qc-red-lane",
+      "branch": "gh12",
+      "message": "qc(gh12): acceptance-shout fail, acceptance-shout-json pass"
+    },
+    "branches": [
+      {
+        "fixture": "lane-shout-qc-repaired",
+        "branch": "gh16",
+        "message": "fix(cli): plain hello prints greeting text so --shout shows (#16)"
+      }
+    ],
+    "stand_ins": {
+      "herdr-say": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr-close": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr": [
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p9 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh16\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh16"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh16 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh16"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh16\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh16\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0
+        }
+      ]
+    },
+    "task": "Goal check-in, lane gh12 (parent issue #12, \"app hello --shout\"; spec docs/specs/hello.spec.html, this lane builds acceptance-shout and acceptance-shout-json), lane branch gh12 checked out in this directory (head {head}), draft PR #12 open for it. Tickets: #13 `--shout` upper-cases the greeting and adds `!`, #14 `--shout` with `--json`; both integrated on gh12 with `just integrate` (head {head}), their implementers closed. At your last check-in `just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json` on {head} failed acceptance-shout (evidence/2026-11-17-gh12-qc.md); you filed #16 for it and briefed implementer-gh16 (pane w2:p9) to diagnose and repair it.\nSince then:\n- implementer-gh16 (pane w2:p9) reported, verbatim:\nDONE #16 gh16 (the tip of branch gh16)\nCause: src/app/cli.py plain path printed f\"Hello, {greeting.name}\", discarding core's shouted Greeting.text; JSON path used asdict so it passed.\nChanged: cli plain = greeting.text; tests/test_cli.py +test_greet_plain, +test_shout_plain (CLI subprocess, no mocks).\nSafe because: core.greet text is exactly \"Hello, {clean}\" when not shouting (src/app/core.py:18), so plain greet output is unchanged; proven step 4/5: test_greet_plain + live run.\nRepo skills loaded: python\nEvidence: none\nChecks: none\nOwner: not run (code-review skill owned-rule search skipped; no rule paths in sandbox)\nPrior art: none (no infrastructure chosen)\nValidation: just check exit 0 (4 passed); red first: test_shout_plain failed 'Hello, Ada'. gh12 merged into gh16: already up to date.\nDemo: $ uv run app hello Ada --shout -> HELLO, ADA! | hello Ada -> Hello, Ada | hello Grace --shout --json -> {\"name\": \"Grace\", \"text\": \"HELLO, GRACE!\"}\nBlockers: seam-list ticket comment not posted (GitHub offline).\nAct on this check-in: consume the result and integrate it. `just qc` and the fresh review on the new head are the next check-in's.\nSandbox run: GitHub is offline, and the lane record and log under octo-feather-state are absent."
   }
 ]
