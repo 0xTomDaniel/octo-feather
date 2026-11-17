@@ -1,39 +1,39 @@
 report at NOW (STATE/lanes)
 owner-caught (headline, director.handoffs.jsonl): COUNTS
-lane lane-a: issue gh1 o/a "Implementer working"
+lane lane-a: issue gh1 0xTomDaniel/octo-feather "Implementer working"
   started: 2026-10-20T08:00:00Z (AGE ago)
-  pr: #5 OPEN ready head aaaa5aaaa5aa checks: 1 in_progress, 1 success
+  pr: #943 OPEN draft head 6f48fa199bd1 checks: 2 skipped
   running: w5:p1 lane-a done (supervisor)
   running: w5:p2 implementer-gh2 working
   waits: waiting_on "", last hand-off 2026-10-20T09:30:00Z (AGE ago)
   waits: worker implementer-gh2 w5:p2 working
-  waits: check e2e in_progress on head aaaa5aaaa5aa
   review rounds: 2
   spend: $1.7500 over 2 calls of known cost, 2 calls of unknown cost
-  gate time: lane 280.25s exit 0, 3 steps, head aaaa5aaaa5aa, started 2026-10-20T10:00:00Z (AGE ago)
-  gate time: main 260.75s exit 0, 2 steps, head 1111a1111a11, started 2026-10-20T07:00:00Z (AGE ago)
+  gate time: lane 280.25s exit 0, 3 steps, head 6f48fa199bd1, started 2026-10-20T10:00:00Z (AGE ago)
+  gate time: main 260.75s exit 0, 2 steps, head b20ee656e6fa, started 2026-10-20T07:00:00Z (AGE ago)
   log lane-a.handoffs.jsonl: 1 unparsable line (2)
-lane lane-b: issue gh3 o/b "Escalated to the director"
+lane lane-b: issue gh3 0xTomDaniel/octo-feather "Escalated to the director"
   started: 2026-10-21T10:00:00Z (AGE ago)
-  pr: #5 OPEN draft head bbbb5bbbb5bb checks: 1 failure, 1 success
+  pr: #827 MERGED ready head 04c0efcd7c82 checks: 1 failure, 1 skipped
   running: w6:p1 lane-b idle (supervisor)
   waits: waiting_on "director", last hand-off 2026-10-21T11:15:00Z (AGE ago)
   review rounds: 0
   spend: none recorded for lane-b
-  gate time: lane none: no full gate run on a commit of PR #5
-  gate time: main 90.0s exit 0, 1 steps, head 1111b1111b11, started 2026-10-18T12:00:00Z (AGE ago)
+  gate time: lane none: no full gate run on a commit of PR #827
+  gate time: main 260.75s exit 0, 2 steps, head b20ee656e6fa, started 2026-10-20T07:00:00Z (AGE ago)
   log lane-b.handoffs.jsonl: none
-lane lane-c: issue gh4 o/a "Merge ask awaits the owner"
+lane lane-c: issue gh4 0xTomDaniel/octo-feather "Merge ask awaits the owner"
   started: 2026-10-22T12:00:00Z (AGE ago)
-  pr: #9 OPEN ready head aaaa9aaaa9aa checks: 1 success
+  pr: #942 OPEN ready head 3b0ac66a2da8 checks: 1 in_progress, 2 skipped, 1 success
   running: w7:p1 lane-c done (supervisor)
   waits: waiting_on "", last hand-off 2026-10-22T14:00:00Z (AGE ago)
   waits: owner gate merge asked 2026-10-22T14:00:00Z (AGE ago)
+  waits: check check in_progress on head 3b0ac66a2da8
   review rounds: 0
   spend: $0.1250 over 1 call of known cost, 0 calls of unknown cost
-  gate time: lane none: no full gate run on a commit of PR #9
-  gate time: main 260.75s exit 0, 2 steps, head 1111a1111a11, started 2026-10-20T07:00:00Z (AGE ago)
-lane lane-d: issue gh6 o/b "Spec review awaits the owner"
+  gate time: lane none: no full gate run on a commit of PR #942
+  gate time: main 260.75s exit 0, 2 steps, head b20ee656e6fa, started 2026-10-20T07:00:00Z (AGE ago)
+lane lane-d: issue gh6 0xTomDaniel/spec-chat "Spec review awaits the owner"
   started: 2026-10-21T08:30:00Z (AGE ago)
   pr: none
   running: w8:p1 lane-d idle (supervisor)
@@ -42,13 +42,13 @@ lane lane-d: issue gh6 o/b "Spec review awaits the owner"
   review rounds: 0
   spend: none recorded for lane-d
   gate time: lane none: no pr
-  gate time: main 90.0s exit 0, 1 steps, head 1111b1111b11, started 2026-10-18T12:00:00Z (AGE ago)
-gate budget o/a: the latest passed full gate run against gate-budget.toml on o/a's default branch
-  full gate: 280.25s, head aaaa5aaaa5aa, started 2026-10-20T10:00:00Z (AGE ago): OVER BUDGET by 40.25s (budget 240s)
-  growth: +12.1% over the trend's median 250s (the 3 passed full runs before it); set share 10%: GROWN
-  trend: 240s 0000a0000a00 2026-10-19T08:00:00Z, 250s 0000a0000a00 2026-10-19T12:00:00Z, 260.75s 1111a1111a11 2026-10-20T07:00:00Z, 280.25s aaaa5aaaa5aa 2026-10-20T10:00:00Z (passed full runs, oldest first)
+  gate time: main 90.0s exit 0, 1 steps, head 09d5286f16b9, started 2026-10-18T12:00:00Z (AGE ago)
+gate budget 0xTomDaniel/octo-feather: the latest passed full gate run against gate-budget.toml on 0xTomDaniel/octo-feather's default branch
+  full gate: 280.25s, head 6f48fa199bd1, started 2026-10-20T10:00:00Z (AGE ago): within budget, 19.75s to spare (budget 300s)
+  growth: +12.1% over the trend's median 250s (the 3 passed full runs before it); set share 25%: within
+  trend: 240s 2ea8800580f3 2026-10-19T08:00:00Z, 250s 2ea8800580f3 2026-10-19T12:00:00Z, 260.75s b20ee656e6fa 2026-10-20T07:00:00Z, 280.25s 6f48fa199bd1 2026-10-20T10:00:00Z (passed full runs, oldest first)
   slowest: t3 100.25s, t1 90s, t2 90s
-gate budget o/b: no passed full gate run on a commit of o/b's default branch or its open lanes' PRs
+gate budget 0xTomDaniel/spec-chat: no passed full gate run on a commit of 0xTomDaniel/spec-chat's default branch or its open lanes' PRs
 owner queue:
   lane lane-d gate spec-review asked 2026-10-21T09:00:00Z (AGE ago)
   lane lane-c gate merge asked 2026-10-22T14:00:00Z (AGE ago)
