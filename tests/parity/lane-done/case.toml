@@ -1,0 +1,10 @@
+# The parity lever's case for tests/lane-done.sh, its Linear lines retargeted from the product's fake linear to the testkit's stand-in over tapes (#927; tests/parity/lever.py --help).
+old = "tests/lane-done.sh"
+old_at = "44a2045f"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none.
+needs = []
+new = "tests/gate/test_gate.py::test_script[tests/lane-done.sh]"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: a bash tracker script run as its program.
+[ran]
+".agents/skills/linear/scripts/issue-done" = "exec .agents/skills/linear/scripts/issue-done"
