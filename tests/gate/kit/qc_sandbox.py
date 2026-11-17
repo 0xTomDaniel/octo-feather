@@ -280,8 +280,9 @@ def nested(s: Scratch) -> None:
 
 
 def _held(pid: int) -> bool:
-    """PID blocked opening a FIFO no reader holds yet. The sandbox's setup runs in the command's
-    own process (it unshares, never forks, before the probe), so no process tree is walked.
+    """PID blocked opening a FIFO no reader holds yet. The sandbox's setup and its probe stay in
+    the command's own process (its helper commands run and return; no hand-off to a child), so no
+    process tree is walked.
     wchan is one kernel symbol name, compared whole: no fields are parsed, so no schema applies."""
     try:
         return (Path("/proc") / str(pid) / "wchan").read_text() == "wait_for_partner"
