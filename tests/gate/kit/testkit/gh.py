@@ -31,6 +31,12 @@ $FAKE_GH/watch-fails makes every run watch fail as gh does on a rejected token, 
 `gh api PATH --jq .F` prints field F of api/PATH.json, a string bare (a compare's status).
 run watch's texts are real gh's (gh 2.102.0 on vuejs/core, 2026-11-13; watch() names each call).
 Anything else exits 2 naming it.
+
+Recorded answers instead of the store: a $FAKE_GH/tape.json (a list of recordings, as
+testkit/recordings/*.json hold real gh's, each {request, out, err, exit, source}) answers every
+call alone: the Nth call of a request (its argv, one line as the log writes it) replays the Nth
+recording of it, its stdout, stderr and exit as gh gave them; a request with no recording left
+exits 2 naming it.
 """
 
 import json
@@ -141,6 +147,22 @@ def watch(a: list[str]) -> None:
     sys.exit(0 if d["conclusion"] == "success" else 1)
 
 
+def replay(a: list[str]) -> None:
+    """With a tape.json, the Nth call of this request replays its Nth recording, exiting."""
+    p = STORE / "tape.json"
+    if not p.is_file():
+        return
+    req = " ".join(a)
+    said = [r for r in json.loads(p.read_text()) if r["request"] == req]
+    nth = log().count(req)  # this call already logged
+    if nth > len(said):
+        die(f"fake gh: no recording for call {nth} of {req!r} ({len(said)} in tape.json)", 2)
+    r = said[nth - 1]
+    sys.stdout.write(r["out"])
+    sys.stderr.write(r["err"])
+    sys.exit(r["exit"])
+
+
 def opt(a: list[str], flag: str) -> str | None:
     return a[a.index(flag) + 1] if flag in a else None
 
@@ -240,6 +262,7 @@ def main(a: list[str]) -> None:
         die("error connecting to api.github.com")
     if not os.environ.get("GH_TOKEN"):
         die("To get started with GitHub CLI, please run:  gh auth login", 4)
+    replay(a)
     watch(a)
     two = tuple(a[:2])
     if two in (("pr", "view"), ("issue", "view")):
