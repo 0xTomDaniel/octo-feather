@@ -18,6 +18,8 @@
 #       the caller should retry once the target is free
 #   69  the up-chain guard's `herdr agent get` lookup failed (named on stderr)
 #   124 not confirmed within --timeout (named on stderr)
+#   68  a worker's parent proven gone (comms spec #say-parent-gone;
+#       scripts/octo-feather-parent-gone)
 #   >0  anything else
 #
 # A send never hangs or fails silently (#666; owner rulings #585, #619): the
@@ -25,30 +27,31 @@
 # Send a message. One whose message the target shows queued during compaction is
 # never resent: scripts/octo-feather-queued.
 #
-# A target Herdr does not find may be parked: the latest parked line naming it,
-# in any lane hand-off log of the caller's Herdr session (octo-feather-state),
-# decides; another session's lanes repeat its ids. A live agent under the
-# line's name gets the message; otherwise the agent is resumed first (a supervisor,
-# the lane's name, in its lane workspace when that still exists, else a new one; a
-# worker in the caller's space), its new pane= is printed, and the message it
-# receives starts "Resumed from park as pane=PANE. ".
+# A target Herdr does not find may be parked (comms spec #roles-park): its line
+# comes from `octo-feather-handoff parked` (that command's docstring owns which
+# line counts). A live agent under the line's name gets the message; otherwise
+# the agent is resumed first, with the line's role, session and parent: a
+# supervisor through octo-feather-start (which owns its workspace), a worker
+# through herdr-spawn in the workspace `octo-feather-handoff resume-workspace` names.
+# Its new pane= is printed, and the message it receives starts
+# "Resumed from park as pane=PANE. ".
 # `herdr-say --parked TARGET` prints that line, or exits 1 when there is none.
 #
 # Up-chain accident guard (docs/adr/0015, not security): a kit agent may message
 # only up its own chain. `--parent` targets the pane that spawned the caller
-# (OCTO_FEATHER_PARENT). A worker (implementer, code-reviewer, corrector) may
-# reach only its parent, or the director pane in director.toml when its parent
-# is unreachable; a supervisor only its parent (the director) and agents in its
-# own lane workspace, or a parked agent whose latest parked line sits in its
-# lane's hand-off log or names it as parent. Anything else exits 77. The director and callers that are
-# not kit agents (an owner shell, Spec Chat's wake) are not limited.
+# (OCTO_FEATHER_PARENT). A worker (implementer, code-reviewer, corrector,
+# general-worker) may reach only its parent, never the director unless it is
+# that parent; a supervisor only its parent, the director pane in director.toml,
+# agents in its own lane workspace, or a parked agent whose latest parked line
+# sits in its lane's hand-off log or names it as parent. Anything else exits 77.
+# The director and callers that are not kit agents (an owner shell, Spec Chat's
+# wake) are not limited.
 set -euo pipefail
 
 usage() { echo "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET" >&2; }
 here="$(dirname "$(readlink -f "$0")")"
 
-# The latest parked line naming TARGET by pane or name. A line without name is
-# the supervisor: the lane's name, its log's stem.
+# TARGET's parked line: octo-feather-handoff parked (its docstring).
 parked() {
   "$here/../../../../scripts/octo-feather-handoff" parked "$1" \
     "$("$here/../../../../scripts/octo-feather-state")/lanes"
@@ -75,7 +78,7 @@ target="$1"; message="$2"; bound="${bound:-900}"
 allowed() {
   local role="${OCTO_FEATHER_ROLE:-}" parent="${OCTO_FEATHER_PARENT:-}" info pane space director line lane
   looked=""
-  case "$role" in implementer|code-reviewer|corrector|supervisor) ;; *) return 0 ;; esac
+  case "$role" in implementer|code-reviewer|corrector|general-worker|supervisor) ;; *) return 0 ;; esac
   [[ -n "$parent" && "$target" == "$parent" ]] && return 0
   info="$(herdr agent get "$target" 2>&1)" && looked="" || looked="$(tail -1 <<<"$info")"
   pane="$(jq -r '.result.agent.pane_id // empty' <<<"$info" 2>/dev/null || true)"
@@ -83,7 +86,7 @@ allowed() {
   space="$(jq -r '.result.agent.workspace_id // empty' <<<"$info" 2>/dev/null || true)"
   [[ -n "$pane" && "$pane" == "$parent" ]] && return 0
   director="$(sed -n 's/^pane *= *"\(.*\)"/\1/p' "$("$here/../../../../scripts/octo-feather-state")/director.toml" 2>/dev/null | head -1)"
-  [[ -n "$director" && ( "$target" == "$director" || "$pane" == "$director" ) ]] && return 0
+  [[ "$role" == supervisor && -n "$director" && ( "$target" == "$director" || "$pane" == "$director" ) ]] && return 0
   [[ "$role" == supervisor && -n "$space" && "$space" == "${HERDR_WORKSPACE_ID:-}" ]] && return 0
   # A supervisor's own parked agent: not live, its latest parked line in the
   # caller's lane log (the caller's agent name) or naming the caller as parent.
@@ -106,7 +109,14 @@ prompt() { rc=0; out="$(herdr agent prompt "$1" "$message" --wait --until workin
 code() { jq -r '.error.code // empty' <<<"$out" 2>/dev/null || true; }
 
 prompt "$target"
-if [[ "$rc" != 0 && "$(code)" == agent_not_found ]] && line="$(parked "$target")"; then
+gone="" lrc=0
+if [[ "$rc" != 0 && "$(code)" == agent_not_found ]]; then
+  # Only "no parked line" (exit 1) proves the target gone; a failed lookup does not.
+  line="$(parked "$target")" || lrc=$?
+  [[ "$lrc" == 1 ]] && gone=1
+  [[ "$lrc" == 0 || "$lrc" == 1 ]] || echo "herdr-say: parked lookup for $target failed (exit $lrc): $target not proven gone" >&2
+fi
+if [[ "$rc" != 0 && "$(code)" == agent_not_found && -z "$gone" && "$lrc" == 0 ]]; then
   name="$(jq -r .name <<<"$line")"
   if ! herdr agent get "$name" >/dev/null 2>&1; then
     resume=(--cwd "$(jq -r .cwd <<<"$line")" --name "$name" --resume "$(jq -r .session <<<"$line")"
@@ -114,7 +124,8 @@ if [[ "$rc" != 0 && "$(code)" == agent_not_found ]] && line="$(parked "$target")
     if [[ "$name" == "$(jq -r .lane <<<"$line")" ]]; then
       started="$("$here/../../../../scripts/octo-feather-start" "${resume[@]}")"
     else
-      started="$("$here/herdr-spawn" --workspace "${HERDR_WORKSPACE_ID:-}" --label "$(jq -r '.label // .name' <<<"$line")" \
+      space="$("$here/../../../../scripts/octo-feather-handoff" resume-workspace <<<"$line")"
+      started="$("$here/herdr-spawn" --workspace "$space" --label "$(jq -r '.label // .name' <<<"$line")" \
         --role "$(jq -r '.role // empty' <<<"$line")" "${resume[@]}" -- pi)"
     fi
     name="$(sed -n 's/.* pane=\([^ ]*\).*/\1/p' <<<"$started")"
@@ -131,6 +142,11 @@ fi
   echo "herdr-say: $target is blocked on interactive input; not delivered" >&2; exit 75; }
 
 printf '%s\n' "$out" >&2
+# A worker's own parent proven gone: comms spec #say-parent-gone.
+case "${OCTO_FEATHER_ROLE:-}" in implementer|code-reviewer|corrector|general-worker)
+  [[ -n "$gone" && "$target" == "${OCTO_FEATHER_PARENT:-}" ]] &&
+    exec "$here/../../../../scripts/octo-feather-parent-gone" "$target" "$bound" ;;
+esac
 # Stalled or still unconfirmed at the bound: loud, naming the pane and its state.
 case "$(code)" in
   agent_prompt_stalled|timeout)

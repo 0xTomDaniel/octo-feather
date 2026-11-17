@@ -16,8 +16,8 @@ QA PATH     how a criterion's demo path runs (docs/adr/0002): app CLI, HTTP or U
 QC          `just qc` where it runs; on macOS it does not: the merge ask says `just qc` not run (macOS)
 FACTORY     target not created by the kit: run octo-feather-integrate and octo-feather-qc directly,
             add no `integrate` or `qc` recipe and commit no Spec Chat review state (docs/adr/0017)
-MERGES      the director merges nothing, the spec PR included: the owner merges the spec PR,
-            and each lane's merge runs as spec #gates-merge says (agents/director.md, Merges)
+MERGES      every merge, the spec PR's included, runs as spec #gates-merge says
+            (agents/director.md, Merges)
 DEADLINE    <date, time, timezone>; what must be on main by then
 DECIDED     owner decisions already made, with pointers
 OPEN        open questions, and who answers them

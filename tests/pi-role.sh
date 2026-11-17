@@ -49,7 +49,7 @@ grep -qx "PATH=$t/bin:/usr/bin:/bin" "$t/env.nomise" || { echo "pi-role test: wi
 # #262 (roles#launch-web): a web role's tab args add the kit's two web servers and drop --no-mcp.
 ro=read,grep,find,ls,bash,codemode; rw=read,grep,find,ls,bash,edit,write,codemode
 web=',mcp__parallel__*,mcp__exa__*;web'
-for rt in "director:$ro$web" "code-reviewer:$ro$web" "qc-judge:$ro;--no-mcp" "supervisor:$rw;--no-mcp" "implementer:$rw$web" "corrector:$rw$web" "shaper:read,grep,find,ls,bash,edit,write,codemode$web"; do
+for rt in "director:$ro$web" "code-reviewer:$ro$web" "qc-judge:$ro;--no-mcp" "supervisor:$rw;--no-mcp" "implementer:$rw$web" "general-worker:$rw$web" "corrector:$rw$web" "shaper:read,grep,find,ls,bash,edit,write,codemode$web"; do
   role="${rt%%:*}"; want="${rt#*:}"
   got="$(cd "$t/gh1" && "$kit/scripts/pi-role" --json "$kit/agents/$role.md" 2>/dev/null | python3 -c 'import json,sys; a=json.load(sys.stdin)["args"]; print((a[a.index("--tools")+1] if "--tools" in a else "none") + ";" + ("--no-mcp" if "--no-mcp" in a else "web" if a[a.index("--octo-feather-web-servers")+1].endswith("/web-mcp.json") else "?"))')"
   [[ "$got" == "$want" ]] || { echo "pi-role test: $role --tools is $got, want $want" >&2; exit 1; }
@@ -63,4 +63,11 @@ ln -s "$kit/.agents/skills" "$t/kit/.agents/skills"
 sed -i 's/^tools: .*/tools: read, grep, find, ls, bash, codemode/' "$t/kit/agents/director.md"
 if "$t/kit/scripts/check-roles" >/dev/null 2>"$t/cr"; then echo "pi-role test: check-roles passed a role listing codemode" >&2; exit 1; fi
 grep -q 'agents/director.md: .*`codemode`.*pi-role adds it' "$t/cr" || { echo "pi-role test: check-roles did not name the file and codemode: $(cat "$t/cr")" >&2; exit 1; }
-echo "pi-role: ok (repo skill from a lane worktree, home ignored, missing one warned; -p/--print child has no OCTO_FEATHER_PARENT or HERDR_PANE_ID/TAB_ID/WORKSPACE_ID, a pane launch keeps them; mise's shims before the system dirs in a mise.toml repo, none elsewhere or without mise (#261); #175 (roles#launch-codemode, roles#fm-tools))"
+# #829: check-roles counts general-worker among its roles, and still refuses a role file not in ROLES.
+cp "$kit/agents/director.md" "$t/kit/agents/director.md"
+out="$("$t/kit/scripts/check-roles" 2>"$t/cr")" || { echo "pi-role test: check-roles refused the kit's roles: $(cat "$t/cr")" >&2; exit 1; }
+[[ "$out" == "roles: ok (9 role files"* ]] || { echo "pi-role test: check-roles did not count 9 roles: $out" >&2; exit 1; }
+sed 's/^name: .*/name: stray/' "$kit/agents/general-worker.md" > "$t/kit/agents/stray.md"
+if "$t/kit/scripts/check-roles" >/dev/null 2>"$t/cr"; then echo "pi-role test: check-roles passed a role file not in ROLES" >&2; exit 1; fi
+grep -qF "agents/: role files ['stray'] are not in ROLES" "$t/cr" || { echo "pi-role test: check-roles did not name the stray role file: $(cat "$t/cr")" >&2; exit 1; }
+echo "pi-role: ok (repo skill from a lane worktree, home ignored, missing one warned; -p/--print child has no OCTO_FEATHER_PARENT or HERDR_PANE_ID/TAB_ID/WORKSPACE_ID, a pane launch keeps them; mise's shims before the system dirs in a mise.toml repo, none elsewhere or without mise (#261); #175 (roles#launch-codemode, roles#fm-tools); #829 general-worker launch, check-roles counts it and refuses a stray role file)"
