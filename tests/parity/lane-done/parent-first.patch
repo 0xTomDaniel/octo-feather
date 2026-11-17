@@ -1,0 +1,14 @@
+Seeded defect: the lane close moves the parent first, before its tickets (octo-feather-lane --help, done: the parent last).
+diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
+index a9b3c986..252e632b 100755
+--- a/scripts/octo-feather-lane
++++ b/scripts/octo-feather-lane
+@@ -2771,7 +2771,7 @@ def cmd_done(args: list[str]) -> int:
+         raise Refuse(f"usage: octo-feather-lane done PARENT (the lane's parent ticket key, e.g. 40 or ENG-123; got {' '.join(args) or 'nothing'})")
+     d = issue_view(args[0], err=Refuse)
+     parent = d["key"]
+-    keys = sorted(set(d["children"]), key=key_order) + [parent]   # the parent last: it is done when its tickets are
++    keys = [parent] + sorted(set(d["children"]), key=key_order)   # the parent last: it is done when its tickets are
+     failed = []
+     for k in keys:
+         try:

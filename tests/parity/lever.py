@@ -4,7 +4,8 @@
   tests/parity/lever.py CASE
 
 CASE is a dir here, tests/parity/CASE/: case.toml names the old test (`old`, a tests/*.sh
-path, and `old_at`, a commit holding it, as it is gone from HEAD once parity holds), every
+path or a pytest item id PATH::ITEM, and `old_at`, a commit holding it, as it is gone from HEAD
+once parity holds; for an item, PATH is restored from old_at and the item run), every
 file under tests/ the old test needs at old_at (`needs`: the libraries it sources, the fixtures
 and helpers it runs or reads; a dir stands for every file under it), the new test (`new`, a
 pytest path), and how the old run shows it ran each file a defect patches (`ran`, file: fact);
@@ -12,10 +13,10 @@ each *.patch there is one seeded defect in a kit command, its first line saying 
 In one scratch copy of the kit's files (tracked, and new ones git would track), a git repo,
 first with no defect, then with each patch applied in turn (git apply), the lever runs the old
 test with it and its `needs` restored from old_at, then the new one on the kit's own files,
-each through the copy's `just test` (the old as its gate item, the new as its file; -x: the
-first failure decides; -rA: every item's output in its log), and prints one line per run: the
-defect, the old result, the new. Exit 0 only when both pass with no defect and both fail on
-every defect.
+each through the copy's `just test` (the old as its gate item or its pytest id, the new as its
+file; -x: the first failure decides; -rA: every item's output in its log), and prints one line
+per run: the defect, the old result, the new. Exit 0 only when both pass with no defect and
+both fail on every defect.
 
 The old side must have run what it covers, each an exact fact; the lever refuses the case
 (exit 2), naming which does not hold:
@@ -121,7 +122,7 @@ def old_files(old: str, old_at: str, needs: list[str]) -> dict[str, bytes]:
     """The old test and each file of NEEDS (a dir: every file under it) at OLD_AT, by path;
     refused when OLD_AT lacks one."""
     out: dict[str, bytes] = {}
-    for n in [old, *needs]:
+    for n in [old.partition("::")[0], *needs]:
         listed = git("ls-tree", "-r", "--name-only", old_at, "--", n).stdout.decode().split()
         if not listed:
             refuse(
@@ -301,10 +302,18 @@ class Lever:
         for p, body in files.items():
             (k / p).parent.mkdir(parents=True, exist_ok=True)
             (k / p).write_bytes(body)
-        (k / old).chmod(0o755)
+        item = "::" in old  # a pytest item id: run as itself, its file restored above
+        if not item:
+            (k / old).chmod(0o755)
         git("add", "-A", cwd=k)
         log = logs / f"{name}.old.log"
-        cmd = ["just", "test", "-x", "-rA", f"tests/gate/test_gate.py::test_script[{old}]"]
+        cmd = [
+            "just",
+            "test",
+            "-x",
+            "-rA",
+            old if item else f"tests/gate/test_gate.py::test_script[{old}]",
+        ]
         if how is None:
             return sh(cmd, k, log)
         with tempfile.TemporaryDirectory(prefix="lever-old-") as w:

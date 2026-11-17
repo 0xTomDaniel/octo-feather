@@ -1,0 +1,86 @@
+[
+ {
+  "request": "issue view 944 --json number,title,body,state,url,parent,subIssues,blockedBy",
+  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Test recording for #930 (ticket #931): this scratch issue exists only so the kit records a real `octo-feather-lane done` on an open parent with an open and an already-closed sub-issue, for the testkit gh stand-in. Closed by that recording run; no work here.\",\"number\":944,\"parent\":null,\"state\":\"OPEN\",\"subIssues\":{\"nodes\":[{\"id\":\"I_kwDOVOndwM8AAAABf5to0g\",\"number\":945,\"state\":\"OPEN\",\"title\":\"[gh930 recording] lane done: open sub-issue\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/945\"},{\"id\":\"I_kwDOVOndwM8AAAABf4s99g\",\"number\":938,\"state\":\"CLOSED\",\"title\":\"[gh930 recording] gh issue close on an open issue\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/938\"}],\"totalCount\":2},\"title\":\"[gh930 recording] lane done: open parent\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/944\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather",
+   "command": "gh issue view 944 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "date": "2026-11-17"
+  }
+ },
+ {
+  "request": "issue close 938",
+  "out": "",
+  "err": "! Issue 0xTomDaniel/octo-feather#938 ([gh930 recording] gh issue close on an open issue) is already closed\n",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather",
+   "command": "gh issue close 938",
+   "date": "2026-11-17"
+  }
+ },
+ {
+  "request": "issue view 938 --json number,title,body,state,url,parent,subIssues,blockedBy",
+  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Test recording for #930 (ticket #931): this scratch issue exists only so `gh issue close` on an open issue is recorded once for the kit's testkit gh stand-in. Closed right away by that recording; no work here.\",\"number\":938,\"parent\":{\"id\":\"I_kwDOVOndwM8AAAABf5toGA\",\"number\":944,\"state\":\"OPEN\",\"title\":\"[gh930 recording] lane done: open parent\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/944\"},\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"[gh930 recording] gh issue close on an open issue\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/938\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather",
+   "command": "gh issue view 938 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "date": "2026-11-17"
+  }
+ },
+ {
+  "request": "issue close 945",
+  "out": "",
+  "err": "✓ Closed issue 0xTomDaniel/octo-feather#945 ([gh930 recording] lane done: open sub-issue)\n",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather",
+   "command": "gh issue close 945",
+   "date": "2026-11-17"
+  }
+ },
+ {
+  "request": "issue view 945 --json number,title,body,state,url,parent,subIssues,blockedBy",
+  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Test recording for #930 (ticket #931): this scratch issue exists only so the kit records a real `octo-feather-lane done` on an open parent with an open and an already-closed sub-issue, for the testkit gh stand-in. Closed by that recording run; no work here.\",\"number\":945,\"parent\":{\"id\":\"I_kwDOVOndwM8AAAABf5toGA\",\"number\":944,\"state\":\"OPEN\",\"title\":\"[gh930 recording] lane done: open parent\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/944\"},\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"[gh930 recording] lane done: open sub-issue\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/945\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather",
+   "command": "gh issue view 945 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "date": "2026-11-17"
+  }
+ },
+ {
+  "request": "issue close 944",
+  "out": "",
+  "err": "✓ Closed issue 0xTomDaniel/octo-feather#944 ([gh930 recording] lane done: open parent)\n",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather",
+   "command": "gh issue close 944",
+   "date": "2026-11-17"
+  }
+ },
+ {
+  "request": "issue view 944 --json number,title,body,state,url,parent,subIssues,blockedBy",
+  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Test recording for #930 (ticket #931): this scratch issue exists only so the kit records a real `octo-feather-lane done` on an open parent with an open and an already-closed sub-issue, for the testkit gh stand-in. Closed by that recording run; no work here.\",\"number\":944,\"parent\":null,\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[{\"id\":\"I_kwDOVOndwM8AAAABf5to0g\",\"number\":945,\"state\":\"CLOSED\",\"title\":\"[gh930 recording] lane done: open sub-issue\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/945\"},{\"id\":\"I_kwDOVOndwM8AAAABf4s99g\",\"number\":938,\"state\":\"CLOSED\",\"title\":\"[gh930 recording] gh issue close on an open issue\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/938\"}],\"totalCount\":2},\"title\":\"[gh930 recording] lane done: open parent\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/944\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather",
+   "command": "gh issue view 944 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "date": "2026-11-17"
+  }
+ }
+]
