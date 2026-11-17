@@ -1,97 +1,85 @@
 [
  {
-  "request": "issue view 915 --json number,title,body,state,url,parent,subIssues,blockedBy",
-  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Main 7f4801b1 (after #880) CI red: tests/gate/kit/test_template_languages.py::test_claims_gate failed with shutil.Error: copying the prepared template repo raced a vanishing .git/objects/maintenance.lock ([Errno 2] No such file or directory), run 43550507040. Git's automatic background maintenance (gc --auto / maintenance) runs detached in the prepared fixture repo while the test copies it. #880 moved qc-captured tests to build fixtures in their own scratch, which may make the copy hit this more often.\\n\\nFix: make the prepared fixture repos never start background maintenance (git config gc.auto 0, maintenance.auto false, or GIT_CONFIG_* in the testkit env), and/or copy a repo only after its git is quiescent; a test that fails on the race. Smallest change; tests only. Also check the other prepared-repo copies in testkit for the same race.\\n\\nPart of a class: load- or timing-sensitive tests on main this week: director-reflect.sh timeout (#856, fixed), test_qa_analyst::test_comparison (wall-time compare), test_qc_sandbox::test_live_survivor (empty pidfile). A correction pass should hunt the class.\\n\",\"number\":915,\"parent\":null,\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[{\"id\":\"I_kwDOVOndwM8AAAABfJGInQ\",\"number\":916,\"state\":\"CLOSED\",\"title\":\"gh915: prepared scratch copies never race git background maintenance\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/916\"},{\"id\":\"I_kwDOVOndwM8AAAABfJUgOw\",\"number\":918,\"state\":\"CLOSED\",\"title\":\"gh915: qc sandbox live-survivor test never reads a partial pidfile\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/918\"}],\"totalCount\":2},\"title\":\"Main red: test_claims_gate copy races git background maintenance in the prepared fixture\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/915\"}\n",
+  "request": "issue view 944 --json number,title,body,state,url,parent,subIssues,blockedBy",
+  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Test recording for #930 (ticket #931): this scratch issue exists only so the kit records a real `octo-feather-lane done` on an open parent with an open and an already-closed sub-issue, for the testkit gh stand-in. Closed by that recording run; no work here.\",\"number\":944,\"parent\":null,\"state\":\"OPEN\",\"subIssues\":{\"nodes\":[{\"id\":\"I_kwDOVOndwM8AAAABf5to0g\",\"number\":945,\"state\":\"OPEN\",\"title\":\"[gh930 recording] lane done: open sub-issue\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/945\"},{\"id\":\"I_kwDOVOndwM8AAAABf4s99g\",\"number\":938,\"state\":\"CLOSED\",\"title\":\"[gh930 recording] gh issue close on an open issue\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/938\"}],\"totalCount\":2},\"title\":\"[gh930 recording] lane done: open parent\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/944\"}\n",
   "err": "",
   "exit": 0,
   "source": {
    "gh": "2.102.0",
    "repo": "0xTomDaniel/octo-feather",
-   "command": "gh issue view 915 --json number,title,body,state,url,parent,subIssues,blockedBy",
-   "date": "2026-11-17"
-  }
- },
- {
-  "request": "issue close 916",
-  "out": "",
-  "err": "! Issue 0xTomDaniel/octo-feather#916 (gh915: prepared scratch copies never race git background maintenance) is already closed\n",
-  "exit": 0,
-  "source": {
-   "gh": "2.102.0",
-   "repo": "0xTomDaniel/octo-feather",
-   "command": "gh issue close 916",
-   "date": "2026-11-17"
-  }
- },
- {
-  "request": "issue view 916 --json number,title,body,state,url,parent,subIssues,blockedBy",
-  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"## Parent\\n\\n#915\\n\\n## What to build\\n\\nEvery kit test that copies a prepared scratch (the shared testkit's prepare-once-per-gate-run copy, and any other prepared-repo copy in the testkit or tests/lib) copies a quiescent git repo: no git command a scenario or its kit commands run in a scratch starts git's automatic background maintenance (gc --auto, maintenance --auto, detached), so the copy never races a vanishing `.git/objects/maintenance.lock` or a repacking object store. Seam, agreed before any test: the testkit's Scratch interface (its environment, `run`, `git` and `prepare`), the one shared world every kit test goes through (testkit docstring); a new kit test drives that interface and shows auto-maintenance is not started in a scratch repo even when the repo's own config would trigger it at once, and the same test fails on the code before the fix. Tests only, smallest change, no product change, no retry or ignore-on-copy workaround in place of quiescence.\\n\\nDemo: `just test tests/gate/kit/test_template_languages.py::test_claims_gate tests/gate/kit/test_qc_one_execution.py` runs the two items that hit the race on main and on PR #823 CI, green; the new race test is its own gate item.\\n\\n## Acceptance criteria\\n\\n- [ ] rule: kit tests are deterministic under load, a prepared scratch copy never races git background maintenance (owner ruling #915)\\n- [ ] the new kit test fails on main before the fix (git starts auto maintenance in a scratch repo) and passes after it\\n- [ ] every prepared-repo copy in the testkit and tests/lib audited; each that copies a git repo is covered by the same fix or named as not affected\\n- [ ] demo: `just test tests/gate/kit/test_template_languages.py::test_claims_gate tests/gate/kit/test_qc_one_execution.py` passes\\n\\n## Blocked by\\n\\nNone (can start immediately)\\n\",\"number\":916,\"parent\":{\"id\":\"I_kwDOVOndwM8AAAABfIzkdQ\",\"number\":915,\"state\":\"CLOSED\",\"title\":\"Main red: test_claims_gate copy races git background maintenance in the prepared fixture\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/915\"},\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"gh915: prepared scratch copies never race git background maintenance\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/916\"}\n",
-  "err": "",
-  "exit": 0,
-  "source": {
-   "gh": "2.102.0",
-   "repo": "0xTomDaniel/octo-feather",
-   "command": "gh issue view 916 --json number,title,body,state,url,parent,subIssues,blockedBy",
-   "date": "2026-11-17"
-  }
- },
- {
-  "request": "issue close 918",
-  "out": "",
-  "err": "! Issue 0xTomDaniel/octo-feather#918 (gh915: qc sandbox live-survivor test never reads a partial pidfile) is already closed\n",
-  "exit": 0,
-  "source": {
-   "gh": "2.102.0",
-   "repo": "0xTomDaniel/octo-feather",
-   "command": "gh issue close 918",
-   "date": "2026-11-17"
-  }
- },
- {
-  "request": "issue view 918 --json number,title,body,state,url,parent,subIssues,blockedBy",
-  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"## Parent\\n\\n#915\\n\\n## What to build\\n\\nThe qc sandbox's live-survivor kit test reads its survivor's pid only once the stand-in bwrap has written it whole: the stand-in publishes the pidfile atomically (written beside it, then renamed into place), so the test never reads an empty or partial pidfile while the survivor is still writing it (seen on lane CI as `int('')` at the pidfile read). Tests only, smallest change, no product change, no retry loop in place of an atomic publish. Proof the old shape races: with the window between the pidfile's create and its write widened, the old stand-in makes the test read an empty file and fail; the new one passes.\\n\\nDemo: `just test tests/gate/kit/test_qc_sandbox.py::test_live_survivor` passes.\\n\\n## Acceptance criteria\\n\\n- [ ] rule: kit tests are deterministic under load, a stand-in's pidfile is never read before it is whole (owner ruling #915)\\n- [ ] the race shown: old stand-in with a widened create-to-write window fails reading an empty pidfile; new stand-in passes with the same window\\n- [ ] demo: `just test tests/gate/kit/test_qc_sandbox.py::test_live_survivor` passes\\n\\n## Blocked by\\n\\nNone (can start immediately)\\n\",\"number\":918,\"parent\":{\"id\":\"I_kwDOVOndwM8AAAABfIzkdQ\",\"number\":915,\"state\":\"CLOSED\",\"title\":\"Main red: test_claims_gate copy races git background maintenance in the prepared fixture\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/915\"},\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"gh915: qc sandbox live-survivor test never reads a partial pidfile\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/918\"}\n",
-  "err": "",
-  "exit": 0,
-  "source": {
-   "gh": "2.102.0",
-   "repo": "0xTomDaniel/octo-feather",
-   "command": "gh issue view 918 --json number,title,body,state,url,parent,subIssues,blockedBy",
-   "date": "2026-11-17"
-  }
- },
- {
-  "request": "issue close 915",
-  "out": "",
-  "err": "! Issue 0xTomDaniel/octo-feather#915 (Main red: test_claims_gate copy races git background maintenance in the prepared fixture) is already closed\n",
-  "exit": 0,
-  "source": {
-   "gh": "2.102.0",
-   "repo": "0xTomDaniel/octo-feather",
-   "command": "gh issue close 915",
-   "date": "2026-11-17"
-  }
- },
- {
-  "request": "issue view 915 --json number,title,body,state,url,parent,subIssues,blockedBy",
-  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Main 7f4801b1 (after #880) CI red: tests/gate/kit/test_template_languages.py::test_claims_gate failed with shutil.Error: copying the prepared template repo raced a vanishing .git/objects/maintenance.lock ([Errno 2] No such file or directory), run 43550507040. Git's automatic background maintenance (gc --auto / maintenance) runs detached in the prepared fixture repo while the test copies it. #880 moved qc-captured tests to build fixtures in their own scratch, which may make the copy hit this more often.\\n\\nFix: make the prepared fixture repos never start background maintenance (git config gc.auto 0, maintenance.auto false, or GIT_CONFIG_* in the testkit env), and/or copy a repo only after its git is quiescent; a test that fails on the race. Smallest change; tests only. Also check the other prepared-repo copies in testkit for the same race.\\n\\nPart of a class: load- or timing-sensitive tests on main this week: director-reflect.sh timeout (#856, fixed), test_qa_analyst::test_comparison (wall-time compare), test_qc_sandbox::test_live_survivor (empty pidfile). A correction pass should hunt the class.\\n\",\"number\":915,\"parent\":null,\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[{\"id\":\"I_kwDOVOndwM8AAAABfJGInQ\",\"number\":916,\"state\":\"CLOSED\",\"title\":\"gh915: prepared scratch copies never race git background maintenance\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/916\"},{\"id\":\"I_kwDOVOndwM8AAAABfJUgOw\",\"number\":918,\"state\":\"CLOSED\",\"title\":\"gh915: qc sandbox live-survivor test never reads a partial pidfile\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/918\"}],\"totalCount\":2},\"title\":\"Main red: test_claims_gate copy races git background maintenance in the prepared fixture\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/915\"}\n",
-  "err": "",
-  "exit": 0,
-  "source": {
-   "gh": "2.102.0",
-   "repo": "0xTomDaniel/octo-feather",
-   "command": "gh issue view 915 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "command": "gh issue view 944 --json number,title,body,state,url,parent,subIssues,blockedBy",
    "date": "2026-11-17"
   }
  },
  {
   "request": "issue close 938",
   "out": "",
-  "err": "✓ Closed issue 0xTomDaniel/octo-feather#938 ([gh930 recording] gh issue close on an open issue)\n",
+  "err": "! Issue 0xTomDaniel/octo-feather#938 ([gh930 recording] gh issue close on an open issue) is already closed\n",
   "exit": 0,
   "source": {
    "gh": "2.102.0",
    "repo": "0xTomDaniel/octo-feather",
    "command": "gh issue close 938",
+   "date": "2026-11-17"
+  }
+ },
+ {
+  "request": "issue view 938 --json number,title,body,state,url,parent,subIssues,blockedBy",
+  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Test recording for #930 (ticket #931): this scratch issue exists only so `gh issue close` on an open issue is recorded once for the kit's testkit gh stand-in. Closed right away by that recording; no work here.\",\"number\":938,\"parent\":{\"id\":\"I_kwDOVOndwM8AAAABf5toGA\",\"number\":944,\"state\":\"OPEN\",\"title\":\"[gh930 recording] lane done: open parent\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/944\"},\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"[gh930 recording] gh issue close on an open issue\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/938\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather",
+   "command": "gh issue view 938 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "date": "2026-11-17"
+  }
+ },
+ {
+  "request": "issue close 945",
+  "out": "",
+  "err": "✓ Closed issue 0xTomDaniel/octo-feather#945 ([gh930 recording] lane done: open sub-issue)\n",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather",
+   "command": "gh issue close 945",
+   "date": "2026-11-17"
+  }
+ },
+ {
+  "request": "issue view 945 --json number,title,body,state,url,parent,subIssues,blockedBy",
+  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Test recording for #930 (ticket #931): this scratch issue exists only so the kit records a real `octo-feather-lane done` on an open parent with an open and an already-closed sub-issue, for the testkit gh stand-in. Closed by that recording run; no work here.\",\"number\":945,\"parent\":{\"id\":\"I_kwDOVOndwM8AAAABf5toGA\",\"number\":944,\"state\":\"OPEN\",\"title\":\"[gh930 recording] lane done: open parent\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/944\"},\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"[gh930 recording] lane done: open sub-issue\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/945\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather",
+   "command": "gh issue view 945 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "date": "2026-11-17"
+  }
+ },
+ {
+  "request": "issue close 944",
+  "out": "",
+  "err": "✓ Closed issue 0xTomDaniel/octo-feather#944 ([gh930 recording] lane done: open parent)\n",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather",
+   "command": "gh issue close 944",
+   "date": "2026-11-17"
+  }
+ },
+ {
+  "request": "issue view 944 --json number,title,body,state,url,parent,subIssues,blockedBy",
+  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Test recording for #930 (ticket #931): this scratch issue exists only so the kit records a real `octo-feather-lane done` on an open parent with an open and an already-closed sub-issue, for the testkit gh stand-in. Closed by that recording run; no work here.\",\"number\":944,\"parent\":null,\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[{\"id\":\"I_kwDOVOndwM8AAAABf5to0g\",\"number\":945,\"state\":\"CLOSED\",\"title\":\"[gh930 recording] lane done: open sub-issue\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/945\"},{\"id\":\"I_kwDOVOndwM8AAAABf4s99g\",\"number\":938,\"state\":\"CLOSED\",\"title\":\"[gh930 recording] gh issue close on an open issue\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/938\"}],\"totalCount\":2},\"title\":\"[gh930 recording] lane done: open parent\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/944\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather",
+   "command": "gh issue view 944 --json number,title,body,state,url,parent,subIssues,blockedBy",
    "date": "2026-11-17"
   }
  }
