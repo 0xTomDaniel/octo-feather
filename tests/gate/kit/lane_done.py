@@ -18,8 +18,9 @@ from pathlib import Path
 from testkit import ROOT, Ran, Scratch, kit, main
 
 LINEAR = ROOT / ".agents" / "skills" / "linear" / "scripts"
-# gh 2.102.0 on 0xTomDaniel/octo-feather, 2026-11-17 (each recording's source): closed parent #915
-# with sub-issues #916 and #918; #938, another lane's open issue, its close recorded too.
+# gh 2.102.0 on 0xTomDaniel/octo-feather, 2026-11-17 (each recording's source): one real
+# `octo-feather-lane done 944` on scratch issues, open parent #944 with open sub-issue #945 and
+# already-closed #938, which closed #945 and #944.
 TAPE = Path(__file__).parent / "testkit" / "recordings" / "lane-done.json"
 STORE: dict[str, object] = {
     "workspace": "acme",
@@ -94,25 +95,25 @@ def linear(s: Scratch) -> None:
 
 
 def github(s: Scratch) -> None:
-    """A GitHub target (no .octo-feather.toml): parent 915 with sub-issues 916 and 918, 938 another
-    lane's (its close recorded, never asked): 916, 918, then 915 closed through issue-done; gh asked
-    only issue view and issue close. A parent gh holds no recording for fails loudly, named."""
+    """A GitHub target (no .octo-feather.toml): open parent 944 with open sub-issue 945 and
+    already-closed 938: 938, 945, then 944 closed through issue-done; gh asked only issue view and
+    issue close. An unrecorded parent: testkit/gh.py's replay owns the refusal."""
     s.git(s.root, "init", "-q", "-b", "main", "gh")
     s.gh.store("tape.json", json.loads(TAPE.read_text()))
-    r = done(s, "gh", "915")
-    want = "916: done\n918: done\n915: done\n915: parent and 2 tickets done"
+    r = done(s, "gh", "944")
+    want = "938: done\n945: done\n944: done\n944: parent and 2 tickets done"
     assert r.out == want, f"github done output: {r.out}"
     log = s.gh.log()
     closes = [x for x in log if x.startswith("issue close")]
-    assert closes == ["issue close 916", "issue close 918", "issue close 915"], (
+    assert closes == ["issue close 938", "issue close 945", "issue close 944"], (
         f"github closes: {log}"
     )
     assert all(x.startswith(("issue view ", "issue close ")) for x in log), (
         f"github close ran another gh command: {log}"
     )
-    r = done(s, "gh", "938", want=1)
-    unrecorded = "fake gh: no recording for call 1 of 'issue view 938 --json "
-    assert "tracker script github-issues/issue-view 938 failed" in r.err, f"unrecorded: {r.err}"
+    r = done(s, "gh", "9", want=1)
+    unrecorded = "fake gh: no recording for call 1 of 'issue view 9 --json "
+    assert "tracker script github-issues/issue-view 9 failed" in r.err, f"unrecorded: {r.err}"
     assert unrecorded in r.err, f"unrecorded: {r.err}"
 
 
