@@ -1,0 +1,42 @@
+[
+ {
+  "request": "issue list --repo owner/target-a --state all --limit 1000 --search \"correction-lane\" in:title --json number,title,state,closedAt,body,comments",
+  "out": "[]\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "form": "gh 2.102.0's output form (stdout not a terminal: issue list JSON, issue create the new issue's URL, issue comment the comment's URL); synthetic values, never a real tracker written",
+   "case": "no correction-lane issue yet"
+  }
+ },
+ {
+  "request": "issue list --repo owner/target-b --state all --limit 1000 --search \"correction-lane\" in:title --json number,title,state,closedAt,body,comments",
+  "out": "[]\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "form": "gh 2.102.0's output form (stdout not a terminal: issue list JSON, issue create the new issue's URL, issue comment the comment's URL); synthetic values, never a real tracker written",
+   "case": "no correction-lane issue yet"
+  }
+ },
+ {
+  "request": "issue create --title [correction-lane reflection-missed] change the question list: reflection-missed --body-file -",
+  "out": "https://github.com/owner/target-a/issues/1\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "form": "gh 2.102.0's output form (stdout not a terminal: issue list JSON, issue create the new issue's URL, issue comment the comment's URL); synthetic values, never a real tracker written",
+   "case": "GH_REPO owner/target-a"
+  }
+ },
+ {
+  "request": "issue create --title [correction-lane reflection-missed] change the question list: reflection-missed --body-file -",
+  "out": "https://github.com/owner/target-b/issues/1\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "form": "gh 2.102.0's output form (stdout not a terminal: issue list JSON, issue create the new issue's URL, issue comment the comment's URL); synthetic values, never a real tracker written",
+   "case": "GH_REPO owner/target-b"
+  }
+ }
+]

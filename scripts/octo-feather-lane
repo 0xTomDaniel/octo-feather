@@ -55,9 +55,9 @@ moves) file the correction lanes due (spec comms #reflection-correction; the rul
 through the tracker skill's `issue-create`: a lane's in its target's tracker (the current directory's tracker skill,
 the lane record's `repository`), the director's in the kit's; each issue's title carries the marker of
 scripts/octo-feather-reflect `MARK`, by which `gh issue list` finds the ones already filed. Prints
-`correction lane: filed <key> in <tracker> for <class> (...)` per issue; a class whose issue is open gets, through
-`issue-comment`, one comment quoting its findings no issue of the class quotes yet, printed as `correction lane:
-commented <url> on <key> ...` then the comment; else `correction lanes: none filed or commented`;
+`correction lane: filed <key> in <tracker> for <class> (...)` per issue, `correction lane: commented <url> on <key> ...`
+then the comment per `issue-comment` (when: scripts/octo-feather-reflect `recurrence`), else `correction lanes: none
+filed or commented`;
 a tracker other than github-issues gets `correction lane: due, not filed: ...` naming the title to file by hand.
 A tracker that cannot be read or written refuses the archive, its reflections' lines undone, every file in place.
 
@@ -693,8 +693,8 @@ GITHUB_ISSUES = "github-issues"   # the kit's own tracker skill, and the one tra
 
 def file_corrections(lanes: Path) -> list[str]:
     """Spec comms #reflection-correction: file, through the tracker skill's issue-create, every correction lane the
-    rule makes due (scripts/octo-feather-reflect `corrections`, `still_due`), or comment its new findings on the open
-    one (`recurrence`, issue-comment), whichever reflection ran, each in its
+    rule makes due (scripts/octo-feather-reflect `corrections`, `still_due`), or its issue-comment (`recurrence`),
+    whichever reflection ran, each in its
     own owner's tracker: a lane name files in its target's tracker (the current directory's tracker skill, the lane
     record's repository), the director in the kit's. Prints each filed key; Refuse when the tracker cannot be read or written."""
     import tomllib
@@ -730,11 +730,11 @@ def file_corrections(lanes: Path) -> list[str]:
                       f" one; file it by hand through {skill}'s issue-create, title `{d.title()}`, unless one is open")
             continue
         if str(repo) not in known:   # gh's search index lags a write: this run's own are added in memory
-            known[str(repo)] = correction_issues(str(repo) if repo else None, ",body,comments")
+            known[str(repo)] = correction_issues(str(repo) if repo else None, full=True)
         issues = known[str(repo)]
         for d in mine:
             if not r.still_due(d, issues):
-                if (again := r.recurrence(d, issues)):   # spec comms #reflection-correction: a comment, never an issue
+                if (again := r.recurrence(d, issues)):
                     n, text = again[0]["number"], again[1]
                     try:
                         url = tracker("issue-comment", str(n), "--body-file", "-", err=Refuse, skill=skill, env=env,
@@ -763,13 +763,15 @@ def file_corrections(lanes: Path) -> list[str]:
     return filed
 
 
-def correction_issues(repo: str | None, more: str = "") -> list[dict[str, object]]:
+def correction_issues(repo: str | None, full: bool = False) -> list[dict[str, object]]:
     """Every correction-lane issue, open or closed, of the github-issues tracker REPO (None: the current directory's),
-    found by scripts/octo-feather-reflect `MARK_WORD` in its title: {number, title, state, closedAt}, and the gh
-    fields MORE adds (`,body,comments`); Refuse on an issue whose number, body or comments gh's JSON lacks."""
+    found by scripts/octo-feather-reflect `MARK_WORD` in its title, as a strict record of gh's raw fields: number (int),
+    title, state (str), closedAt (str or null), and when FULL body (str) and comments ([{body: str}]); Refuse on any
+    other JSON, naming the issue and the fix."""
     r = reflect_module()
+    fields = ["number", "title", "state", "closedAt", *(["body", "comments"] if full else [])]
     out = gh(["issue", "list", *(["--repo", repo] if repo else []), "--state", "all", "--limit", "1000",
-              "--search", f'"{r.MARK_WORD}" in:title', "--json", "number,title,state,closedAt" + more],
+              "--search", f'"{r.MARK_WORD}" in:title', "--json", ",".join(fields)],
              "check gh auth and network, then rerun")
     try:
         got = json.loads(out)
@@ -777,15 +779,25 @@ def correction_issues(repo: str | None, more: str = "") -> list[dict[str, object
         raise Refuse(f"correction lanes: gh issue list printed no JSON ({e}): rerun") from e
     if not isinstance(got, list):
         raise Refuse("correction lanes: gh issue list printed no list: rerun")
-    issues = [cast("dict[str, object]", i) for i in cast("list[object]", got) if isinstance(i, dict)]
-    for i in issues:   # null: gh holds none
-        c: object = i.get("comments") or []
-        if not isinstance(i.get("number"), int) or not isinstance(i.get("body"), (str, type(None))) \
-                or not isinstance(c, list) or not all(isinstance(x, dict) and isinstance(cast("dict[str, object]", x).get("body"), str)
-                                                      for x in cast("list[object]", c)):
-            raise Refuse(f"correction lanes: gh issue list printed issue #{i.get('number')} not in gh's form (number an"
-                         f" int, body a string, comments a list of {{body}}): check `gh issue list --json"
-                         f" number,body,comments` on {repo or 'this repo'} and update gh, then rerun")
+    issues: list[dict[str, object]] = []
+    for n, i in enumerate(cast("list[object]", got), 1):
+        d = cast("dict[str, object]", i) if isinstance(i, dict) else {}
+        cs = d.get("comments")
+        ok = all(k in d for k in fields) and type(d["number"]) is int and isinstance(d["title"], str) \
+            and isinstance(d["state"], str) and isinstance(d["closedAt"], (str, type(None))) \
+            and (not full or isinstance(d["body"], str) and isinstance(cs, list)
+                 and all(isinstance(c, dict) and isinstance(cast("dict[str, object]", c).get("body"), str)
+                         for c in cast("list[object]", cs)))
+        if not ok:
+            raise Refuse(f"correction lanes: gh issue list item {n} (#{d.get('number')}) is not gh's issue JSON (number an"
+                         " int, title and state strings, closedAt a string or null"
+                         + (", body a string, comments a list of objects with a string body" if full else "")
+                         + f"): check `gh issue list --json {','.join(fields)}` on {repo or 'this repo'}, update gh,"
+                         " then rerun")
+        rec = {k: d[k] for k in fields if k != "comments"}
+        if full:
+            rec["comments"] = [{"body": cast("dict[str, object]", c)["body"]} for c in cast("list[object]", cs)]
+        issues.append(rec)
     return issues
 
 

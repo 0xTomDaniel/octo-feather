@@ -278,6 +278,7 @@ def issue_write(a: list[str]) -> None:
         nums = [int(p.stem) for p in (STORE / "issue").glob("*.json")]
         n = str(max(nums, default=0) + 1)
         d: dict[str, Any] = {"number": int(n), "title": opt(a, "--title"), "state": "OPEN"}
+        d |= {"closedAt": None, "comments": []}  # as gh: open, no comment yet
     else:
         n = a[2]
         if not (STORE / "issue" / f"{n}.json").is_file():

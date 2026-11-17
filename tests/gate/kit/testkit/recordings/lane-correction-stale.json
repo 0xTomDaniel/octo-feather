@@ -1,0 +1,40 @@
+[
+ {
+  "request": "issue list --repo 0xTomDaniel/octo-feather --state all --limit 1000 --search \"correction-lane\" in:title --json number,title,state,closedAt,body,comments",
+  "out": "[]\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "form": "gh 2.102.0's output form (stdout not a terminal: issue list JSON, issue create the new issue's URL, issue comment the comment's URL); synthetic values, never a real tracker written",
+   "case": "no correction-lane issue yet"
+  }
+ },
+ {
+  "request": "issue create --title [correction-lane reflection-missed] change the question list: reflection-missed --body-file -",
+  "out": "https://github.com/0xTomDaniel/octo-feather/issues/1\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "form": "gh 2.102.0's output form (stdout not a terminal: issue list JSON, issue create the new issue's URL, issue comment the comment's URL); synthetic values, never a real tracker written"
+  }
+ },
+ {
+  "request": "issue list --repo 0xTomDaniel/octo-feather --state all --limit 1000 --search \"correction-lane\" in:title --json number,title,state,closedAt,body,comments",
+  "out": "[]\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "form": "gh 2.102.0's output form (stdout not a terminal: issue list JSON, issue create the new issue's URL, issue comment the comment's URL); synthetic values, never a real tracker written",
+   "case": "a re-list right after the create: GitHub's search index lags a write, so it still lists none"
+  }
+ },
+ {
+  "request": "issue comment 1 --body-file -",
+  "out": "https://github.com/0xTomDaniel/octo-feather/issues/1#issuecomment-1\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "form": "gh 2.102.0's output form (stdout not a terminal: issue list JSON, issue create the new issue's URL, issue comment the comment's URL); synthetic values, never a real tracker written"
+  }
+ }
+]
