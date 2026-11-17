@@ -17,9 +17,10 @@ naming it.
             never github-issues, no role linear-cli or github-issues; tracker = "jira": pi-role
             and octo-feather-start --issue exit non-zero naming jira and the kit's trackers, and
             the testkit herdr logs no workspace, tab or agent start
-  checked   check-skills fails a tracker skill missing a tracker script, or holding one not
-            executable, naming skill and script (one run for every missing script, one for both
-            not executable: each run starts the real Pi)
+  checked   check-skills passes a clean kit copy and fails one holding a tracker script not
+            executable, naming skill and script, each of two alone (each run starts the real Pi)
+  missing   one item per tracker script: check-skills fails a kit copy whose github-issues, then
+            whose linear, lacks it alone, naming skill and script
   github    each github-issues script against the offline gh (github-pr's scripts/gh) over a
             snapshot, whose refusal of writes passes through; issue-view lists sub-issue keys as
             children and refuses a partial list; the writes against the testkit gh: the gh call
@@ -34,7 +35,8 @@ from __future__ import annotations
 import json
 import os
 import shutil
-from typing import TYPE_CHECKING
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, cast
 
 from testkit import FIXTURES, HERE, ROOT, Ran, Scratch, kit, main
 
@@ -69,10 +71,26 @@ def target(s: Scratch, tracker: str | None = None) -> Path:
     return t
 
 
+@dataclass(frozen=True)
+class Launch:
+    """`pi-role --json`'s output, the one field read: args, Pi's arguments."""
+
+    args: list[str]
+
+
+def launch(out: str) -> Launch:
+    """OUT parsed and validated once; fails naming the field it rejects."""
+    d: object = json.loads(out)
+    args = cast("dict[str, object]", d).get("args") if isinstance(d, dict) else None
+    ok = isinstance(args, list) and all(isinstance(a, str) for a in cast("list[object]", args))
+    assert ok, f"pi-role --json: field args is not a list of text: {out}"
+    return Launch(cast("list[str]", args))
+
+
 def names(s: Scratch, cwd: Path, role: str) -> list[str]:
     """The skill names pi-role --json passes ROLE's launch in CWD, in order."""
-    a = json.loads(s.run([kit("pi-role"), "--json", str(AGENTS / f"{role}.md")], cwd=cwd).out)
-    return [a["args"][i + 1].rsplit("/", 1)[1] for i, x in enumerate(a["args"]) if x == "--skill"]
+    a = launch(s.run([kit("pi-role"), "--json", str(AGENTS / f"{role}.md")], cwd=cwd).out).args
+    return [a[i + 1].rsplit("/", 1)[1] for i, x in enumerate(a[:-1]) if x == "--skill"]
 
 
 def skills(s: Scratch) -> None:
@@ -121,31 +139,41 @@ def skills(s: Scratch) -> None:
     assert not started, f"a workspace or agent started: {calls}"
 
 
-def checked(s: Scratch) -> None:
-    """check-skills on a kit copy: clean, every tracker script missing, two not executable."""
+def kit_copy(s: Scratch) -> tuple[Path, list[str]]:
+    """A kit copy check-skills reads (agents, skills, extensions, pi-role), and its command, run
+    with the real Pi, which check-skills asks, not the testkit's."""
     k = s.root / "kit"
     for d in ("agents", ".agents", "extensions"):
         shutil.copytree(ROOT / d, k / d, symlinks=True)
     (k / "scripts").mkdir()
     for f in ("scripts/check-skills", "scripts/pi-role", "web-mcp.json"):
         shutil.copy2(ROOT / f, k / f)
-    s.env["PATH"] = os.environ["PATH"]  # the real Pi, which check-skills asks, not the testkit's
-    check = [str(k / "scripts" / "check-skills")]
+    s.env["PATH"] = os.environ["PATH"]
+    return k, [str(k / "scripts" / "check-skills")]
+
+
+def checked(s: Scratch) -> None:
+    """check-skills on a kit copy: clean, then each of two tracker scripts not executable alone."""
+    k, check = kit_copy(s)
     out = s.run(check, cwd=k).out
     assert "trackers github, linear)" in out, f"check-skills covers both trackers: {out}"
+    for sk, n in (("linear", "issue-done"), ("github-issues", "pr-line")):
+        f = k / ".agents/skills" / sk / "scripts" / n
+        f.chmod(0o644)
+        err = s.run(check, cwd=k, want=1).err
+        assert f"tracker skill {sk}: tracker script {n} is not executable" in err, err
+        f.chmod(0o755)
+
+
+def missing(s: Scratch, n: str) -> None:
+    """check-skills on a kit copy without tracker script N, in each tracker skill alone."""
+    k, check = kit_copy(s)
     for sk in ("github-issues", "linear"):
-        for n in SCRIPTS:
-            (k / ".agents/skills" / sk / "scripts" / n).rename(s.root / f"{sk}-{n}")
-    err = s.run(check, cwd=k, want=1).err
-    for sk in ("github-issues", "linear"):
-        for n in SCRIPTS:
-            assert f"tracker skill {sk}: missing tracker script {n} " in err, f"{sk} {n}: {err}"
-            (s.root / f"{sk}-{n}").rename(k / ".agents/skills" / sk / "scripts" / n)
-    (k / ".agents/skills/linear/scripts/issue-done").chmod(0o644)
-    (k / ".agents/skills/github-issues/scripts/pr-line").chmod(0o644)
-    err = s.run(check, cwd=k, want=1).err
-    assert "tracker skill linear: tracker script issue-done is not executable" in err, err
-    assert "tracker skill github-issues: tracker script pr-line is not executable" in err, err
+        f = k / ".agents/skills" / sk / "scripts" / n
+        f.rename(s.root / n)
+        err = s.run(check, cwd=k, want=1).err
+        assert f"tracker skill {sk}: missing tracker script {n} " in err, f"{sk} {n}: {err}"
+        (s.root / n).rename(f)
 
 
 def snapshot(s: Scratch) -> Path:
@@ -370,4 +398,4 @@ def linear(s: Scratch) -> None:  # noqa: PLR0915 (one tape session, its calls in
 
 
 if __name__ == "__main__":
-    main(skills, checked, github, linear)
+    main(skills, checked, missing, github, linear)
