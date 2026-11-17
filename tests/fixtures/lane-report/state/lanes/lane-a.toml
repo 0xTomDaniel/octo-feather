@@ -1,8 +1,8 @@
 supervisor = "w5:p1"
-repository = "o/a"
+repository = "0xTomDaniel/octo-feather"
 issue = "gh1"
 goal = "Implementer working"
-pr = 5
+pr = 943
 started_at = "2026-10-20T08:00:00Z"
 last_handoff_at = "2026-10-20T09:30:00Z"
 waiting_on = ""
