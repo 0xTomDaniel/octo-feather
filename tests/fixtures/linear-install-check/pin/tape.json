@@ -1,0 +1,8 @@
+{
+ "source": "Not recorded: LINEAR_API_KEY is not set in the factory (director decision on #921). Built from schpet/linear-cli v3.1.0's source (the linear skill's cli-version) and Linear's GraphQL schema, as tests/fixtures/linear-tracker/tape.json's source says, stdout and stderr not a terminal: `--version` as clap prints it for cli/mod.rs's #[command(name = \"linear\", version)]: the name, a space, the crate version (Cargo.toml version = \"3.1.0\").",
+ "calls": [
+  {"argv": ["--version"], "stdin": null, "answers": [
+   {"rc": 0, "err": "", "out": "linear 3.1.0\n"}
+  ]}
+ ]
+}
