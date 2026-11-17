@@ -560,6 +560,86 @@
           ],
           "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
           "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--role",
+            "implementer",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--role",
+            "implementer",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo} contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo} contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--role",
+            "implementer",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo} contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--role",
+            "implementer",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo} contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
         }
       ],
       "herdr-close": [
@@ -855,6 +935,46 @@
           ],
           "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo} contract=ok provider_session_id=s-w2:p10\n",
           "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--role",
+            "implementer",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--role",
+            "implementer",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
         }
       ],
       "herdr-close": [
@@ -1149,6 +1269,46 @@
             "implementer-gh15"
           ],
           "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo} contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--role",
+            "implementer",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--role",
+            "implementer",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
           "exit": 0
         }
       ],
