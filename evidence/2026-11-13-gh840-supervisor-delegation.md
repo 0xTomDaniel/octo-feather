@@ -52,6 +52,8 @@ What each case shows in this run:
 - owner-need-reaches-director (negative): passes on both kits, as a negative must (non-discriminating by design).
 - qc-failure-brief-review (review case): REVIEW on both kits, 0/3 by rule (a review case never counts as a pass); each run's output kept in its review.json (paths in the recorded runs below), verdicts pending a maintainer (`scripts/octo-feather-qa --review <run dir> supervisor-delegation/qc-failure-brief-review pass|fail NOTE`).
 
+Review verdicts: qc-failure-brief-review pass at head (run 20261117T151829Z-60554a, kit 4c7e2433), baseline fail (the supervisor named the cause in the brief, greeting.text); recorded by the independent reviewer code-reviewer-gh840-cases: head briefs paste the failure as found and leave the diagnosis to the worker.
+
 The facts the analysis flags non-discriminating (spawn an implementer, edit nothing under src/ or tests/, integrate the worker branches) pass on both kits; the director message decides, as in the earlier proofs.
 
 Commits after the final proof head 4c7e2433 are evidence only: `git diff --stat 4c7e2433..HEAD` at d4bd9a4c (this note's commit adds only this paragraph to the same six files):

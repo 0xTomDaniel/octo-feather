@@ -230,7 +230,23 @@ Held-out cases are written and scored by their separate author, not here.
 
 ## gh754 train cases
 
-Frozen gh754 train cases (review cases on history fixtures, copied for this lane at /tmp/gh840/gh754-train; evidence 35d01c7, evidence/2026-11-12-gh754-supervisor-preintervention.md), run as the brief asks: `scripts/octo-feather-qa --evals /tmp/gh840/gh754-train --runs 1 --baseline origin/main`, run 20261113T123439Z-adbfe9, kit dad85635 (agents/supervisor.md as at c7e915e9, the restated lines of the first proof, not the final pointer text) beside baseline 7bb5c70399dc. Both cases end REVIEW on both kits: no verdict is recorded here; a reviewer records it with `scripts/octo-feather-qa --review`. Kept outputs: $(octo-feather-state)/qa/20261113T123439Z-adbfe9/<suite>/<case>/{baseline,current}/run-1/ (transcript.jsonl, its final message the handoff judged; review.json).
+### Final run 20261117T222940Z-a27412 (kit 70cc62c8, final role text)
+
+`scripts/octo-feather-qa --evals /tmp/gh840/gh754-train --runs 3 --baseline b20ee656`, run 20261117T222940Z-a27412, kit 70cc62c8baa0badaaf124d0f318e41994db9007b (gh840's final role text; no role or herdr-comms change on main since b20ee656) beside baseline b20ee656e6fa17ed19f4a617b9962ffb5fc0770f, the private gh754 train copy on history fixtures, 3 runs per kit. Every run ended REVIEW with a real final message (4 to 8 thousand characters); no FAIL, no provider error. Kept output: `$(octo-feather-state)/qa/20261117T222940Z-a27412/<suite>/<case>/{baseline,current}/run-{1,2,3}/review.json`.
+
+Verdicts, recorded by an independent cross-family reviewer (code-reviewer-gh840-gh754, openai) in `$(octo-feather-state)/qa/reviews/<suite>/<case>.jsonl`:
+
+| case | baseline (b20ee656) | head (70cc62c8) |
+|---|---|---|
+| gh754-practical-parallelism/supervisor-nov9-ready-work | PASS 3/3 | PASS 3/3 |
+| gh754-preintervention/supervisor-original-0336-checkpoint | FAIL 3/3 | FAIL 3/3 |
+
+- supervisor-nov9-ready-work: both kits brief separate fresh audit and repair workers beside the inventory worker, gates kept. Already met on main.
+- supervisor-original-0336-checkpoint: class missing-work-decomposition: the independent audit and inventory stay on one serial assignment, repair deferred (head run 3 queues #751 for a fresh worker). Not fixed by this lane, and no regression: it fails identically on main. Owner ruling 2026-11-17: ship as is, carried on #783 (issuecomment-6963517806).
+
+### History: single run 20261113T123439Z-adbfe9 (kit dad85635)
+
+Frozen gh754 train cases (review cases on history fixtures, copied for this lane at /tmp/gh840/gh754-train; evidence 35d01c7, evidence/2026-11-12-gh754-supervisor-preintervention.md), run as the brief asks: `scripts/octo-feather-qa --evals /tmp/gh840/gh754-train --runs 1 --baseline origin/main`, run 20261113T123439Z-adbfe9, kit dad85635 (agents/supervisor.md as at c7e915e9, the restated lines of the first proof, not the final pointer text) beside baseline 7bb5c70399dc. Both cases end REVIEW on both kits: no verdict is recorded here; a reviewer records it with `scripts/octo-feather-qa --review`. Verdicts recorded later by code-reviewer-gh840-cases (one run each): supervisor-nov9-ready-work PASS head, PASS baseline; supervisor-original-0336-checkpoint FAIL head, FAIL baseline (the same implementer resumed on the next tranche, no independent cut). Kept outputs: $(octo-feather-state)/qa/20261113T123439Z-adbfe9/<suite>/<case>/{baseline,current}/run-1/ (transcript.jsonl, its final message the handoff judged; review.json).
 
 What each kept handoff proposes, stated as fact, not judged:
 
