@@ -51,8 +51,11 @@ def comments(s: Scratch, n: int) -> list[str]:
 
 
 def run(s: Scratch, *args: str, want: int = 0) -> str:
+    """`octo-feather-lane ARGS`'s output, also printed: the scenario's demo for qc."""
     r = s.run([L, *args], want=want)
-    return f"{r.out}\n{r.err}"
+    out = f"{r.out}\n{r.err}"
+    print(f"$ octo-feather-lane {' '.join(args)}\n{out.strip()}\n", flush=True)  # noqa: T201
+    return out
 
 
 def recurrence(s: Scratch) -> None:
@@ -130,6 +133,7 @@ def reflection_missed(s: Scratch) -> None:
     title = "[correction-lane reflection-missed] change the question list: reflection-missed"
     assert new["title"] == title, new
     assert gap in str(new["body"]), new
+    assert "Changes: the question list, reflection/questions.json" in str(new["body"]), new
     assert "old gap" in str(new["body"]), new
     assert len(comments(s, 5)) == 1, "commented on a closed issue"
     s.gh.store("issue/6.json", new | {"comments": "not a list"})
