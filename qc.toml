@@ -263,6 +263,12 @@ covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11
 [demo."comms#acceptance-real-blocker"]
 covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11-13-gh840-supervisor-autonomy.md"]
 
+# No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-general-worker --runs 3 --baseline
+# origin/main), which needs the eval slot and a real model route: not a qc demo. The agent fallback judge reads its run in
+# evidence/2026-11-17-gh840-supervisor-general-worker.md (pass rates on both kits, recorded spawns, briefs and sends).
+[demo."roles#acceptance-general-worker-no-implementation"]
+covers = ["agents/supervisor.md", "evals/supervisor-general-worker", "evals/fixtures/lane-shout-general-diff", "evidence/2026-11-17-gh840-supervisor-general-worker.md"]
+
 # No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-fresh-worker --runs 3 --baseline
 # origin/main), which needs the eval slot and a real model route: not a qc demo. The agent fallback judge reads its run,
 # each case's pass rate on both kits and every recorded herdr-spawn and herdr-say argv, in
