@@ -131,7 +131,7 @@ covers = ["scripts/octo-feather-lane", ".github/workflows/check.yml", "templates
 [demo."issue-lifecycle#acceptance-review-resolution"]
 covers = ["scripts/octo-feather-lane", "agents/code-reviewer.md", "agents/supervisor.md"]
 
-# Proven by tests/lane-ci-start.sh's tagged cases (the rule: issue-lifecycle #lanes-one-head); the role naming the
+# Proven by tests/gate/kit/test_lane_ci_start.py's tagged items (the rule: issue-lifecycle #lanes-one-head); the role naming the
 # command: owed eval docs/owed-evals/589.md.
 [demo."issue-lifecycle#acceptance-ci-alongside"]
 covers = ["scripts/octo-feather-lane", "agents/supervisor.md", ".skillfile/patches/skills/implement-spec/SKILL.md.patch", ".agents/skills/implement-spec/SKILL.md"]
