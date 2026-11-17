@@ -1,0 +1,27 @@
+# The gh930 recording's CI (tests/gate/kit/lane_ci_start.py): check.yml's shape, made trivial.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+jobs:
+  scope:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-24.04
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: diff
+        run: |
+          sleep 15
+          base=${{ github.event.pull_request.base.sha }} head=${{ github.event.pull_request.head.sha }}
+          if git diff --name-only "$base" "$head" | grep -qv '^docs/specs/.*[.]status[.]json$'
+          then echo code=true >> "$GITHUB_OUTPUT"; else echo code=false >> "$GITHUB_OUTPUT"; fi
+  check:
+    needs: scope
+    if: needs.scope.outputs.code != 'false'
+    concurrency: gh930-recording-check
+    runs-on: ubuntu-24.04
+    steps:
+      - run: if [ "${{ github.event.action }}" != synchronize ]; then sleep 90; fi
