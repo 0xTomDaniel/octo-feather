@@ -39,6 +39,35 @@ What each case shows in this run:
 - implementer-result-integrated-not-candidate: baseline 0/3, head 3/3 (its branch_paths fact passes on both kits, as the analysis flags; the director-message fact decides).
 - cleanup-result-consumed (negative): passes on both kits, as a negative must.
 
+Commits after the final proof head 4c7e2433 are evidence only: `git diff --stat 4c7e2433..HEAD` at d4bd9a4c (this note's commit adds only this paragraph to the same six files):
+
+```
+ evidence/2026-11-13-gh840-supervisor-autonomy.md   | 586 ++++++++++++++++++
+ evidence/2026-11-13-gh840-supervisor-delegation.md | 431 +++++++++++++
+ .../2026-11-13-gh840-supervisor-fresh-worker.md    | 689 +++++++++++++++++++++
+ .../2026-11-13-gh840-supervisor-notifications.md   | 397 ++++++++++++
+ evidence/2026-11-13-gh840-worker-uncertain-send.md | 349 +++++++++++
+ .../2026-11-17-gh840-supervisor-general-worker.md  | 258 ++++++++
+ 6 files changed, 2710 insertions(+)
+```
+
+From the brief's base 2d105669 the range also holds the stand-in fix 4c7e2433 (`evals/*/cases.json` stand_ins only), the run's head: `git diff --stat 2d105669..HEAD` at d4bd9a4c:
+
+```
+ evals/supervisor-autonomy/cases.json               |  48 +-
+ evals/supervisor-delegation/cases.json             |  30 +
+ evals/supervisor-fresh-worker/cases.json           |  40 +-
+ evals/supervisor-general-worker/cases.json         |  30 +
+ evals/supervisor-notifications/cases.json          |  60 ++
+ evidence/2026-11-13-gh840-supervisor-autonomy.md   | 586 ++++++++++++++++++
+ evidence/2026-11-13-gh840-supervisor-delegation.md | 431 +++++++++++++
+ .../2026-11-13-gh840-supervisor-fresh-worker.md    | 689 +++++++++++++++++++++
+ .../2026-11-13-gh840-supervisor-notifications.md   | 397 ++++++++++++
+ evidence/2026-11-13-gh840-worker-uncertain-send.md | 349 +++++++++++
+ .../2026-11-17-gh840-supervisor-general-worker.md  | 258 ++++++++
+ 11 files changed, 2906 insertions(+), 12 deletions(-)
+```
+
 Every recorded `herdr-say`, `herdr-spawn`, `octo-feather-integrate` and `octo-feather-handoff` argv of this run, whole, per case, kit and run: section "Final evaluation: recorded runs" at the end of this file. The sections between here and there are the earlier proofs, kept as history.
 
 ### History: lane final run 20261117T015044Z-97f547 at 2d105669 (superseded)
