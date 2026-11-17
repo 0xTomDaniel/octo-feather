@@ -638,6 +638,8 @@ What each case shows in this run:
 - owner-access-blocker-and-ready-work: baseline 2/3 (stated partial: baseline run 2 sent the director two messages, the blocker and a pilot status; `count 1` failed), head 3/3. Already met in the earlier proof (3/3 both kits): the behaviour is mostly on main, so this case is a weak discriminator.
 - owner-access-blocker-message (review case): REVIEW on both kits, 0/3 by rule; each run's output kept in its review.json (paths below), verdicts pending a maintainer.
 
+Review verdicts: owner-access-blocker-message pass at head (run 20261117T182353Z-466452, kit 39e35d70), baseline pass; recorded by the independent reviewer code-reviewer-gh840-cases (openai): one access decision with attempts and options, #15 spawned.
+
 Commits after the final proof head 4c7e2433 are evidence only: `git diff --stat 4c7e2433..HEAD` at d4bd9a4c (this note's commit adds only this paragraph to the same six files):
 
 ```
