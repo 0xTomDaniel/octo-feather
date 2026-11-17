@@ -1,0 +1,11 @@
+Seeded defect: linear's issue-done swallows linear's refusal of the move, exiting 0 as if the issue moved (the script's header).
+diff --git a/.agents/skills/linear/scripts/issue-done b/.agents/skills/linear/scripts/issue-done
+index 7ddaccef..3913a1ac 100755
+--- a/.agents/skills/linear/scripts/issue-done
++++ b/.agents/skills/linear/scripts/issue-done
+@@ -7,4 +7,4 @@ set -euo pipefail
+ [[ "$1" =~ ^[A-Za-z][A-Za-z0-9]*-[0-9]+$ ]] || { echo "issue-done: $1 is not a Linear issue key (TEAM-123)" >&2; exit 1; }
+ view="$("$(dirname "${BASH_SOURCE[0]}")/issue-view" "$1" 2>&1)" || { echo "issue-done: ${view#issue-view: }" >&2; exit 1; }
+ [[ "$(jq -r .state <<<"$view")" != "done" ]] || exit 0
+-out="$(linear issue update "${1^^}" --state completed --no-input 2>&1)" || { echo "issue-done: $out" >&2; exit 1; }
++out="$(linear issue update "${1^^}" --state completed --no-input 2>&1)" || true

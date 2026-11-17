@@ -1,0 +1,12 @@
+Seeded defect: linear's install-check takes any reported release as the pin (the script's header: ok only when linear --version reports the pin).
+diff --git a/.agents/skills/linear/scripts/install-check b/.agents/skills/linear/scripts/install-check
+index 29ae5e6e..b0aa661d 100755
+--- a/.agents/skills/linear/scripts/install-check
++++ b/.agents/skills/linear/scripts/install-check
+@@ -10,5 +10,5 @@ if ! p="$(command -v linear)"; then
+   printf 'linear MISSING (want v%s); %s\n' "$pin" "$how"; exit 1
+ fi
+ v="$(linear --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+-if [[ "$v" == "$pin" ]]; then printf 'linear ok  %s (v%s)\n' "$p" "$v"; exit 0; fi
++if [[ -n "$v" ]]; then printf 'linear ok  %s (v%s)\n' "$p" "$v"; exit 0; fi
+ printf 'linear WRONG VERSION %s reports %s, want v%s; %s\n' "$p" "${v:-no version}" "$pin" "$how"; exit 1
