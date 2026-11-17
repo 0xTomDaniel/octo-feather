@@ -280,25 +280,13 @@ def nested(s: Scratch) -> None:
 
 
 def _held(pid: int) -> bool:
-    """PID or a process below it blocked opening a FIFO no reader holds yet."""
-    kids: dict[int, list[int]] = {}
-    for d in Path("/proc").iterdir():
-        if d.name.isdigit():
-            try:
-                stat = (d / "stat").read_text()
-            except OSError:
-                continue
-            kids.setdefault(int(stat.rsplit(")", 1)[1].split()[1]), []).append(int(d.name))
-    todo = [pid]
-    while todo:
-        p = todo.pop()
-        try:
-            if (Path("/proc") / str(p) / "wchan").read_text() == "wait_for_partner":
-                return True
-        except OSError:
-            pass
-        todo += kids.get(p, [])
-    return False
+    """PID blocked opening a FIFO no reader holds yet. The sandbox's setup runs in the command's
+    own process (it unshares, never forks, before the probe), so no process tree is walked.
+    wchan is one kernel symbol name, compared whole: no fields are parsed, so no schema applies."""
+    try:
+        return (Path("/proc") / str(pid) / "wchan").read_text() == "wait_for_partner"
+    except OSError:  # exited
+        return False
 
 
 def same_session(s: Scratch) -> None:
