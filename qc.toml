@@ -116,6 +116,10 @@ covers = ["templates/python/.githooks/pre-commit", "templates/typescript/.githoo
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 starter-acceptance"
 covers = ["templates/python/tests", "templates/typescript/tests", "templates/python/qc.toml", "templates/typescript/qc.toml", "templates/typescript/vitest.config.ts", "scripts/octo-feather-qc", "tests/gate/conftest.py"]
 
+[demo."templates#acceptance-edge-rejects"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 template-edge"
+covers = ["templates/python/src", "templates/python/pyproject.toml", "templates/python/uv.lock", "templates/typescript/src", "templates/typescript/package.json", "templates/typescript/pnpm-lock.yaml"]
+
 [demo."issue-lifecycle#acceptance-merge-ask-full-proof"]
 covers = ["scripts/octo-feather-lane", "scripts/octo-feather-gate", "scripts/octo-feather-integrate"]
 

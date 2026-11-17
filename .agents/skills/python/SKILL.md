@@ -30,7 +30,16 @@ The project's own tooling wins. A project on pip and `requirements*.txt` stays o
 - Prefer fully typed code, including function signatures, return types on public interfaces, and structured data models.
 - Avoid `Any` except at unavoidable third-party boundaries, and narrow it immediately when you must use it.
 - Prefer `Protocol`, `TypedDict`, `dataclass`, or Pydantic-style models over unstructured dictionaries for stable contracts.
-- Validate external inputs and outputs at application boundaries.
+
+## Data At Edges
+
+The rule for data crossing the product's edge: quality spec `#acceptance-edge-validated`. Python practice:
+
+- Use the repo's established schema library. A repo with none adds the one templates spec `#tpl-edge` names, through its own tooling (`uv add pydantic` on `uv`).
+- Parse, then validate: `Model.model_validate_json(raw)` for JSON; for another format, its real parser (`tomllib`, a YAML library, `csv`) then `Model.model_validate(parsed)`.
+- Edge models extend one base model with `model_config = ConfigDict(strict=True, extra="forbid")`.
+- Map the validated model to the domain's types; code past the edge takes typed values, never the parsed `dict`. Output another tool reads is built from a model (`model_dump_json()`).
+- No `isinstance` chains or key checks over a parsed `dict` in the library's place, unless the rule's stated reason stands beside them.
 
 ## Testing And Quality
 

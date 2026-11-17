@@ -31,7 +31,7 @@ from typing import Any, NoReturn, cast
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history", "run-slots")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "template-edge", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history", "run-slots")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -2871,6 +2871,47 @@ def drive_starter_acceptance(f: Feature) -> None:
     say(f"starter-acceptance evidence: {f.d}")
 
 
+def strings(doc: object) -> list[str]:
+    """Every string value in a parsed JSON document, at any depth."""
+    if isinstance(doc, str):
+        return [doc]
+    items = cast("dict[str, object]", doc).values() if isinstance(doc, dict) else cast("list[object]", doc) if isinstance(doc, list) else []
+    return [s for x in items for s in strings(x)]
+
+
+def drive_template_edge(f: Feature) -> None:
+    """A template-born repo's starter edge, per template: `just new-repo`, its packages from the box's caches
+    offline, then its installed `app` driven as templates#acceptance-edge-rejects states."""
+    sc = RUN_DIR / "scratch" / "template-edge"
+    shutil.rmtree(sc, ignore_errors=True)
+    sc.mkdir(parents=True)
+    ident = {"GIT_AUTHOR_NAME": "verify-octo-feather", "GIT_AUTHOR_EMAIL": "verify@octo-feather.invalid",
+             "GIT_COMMITTER_NAME": "verify-octo-feather", "GIT_COMMITTER_EMAIL": "verify@octo-feather.invalid"}
+    f.env = {**ident, "MISE_STATE_DIR": str(sc / "mise-state")}
+    env = {**os.environ, **f.env}
+    valid = {"name": "Ada"}
+    unknown = {**valid, "mood": "glad"}
+    # Each template's install, offline from the box's caches, and its app command (package.json's bin under node).
+    langs: dict[str, tuple[list[str], Callable[[Path], list[str]]]] = {
+        "python": (["uv", "sync", "--locked", "--offline", "--quiet"], lambda r: [str(r / ".venv/bin/app")]),
+        "typescript": (["pnpm", "install", "--offline", "--frozen-lockfile"], lambda r: ["node", str(r / "src/cli.ts")])}
+    for lang, (install, app) in langs.items():
+        r = sc / lang
+        f.run(f"{lang}-new-repo", "just", "--justfile", f"{f.s.repo}/justfile", "new-repo", lang, str(r), "--no-spec-chat")
+        code, text = output(install, cwd=r, env=env)
+        f.obs(f"{lang}-new-repo", "install", f"{shlex.join(install)}: exit {code}\n{text}")
+        f.check(f"{lang}-new-repo", lambda c: c.code == 0 and c.o["install"].split("\n", 1)[0].endswith(": exit 0"))
+        cmd = app(r)
+        f.run(f"{lang}-unknown-field", *cmd, "hello", "--request", json.dumps(unknown), "--json")
+        # Named: "mood" is a string value somewhere in the one document stdout holds (each template its own shape).
+        f.check(f"{lang}-unknown-field", lambda c: c.code != 0 and "mood" in strings(cast("object", c.j))
+                and "Hello" not in c.out)
+        f.run(f"{lang}-valid", *cmd, "hello", "--request", json.dumps(valid), "--json")
+        f.check(f"{lang}-valid", lambda c: c.code == 0 and c.j == {"name": "Ada", "text": "Hello, Ada"})
+    f.env = {}
+    say(f"template-edge evidence: {f.d}")
+
+
 def drive_run_slots(f: Feature) -> None:
     """The box's heavy-run slot (octo-feather-slot --help) as a lane's implementer and the director meet it, in
     scratch box state: a lane gh7 whose implementer's `just test` over a 31-item scratch suite is refused before any
@@ -2937,6 +2978,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "one-execution": drive_one_execution,
     "one-execution-incomplete": drive_one_execution_incomplete,
     "starter-acceptance": drive_starter_acceptance,
+    "template-edge": drive_template_edge,
     "qa-runs": drive_qa_runs,
     "qa-baseline": drive_qa_baseline,
     "qa-analyst": drive_qa_analyst,
