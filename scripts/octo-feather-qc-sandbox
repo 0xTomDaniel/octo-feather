@@ -942,10 +942,11 @@ def setup(judge: list[str]) -> NoReturn:
             mount(src, p, None, MS_BIND | MS_REC)
         except OSError as e:
             die(f"bind back {p} ({e})")
-    probe = f"qc-tmp-probe-{S}"
-    open(f"/proc/self/fd/{tfd}/{probe}", "w").close()
-    ok = not os.path.exists(f"/tmp/{probe}")
-    os.unlink(f"/proc/self/fd/{tfd}/{probe}")
+    # a name of its own (#957): runs of one session at once never remove each other's probe
+    pfd, probe = tempfile.mkstemp(prefix=f"qc-tmp-probe-{S}-", dir=f"/proc/self/fd/{tfd}")
+    os.close(pfd)
+    ok = not os.path.exists(f"/tmp/{os.path.basename(probe)}")
+    os.unlink(probe)
     os.close(tfd)
     if not ok:
         die("/tmp is private")
