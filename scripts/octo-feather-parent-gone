@@ -1,0 +1,137 @@
+#!/usr/bin/env python3
+"""octo-feather-parent-gone PARENT SECONDS: herdr-say's parent-gone step, run only by herdr-say.
+
+herdr-say runs it once Herdr has proven a worker's parent PARENT gone (the rule and what the
+director gets: comms spec #say-parent-gone, docs/adr/0030). It sends the director pane of the
+caller's session (`pane` in $(octo-feather-state)/director.toml) one fixed alert composed here,
+naming the lane (the lane record whose `supervisor` is PARENT; none for a director-owned child),
+PARENT and the calling worker (HERDR_PANE_ID, its Herdr name, OCTO_FEATHER_ROLE), through
+`herdr agent prompt --wait` bounded by SECONDS. Nothing of the worker's message reaches it.
+
+Always exits 68 (herdr-say's exit for this case), saying on stderr that the worker's send was not
+delivered, then the alert's fate: delivered, or not (no or unreadable director.toml, no `pane`,
+the prompt failing), the result then retained for reconciliation (comms spec #notify-delivery).
+A lane record that cannot be read is named and skipped.
+
+Its own script, not an octo-feather-handoff subcommand: that one reads hand-off logs; this one
+reads the director and lane records and sends through Herdr. Stdlib only (kit script, AGENTS.md).
+"""
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+import tomllib
+
+GONE = 68
+ARGC = 3  # the command, PARENT, SECONDS
+HERE = Path(__file__).resolve().parent
+
+
+def say(line: str) -> None:
+    sys.stderr.write(f"herdr-say: {line}\n")
+
+
+def toml(p: Path) -> dict[str, object] | str:
+    """P's table, or why it cannot be read."""
+    try:
+        return tomllib.loads(p.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        return f"no {p}"
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        return f"{p} unreadable ({e})"
+
+
+def lane_of(state: Path, parent: str, director: str) -> str:
+    """The alert's lane phrase for PARENT."""
+    for p in sorted((state / "lanes").glob("*.toml")):
+        rec = toml(p)
+        if isinstance(rec, str):
+            say(f"skipping lane record: {rec}")
+        elif rec.get("supervisor") == parent:
+            return f"lane {p.stem}"
+    if parent == director:
+        return "no lane (parent is the director pane in director.toml)"
+    return (
+        "no lane (no lane record names it supervisor: a director-owned worker, "
+        "or its lane record gone)"
+    )
+
+
+def worker_name(pane: str) -> str:
+    """The caller's Herdr agent name, or unnamed."""
+    if not pane:
+        return "unnamed"
+    get = ["herdr", "agent", "get", pane]
+    p = subprocess.run(get, capture_output=True, text=True, check=False)
+    try:
+        name = json.loads(p.stdout)["result"]["agent"]["name"]
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return "unnamed"
+    return name if isinstance(name, str) and name else "unnamed"
+
+
+def main() -> int:
+    if len(sys.argv) != ARGC or not sys.argv[2].isdigit():
+        sys.stderr.write("usage: octo-feather-parent-gone PARENT SECONDS\n")
+        return 64
+    parent, bound = sys.argv[1], int(sys.argv[2])
+    me = os.environ.get("HERDR_PANE_ID", "")
+    role = os.environ.get("OCTO_FEATHER_ROLE", "")
+    state = Path(
+        subprocess.run(
+            [HERE / "octo-feather-state"], capture_output=True, text=True, check=True
+        ).stdout.strip()
+    )
+    say(
+        f"parent {parent} is gone (agent_not_found, no parked line names it): not delivered; "
+        "keep your result and stop, do not re-send"
+    )
+    rec = toml(state / "director.toml")
+    director = rec.get("pane") if isinstance(rec, dict) else None
+    if not isinstance(director, str) or not director:
+        why = rec if isinstance(rec, str) else f"no pane in {state / 'director.toml'}"
+        say(
+            f"parent-gone alert NOT delivered: no director reachable ({why}); "
+            "your result stays retained for reconciliation"
+        )
+        return GONE
+    alert = (
+        "parent-gone alert from herdr-say (comms spec #say-parent-gone): "
+        f"{lane_of(state, parent, director)}: "
+        f"parent {parent} is gone (Herdr: agent_not_found; no parked line names it). "
+        f"Worker {worker_name(me)} "
+        f"(pane {me or 'unknown'}, role {role or 'unknown'}) holds its result, undelivered. "
+        "Recover the parent; it reconciles the retained result."
+    )
+    cmd = [
+        "herdr",
+        "agent",
+        "prompt",
+        director,
+        alert,
+        "--wait",
+        "--until",
+        "working",
+        "--until",
+        "idle",
+    ]
+    p = subprocess.run(
+        [*cmd, "--timeout", str(bound * 1000)], capture_output=True, text=True, check=False
+    )
+    if p.returncode == 0:
+        say(f"parent-gone alert delivered to the director (pane {director})")
+    else:
+        last = (p.stderr or p.stdout).strip().splitlines()[-1:] or ["no output"]
+        say(
+            f"parent-gone alert NOT delivered to the director (pane {director}, "
+            f"exit {p.returncode}: {last[0]}); "
+            "your result stays retained for reconciliation"
+        )
+    return GONE
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -31,8 +31,13 @@
       "pr": 271
     },
     "acceptance-codemode-every-role": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 833,
+      "record": "20261114T035639Z-8ebcb039",
+      "commit": "cb4a3f3fc53acb8e46fba0d5c5b0149b38924202",
+      "tests": [
+        "tests/web-tools.sh"
+      ]
     },
     "acceptance-reflector-tools": {
       "status": "planned",
@@ -52,8 +57,11 @@
       "pr": null
     },
     "acceptance-web-roles": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 833,
+      "record": "20261114T040048Z-2a3e2b8c",
+      "commit": "cb4a3f3fc53acb8e46fba0d5c5b0149b38924202",
+      "tests": []
     },
     "acceptance-web-no-other-mcp": {
       "status": "built",
@@ -80,8 +88,13 @@
       "pr": null
     },
     "acceptance-task-worker-route": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 833,
+      "record": "20261114T035639Z-fa97d2af",
+      "commit": "cb4a3f3fc53acb8e46fba0d5c5b0149b38924202",
+      "tests": [
+        "tests/gate/kit/herdr_messaging.py"
+      ]
     },
     "acceptance-cleanup-protected-data": {
       "status": "planned",
