@@ -437,6 +437,8 @@ def check_stand_ins(at: str, c: dict[str, object], errs: list[str]) -> None:
             return all(strs) and bool(w) and isinstance(d["stdout"], str) and type(e) is int and 0 <= e <= 255 and type(n) is int and n >= 0
         if not (isinstance(answers, list) and answers and all(ok(a) for a in cast("list[object]", answers))):
             errs.append(f"{f}: must be a non-empty list of {{\"args\": [string...], \"stdout\": string, \"exit\": 0 to 255, optional \"after\": [string...], optional \"argc\": integer >= 0}}")
+        elif any(not 7 <= int(n) <= 40 for a in cast("list[dict[str, str]]", answers) for n in re.findall(r"\{head:(\d+)\}", a["stdout"])):
+            errs.append(f"{f}: {{head:N}} in a stdout must have N from 7 to 40 (schema.md, Case, stand_ins)")
 
 
 def check_setup(at, c, evals, errs):

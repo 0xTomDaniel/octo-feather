@@ -2,7 +2,7 @@
 # Integration test for scripts/octo-feather-qa (factory evals) and scripts/check-evals (eval case shape),
 # driven as commands with a stub `pi` and a fake `herdr` first on PATH: no model, no live Herdr (tests/lib/qa.sh).
 # One section of the factory-evals test per gate item (#506): tests/qa.sh and each tests/qa-*.sh.
-# Proves: ran: a run through the sandbox's recording shim matched by its arguments (positional prefix, flag and value pairs anywhere) and {head}, a count of matching runs, a case's stand-ins, stdin/stdout/exit
+# Proves: ran: a run through the sandbox's recording shim matched by its arguments (positional prefix, flag and value pairs anywhere) and {head}, a count of matching runs, a case's stand-ins ({repo}, {head}, {head:N} filled), stdin/stdout/exit
 # passed through, an echo or other arguments fail naming the record, a shim only for a named program.
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`), as tests/qc.sh does.
 # shellcheck source=tests/lib/qa.sh
@@ -67,11 +67,12 @@ python3 - "$t/rf/rf" <<'PY'
 import json, sys
 d = sys.argv[1]
 step = [["bash", "herdr-say --parent 'hi there' < /dev/null; echo rc=$?; herdr-say --parent < /dev/null; echo rc=$?; herdr-say other x < /dev/null; echo rc=$?; "
-                 "herdr agent get p1; echo rc=$?; herdr-close p1; herdr agent get p1; echo rc=$?; echo REPO=$PWD"]]
+                 "herdr agent get p1; echo rc=$?; herdr-close p1; herdr agent get p1; echo rc=$?; echo REPO=$PWD; herdr pane read p1; echo HEAD=$(git rev-parse HEAD)"]]
 stands = {"herdr-say": [{"args": ["--parent"], "argc": 2, "stdout": "delivered\n", "exit": 0},
                         {"args": ["--parent"], "stdout": "usage: herdr-say\n", "exit": 64}],
           "herdr": [{"args": ["agent", "get", "p1"], "stdout": "gone\n", "exit": 1, "after": ["herdr-close", "p1"]},
-                    {"args": ["agent", "get", "p1"], "stdout": "up in {repo}\n", "exit": 0}],
+                    {"args": ["agent", "get", "p1"], "stdout": "up in {repo}\n", "exit": 0},
+                    {"args": ["pane", "read", "p1"], "stdout": "at {head:12} of {head}\n", "exit": 0}],
           "herdr-close": [{"args": [], "stdout": "", "exit": 0}]}
 json.dump([{"id": "rstand", "role": "implementer", "fixture": "fx", "task": "Do it. STUB-STEPS:" + json.dumps(step),
             "stand_ins": stands}], open(f"{d}/cases.json", "w"))
@@ -91,6 +92,8 @@ grep -qx 'delivered' <<< "$so" && grep -qx 'rc=0' <<< "$so" && grep -qx 'usage: 
 repo="$(sed -n 's/^REPO=//p' <<< "$so")"
 [[ -n "$repo" ]] && grep -qx "up in $repo" <<< "$so" && grep -qx 'gone' <<< "$so" \
   || fail "stand_ins: want {repo} filled, then the after-close answer: $so"
+head="$(sed -n 's/^HEAD=//p' <<< "$so")"   # {head:N}: the first N hex digits of the setup HEAD (schema.md, Case, stand_ins)
+[[ ${#head} == 40 ]] && grep -qx "at ${head:0:12} of $head" <<< "$so" || fail "stand_ins: want {head:12} and {head} filled: $so"
 # fake_qa (schema.md, Case): the role's own octo-feather-qa call recorded by the ran shim and answered in the real
 # tool's output form, with no case run; a poison octo-feather-qa further down PATH (where the kit's real one would be
 # found) never runs. The case repo holds an eval suite (fixture fxe: fx plus evals/s1, case c1).
