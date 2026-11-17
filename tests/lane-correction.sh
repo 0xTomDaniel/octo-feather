@@ -66,7 +66,7 @@ for want in ("Class: dup-rule", "Route: agents/implementer.md Rules", "gh1 resta
 assert "question list" not in i["body"], i["body"]
 EOF
 
-# Its issue open, a new finding is a comment, never an issue: tests/gate/kit/lane_correction.py (recurrence).
+# Its issue open, a new finding: tests/gate/kit/lane_correction.py (recurrence).
 
 # Closed after the class's latest finding: nothing; closed before a newer finding: files again.
 close 901 2099-01-01T00:00:00Z
