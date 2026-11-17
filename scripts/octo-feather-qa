@@ -48,9 +48,10 @@ result.json, and <run-id>/summary.json.
 Each case's result.json (and its entry in summary.json `cases`) also holds `runs` (one entry per run: run, dir,
 verdict, deciding, model, seconds, stop, tool_calls, `usage`: the summed usage Pi reported on the run's assistant
 message_end events, input, output, cache_read, cache_write, total tokens and cost_usd (null when Pi reported no
-cost), and `facts`: each graded fact with its status), `runs_passed`, `pass_rate` (runs passed over runs) and
+cost), and seconds (its first to its last message_end timestamp, Pi's clock; 0 with none)), and `facts`: each
+graded fact with its status), `runs_passed`, `pass_rate` (runs passed over runs) and
 `stddev` (the sample standard deviation of the runs' results, 1 a pass and 0 a fail; 0 for one run), and `time`
-(seconds), `tokens` (total) and `cost_usd` (null unless every run reported a cost), each {mean, stddev} over the
+(usage seconds), `tokens` (total) and `cost_usd` (null unless every run reported a cost), each {mean, stddev} over the
 runs, stddev as for the pass rate; summary.json `runs` is the runs per case.
   --suite NAME, --case ID   select cases (repeatable; default every case); unknown names exit 64
   --sample N                of the selected cases run only N, stratified by should_trigger and split
@@ -61,8 +62,8 @@ runs, stddev as for the pass rate; summary.json `runs` is the runs per case.
                             <case>/run-<k>/, an indented `run k/N` line each, then the case line (its verdict:
                             spec quality#acceptance-qa-repeats): its runs passed out of N, pass rate and stddev,
                             and each failed run's deciding facts; then its cost line: time and tokens, each mean
-                            +/- stddev. A judgment bench runs once. Without it: one run, artifacts in
-                            <case>/, no run lines
+                            +/- stddev (time: each run's usage seconds, above, never the wall clock). A judgment
+                            bench runs once. Without it: one run, artifacts in <case>/, no run lines
   --model MODEL             pi --model override (default: the role's frontmatter model; a bench runs no chat model)
   --classifier P/ID         a judgment bench benches only this classifier (repeatable; default every available one)
   --evals DIR               eval suites dir (default: the kit's evals/)
@@ -1253,14 +1254,18 @@ USAGE_KEYS = (("input", "input"), ("output", "output"), ("cache_read", "cacheRea
 
 def run_usage(transcript: Path) -> Result:
     """The tokens a run's assistant messages used (summed message_end usage, as Pi reports it) and their cost
-    (cost_usd None when Pi reported none); every count 0 for a run with no transcript."""
+    (cost_usd None when Pi reported none); its seconds, the span of its message_end timestamps (Pi's clock, ms);
+    every count 0 for a run with no transcript."""
     tot: dict[str, float] = {k: 0 for k, _ in USAGE_KEYS}
     total, cost = 0, None
+    stamps: list[float] = []
     lines = transcript.read_text().splitlines() if transcript.is_file() else []
     for raw in (safe_json(ln) for ln in lines):
         e = cast("Result", raw) if isinstance(raw, dict) else {}
         msg = e.get("message") if e.get("type") == "message_end" else None
         m = cast("Result", msg) if isinstance(msg, dict) else {}
+        if isinstance(ts := m.get("timestamp"), int | float):
+            stamps.append(ts)
         u = m.get("usage") if m.get("role") == "assistant" else None
         if not isinstance(u, dict):
             continue
@@ -1274,7 +1279,8 @@ def run_usage(transcript: Path) -> Result:
         c = cast("Result", c).get("total") if isinstance(c, dict) else None
         if isinstance(c, int | float):
             cost = (cost or 0) + c
-    return {**tot, "total": total, "cost_usd": None if cost is None else round(cost, 6)}
+    return {**tot, "total": total, "cost_usd": None if cost is None else round(cost, 6),
+            "seconds": round((max(stamps) - min(stamps)) / 1000, 3) if stamps else 0.0}
 
 
 def spread(values: list[float]) -> Result:
@@ -1358,7 +1364,7 @@ def aggregate(done: list[tuple[str, Result]], out: Path, runs: int) -> Result:
                             for k, ((d, r), u) in enumerate(zip(done, use), 1)],
                    "runs_passed": int(sum(ok)), "pass_rate": round(statistics.fmean(ok), 4),
                    "stddev": round(statistics.stdev(ok), 4) if len(ok) > 1 else 0.0,
-                   "time": spread([cast("float", r["seconds"]) for r in rs]),
+                   "time": spread([cast("float", u["seconds"]) for u in use]),
                    "tokens": spread([cast("float", u["total"]) for u in use]),
                    "cost_usd": spread(costs) if len(costs) == len(use) else None}
     if len(rs) == 1 and done[0][0] == ".":

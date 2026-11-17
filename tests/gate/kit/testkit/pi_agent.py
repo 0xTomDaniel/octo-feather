@@ -16,7 +16,10 @@ supplies; none there: exit 2 naming it. Else one bash call (`ls`), then:
                   STUB-NOCRED, STUB-TAMPER, STUB-REPOS, STUB-SYNC, STUB-OVERFLOW pick them)
   STUB-STEPS:J    a scripted run, J a JSON list of [kind, arg] (comments at its loop)
   STUB-DECL-*     the final message a declaration case grades
-Each assistant message carries usage: 100 input and 10*k output tokens, cost 0.001.
+Each assistant message carries usage: 100 input and 10*k output tokens, cost 0.001. Each message
+carries Pi's timestamp (ms), stated, never read off a clock: one second per message after the first
+(a model turn a second), so a run's time as Pi reports it is fixed by its messages, whatever the
+box's load or a pause.
 
 The model's turn between calls is readiness, never a delay, read off the stub's own stdout pipe
 alone (no other process's /proc): each event is written and then waited on until the pipe holds
@@ -35,6 +38,7 @@ from __future__ import annotations
 
 import array
 import fcntl
+import itertools
 import json
 import os
 import re
@@ -59,6 +63,7 @@ def die(msg: str) -> NoReturn:
 
 
 PIPE = stat.S_ISFIFO(os.fstat(1).st_mode)
+STAMPS = itertools.count(1733234400000, 1000)  # each message's timestamp (ms), in turn
 
 
 def ready() -> None:
@@ -79,6 +84,8 @@ def ready() -> None:
 def out(e: dict[str, object]) -> None:
     """One event line; an assistant message_end carries usage, as Pi's."""
     m = cast("dict[str, object]", e["message"]) if e.get("type") == "message_end" else None
+    if m is not None:
+        m["timestamp"] = next(STAMPS)
     if m is not None and m.get("role") == "assistant":
         m["usage"] = {
             "input": 100,

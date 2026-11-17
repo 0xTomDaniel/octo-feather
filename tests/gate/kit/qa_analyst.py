@@ -28,7 +28,7 @@ NO_TDD = {"fact": "skill_not_read", "skill": "tdd"}
 NO_PULL = {"fact": "skill_not_read", "skill": "pull"}
 # Each case by id: its task's stub tokens (testkit/pi_agent.py) and its facts. same: passes on
 # both kits. alt: fails on c1 (no tdd), alternates on c2, its pull fact passing everywhere.
-# costly: passes on both, 3 more messages' tokens on c2.
+# costly: passes on both, 3 more messages on c2: their tokens, and their turns in Pi's timestamps.
 CASES = {
     "same": ("Only look.", [NO_TDD]),
     "alt": ("Build it. STUB-READ-TDD STUB-ALTERNATE", [TDD, NO_PULL]),
@@ -127,15 +127,19 @@ def block(out: str) -> list[str]:
 
 
 def comparison(s: Scratch) -> None:
-    """--baseline, one run each: a non-discriminating case (same) and a cost tradeoff (costly),
-    each on its case in the output and summary.json; --analyze on the stored run dir prints the
+    """--baseline, one run each: a non-discriminating case (same) and a cost tradeoff (costly) in
+    time and tokens, both as Pi's stand-in reports them, so no load or pause moves either; each
+    on its case in the output and summary.json; --analyze on the stored run dir prints the
     same analysis from summary.json alone, starting no pi and no sandbox."""
     qa = Qa(s)
     got, d, out = qa.run("same", "costly", runs=1, baseline=True, want=0)
     want = [
         HEAD,
         "  non-discriminating case an/same: every run on both kits passed",
-        "  cost tradeoff an/costly: pass rate 1.00 on both kits; tokens mean 220.0 to 550.0",
+        (
+            "  cost tradeoff an/costly: pass rate 1.00 on both kits; time mean 1.0 to 4.0;"
+            " tokens mean 220.0 to 550.0"
+        ),
     ]
     assert got == want, f"want\n{want}\ngot\n{got}\nin: {out}"
     a = json.loads((d / "summary.json").read_text())["analysis"]
@@ -143,8 +147,8 @@ def comparison(s: Scratch) -> None:
     assert a["non_discriminating_cases"] == [{"case": "an/same", "pass_rate": 1.0}], a
     assert a["non_discriminating_facts"] == [], a
     assert a["high_variance"] == [], a
-    cost = {"baseline": 220.0, "current": 550.0}
-    assert a["cost_tradeoffs"] == [{"case": "an/costly", "pass_rate": 1.0, "tokens": cost}], a
+    cost = {"case": "an/costly", "pass_rate": 1.0, "time": {"baseline": 1.0, "current": 4.0}}
+    assert a["cost_tradeoffs"] == [{**cost, "tokens": {"baseline": 220.0, "current": 550.0}}], a
     # The rerun: a poison pi first on PATH, which no rerun may start.
     poison = s.root / "poison"
     poison.mkdir()
