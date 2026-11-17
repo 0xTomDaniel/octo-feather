@@ -4,7 +4,14 @@ docstring), each run as that file's command through `case` (tests/gate/kit/conft
 from collections.abc import Callable
 
 import pytest
-from lane_correction import kit_lane, malformed, recurrence, reflection_missed, two_targets
+from lane_correction import (
+    kit_lane,
+    malformed,
+    one_target,
+    recurrence,
+    reflection_missed,
+    two_targets,
+)
 
 Case = Callable[..., None]
 
@@ -29,3 +36,7 @@ def test_lane_correction_malformed(case: Case) -> None:
 
 def test_lane_correction_two_targets(case: Case) -> None:
     case(two_targets)
+
+
+def test_lane_correction_one_target(case: Case) -> None:
+    case(one_target)

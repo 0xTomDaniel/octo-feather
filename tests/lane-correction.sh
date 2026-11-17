@@ -101,7 +101,7 @@ for n, quote, other in ((903, "reword undetected-rule", "add a stale-PR question
 assert not any("owner-caught" in i["title"] for i in by.values()), by
 EOF
 
-# Their issues open, each quoting its finding: the director reflection alone, no new finding, files and comments nothing.
+# Their issues open, each quoting its finding: the director reflection alone, no new finding (outcome: comms #reflection-correction).
 none; out="$("$L" reflect --director 2>&1)" || fail "reflect --director failed: $out"
 [[ "$(count)" == 4 ]] && grep -qxF "correction lanes: none filed or commented" <<<"$out" || fail "refiled: $out $(issues)"
 

@@ -55,9 +55,8 @@ moves) file the correction lanes due (spec comms #reflection-correction; the rul
 through the tracker skill's `issue-create`: a lane's in its target's tracker (the current directory's tracker skill,
 the lane record's `repository`), the director's in the kit's; each issue's title carries the marker of
 scripts/octo-feather-reflect `MARK`, by which `gh issue list` finds the ones already filed. Prints
-`correction lane: filed <key> in <tracker> for <class> (...)` per issue, `correction lane: commented <url> on <key> ...`
-then the comment per `issue-comment` (when: scripts/octo-feather-reflect `recurrence`), else `correction lanes: none
-filed or commented`;
+`correction lane: filed <key> in <tracker> for <class> (...)` or `correction lane: commented <url> on <key> ...` and
+the comment per write (which write: spec comms #reflection-correction), else `correction lanes: none filed or commented`;
 a tracker other than github-issues gets `correction lane: due, not filed: ...` naming the title to file by hand.
 A tracker that cannot be read or written refuses the archive, its reflections' lines undone, every file in place.
 
@@ -692,11 +691,10 @@ GITHUB_ISSUES = "github-issues"   # the kit's own tracker skill, and the one tra
 
 
 def file_corrections(lanes: Path) -> list[str]:
-    """Spec comms #reflection-correction: file, through the tracker skill's issue-create, every correction lane the
-    rule makes due (scripts/octo-feather-reflect `corrections`, `still_due`), or its issue-comment (`recurrence`),
-    whichever reflection ran, each in its
-    own owner's tracker: a lane name files in its target's tracker (the current directory's tracker skill, the lane
-    record's repository), the director in the kit's. Prints each filed key; Refuse when the tracker cannot be read or written."""
+    """Spec comms #reflection-correction, through the tracker skill's issue-create or issue-comment, for every correction
+    lane due (scripts/octo-feather-reflect `corrections`, `merge`, `still_due`, `recurrence`), whichever reflection ran,
+    in each owner's tracker: a lane's its target's (the current directory's tracker skill, the lane record's
+    repository), the director's the kit's. Prints each key or comment; Refuse when the tracker cannot be read or written."""
     import tomllib
     r = reflect_module()
     dlog = lanes.parent / DIRECTOR_LOG
@@ -708,11 +706,8 @@ def file_corrections(lanes: Path) -> list[str]:
     except (OSError, UnicodeDecodeError) as e:
         raise Refuse(f"correction lanes: cannot read the hand-off logs ({e}): fix the cause, then rerun") from e
     filed: list[str] = []
-    known: dict[str, list[dict[str, object]]] = {}   # each repo's issues, listed once, plus what this run wrote
+    trackers: dict[tuple[str, str | None], list[object]] = {}   # (skill, repo): the dues landing there
     for owner in dict.fromkeys(o for d in due for o in d.owners):
-        mine = [d for d in due if owner in d.owners]
-        if not mine:
-            continue
         if owner == r.DIRECTOR:
             skill, repo = GITHUB_ISSUES, r.KIT_REPO
         else:
@@ -722,16 +717,18 @@ def file_corrections(lanes: Path) -> list[str]:
                 repo = tomllib.loads(rec.read_text(encoding="utf-8")).get("repository") if rec else None
             except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
                 raise Refuse(f"correction lanes: cannot read lane record {rec} ({e}): fix it, then rerun") from e
+        there = trackers.setdefault((skill, str(repo) if repo else None), [])
+        there += [d for d in due if owner in d.owners and d not in there]
+    for (skill, repo), dues in trackers.items():
+        mine = r.merge(dues)   # one per class: one issue or one comment per class per tracker
         where = f"{skill} {repo or 'of the current directory'}"
-        env = {"GH_REPO": str(repo)} if repo else {}
+        env = {"GH_REPO": repo} if repo else {}
         if skill != GITHUB_ISSUES:
             for d in mine:
                 print(f"correction lane: due, not filed: {d.cls}: tracker skill {skill} offers no search for an existing"
                       f" one; file it by hand through {skill}'s issue-create, title `{d.title()}`, unless one is open")
             continue
-        if str(repo) not in known:   # gh's search index lags a write: this run's own are added in memory
-            known[str(repo)] = correction_issues(str(repo) if repo else None, full=True)
-        issues = known[str(repo)]
+        issues = correction_issues(repo, full=True)
         for d in mine:
             if not r.still_due(d, issues):
                 if (again := r.recurrence(d, issues)):
@@ -742,7 +739,6 @@ def file_corrections(lanes: Path) -> list[str]:
                     except Refuse as e:
                         raise Refuse(f"correction lanes: {e}" + (f" (filed before it: {', '.join(filed)})" if filed else "")) from e
                     filed.append(url)
-                    again[0]["comments"] = [*(again[0].get("comments") or []), {"body": text}]
                     print(f"correction lane: commented {url} on {n} in {where} for {d.cls}:")
                     print("\n".join(f"  {x}" if x else "" for x in text.splitlines()))
                 continue
@@ -752,10 +748,6 @@ def file_corrections(lanes: Path) -> list[str]:
             except Refuse as e:
                 raise Refuse(f"correction lanes: {e}" + (f" (filed before it: {', '.join(filed)})" if filed else "")) from e
             filed.append(key)
-            if not key.isdigit():
-                raise Refuse(f"correction lanes: issue-create printed {key!r}, no issue number: check {skill}, then rerun"
-                             f" (filed: {', '.join(filed)})")
-            issues.append({"number": int(key), "title": d.title(), "state": "OPEN", "body": d.body(), "comments": []})
             print(f"correction lane: filed {key} in {where} for {d.cls} ({len(d.findings)} finding"
                   f"{'s' if len(d.findings) != 1 else ''}; route: {d.route()})")
     if not filed:

@@ -942,6 +942,26 @@ def corrections(logs: dict[str, list[LogLine]], director: list[LogLine]) -> list
     return out
 
 
+def merge(dues: list[Due]) -> list[Due]:
+    """DUES landing in one tracker as one Due per class: its findings (by date), routes, latest
+    and owners together."""
+    by: dict[str, list[Due]] = {}
+    for d in dues:
+        by.setdefault(d.cls, []).append(d)
+    return [
+        ds[0]
+        if len(ds) == 1
+        else Due(
+            cls,
+            sorted((f for d in ds for f in d.findings), key=lambda f: str(f[1].get("at") or "")),
+            list(dict.fromkeys(x for d in ds for x in d.routes)),
+            max(d.latest for d in ds),
+            tuple(sorted({o for d in ds for o in d.owners})),
+        )
+        for cls, ds in by.items()
+    ]
+
+
 def of_class(due: Due, issues: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """DUE's class's issues among ISSUES, oldest first: the class the first word of the title's
     marker, so a legacy reflection-missed marker's timestamp and hash never block a match."""
@@ -966,10 +986,9 @@ def still_due(due: Due, issues: list[dict[str, Any]]) -> bool:
 
 
 def recurrence(due: Due, issues: list[dict[str, Any]]) -> tuple[dict[str, Any], str] | None:
-    """The issue among ISSUES ({..., body, comments: [{body}]}) and the comment comms spec
-    #reflection-correction adds for DUE on a recurrence: the oldest open of its class, quoting the
-    findings no issue of the class quotes yet; the running count, the distinct findings its issues
-    and this comment quote. None when it adds none."""
+    """The issue among ISSUES ({..., body, comments: [{body}]}) and the comment for DUE on a
+    recurrence (comms spec #reflection-correction): the oldest open of its class; the running count,
+    the distinct findings its issues and this comment quote. None when it adds none."""
     mine = of_class(due, issues)
     first = next((i for i in mine if is_open(i)), None)
     if first is None:
