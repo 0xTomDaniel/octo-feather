@@ -34,6 +34,8 @@ Spawn bare, then send the brief with herdr-say. The runtime is always pi.
 --resume SESSION continues a parked Pi session (its --session-id).
 
 Prints: name= role= tab= pane= cwd= contract= provider_session_id=
+A caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line
+appended there: octo-feather-handoff spawn --caller.
 EOF
 }
 
@@ -235,4 +237,8 @@ if ! "$(dirname "$(readlink -f "$0")")/herdr_ready.py" "$pane" "$name"; then
   close_orphan_tab; exit 69
 fi
 
-echo "name=$name role=$role tab=$tab pane=$pane cwd=$cwd contract=$contract provider_session_id=$session"
+line="name=$name role=$role tab=$tab pane=$pane cwd=$cwd contract=$contract provider_session_id=$session"
+# The spawn line goes to the caller's own hand-off log, if it owns one (octo-feather-handoff --help, spawn --caller).
+[[ -z "${HERDR_PANE_ID:-}" ]] || "$root/scripts/octo-feather-handoff" spawn --caller "$HERDR_PANE_ID" <<<"$line" ||
+  echo "herdr-spawn: spawn line not recorded in the caller's hand-off log (error above); the agent runs" >&2
+echo "$line"

@@ -1992,6 +1992,70 @@
     "task": "Quick check before I file something: what do our specs say `app hello Ada --json` prints? Point me at the anchor, nothing else."
   },
   {
+    "id": "gw-herdr-send-test-list",
+    "role": "general-worker",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Your parent is the lane gh12 supervisor, pane w2:p1. Its brief: find which tests in tests/test_cli.py cover --json output, and get the list to it when you are done."
+  },
+  {
+    "id": "gw-herdr-director-ticket-count",
+    "role": "general-worker",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Brief from your parent, the director in pane w1:p1: count the open tickets in notes/tickets.md and deliver the number to it as a message; text left in your own pane does not count."
+  },
+  {
+    "id": "gw-herdr-near-which-pane",
+    "role": "general-worker",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Do not message anyone. From notes/lane.toml, which pane supervises the lane? Answer in your reply only."
+  },
+  {
+    "id": "gw-herdr-near-handoff-count",
+    "role": "general-worker",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Do not message anyone. How many events does notes/handoffs.jsonl hold? One line in your reply."
+  },
+  {
+    "id": "gw-prove-json-greeting",
+    "role": "general-worker",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Brief from your supervisor: the lane notes claim `uv run app hello Ada --json` prints a greeting key. Find out whether that holds on this checkout and report what you found."
+  },
+  {
+    "id": "gw-prove-measure-dirs",
+    "role": "general-worker",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Host task from the director: how much disk do notes/ and review/ use on this checkout, each separately? Give numbers it can rely on, and say how you got them."
+  },
+  {
+    "id": "gw-prove-near-gate-line",
+    "role": "general-worker",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Do not message anyone. Quote the line of AGENTS.md that names the gate command; run nothing."
+  },
+  {
+    "id": "gw-prove-near-diff-files",
+    "role": "general-worker",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Do not message anyone. Which files does review/shout.diff touch? Read it only."
+  },
+  {
     "id": "impl-refactor-fold-goodbye",
     "role": "implementer",
     "fixture": "python-app-refactor",

@@ -143,16 +143,33 @@ exits with the close status.
 
 ```
 herdr-close --park PANE >>"$lanes/<lane>.handoffs.jsonl"
+herdr-close --park PANE >>"$(octo-feather-state)/director.handoffs.jsonl"   # the director's own general worker
 ```
 
 `$lanes` is `$(octo-feather-state)/lanes`. Reads the Pi session id and role
 `herdr-spawn` exported into PANE's tab, closes its tab, or its whole space when
 that tab is the space's only one (a supervisor in its own space), and prints
-one parked line (`at kind pane name role cwd session`) on stdout, even when the
-close fails; the close report goes to stderr. The parker appends the line: the
-director for a supervisor, the supervisor for a worker. An agent Herdr does not report
+one parked line (`at kind pane name role cwd session label parent`) on stdout, even when the
+close fails; the close report goes to stderr. The parker appends the line to the
+log comms spec `#roles-park` names (the two commands above). An agent Herdr does not report
 idle is refused with exit 75, one not spawned by `herdr-spawn` with 65; nothing
 is closed.
+
+## Replace a worker that ended without reporting
+
+A worker whose pane holds no finished result (comms spec `#roles-goal`):
+
+```
+herdr-close PANE                       # when herdr agent get PANE still finds it
+octo-feather-handoff attempt --ended-unreported "$lanes/<lane>.handoffs.jsonl" PANE \
+  --partial "<commit, branch, what it left>" --recovery "<what replaces it>" [--commit C] \
+  >>"$lanes/<lane>.handoffs.jsonl"
+herdr-spawn ...                        # the replacement, a fresh session
+```
+
+The attempt reads the old session from the spawn line `herdr-spawn` recorded
+(`herdr-spawn --help`); its refusals: `octo-feather-handoff --help`. The
+line's fields: comms spec `#handoff-fields`.
 
 ## Send a message
 
@@ -174,6 +191,7 @@ Exit codes are the contract:
 | 0 | delivered, and Herdr observed the agent change state |
 | 75 | target is blocked on interactive input; retry when it frees |
 | 124 | not confirmed within `--timeout` (still not seen to start or finish a turn); named |
+| 68 | comms spec `#say-parent-gone` |
 | 69 | the up-chain guard's `herdr agent get TARGET` lookup failed; named, nothing sent (one answering `agent_not_found` is an answer: 77, the lookup named) |
 | other | anything else |
 
@@ -201,13 +219,11 @@ is either delivered now or reported as not delivered.
 Native Herdr refuses to prompt a blocked agent, so an open dialog is never
 typed into.
 
-A target Herdr does not find may be parked. The latest parked line naming it,
-by pane or name, in any lane hand-off log in `$lanes` decides: a live agent
-under the line's name gets the message; otherwise the agent is resumed (a
-supervisor, the line named after its log, in its lane space when that still
-exists, else a new one; a worker in the caller's `$HERDR_WORKSPACE_ID`), gets the
-message prefixed `Resumed from park as pane=PANE. `, and `herdr-say` prints its
-new `pane=`. `herdr-say --parked TARGET` prints that line, or exits 1.
+A target Herdr does not find may be parked (comms spec `#roles-park`): which
+parked line counts, `octo-feather-handoff --help` (parked); where the agent
+resumes, `herdr-say`'s header. A resumed agent gets the message prefixed
+`Resumed from park as pane=PANE. `, and `herdr-say` prints its new `pane=`.
+`herdr-say --parked TARGET` prints that line, or exits 1.
 `herdr-wake check` counts a parked supervisor as present, so a spec review hand-off
 resumes it.
 
