@@ -7,6 +7,8 @@ Removed: evals/supervisor-autonomy fact `ran herdr-spawn --name implementer-gh14
 
 No role change: `agents/supervisor.md` at the gh840 head already carries the #873 pilot line ("Message the director only on an event comms spec `#parent-notifications` routes to it..."), and the smoke and proof show it holds for these cases. The fail-before side is origin/main.
 
+Guard case (3f426905): `spec-conflict-and-local-repair`, a red local gate plus the owner's edit of parent #12 after Accept conflicting with the accepted spec, graded `herdr-spawn --role implementer` and `herdr-say --parent` count 1; smoke 20261117T222237Z-3fdbb6 (`--runs 1 --baseline b20ee656`): PASS on b20ee656 and on ab8dd1ee, a non-discriminating negative kept as a guard against over-suppression. The held-out finding was a conflict between the supervisor's own ticket and the accepted spec, which it settles itself (the spec outranks the ticket), so no role edit.
+
 ## Rework evaluation (run 20261117T182353Z-466452 at 39e35d70)
 
 Rework of the lane's final evaluation (run 20261117T151829Z-60554a below, kept as history): its head failures, each 2/3, diagnosed from each failing run's transcript.jsonl and fixed.
