@@ -365,33 +365,15 @@ def status_commit_fails(s: Scratch) -> None:
 
 
 def snapshot_misses(s: Scratch) -> None:
-    """The offline gh on --json: a field absent from the snapshot is refused, logged and counted;
-    a stored null is returned."""
+    """The offline gh on --json, on the snapshot octo-feather-qc-ghsnap wrote of o/r: a field the
+    snapshot does not store is refused, logged and counted, never a made-up null; a stored null
+    (open PR 2's mergedAt) and a stored value are returned. The fields asked are ones gh takes and
+    the writer never fetches (its IF, PF, PL, RUN, repo view): reviews, labels and description,
+    asked before of a hand-written snapshot, are fetched (#936); run 7's conclusion is a stored
+    value, as gh answers "" for a run in progress, never null."""
+    s.prepare("qc-gh", build)
     sn = s.root / "snap"
-    (sn / "pr").mkdir(parents=True)
-    pr2 = {
-        "number": 2,
-        "title": "T",
-        "state": "OPEN",
-        "headRefName": "gh1",
-        "baseRefName": "main",
-        "mergedAt": None,
-        "author": {"login": "a"},
-        "updatedAt": "x",
-    }
-    snapshot: tuple[tuple[str, object], ...] = (
-        ("meta.json", {"repo": "o/r", "fetched_at": "x", "counts": {}, "capped": []}),
-        (
-            "run-list.json",
-            [{"databaseId": 7, "status": "in_progress", "conclusion": None, "headBranch": "gh1"}],
-        ),
-        ("pr/2.json", pr2),
-        ("pr-list.json", [pr2]),
-        ("issue-list.json", [{"number": 1, "title": "I", "state": "OPEN", "updatedAt": "x"}]),
-        ("repo.json", {"nameWithOwner": "o/r"}),
-    )
-    for name, d in snapshot:
-        (sn / name).write_text(json.dumps(d))
+    s.run([kit("octo-feather-qc-ghsnap"), "o/r", str(sn)])
     miss = s.root / "miss.log"
     env = {"OCTO_FEATHER_GHSNAP": str(sn), "OCTO_FEATHER_GHSNAP_MISS": str(miss)}
 
@@ -402,11 +384,11 @@ def snapshot_misses(s: Scratch) -> None:
     calls = (
         "run view 7 --json jobs",
         "run view 7 --json conclusion,jobs",
-        "pr view 2 --json title,reviews",
-        "pr list --json number,reviews",
-        "issue list --json number,labels",
+        "pr view 2 --json title,projectItems",
+        "pr list --json number,isInMergeQueue",
+        "issue list --json number,reactionGroups",
         "run list --json databaseId,jobs",
-        "repo view --json nameWithOwner,description",
+        "repo view --json nameWithOwner,stargazerCount",
     )
     for n, c in enumerate(calls, 1):
         out = gh(1, *c.split())
@@ -416,10 +398,10 @@ def snapshot_misses(s: Scratch) -> None:
         assert len(miss.read_text().splitlines()) == n, (
             f"gh {c}: refusal not logged: {miss.read_text()}"
         )
-    assert '"conclusion": null' in gh(0, "run", "view", "7", "--json", "conclusion,status")
+    assert '"conclusion": "success"' in gh(0, "run", "view", "7", "--json", "conclusion,status")
     assert gh(0, "pr", "view", "2", "--json", "mergedAt", "-q", ".mergedAt") == "null"
     assert '"mergedAt": null' in gh(0, "pr", "list", "--json", "number,mergedAt")
-    assert len(miss.read_text().splitlines()) == len(calls), "a genuine null was logged as a miss"
+    assert len(miss.read_text().splitlines()) == len(calls), "a stored field was logged as a miss"
 
 
 def kit_on_kit(s: Scratch) -> None:

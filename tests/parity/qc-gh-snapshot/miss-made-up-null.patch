@@ -1,0 +1,15 @@
+Seeded defect: the offline gh answers a --json field its snapshot lacks with a made-up null instead of refusing it (scripts/gh, pick).
+diff --git a/.agents/skills/github-pr/scripts/gh b/.agents/skills/github-pr/scripts/gh
+index 4e01be3f..4014ec83 100755
+--- a/.agents/skills/github-pr/scripts/gh
++++ b/.agents/skills/github-pr/scripts/gh
+@@ -81,8 +81,7 @@ def picks(rows, fields):
+     if not fields: return rows
+     want = [f for f in fields.split(",") if f]
+     gone = [f for f in want if any(f not in r for r in rows)]
+-    if gone: miss(f"not in snapshot: {','.join(gone)} (stored: {','.join(sorted({k for r in rows for k in r}))})")
+-    return [{f: r[f] for f in want} for r in rows]
++    return [{f: r.get(f) for f in want} for r in rows]
+ 
+ 
+ def check_repo(o):
