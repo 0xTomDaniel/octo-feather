@@ -51,6 +51,10 @@ CLEARED = (
     "OPENROUTER_API_KEY",
     "OCTO_FEATHER_CHECK_RUN",
 )
+# Set in every scenario as git's environment config (GIT_CONFIG_COUNT, outranking any repo's
+# own): no git a scenario runs starts automatic maintenance (gc --auto, maintenance run --auto),
+# which would keep writing in a .git a prepared scratch's copy reads (#916).
+QUIET_GIT = {"maintenance.auto": "false", "gc.auto": "0"}
 
 
 class MissingFixtureError(FileNotFoundError):
@@ -108,7 +112,7 @@ class Gh:
 
 class Scratch:
     """One scenario's world under a fresh temp dir: HOME, TMPDIR, the fakes first on PATH,
-    CLEARED unset, and a fake GitHub store. Removed when the scenario ends."""
+    CLEARED unset, QUIET_GIT set, and a fake GitHub store. Removed when the scenario ends."""
 
     def __init__(self, root: Path) -> None:
         self.root = root
@@ -126,6 +130,10 @@ class Scratch:
             "FAKE_GH": str(self.gh.dir),
             "GH_TOKEN": "testkit-token",  # the caller's gh auth, as the fake gh asks for it
         }
+        n = int(env.get("GIT_CONFIG_COUNT") or 0)  # appended to the caller's, never replacing
+        for i, (k, v) in enumerate(QUIET_GIT.items(), n):
+            env |= {f"GIT_CONFIG_KEY_{i}": k, f"GIT_CONFIG_VALUE_{i}": v}
+        env["GIT_CONFIG_COUNT"] = str(n + len(QUIET_GIT))
         self.env = env
 
     def link_fakes(self, kit_dir: Path) -> None:
