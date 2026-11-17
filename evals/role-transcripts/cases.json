@@ -259,6 +259,28 @@
     "task": "Review lane gh14, ticket T14 (`app newer A B` also orders pre-release versions the way the team now tags them: `1.0.0-rc.1` before `1.0.0`, `alpha.2` before `alpha.10`, numeric identifiers before alphanumeric ones, `+BUILD` ignored; criterion newer-pre).\nDiff: base main, head implementer-t14 in this directory (`git diff main...implementer-t14`).\nThe implementer's report ends with these fields:\n```\nChecks: none\nOwners: none\nPrior art: none\n```\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every blocking finding, and nothing else in json:\n```json\n{\"blocking\": [{\"path\": \"<file>\", \"class\": \"<finding class>\"}]}\n```\n(an empty list when nothing blocks)."
   },
   {
+    "id": "reviewer-unvalidated-edge-ts",
+    "role": "code-reviewer",
+    "fixture": "ts-pnpm-store",
+    "head": {
+      "fixture": "ts-pnpm-store-shared",
+      "branch": "implementer-t236",
+      "message": "fix(setup): install every worktree from the shared pnpm store (T236, setup-shared-store)"
+    },
+    "task": "Review lane gh235, ticket T236 (per-worktree pnpm stores fill the disk: `just setup-dependencies` installs every worktree from pnpm's one shared store outside it, with no `store-dir` in .npmrc; a gate test drives the real recipe offline in a scratch checkout and checks the store pnpm recorded for the install; criterion setup-shared-store).\nDiff: base main, head implementer-t236 in this directory (`git diff main...implementer-t236`).\nThe implementer's report ends with these fields:\n```\nChecks: none\nOwners: none\nPrior art: none\n```\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every blocking finding, and nothing else in json:\n```json\n{\"blocking\": [{\"path\": \"<file>\", \"class\": \"<finding class>\", \"library\": \"<the library the finding names to use, as the repo's manifest names its package; \\\"\\\" when none>\"}]}\n```\n(an empty list when nothing blocks)."
+  },
+  {
+    "id": "reviewer-unvalidated-edge-py",
+    "role": "code-reviewer",
+    "fixture": "python-app-pydantic",
+    "head": {
+      "fixture": "python-app-pydantic-team",
+      "branch": "implementer-t31",
+      "message": "feat(hello-team): greet a roster export's active members (T31, hello-team)"
+    },
+    "task": "Review lane gh31, ticket T31 (`app hello-team ROSTER` greets every active member of the roster file the HR tool exports, one greeting per line, in file order; with --json one JSON object per line as `app hello --json` prints one; the export is JSON: a `members` list, each member with `name` and `active`, among other fields the tool writes; criterion hello-team).\nDiff: base main, head implementer-t31 in this directory (`git diff main...implementer-t31`).\nThe implementer's report ends with these fields:\n```\nChecks: none\nOwners: none\nPrior art: none\n```\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every blocking finding, and nothing else in json:\n```json\n{\"blocking\": [{\"path\": \"<file>\", \"class\": \"<finding class>\", \"library\": \"<the library the finding names to use, as the repo's manifest names its package; \\\"\\\" when none>\"}]}\n```\n(an empty list when nothing blocks)."
+  },
+  {
     "id": "implementer-refactor-ticket",
     "role": "implementer",
     "fixture": "python-app-refactor",

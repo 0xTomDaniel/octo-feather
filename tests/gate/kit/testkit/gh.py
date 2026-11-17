@@ -4,16 +4,32 @@
 A store, no logic of the kit's: PR N is $FAKE_GH/pr/N.json, as `gh pr view --json` returns it
 (as real gh, every field asked: the stored value, or null), its diff pr/N.diff; issue N
 issue/N.json, workflow run N run/N.json, the repo repo.json, each `--json` answered the same
-way, `issue|pr|run list` every one stored (by number); `gh api [--paginate --slurp] PATH`, a
-GET, prints api/PATH.json (one page; slurped, a list of it), a path not stored is GitHub's 404;
-a stored api/PATH.err fails any call on PATH (a GET or a write) as gh does: its text on stderr,
-exit 1. `gh api -X POST repos/o/r/issues/N/comments` appends a comment, `-X PATCH
+way, `issue|pr|run list` every one stored (by number), `pr list` only those on --base B and in
+--state S when given (GitHub's state, OPEN for open); `pr edit N --base B` stores B as PR N's
+base and prints its URL; `repo view OWNER/NAME|URL`, for a repo other than o/r, answers
+api/repos/OWNER/NAME.json the same way (gh reads the URL itself), an unstored one GitHub's
+unresolved repository; `gh api [--paginate --slurp] PATH`, a
+GET, prints api/PATH.json (one page; slurped, a list of it; {owner}/{repo} in PATH is o/r, as gh
+fills it from this dir's repo), a path not stored is GitHub's 404;
+a stored api/PATH.err (PATH filled the same way) fails any call on PATH (a GET or a write)
+as gh does: its text on stderr, exit 1. `gh api -X POST repos/o/r/issues/N/comments` appends a
+comment, `-X PATCH
 repos/o/r/issues/comments/ID` replaces one's body (any PR's); each prints the comment URL
 (`--jq .html_url`). `gh api repos/o/r/commits?...` prints $FAKE_GH/commits.json (the default
 branch's commits), `gh api repos/o/r/contents/F -H Accept: application/vnd.github.raw`
 $FAKE_GH/contents/F (the default branch's file), each `gh: Not Found (HTTP 404)` when absent. As
 the real gh: no GH_TOKEN (the caller's auth; the testkit's Scratch sets one) asks for `gh auth
 login`, and a file $FAKE_GH/down is the network down. Every call is one line in $FAKE_GH/log.
+`run list` keeps only the runs on --commit (headSha), --branch (headBranch), --event (event) and
+--workflow (workflowName) when given, a run storing no such field kept, and a run storing
+`from_list` N only from the Nth `run list --commit` call in the log on (a run created later, by
+call order, never the clock); --limit N the N newest. `run watch N --exit-status` waits for run N
+as gh does: completed, it prints gh's own line on it; in progress, it completes it with its
+stored `completes` conclusion (no line), so the next list reads it completed, as gh returns once
+the run ends; exit 1 unless it concluded success. A file
+$FAKE_GH/watch-fails makes every run watch fail as gh does on a rejected token, the run unchanged.
+`gh api PATH --jq .F` prints field F of api/PATH.json, a string bare (a compare's status).
+run watch's texts are real gh's (gh 2.102.0 on vuejs/core, 2026-11-13; watch() names each call).
 Anything else exits 2 naming it.
 """
 
@@ -22,9 +38,16 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 STORE = Path(os.environ["FAKE_GH"])
 RAW = ["-H", "Accept: application/vnd.github.raw"]
+FILTERS = {
+    "--commit": "headSha",
+    "--branch": "headBranch",
+    "--event": "event",
+    "--workflow": "workflowName",
+}
 
 
 def pr_file(n: str) -> Path:
@@ -64,8 +87,84 @@ def view(a: list[str]) -> None:
 def listed(a: list[str]) -> None:
     """`issue|pr|run list --json F`: every one stored, by number."""
     rows = [json.loads(p.read_text()) for p in (STORE / a[0]).glob("*.json")]
+    if a[0] == "pr":
+        base, state = opt(a, "--base"), opt(a, "--state")
+        rows = [d for d in rows if base in (None, d.get("baseRefName"))]
+        rows = [d for d in rows if state in (None, "all") or d.get("state") == state.upper()]
+    if a[0] == "run":
+        rows = runs(rows, a)
     key = "databaseId" if a[0] == "run" else "number"
     out([pick(d, a) for d in sorted(rows, key=lambda d: d[key])])
+
+
+def runs(rows: list[Any], a: list[str]) -> list[Any]:
+    """`run list`: the runs created by this call on each filter given (a run without the field
+    kept); `from_list` counts the `run list --commit` calls logged, this call already in."""
+    nth = sum(x.startswith("run list ") and " --commit " in x for x in log())
+    rows = [d for d in rows if int(str(d.get("from_list", 0))) <= nth]
+    for flag, field in FILTERS.items():
+        v = opt(a, flag)
+        rows = [d for d in rows if v is None or d.get(field, v) == v]
+    n = opt(a, "--limit")
+    return sorted(rows, key=lambda d: int(str(d["databaseId"])))[-int(n) :] if n else rows
+
+
+def log() -> list[str]:
+    return (STORE / "log").read_text().splitlines()
+
+
+def watch(a: list[str]) -> None:
+    """`run watch N --exit-status [-R O/R]`, as gh 2.102.0 answers it (vuejs/core, 2026-11-13),
+    exiting; any other call returns."""
+    if a[:2] != ["run", "watch"] or "--exit-status" not in a:
+        return
+    n, repo = a[2], opt(a, "-R") or "o/r"
+    api = f"https://api.github.com/repos/{repo}/actions/runs/{n}?exclude_pull_requests=true"
+    p = STORE / "run" / f"{n}.json"
+    if (
+        STORE / "watch-fails"
+    ).exists():  # `GH_TOKEN=bogus gh run watch 43337488098 --exit-status -R vuejs/core`
+        die(
+            f"failed to get run: HTTP 401: Bad credentials ({api})\n"
+            "Try authenticating with:  gh auth login -h github.com"
+        )
+    if not p.is_file():  # `gh run watch 1 --exit-status -R vuejs/core`
+        die(f"failed to get run: HTTP 404: Not Found ({api})")
+    d = json.loads(p.read_text())
+    if d["status"] == "completed":  # `gh run watch 41994021141 --exit-status -R vuejs/core`
+        sys.stdout.write(
+            f"Run {d['workflowName']} ({n}) has already completed with '{d['conclusion']}'\n"
+        )
+    else:
+        d |= {"status": "completed", "conclusion": d["completes"]}
+        p.write_text(json.dumps(d))
+    sys.exit(0 if d["conclusion"] == "success" else 1)
+
+
+def opt(a: list[str], flag: str) -> str | None:
+    return a[a.index(flag) + 1] if flag in a else None
+
+
+def edit(a: list[str]) -> None:
+    """`pr edit N --base B`."""
+    p, base = pr_file(a[2]), opt(a, "--base")
+    if not p.is_file():
+        die(f"GraphQL: Could not resolve to a PullRequest with the number of {a[2]}.")
+    if base is None:
+        die(f"fake gh: unexpected {a}", 2)
+    d = json.loads(p.read_text())
+    d["baseRefName"] = base
+    p.write_text(json.dumps(d))
+    sys.stdout.write(f"https://github.com/o/r/pull/{a[2]}\n")
+
+
+def repo_view(a: list[str]) -> None:
+    """`repo view [OWNER/NAME|URL] --json F`."""
+    name = re.sub(r"^https://github\.com/|\.git$", "", a[2]) if a[2:3] != ["--json"] else "o/r"
+    p = STORE / ("repo.json" if name == "o/r" else f"api/repos/{name}.json")
+    if not p.is_file():
+        die(f"GraphQL: Could not resolve to a Repository with the name '{name}'.")
+    out(pick(json.loads(p.read_text()), a))
 
 
 def diff(a: list[str]) -> None:
@@ -77,25 +176,32 @@ def diff(a: list[str]) -> None:
 
 def failed(path: str) -> None:
     """A stored api/PATH.err: gh's error on PATH."""
-    p = STORE / "api" / f"{path.lstrip('/')}.err"
+    p = STORE / "api" / f"{path.lstrip('/').replace('{owner}/{repo}', 'o/r')}.err"
     if p.is_file():
         die(p.read_text().strip())
 
 
 def get(a: list[str]) -> None:
     """`api [--paginate --slurp] PATH`, a GET; the default branch's commits and raw files."""
-    failed(a[-1])
+    jq = opt(a, "--jq")
+    path = a[1] if jq else a[-1]
+    failed(path)
     if len(a) == 2 and re.fullmatch(r"repos/o/r/commits(\?.*)?", a[1]):
         served(STORE / "commits.json")
         return
     if a[2:] == RAW and (m := re.fullmatch(r"repos/o/r/contents/(.+)", a[1])):
         served(STORE / "contents" / m.group(1))
         return
-    p = STORE / "api" / f"{a[-1].lstrip('/')}.json"
+    p = STORE / "api" / f"{path.lstrip('/').replace('{owner}/{repo}', 'o/r')}.json"
     if not p.is_file():
         die("gh: Not Found (HTTP 404)")
     page = json.loads(p.read_text())
-    out([page] if "--slurp" in a else page)
+    if jq is None:
+        out([page] if "--slurp" in a else page)
+    elif re.fullmatch(r"\.\w+", jq) and isinstance(page.get(jq[1:]), str):
+        sys.stdout.write(page[jq[1:]] + "\n")
+    else:
+        die(f"fake gh: unexpected {a}", 2)
 
 
 def write(a: list[str]) -> None:
@@ -134,13 +240,16 @@ def main(a: list[str]) -> None:
         die("error connecting to api.github.com")
     if not os.environ.get("GH_TOKEN"):
         die("To get started with GitHub CLI, please run:  gh auth login", 4)
+    watch(a)
     two = tuple(a[:2])
     if two in (("pr", "view"), ("issue", "view")):
         view(a)
     elif two in (("issue", "list"), ("pr", "list"), ("run", "list")):
         listed(a)
     elif two == ("repo", "view"):
-        out(pick(json.loads((STORE / "repo.json").read_text()), a))
+        repo_view(a)
+    elif two == ("pr", "edit"):
+        edit(a)
     elif two == ("pr", "diff"):
         diff(a)
     elif a[:1] == ["api"] and "-X" not in a:

@@ -35,6 +35,23 @@ describe("app hello", () => {
     }
   });
 
+  it("greets a JSON request", () => {
+    for (const want of greetings()) {
+      const { code, out } = run(["hello", "--request", JSON.stringify({ name: want.name }), "--json"]);
+      expect(code).toBe(0);
+      expect(JSON.parse(out)).toEqual(want);
+    }
+  });
+
+  it("names a request's unknown field", () => {
+    const { code, out } = run(["hello", "--request", '{"name": "Ada", "mood": "glad"}', "--json"]);
+    expect(code).toBe(2);
+    expect(JSON.parse(out)).toEqual({
+      error: "invalid request",
+      issues: [{ field: "mood", problem: 'Unrecognized key: "mood"' }],
+    });
+  });
+
   it("reports an empty name as a JSON error", () => {
     const { code, out } = run(["hello", "  ", "--json"]);
     expect(code).toBe(2);
