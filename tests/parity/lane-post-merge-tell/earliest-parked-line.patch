@@ -1,0 +1,14 @@
+Seeded defect: a lane's earliest parked line decides parked or gone, not its latest (post-merge step 4, issue 458).
+diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
+index 29b0852d..c4a32993 100755
+--- a/scripts/octo-feather-lane
++++ b/scripts/octo-feather-lane
+@@ -3965,7 +3965,7 @@ def pm_tell(pm: PostMerge) -> str:
+             except OSError as e:
+                 failed.append(f"{name} {sup}: hand-off log {log} unread ({e})"); continue
+             marks.sort(key=lambda x: str(x.get("at") or ""))
+-            (parked if marks and marks[-1].get("pane") == sup else gone).append(f"{name} {sup}"); continue
++            (parked if marks and marks[0].get("pane") == sup else gone).append(f"{name} {sup}"); continue
+         # A failed send is loud (director rule #619): NOT told, named with the command that re-sends it by hand.
+         again = f"re-send by hand: herdr-say {shlex.quote(sup)} {shlex.quote(msg)}"
+         try:

@@ -1,0 +1,10 @@
+# The parity lever's case for tests/lane-post-merge-tell.sh, rewritten as tests/gate/kit/test_herdr_messaging.py::test_post_merge_tell_supervisors (tests/parity/lever.py --help).
+old = "tests/lane-post-merge-tell.sh"
+old_at = "7305a0fa"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none, its fakes are inline.
+needs = []
+new = "tests/gate/kit/test_herdr_messaging.py::test_post_merge_tell_supervisors"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit script run by the kit venv's python: coverage.py measures it.
+[ran]
+"scripts/octo-feather-lane" = "coverage"

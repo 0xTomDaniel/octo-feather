@@ -1,0 +1,14 @@
+Seeded defect: post-merge hands herdr-close the lane's whole space even when it is shared, so herdr-close closes every tab there, not the supervisor pane's tab (octo-feather-lane --help, post-merge step 5).
+diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
+index 29b0852d..8a0c31a8 100755
+--- a/scripts/octo-feather-lane
++++ b/scripts/octo-feather-lane
+@@ -4018,7 +4018,7 @@ def pm_close(target: str, space: str, shared: bool) -> str:
+     failed close, Herdr is asked whether TARGET is gone: then it was closed already."""
+     what = f"tab of {target}" if shared else f"space {target}"
+     try:
+-        p = subprocess.run(["herdr-close", target], capture_output=True, text=True, stdin=subprocess.DEVNULL)
++        p = subprocess.run(["herdr-close", space], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+     except FileNotFoundError:
+         raise Refuse("herdr-close not on PATH: put the kit's scripts on PATH (herdr-comms skill), then rerun")
+     if not p.returncode:

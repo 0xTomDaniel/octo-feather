@@ -12,7 +12,9 @@ line in its `log`. `agents.json` maps each pane id to its agent, {name, pane_id,
 tab_id, agent_status}, and `ready_at` (an epoch time: `unknown` until then, a Pi still booting);
 a scenario may write it. `tab create --workspace W [--label L] [--env K=V]...` makes tab W:tN,
 pane W:pN (N past every earlier tab's), keeping L and the env (its agent's `label`, `env`);
-`tab get T` prints T's label, `workspace get W` its tab count; `tab close T` drops T's agents;
+`tab get T` prints T's label; `tab close T` drops T's agents; `workspace close W` drops W's agents,
+`workspace get W` finds W while an agent is in it, with its tab count, as Herdr 0.9.5 prints it
+(else workspace_not_found on stderr, exit 1, as does a close of it);
 `agent start NAME --pane P -- ARGS` starts Pi NAME there, taking input the seconds
 in the file `ready_after` later (0 without one), then reading the state in the file `start-status`
 (idle without one). Until then Herdr reads it `unknown`, and from
@@ -25,7 +27,8 @@ $HOME/.pi/agent/extensions); with no agent dir it fails, as Herdr does, and so w
 `install-down` (`herdr: integration install failed`); a file `no-report` makes Pi never report.
 `agent get T` (by name or pane), as Herdr 0.9.5 prints it:
 found, the agent on stdout; else agent_not_found on stderr, exit 1; a file `get-down` makes it
-fail plain (`herdr: server not reachable`, exit 1). `agent wait T --until S... --timeout MS`
+fail plain (`herdr: server not reachable`, exit 1), for the targets it lists, one a line, or for
+every target when it is empty. `agent wait T --until S... --timeout MS`
 returns once T reads a state S, else `timeout`. `agent prompt T TEXT --wait [--until S...]
 [--timeout MS]`: blocked is `agent_blocked`, nothing sent; an agent not yet taking input gets
 TEXT typed, unsent (a line in `typed`), `agent_prompt_stalled`; any other gets it submitted (a line
@@ -113,14 +116,21 @@ class World:
             return fail("tab_not_found")
         return say({"tab": {"tab_id": a[2], "label": g.get("label", "")}})
 
-    def workspace_get(self, a: list[str]) -> int:
-        tabs = {g["tab_id"] for g in self.agents.values() if g["workspace_id"] == a[2]}
-        if not tabs:
-            return fail("workspace_not_found")
-        return say({"workspace": {"workspace_id": a[2], "tab_count": len(tabs)}})
-
     def tab_close(self, a: list[str]) -> int:
         self.agents = {p: g for p, g in self.agents.items() if g["tab_id"] != a[2]}
+        self.save()
+        return 0
+
+    def workspace(self, a: list[str]) -> int:
+        """`workspace get|close W`."""
+        w = a[2]
+        tabs = {g["tab_id"] for g in self.agents.values() if g["workspace_id"] == w}
+        if not tabs:
+            return fail("workspace_not_found")
+        if a[1] == "get":
+            info = {"workspace_id": w, "tab_count": len(tabs)}
+            return say({"type": "workspace_info", "workspace": info})
+        self.agents = {p: g for p, g in self.agents.items() if g["workspace_id"] != w}
         self.save()
         return 0
 
@@ -157,7 +167,8 @@ class World:
         return 0
 
     def agent_get(self, a: list[str]) -> int:
-        if (self.dir / "get-down").exists():
+        down = self.dir / "get-down"
+        if down.exists() and a[2] in (down.read_text().split() or [a[2]]):
             sys.stderr.write("herdr: server not reachable\n")
             return 1
         g = self.find(a[2])
@@ -212,7 +223,8 @@ class World:
             ("tab", "create"): self.tab_create,
             ("tab", "close"): self.tab_close,
             ("tab", "get"): self.tab_get,
-            ("workspace", "get"): self.workspace_get,
+            ("workspace", "close"): self.workspace,
+            ("workspace", "get"): self.workspace,
             ("agent", "start"): self.agent_start,
             ("agent", "get"): self.agent_get,
             ("agent", "wait"): self.agent_wait,
