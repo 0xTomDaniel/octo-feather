@@ -1,0 +1,32 @@
+import argparse
+import json
+import sys
+from dataclasses import asdict
+
+from app.core import greet
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(prog="app")
+    commands = parser.add_subparsers(dest="command", required=True)
+    hello = commands.add_parser("hello", help="greet someone")
+    hello.add_argument("name")
+    hello.add_argument("--json", action="store_true", help="print JSON")
+    hello.add_argument("--shout", action="store_true", help="upper-case the greeting")
+    args = parser.parse_args(argv)
+
+    try:
+        greeting = greet(str(args.name), shout=bool(args.shout))
+    except ValueError as err:
+        if args.json:
+            sys.stdout.write(json.dumps({"error": str(err)}) + "\n")
+        else:
+            sys.stderr.write(f"error: {err}\n")
+        return 2
+    plain = greeting.text
+    sys.stdout.write((json.dumps(asdict(greeting)) if args.json else plain) + "\n")
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

@@ -1,0 +1,68 @@
+{
+  "diagnosis-diff-goes-to-implementer": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "herdr-spawn",
+        "args": [
+          "--role",
+          "implementer"
+        ]
+      },
+      {
+        "fact": "branch_paths",
+        "untouched": [
+          "src/",
+          "tests/"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 0
+      }
+    ]
+  },
+  "implementer-result-integrated-not-candidate": {
+    "facts": [
+      {
+        "fact": "branch_paths",
+        "touched": [
+          "src/app/cli.py",
+          "tests/test_cli.py"
+        ],
+        "untouched": [
+          "tests/test_shout_plain.py"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 0
+      }
+    ]
+  },
+  "cleanup-result-consumed": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "herdr-spawn",
+        "args": [],
+        "count": 0
+      },
+      {
+        "fact": "branch_paths",
+        "untouched": [
+          "src/",
+          "tests/"
+        ]
+      }
+    ]
+  }
+}
