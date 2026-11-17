@@ -4,7 +4,8 @@ drive: its docstring), each run as that file's command through `case`
 
 from collections.abc import Callable
 
-from tracker import checked, github, linear, skills
+import pytest
+from tracker import SCRIPTS, checked, github, linear, missing, skills
 
 Case = Callable[..., None]
 
@@ -15,6 +16,11 @@ def test_tracker_skills(case: Case) -> None:
 
 def test_tracker_scripts_checked(case: Case) -> None:
     case(checked)
+
+
+@pytest.mark.parametrize("script", SCRIPTS)
+def test_tracker_script_missing(case: Case, script: str) -> None:
+    case(missing, script)
 
 
 def test_tracker_github_issues(case: Case) -> None:

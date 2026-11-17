@@ -9,9 +9,9 @@ argument is `-`, else null), and answers from the tape $FAKE_LINEAR/tape.json:
   ANSWER  {"rc": N, "err": TEXT, and "out": TEXT or "json": VALUE}: its exit status, stderr and
           stdout; a VALUE printed as linear-cli prints a piped `api` response: compact, one line.
 
-The Nth time a call is made it gets the tape's Nth answer for it (the last, once they run out):
-what Linear answered that call each time, in order. A call no tape records, or a tape field
-missing, unknown or of the wrong type, exits 2 naming it.
+The Nth time a call is made it gets the tape's Nth answer for it: what Linear answered that call
+each time, in order. A call no tape records, one asked more times than its tape answers, or a
+tape field missing, unknown or of the wrong type, exits 2 naming it.
 """
 
 import json
@@ -101,7 +101,13 @@ hit = next((c for c in calls if [c.argv, c.stdin] == asked), None)
 if hit is None:
     sys.stderr.write(f"fake linear: no recording for linear {json.dumps(argv)} stdin {stdin!r}\n")
     sys.exit(2)
-a = hit.answers[min(before, len(hit.answers) - 1)]
+if before >= len(hit.answers):
+    sys.stderr.write(
+        f"fake linear: answers exhausted: linear {json.dumps(argv)} stdin {stdin!r} asked "
+        f"{before + 1} times, the tape answers it {len(hit.answers)}\n"
+    )
+    sys.exit(2)
+a = hit.answers[before]
 sys.stdout.write(a.out)
 sys.stderr.write(a.err)
 sys.exit(a.rc)
