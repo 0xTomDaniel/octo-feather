@@ -1,0 +1,12 @@
+# The parity lever's case for test_qc_gh.py::test_snapshot_misses, its snapshot now written by the real octo-feather-qc-ghsnap (#936) (tests/parity/lever.py --help).
+old = "tests/gate/kit/test_qc_gh.py::test_snapshot_misses"
+old_at = "b20ee656"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): the scenario module its item runs.
+needs = [
+    "tests/gate/kit/qc_gh.py",
+]
+new = "tests/gate/kit/test_qc_gh.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit script run by the kit venv's python: coverage.py measures it.
+[ran]
+".agents/skills/github-pr/scripts/gh" = "coverage"
