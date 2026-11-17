@@ -1,0 +1,14 @@
+Seeded defect: the offline gh refuses a snapshot miss but never logs it to OCTO_FEATHER_GHSNAP_MISS (scripts/gh, miss).
+diff --git a/.agents/skills/github-pr/scripts/gh b/.agents/skills/github-pr/scripts/gh
+index 4e01be3f..695e4722 100755
+--- a/.agents/skills/github-pr/scripts/gh
++++ b/.agents/skills/github-pr/scripts/gh
+@@ -38,7 +38,7 @@ def miss(why, code=1):
+                 c.shutdown(socket.SHUT_WR)
+                 while c.recv(16): pass
+             else:
+-                with open(MISS, "a") as f: f.write(json.dumps({"argv": sys.argv[1:], "why": why}) + "\n")
++                pass
+         except OSError: pass
+     try: at = open(os.path.join(SNAP, "fetched_at")).read().strip()
+     except OSError: at = "none"
