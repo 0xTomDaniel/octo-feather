@@ -1,0 +1,50 @@
+{
+ "source": "Not recorded: LINEAR_API_KEY is not set in the factory (director decision on #921). Each answer is what schpet/linear-cli v3.1.0 (the linear skill's cli-version) prints with stdout and stderr not a terminal, per its source at tag v3.1.0 (crates/linear-cli/src): success lines from commands/outcome.rs done() (`✓ VERB ENTITY LABEL`, the url on the next line) as issue/create.rs, issue/relation/add.rs, comment_add.rs output() and issue/update.rs call it; `Creating issue in TEAM` on stderr (create.rs header); a failure as app.rs report() renders it (`✗ CONTEXT: MESSAGE`, its hint indented below), its exit status from error.rs Failure (not found 3, invalid input 2); `api` prints Linear's response body compact (api.rs json_output), errors too, on stdout, exiting 3 for a missing entity (graphql/envelope.rs); the not-found body is tests/cli/errors.rs ISSUE_NOT_FOUND. Response bodies follow Linear's GraphQL schema (Issue, WorkflowState.type, IssueConnection, IssueRelation) for the linear skill's issue-view query.",
+ "calls": [
+  {"argv": ["api", "--no-input", "--variable", "id=ENG-3", "query IssueView($id: String!) { issue(id: $id) { identifier title description url state { type }\n  parent { identifier } children(first: 250) { nodes { identifier } pageInfo { hasNextPage } }\n  inverseRelations(first: 250) { nodes { type issue { identifier } } } } }"], "stdin": null, "answers": [
+   {"rc": 0, "err": "", "json": {"data": {"issue": {"identifier": "ENG-3", "title": "Parent", "description": "p", "url": "https://linear.app/acme/issue/ENG-3/parent", "state": {"type": "started"}, "parent": null, "children": {"nodes": [{"identifier": "ENG-7"}], "pageInfo": {"hasNextPage": false}}, "inverseRelations": {"nodes": []}}}}}
+  ]},
+  {"argv": ["api", "--no-input", "--variable", "id=ENG-7", "query IssueView($id: String!) { issue(id: $id) { identifier title description url state { type }\n  parent { identifier } children(first: 250) { nodes { identifier } pageInfo { hasNextPage } }\n  inverseRelations(first: 250) { nodes { type issue { identifier } } } } }"], "stdin": null, "answers": [
+   {"rc": 0, "err": "", "json": {"data": {"issue": {"identifier": "ENG-7", "title": "Issue 7", "description": "body 7", "url": "https://linear.app/acme/issue/ENG-7/issue-7", "state": {"type": "unstarted"}, "parent": {"identifier": "ENG-3"}, "children": {"nodes": [], "pageInfo": {"hasNextPage": false}}, "inverseRelations": {"nodes": [{"type": "blocks", "issue": {"identifier": "ENG-4"}}, {"type": "blocks", "issue": {"identifier": "ENG-5"}}]}}}}},
+   {"rc": 0, "err": "", "json": {"data": {"issue": {"identifier": "ENG-7", "title": "Issue 7", "description": "body 7", "url": "https://linear.app/acme/issue/ENG-7/issue-7", "state": {"type": "unstarted"}, "parent": {"identifier": "ENG-3"}, "children": {"nodes": [], "pageInfo": {"hasNextPage": false}}, "inverseRelations": {"nodes": [{"type": "blocks", "issue": {"identifier": "ENG-4"}}, {"type": "blocks", "issue": {"identifier": "ENG-5"}}]}}}}},
+   {"rc": 0, "err": "", "json": {"data": {"issue": {"identifier": "ENG-7", "title": "Issue 7", "description": "body 7", "url": "https://linear.app/acme/issue/ENG-7/issue-7", "state": {"type": "completed"}, "parent": {"identifier": "ENG-3"}, "children": {"nodes": [], "pageInfo": {"hasNextPage": false}}, "inverseRelations": {"nodes": [{"type": "blocks", "issue": {"identifier": "ENG-4"}}, {"type": "blocks", "issue": {"identifier": "ENG-5"}}]}}}}}
+  ]},
+  {"argv": ["api", "--no-input", "--variable", "id=ENG-8", "query IssueView($id: String!) { issue(id: $id) { identifier title description url state { type }\n  parent { identifier } children(first: 250) { nodes { identifier } pageInfo { hasNextPage } }\n  inverseRelations(first: 250) { nodes { type issue { identifier } } } } }"], "stdin": null, "answers": [
+   {"rc": 0, "err": "", "json": {"data": {"issue": {"identifier": "ENG-8", "title": "Issue 8", "description": null, "url": "https://linear.app/acme/issue/ENG-8/issue-8", "state": {"type": "canceled"}, "parent": null, "children": {"nodes": [], "pageInfo": {"hasNextPage": false}}, "inverseRelations": {"nodes": []}}}}}
+  ]},
+  {"argv": ["api", "--no-input", "--variable", "id=ENG-9", "query IssueView($id: String!) { issue(id: $id) { identifier title description url state { type }\n  parent { identifier } children(first: 250) { nodes { identifier } pageInfo { hasNextPage } }\n  inverseRelations(first: 250) { nodes { type issue { identifier } } } } }"], "stdin": null, "answers": [
+   {"rc": 3, "err": "", "json": {"errors": [{"message": "Entity not found: Issue", "extensions": {"type": "invalid input", "code": "INPUT_ERROR", "statusCode": 400, "userError": true, "userPresentableMessage": "Could not find referenced Issue."}}], "data": null}},
+   {"rc": 0, "err": "", "json": {"data": {"issue": {"identifier": "ENG-9", "title": "New one", "description": "hi\n", "url": "https://linear.app/acme/issue/ENG-9/new-one", "state": {"type": "unstarted"}, "parent": {"identifier": "ENG-3"}, "children": {"nodes": [], "pageInfo": {"hasNextPage": false}}, "inverseRelations": {"nodes": [{"type": "blocks", "issue": {"identifier": "ENG-4"}}, {"type": "blocks", "issue": {"identifier": "ENG-5"}}]}}}}}
+  ]},
+  {"argv": ["api", "--no-input", "--variable", "id=ENG-99", "query IssueView($id: String!) { issue(id: $id) { identifier title description url state { type }\n  parent { identifier } children(first: 250) { nodes { identifier } pageInfo { hasNextPage } }\n  inverseRelations(first: 250) { nodes { type issue { identifier } } } } }"], "stdin": null, "answers": [
+   {"rc": 3, "err": "", "json": {"errors": [{"message": "Entity not found: Issue", "extensions": {"type": "invalid input", "code": "INPUT_ERROR", "statusCode": 400, "userError": true, "userPresentableMessage": "Could not find referenced Issue."}}], "data": null}}
+  ]},
+  {"argv": ["issue", "create", "--title", "New one", "--description-file", "body", "--parent", "ENG-3", "--team", "ENG", "--no-input"], "stdin": null, "answers": [
+   {"rc": 0, "err": "Creating issue in ENG\n", "out": "✓ Created issue ENG-9: New one\nhttps://linear.app/acme/issue/ENG-9/new-one\n"}
+  ]},
+  {"argv": ["issue", "relation", "add", "ENG-9", "blocked-by", "ENG-4", "--no-input"], "stdin": null, "answers": [
+   {"rc": 0, "err": "", "out": "✓ Created relation ENG-9 blocked-by ENG-4\n"}
+  ]},
+  {"argv": ["issue", "relation", "add", "ENG-9", "blocked-by", "ENG-5", "--no-input"], "stdin": null, "answers": [
+   {"rc": 0, "err": "", "out": "✓ Created relation ENG-9 blocked-by ENG-5\n"}
+  ]},
+  {"argv": ["issue", "create", "--title", "T", "--description-file", "body", "--no-input"], "stdin": null, "answers": [
+   {"rc": 2, "out": "", "err": "✗ No team given and no default team configured\n  Pass --team <key, name, or ID>, or run `linear config` to set a default team.\n"}
+  ]},
+  {"argv": ["issue", "create", "--title", "T", "--description-file", "body", "--parent", "ENG-3", "--team", "ENG", "--no-input"], "stdin": null, "answers": [
+   {"rc": 0, "err": "Creating issue in ENG\n", "out": "✓ Created issue ENG-10: T\nhttps://linear.app/acme/issue/ENG-10/t\n"}
+  ]},
+  {"argv": ["issue", "relation", "add", "ENG-10", "blocked-by", "ENG-99", "--no-input"], "stdin": null, "answers": [
+   {"rc": 3, "out": "", "err": "✗ Failed to create relation: Issue not found: ENG-99\n"}
+  ]},
+  {"argv": ["issue", "comment", "add", "ENG-7", "--body-file", "-", "--no-input"], "stdin": "a note\n", "answers": [
+   {"rc": 0, "err": "", "out": "✓ Added comment to issue ENG-7\nhttps://linear.app/acme/issue/ENG-7/issue-7#comment-3f2a9c1e\n"}
+  ]},
+  {"argv": ["issue", "comment", "add", "ENG-7", "--body-file", "body", "--no-input"], "stdin": null, "answers": [
+   {"rc": 0, "err": "", "out": "✓ Added comment to issue ENG-7\nhttps://linear.app/acme/issue/ENG-7/issue-7#comment-8b41d7a0\n"}
+  ]},
+  {"argv": ["issue", "update", "ENG-7", "--state", "completed", "--no-input"], "stdin": null, "answers": [
+   {"rc": 0, "err": "", "out": "✓ Updated issue ENG-7: Issue 7\nhttps://linear.app/acme/issue/ENG-7/issue-7\n"}
+  ]}
+ ]
+}

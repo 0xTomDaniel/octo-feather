@@ -14,7 +14,12 @@ branch's commits), `gh api repos/o/r/contents/F -H Accept: application/vnd.githu
 $FAKE_GH/contents/F (the default branch's file), each `gh: Not Found (HTTP 404)` when absent. As
 the real gh: no GH_TOKEN (the caller's auth; the testkit's Scratch sets one) asks for `gh auth
 login`, and a file $FAKE_GH/down is the network down. Every call is one line in $FAKE_GH/log.
-Anything else exits 2 naming it.
+Issue writes print what gh v2.102.0 prints with stdout not a terminal (cli/cli pkg/cmd/issue:
+create/create.go, close/close.go; pkg/cmd/pr/shared/commentable.go): `issue create --title T
+--body-file F|- ...` stores issue/N.json, N past every stored one, and prints its URL; `issue
+comment N --body-file F|-` appends to issue N's comments and prints the comment URL; `issue close
+N` closes it, on stderr `✓ Closed issue o/r#N (TITLE)`, or `! Issue o/r#N (TITLE) is already
+closed`. Anything else exits 2 naming it.
 """
 
 import json
@@ -22,6 +27,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Any
 
 STORE = Path(os.environ["FAKE_GH"])
 RAW = ["-H", "Accept: application/vnd.github.raw"]
@@ -127,6 +133,36 @@ def write(a: list[str]) -> None:
     sys.stdout.write(url + "\n")
 
 
+def issue_write(a: list[str]) -> None:
+    """`issue create|comment|close` (the module docstring)."""
+    if a[1] == "create":
+        nums = [int(p.stem) for p in (STORE / "issue").glob("*.json")]
+        n = str(max(nums, default=0) + 1)
+        d: dict[str, Any] = {"number": int(n), "title": a[a.index("--title") + 1], "state": "OPEN"}
+    else:
+        n = a[2]
+        if not (STORE / "issue" / f"{n}.json").is_file():
+            die(f"GraphQL: Could not resolve to an issue or pull request with the number of {n}.")
+        d = json.loads((STORE / "issue" / f"{n}.json").read_text())
+    f = a[a.index("--body-file") + 1] if "--body-file" in a else ""
+    body = sys.stdin.read() if f == "-" else Path(f).read_text() if f else ""
+    url = f"https://github.com/o/r/issues/{n}"
+    if a[1] == "create":
+        d["body"] = body
+    elif a[1] == "comment":
+        comments: list[object] = d.setdefault("comments", [])
+        url += f"#issuecomment-{1001 + len(comments)}"
+        comments.append({"author": {"login": "sup"}, "body": body, "url": url})
+    elif d["state"] == "CLOSED":
+        die(f"! Issue o/r#{n} ({d['title']}) is already closed", 0)
+    else:
+        d["state"], url = "CLOSED", ""
+        sys.stderr.write(f"✓ Closed issue o/r#{n} ({d['title']})\n")
+    (STORE / "issue").mkdir(exist_ok=True)
+    (STORE / "issue" / f"{n}.json").write_text(json.dumps(d))
+    sys.stdout.write(url + "\n" if url else "")
+
+
 def main(a: list[str]) -> None:
     with (STORE / "log").open("a") as f:
         f.write(" ".join(a) + "\n")
@@ -141,6 +177,8 @@ def main(a: list[str]) -> None:
         listed(a)
     elif two == ("repo", "view"):
         out(pick(json.loads((STORE / "repo.json").read_text()), a))
+    elif two in (("issue", "create"), ("issue", "comment"), ("issue", "close")):
+        issue_write(a)
     elif two == ("pr", "diff"):
         diff(a)
     elif a[:1] == ["api"] and "-X" not in a:
