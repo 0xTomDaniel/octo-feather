@@ -60,6 +60,13 @@
       "record": "20261105T172039Z-c6b3dc1c",
       "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
       "tests": []
+    },
+    "acceptance-edge-rejects": {
+      "status": "built",
+      "pr": 899,
+      "record": "20261114T034838Z-f15f1ed8",
+      "commit": "d25bf8b44a4dadd81b8e452038b16291ecf2f86f",
+      "tests": []
     }
   }
 }

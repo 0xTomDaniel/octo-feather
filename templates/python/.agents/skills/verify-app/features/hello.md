@@ -13,10 +13,11 @@ Drive criterion: `app#acceptance-hello-json`
 - `hello-trim` trims surrounding spaces from the name.
 - `hello-empty-json` blank name with `--json`: JSON error, exit 2.
 - `hello-empty-text` blank name without `--json`: error on stderr, exit 2.
+- `hello-request` the input as a JSON request (`--request`), validated at the edge: greets on a valid request; a request holding an unknown field fails naming it, exit 2.
 
 ## How to get to it (user POV)
 
-- Run `app hello <name>` or `app hello <name> --json` in a terminal (inside the repo after `just setup`: `uv run app hello <name> --json`).
+- Run `app hello <name>`, `app hello <name> --json` or `app hello --request '{"name": "<name>"}' --json` in a terminal (inside the repo after `just setup`: `uv run app hello <name> --json`).
 - `app --help` and `app hello --help` list the command.
 
 ## Driving it with verify-app
@@ -32,10 +33,13 @@ Run all cases: `.agents/skills/verify-app/scripts/verify-app drive hello`. Evide
 - **Trimmed name** (`trimmed`). Run `app hello "  <name>  " --json`. Observe the `name` field.
 - **Blank name, JSON** (`empty-json`). Run `app hello "  " --json`. Observe exit code 2, an `error` object on stdout, empty stderr.
 - **Blank name, text** (`empty-text`). Run `app hello "  "`. Observe exit code 2, empty stdout, `error: ` on stderr.
+- **JSON request** (`request-json`). Run `app hello --request '{"name": "<name>"}' --json`. Observe exit code 0, the same greeting as `json`, empty stderr.
+- **Unknown field** (`request-unknown`). Run `app hello --request '{"name": "<name>", "mood": "glad"}' --json`. Observe exit code 2, one JSON document `{"error": "invalid request", "issues": [...]}` whose one issue's `field` is `mood`, empty stderr.
 - **Side effects.** Every case's `.files` is empty: the command writes nothing where it runs.
 
 ## Gotchas
 
 - An unquoted blank name never reaches the app: the shell drops it and argparse exits 2 with usage on stderr. That is not the empty-name path; quote it (`"  "`).
+- A name and `--request` together, or neither, is an argparse usage error (exit 2, `usage:` on stderr).
 - argparse usage errors also exit 2. Tell them apart from the empty-name error by stdout (JSON `error` object) and stderr (`usage:`).
 - `uv run app ...` may sync the venv first; use the launched `bin/app` (the contract's entry) for evidence so no install step mixes into the transcript.

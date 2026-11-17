@@ -13,18 +13,27 @@ supervisor NOT told (lane, pane, timeout, the re-send command) and going on to t
 spec #acceptance-task-worker-route): its parent reached, a peer lane refused (77); and a worker
 never messages the director: its parent proven gone, herdr-say itself sends the director one
 fixed alert, a timeout or a stall none (comms spec #acceptance-parent-gone). director_worker_resume
-drives comms spec #acceptance-director-worker-resume (its docstring names each step)."""
+drives comms spec #acceptance-director-worker-resume (its docstring names each step).
+
+post-merge step 4 (owner ruling on issue 206; issues 398, 458): live supervisors of the PR's repo
+(every lane on a kit PR) told once, by the kit's own herdr-say with its bound, with the merge, PR,
+title and rule files, one prod line each, a rerun telling nothing new; parked and gone lanes
+listed, never sent to; a failed send named, no prod line, exit 1; any other herdr failure stops
+the step; step 5 reached, the kit's own herdr-close run and Herdr's workspace_not_found read as
+already closed. Space ids `zt*`, which no real Herdr gives, so herdr-close's sweep of processes
+tagged with a closed space can reach no box process."""
 
 from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-from testkit import ROOT, Scratch, kit, main
+from testkit import HERE, ROOT, Scratch, kit, main
 
 ASSETS = ROOT / ".agents" / "skills" / "herdr-comms" / "assets"
 TELL_BOUND = 20  # post-merge step 4's bound on one send, seconds (octo-feather-lane --help)
@@ -528,6 +537,287 @@ def post_merge_busy(s: Scratch) -> None:
     assert [x["issue"] for x in prods] == [12], said
 
 
+# A kit install's recipes step 3's refresh runs (by the real just): nothing to fetch or check.
+TELL_JUSTFILE = "vendored-fetch:\n    @true\n\ninstall-check target:\n    @true\n"
+RULED = ".agents/skills/foo/SKILL.md, agents/supervisor.md"
+REREAD = "re-read the changed ones before your next step."
+
+
+def build_tell(p: Scratch) -> None:
+    """repo: main merged gh7 (two rule files and a product file changed) then gh8 (a file under
+    no rule path); kit: a clone of it at main, its origin o/kit (Tell fetches it from repo);
+    shas.json: each merge commit and the head it merged."""
+    r = p.root / "repo"
+    p.run(["git", "init", "-q", "-b", "main", str(r)])
+    for f, text in (("agents/supervisor.md", "a"), ("src/app.py", "a"), ("docs/notes.md", "a")):
+        (r / f).parent.mkdir(parents=True, exist_ok=True)
+        (r / f).write_text(text + "\n")
+    (r / "justfile").write_text(TELL_JUSTFILE)
+    p.git(r, "add", "-A")
+    p.git(r, "commit", "-qm", "base")
+    for branch, files in (
+        ("gh7", ("agents/supervisor.md", ".agents/skills/foo/SKILL.md", "src/app.py")),
+        ("gh8", ("docs/notes.md",)),
+    ):
+        p.git(r, "checkout", "-qb", branch)
+        for f in files:
+            (r / f).parent.mkdir(parents=True, exist_ok=True)
+            (r / f).write_text(f"{branch}\n")
+        p.git(r, "add", "-A")
+        p.git(r, "commit", "-qm", "change")
+        p.git(r, "checkout", "-q", "main")
+        p.git(r, "merge", "-q", "--no-ff", branch, "-m", f"Merge #{branch[2:]}")
+    k = p.root / "kit"
+    p.run(["git", "clone", "-q", str(r), str(k)])
+    p.git(k, "remote", "set-url", "origin", "https://github.com/o/kit.git")
+    log = p.git(r, "log", "--first-parent", "--format=%H %P", "main").splitlines()
+    (m2, _, h2), (m, _, h) = (x.split() for x in log[:2])
+    (p.root / "shas.json").write_text(json.dumps({"m": m, "h": h, "m2": m2, "h2": h2}))
+
+
+class Tell:
+    """The prepared repo and kit install in S, its lanes and director log, Herdr's world, the
+    kit's herdr-say and herdr-close on PATH; `run` runs post-merge from the repo."""
+
+    def __init__(self, s: Scratch) -> None:
+        s.prepare("lane-post-merge-tell", build_tell)
+        self.s, self.r = s, s.root / "repo"
+        self.d = herdr_world(s)
+        s.env.pop("GH_REPO", None)
+        st = s.root / "state" / "octo-feather"
+        self.lanes, self.dlog = st / "lanes", st / "director.handoffs.jsonl"
+        self.lanes.mkdir(parents=True)
+        rec = s.root / "rec"
+        rec.mkdir()
+        for n in ("uv", "pnpm"):  # step 3's refresh reaching the registries: argv_recorder.sh
+            (rec / n).symlink_to(HERE / "argv_recorder.sh")
+        s.env |= {
+            "XDG_STATE_HOME": str(s.root / "state"),
+            "OCTO_FEATHER_KIT_INSTALL": str(s.root / "kit"),
+            "ARGV_LOG": str(s.root / "argv.log"),
+            "PATH": os.pathsep.join([str(rec), str(ASSETS), s.env["PATH"]]),
+            # The kit install's origin, o/kit, is this copy's repo: a url rewrite in git's env
+            # (no git call; the prepared tree's path is not this copy's).
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": f"url.{self.r}.insteadOf",
+            "GIT_CONFIG_VALUE_0": "https://github.com/o/kit.git",
+        }
+        shas = json.loads((s.root / "shas.json").read_text())
+        self.m, self.h, self.m2, self.h2 = (shas[k] for k in ("m", "h", "m2", "h2"))
+        s.gh.store("repo.json", {"nameWithOwner": "o/r"})
+        s.gh.store("api/repos/o/kit.json", {"nameWithOwner": "o/kit"})
+        run = {"databaseId": 1, "status": "completed", "conclusion": "success"}
+        url = "https://github.com/o/r/actions/runs/1"
+        s.gh.store("run/1.json", run | {"workflowName": "check", "url": url})
+        self.store("o/r", "Add foo")
+
+    def store(self, repo: str, title: str) -> None:
+        """PRs 7 (TITLE, of REPO) and 8 (Notes, of o/r), merged."""
+        for n, head, merge, t, at in (
+            (7, self.h, self.m, title, repo),
+            (8, self.h2, self.m2, "Notes", "o/r"),
+        ):
+            pr = {
+                "state": "MERGED",
+                "headRefOid": head,
+                "mergeCommit": {"oid": merge},
+                "baseRefName": "main",
+                "headRefName": f"gh{n}",
+                "title": t,
+                "url": f"https://github.com/{at}/pull/{n}",
+            }
+            self.s.gh.put(n, pr)
+
+    def lane(self, name: str, pane: str, repo: str, issue: int) -> None:
+        (self.lanes / f"{name}.toml").write_text(
+            f'supervisor = "{pane}"\nrepository = "{repo}"\nissue = {issue}\ngoal = "g"\n'
+            'started_at = "2026-10-29T00:00:00Z"\n'
+        )
+
+    def parked(self, lane: str, pane: str, at: str) -> None:
+        line = {"at": at, "kind": "parked", "pane": pane, "name": lane}
+        with (self.lanes / f"{lane}.handoffs.jsonl").open("a") as f:
+            f.write(json.dumps(line) + "\n")
+
+    def live(self, *panes: str, blocked: str = "") -> None:
+        """Herdr's agents: PANES live (idle), BLOCKED (one of them) on a dialog."""
+        live = {p: agent(p, p, "blocked" if p == blocked else "idle") for p in panes}
+        (self.d / "agents.json").write_text(json.dumps(live))
+
+    def run(self, want: int, pr: int, *args: str) -> tuple[str, str]:
+        """post-merge PR (its head) ARGS --wait 0, exit WANT, no traceback: its step 4 line and
+        its last line."""
+        head = self.h if pr == 7 else self.h2
+        cmd = [kit("octo-feather-lane"), "post-merge", str(pr), head, *args, "--wait", "0"]
+        ran = self.s.run(cmd, want=want, cwd=self.r)
+        tell = [x for x in ran.out.splitlines() if re.match(r"step [0-9]+ tell supervisors: ", x)]
+        assert tell, f"no tell supervisors line: {ran.out}"
+        self.out = ran.out
+        return tell[0], ran.out.splitlines()[-1]
+
+    def said(self) -> list[str]:
+        """Each pane a send was tried to, sorted; each send bounded by post-merge's bound."""
+        sends = [x for x in lines(self.d / "log") if x.startswith("agent prompt ")]
+        bound = f" --timeout {TELL_BOUND * 1000}"
+        assert all(x.endswith(bound) for x in sends), f"a send without{bound}: {sends}"
+        return sorted(x.split()[2] for x in sends)
+
+    def told(self) -> list[str]:
+        return [x.split("\t", 1)[1] for x in lines(self.d / "prompts")]
+
+    def prods(self) -> list[dict[str, object]]:
+        return [json.loads(x) for x in lines(self.dlog)]
+
+    def clear(self) -> None:
+        """The sends, Herdr's call log and the director log emptied."""
+        for f in (self.d / "log", self.d / "prompts", self.dlog):
+            f.write_text("")
+
+
+def told_live(t: Tell) -> None:
+    """tell_supervisors' first phase: live, parked and another repo's lanes; a rerun; a merge
+    with no rule file."""
+    t.lane("gh7", "zt0:p1", "o/r", 7)
+    t.lane("live1", "zt1:p1", "o/r", 11)
+    t.lane("parked", "zt2:p1", "o/r", 12)
+    t.lane("other", "zt3:p1", "x/y", 13)
+    t.parked("parked", "zt2:p0", "2026-10-28T00:00:00Z")
+    t.parked("parked", "zt2:p1", "2026-10-29T00:00:00Z")
+    t.live("zt0:p1", "zt1:p1", "zt3:p1")
+    earlier = '{"at": "2026-10-29T00:00:00+00:00", "kind": "prod", "issue": 11, "note": "earlier"}'
+    t.dlog.write_text(earlier + "\n")
+    tell, last = t.run(3, 7, "--lane", "gh7", "--repo", "o/r")
+    assert t.said() == ["zt1:p1"], t.said()
+    want = f"main moved to {t.m[:12]} (#7 Add foo); rule files changed: {RULED}; {REREAD}"
+    assert t.told() == [want], t.told()
+    assert "told: live1 zt1:p1" in tell, tell
+    gone = "gone: director to resume or archive: none"
+    assert tell.endswith(f"not woken: parked zt2:p1; {gone}"), tell
+    assert last.endswith("tell supervisors ok; step 5 teardown pending"), last
+    assert "agent get zt3:p1" not in lines(t.d / "log"), lines(t.d / "log")
+    prods = t.prods()
+    assert len(prods) == 2, prods
+    note = f"post-merge {t.m} #7: main moved, told live1 to re-read {RULED}"
+    p = prods[1]
+    assert sorted(p) == ["at", "issue", "kind", "note"], p
+    assert (p["kind"], p["issue"], p["note"]) == ("prod", 11, note), p
+    assert re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+\+00:00", str(p["at"])), p
+    tell, _ = t.run(3, 7, "--lane", "gh7", "--repo", "o/r")
+    assert len(t.told()) == 1, f"rerun sent again: {t.told()}"
+    assert len(t.prods()) == 2, f"rerun logged again: {t.prods()}"
+    assert "already told: live1" in tell, tell
+    assert "not woken: parked zt2:p1" in tell, tell
+    t.run(3, 8, "--lane", "gh7", "--repo", "o/r")
+    none = f"main moved to {t.m2[:12]} (#8 Notes); rule files changed: none; {REREAD}"
+    assert t.told()[-1] == none, t.told()
+    assert t.prods()[-1]["note"] == f"post-merge {t.m2} #8: main moved, told live1 to re-read none"
+
+
+def told_kit(t: Tell) -> None:
+    """tell_supervisors' kit PR phase: the sends and the director log emptied first."""
+    t.store("o/kit", "Kit rule")
+    t.clear()
+    t.run(3, 7, "--lane", "gh7", "--repo", "o/kit")
+    assert t.said() == ["zt1:p1", "zt3:p1"], f"{t.said()}: {t.out}"
+    assert sorted(int(str(p["issue"])) for p in t.prods()) == [11, 13], t.prods()
+
+
+def told_failed(t: Tell) -> None:
+    """tell_supervisors' failed send phase, on the o/r PR again: live2 added, live1 blocked on
+    a dialog (the kit's herdr-say exits 75)."""
+    t.store("o/r", "Add foo")
+    t.clear()
+    t.lane("live2", "zt4:p1", "o/r", 14)
+    t.live("zt0:p1", "zt1:p1", "zt3:p1", "zt4:p1", blocked="zt1:p1")
+    tell, last = t.run(1, 7, "--lane", "gh7", "--repo", "o/r")
+    assert t.said() == ["zt1:p1", "zt4:p1"], t.said()
+    assert "stopped: " in tell, tell
+    assert "herdr-say failed: live1 zt1:p1 exit 75" in tell, tell
+    assert "told: live2 zt4:p1" in tell, tell
+    assert [p["issue"] for p in t.prods()] == [14], t.prods()
+    assert "tell supervisors stopped" in last, last
+    t.live("zt0:p1", "zt1:p1", "zt3:p1", "zt4:p1")
+    t.run(3, 7, "--lane", "gh7", "--repo", "o/r")
+    assert t.said() == ["zt1:p1", "zt1:p1", "zt4:p1"], f"retry: {t.said()}"
+    assert [p["issue"] for p in t.prods()] == [14, 11], t.prods()
+
+
+def told_gone(t: Tell) -> None:
+    """tell_supervisors' issue 458 phase: every lane record and hand-off log replaced first."""
+    for f in t.lanes.iterdir():
+        f.unlink()
+    t.clear()
+    t.lane("live1", "zt1:p1", "o/r", 11)
+    t.lane("parked", "zt2:p1", "o/r", 12)
+    t.lane("gone", "zt5:p1", "o/r", 15)
+    t.lane("moved", "zt6:p1", "o/r", 16)
+    t.parked("parked", "zt2:p1", "2026-10-29T00:00:00Z")
+    t.parked("moved", "zt6:p1", "2026-10-28T00:00:00Z")
+    t.parked("moved", "zt6:p0", "2026-10-29T00:00:00Z")
+    t.live("zt1:p1")
+    gone = "gone: director to resume or archive: gone zt5:p1, moved zt6:p1"
+    tell, _ = t.run(3, 7, "--lane", "gh1", "--repo", "o/r")
+    assert t.said() == ["zt1:p1"], t.said()
+    want = "told: live1 zt1:p1; already told: none; not woken: parked zt2:p1; " + gone
+    assert tell.startswith("step 4 tell supervisors: ok: "), tell
+    assert tell.endswith(want), tell
+    pending = "step 5 teardown: pending: lane gh1 not archived; rerun on its close report"
+    assert pending in t.out.splitlines(), t.out
+    # Archived: step 5 runs the kit's herdr-close on space zt9, which Herdr has not: its close
+    # fails, and Herdr's workspace_not_found (stderr) reads as already closed.
+    (t.lanes / "archive").mkdir()
+    (t.lanes.parent / "director.toml").write_text('pane = "zt0:p9"\n')
+    t.s.git(t.r, "remote", "add", "origin", str(t.r))
+    (t.lanes / "archive" / "gh1.toml").write_text(
+        'supervisor = "zt9:p1"\nrepository = "o/r"\nissue = 1\npr = 7\ngoal = "g"\n'
+        'started_at = "2026-10-29T00:00:00Z"\n'
+    )
+    t.run(0, 7, "--lane", "gh1", "--repo", "o/r")
+    down = (
+        "step 5 teardown: ok: space zt9 already closed; worktree of gh1 already removed; no open "
+        "PR based on gh1; local branch gh1 already deleted; remote branch gh1 already deleted "
+        "from origin"
+    )
+    assert down in t.out.splitlines(), t.out
+    log = lines(t.d / "log")
+    assert "workspace close zt9" in log, f"herdr-close asked no close: {log}"
+    assert "workspace get zt9" in log, f"teardown asked no workspace get: {log}"
+    # Any other herdr failure still stops step 4, named; the other lanes are still handled.
+    (t.lanes / "archive" / "gh1.toml").unlink()
+    (t.d / "get-down").write_text("zt2:p1\n")
+    tell, _ = t.run(1, 7, "--lane", "gh1", "--repo", "o/r")
+    stop = (
+        "step 4 tell supervisors: stopped: parked zt2:p1: herdr agent get zt2:p1 failed (herdr: "
+        "server not reachable)"
+    )
+    assert tell.startswith(stop), tell
+    assert tell.endswith(gone), tell
+
+
+def tell_supervisors(s: Scratch) -> None:
+    """Only a live supervisor of the PR's repo gets one message naming the merge commit, PR,
+    title and changed rule files, by the kit's herdr-say bounded by post-merge's bound; the --lane
+    lane, a parked one (its latest parked line names its pane) and another repo's lane (never
+    looked up) none; one canonical prod line per lane told, after the director's own; step 4 ok,
+    step 5 pending, exit 3. A rerun sends and logs nothing new (already told). A merge touching no
+    rule file says none, and is told again. A kit PR (o/kit, the install's own repo): every lane
+    runs kit roles, so another repo's live lane is told too, one prod line each (step 3 refreshes
+    the install first: its recipes no-ops by the real just, uv and pnpm argv_recorder.sh). A send
+    that fails (its supervisor blocked on a dialog, herdr-say's 75): named, no prod line for it,
+    the others still tried and told, the step stopped, exit 1; a rerun tells only that one. Issue
+    458: --lane gh1 with a live, a parked and two gone lanes (one never parked, one whose latest
+    parked line names an older pane): only the live one told, the rest listed, step 4 ok, step 5
+    pending (not archived). Archived: step 5 runs, the kit's herdr-close failing and Herdr's
+    workspace_not_found read as already closed. Any other herdr failure (Herdr unreachable on the
+    parked lane's lookup) stops step 4, named, the other lanes still handled. One
+    world, the old test's order: each phase resets only what it names."""
+    t = Tell(s)
+    told_live(t)
+    told_kit(t)
+    told_failed(t)
+    told_gone(t)
+
+
 COMPLETION = "DONE commit abc123: the completion"
 WORKER = {
     "OCTO_FEATHER_ROLE": "implementer",
@@ -582,6 +872,7 @@ if __name__ == "__main__":
         say_lookup_fails,
         say_stalled,
         post_merge_busy,
+        tell_supervisors,
         worker_route,
         parent_gone,
         director_worker_resume,

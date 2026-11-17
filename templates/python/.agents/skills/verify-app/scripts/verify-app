@@ -481,6 +481,28 @@ def drive_hello(s: State) -> bool:
             ("hello", "  "),
             lambda c: c.code == USAGE_EXIT and c.out == "" and c.err.startswith("error: "),
         ),
+        case(
+            s,
+            d,
+            "request-json",
+            ("hello", "--request", json.dumps({"name": name}), "--json"),
+            lambda c: c.code == 0 and c.err == "" and c.j == greeted,
+        ),
+        case(
+            s,
+            d,
+            "request-unknown",
+            ("hello", "--request", json.dumps({"name": name, "mood": "glad"}), "--json"),
+            lambda c: (
+                c.code == USAGE_EXIT
+                and c.err == ""
+                and c.j
+                == {
+                    "error": "invalid request",
+                    "issues": [{"field": "mood", "problem": "Extra inputs are not permitted"}],
+                }
+            ),
+        ),
     ]
     say(f"hello evidence: {d}")
     return all(results)
