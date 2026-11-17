@@ -77,7 +77,8 @@ def recurrence(s: Scratch) -> None:
     (c,) = comments(s, 7)
     assert "- gh3 2026-10-22T00:00:00Z code-review: gh3 restated it again" in c, c
     assert "running count 3" in c, c
-    assert "gh1 restated" not in c and "gh2 restated" not in c, f"quoted an old finding: {c}"
+    assert "gh1 restated" not in c, f"quoted an old finding: {c}"
+    assert "gh2 restated" not in c, f"quoted an old finding: {c}"
     assert "correction lane: commented https://github.com/o/r/issues/7#issuecomment-1001" in out
     assert "gh3 restated it again" in out, f"comment not printed: {out}"
     lane(top, "gh4")
@@ -108,8 +109,10 @@ def reflection_missed(s: Scratch) -> None:
     out = run(s, "reflect", "--director")
     assert issues(s) == [5], f"filed a new issue: {issues(s)} {out}"
     (c,) = comments(s, 5)
-    assert f"route reflection/questions.json owner-asked: {gap}" in c and "- director " in c, c
-    assert "running count 2" in c and "old gap" not in c, c
+    assert f"route reflection/questions.json owner-asked: {gap}" in c, c
+    assert "- director " in c, c
+    assert "running count 2" in c, c
+    assert "old gap" not in c, c
     assert "correction lane: commented https://github.com/o/r/issues/5#issuecomment-1001" in out
     assert gap in out, f"comment not printed: {out}"
     assert any("--repo 0xTomDaniel/octo-feather" in x for x in s.gh.log()), s.gh.log()
@@ -124,12 +127,14 @@ def reflection_missed(s: Scratch) -> None:
     new = issue(s, 6)
     title = "[correction-lane reflection-missed] change the question list: reflection-missed"
     assert new["title"] == title, new
-    assert gap in str(new["body"]) and "old gap" in str(new["body"]), new
+    assert gap in str(new["body"]), new
+    assert "old gap" in str(new["body"]), new
     assert len(comments(s, 5)) == 1, "commented on a closed issue"
     s.gh.store("issue/6.json", new | {"comments": "not a list"})
     out = run(s, "reflect", "--director", want=1)
     assert "Traceback" not in out, out
-    assert "#6" in out and "comments" in out and "rerun" in out, out
+    for want in ("#6", "comments", "rerun"):
+        assert want in out, out
 
 
 if __name__ == "__main__":
