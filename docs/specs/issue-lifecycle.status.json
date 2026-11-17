@@ -229,8 +229,8 @@
     "acceptance-reflection-missed-lane": {
       "status": "built",
       "pr": 962,
-      "record": "20261117T200337Z-b48229f3",
-      "commit": "6e0c6a26f2c3b9b9ca0c415e978b1d73cb61ade1",
+      "record": "20261117T203336Z-c1d05417",
+      "commit": "80687034b535c3f3dd948af2ea09084819d85566",
       "tests": [
         "tests/gate/kit/test_lane_correction.py"
       ]
