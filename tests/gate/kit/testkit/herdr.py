@@ -12,6 +12,8 @@ line in its `log`. `agents.json` maps each pane id to its agent, {name, pane_id,
 tab_id, agent_status}, and `ready_at` (an epoch time: `unknown` until then, a Pi still booting);
 a scenario may write it. `tab create --workspace W [--label L] [--env K=V]...` makes tab W:tN,
 pane W:pN (N past every earlier tab's), keeping L and the env (its agent's `label`, `env`);
+`workspace create --label L` makes workspace wN, N past every agent's workspace, its seed tab
+made as a tab create's (Herdr's envelope: workspace.workspace_id, tab.tab_id);
 `tab get T` prints T's label; `tab close T` drops T's agents; `workspace close W` drops W's agents,
 `workspace get W` finds W while an agent is in it, with its tab count, as Herdr 0.9.5 prints it
 (else workspace_not_found on stderr, exit 1, as does a close of it);
@@ -100,17 +102,28 @@ class World:
         return str(g["agent_status"])
 
     def tab_create(self, a: list[str]) -> int:
+        pane, tab = self.tab(opts(a, "--workspace")[0], a)
+        return say({"tab": {"tab_id": tab}, "root_pane": {"pane_id": pane}})
+
+    def tab(self, w: str, a: list[str]) -> tuple[str, str]:
+        """A new tab in workspace W, its pane bare: their ids."""
         last = self.dir / "last_tab"  # Herdr never reuses a closed tab's number
         n = max(len(self.agents), int(last.read_text()) if last.exists() else 0) + 1
         last.write_text(str(n))
-        w = opts(a, "--workspace")[0]
         pane, tab = f"{w}:p{n}", f"{w}:t{n}"
         self.agents[pane] = {"name": "", "pane_id": pane, "workspace_id": w, "tab_id": tab}
         self.agents[pane]["agent_status"] = "none"
         self.agents[pane]["label"] = next(iter(opts(a, "--label")), "")
         self.agents[pane]["env"] = dict(kv.split("=", 1) for kv in opts(a, "--env"))
         self.save()
-        return say({"tab": {"tab_id": tab}, "root_pane": {"pane_id": pane}})
+        return pane, tab
+
+    def workspace_create(self, a: list[str]) -> int:
+        """`workspace create --label L ...`: workspace wN, N past every agent's, with a seed tab."""
+        ws = [str(g["workspace_id"])[1:] for g in self.agents.values()]
+        w = f"w{max((int(x) for x in ws if x.isdigit()), default=0) + 1}"
+        _, tab = self.tab(w, a)
+        return say({"workspace": {"workspace_id": w}, "tab": {"tab_id": tab}})
 
     def tab_get(self, a: list[str]) -> int:
         g = next((g for g in self.agents.values() if g["tab_id"] == a[2]), None)
@@ -230,6 +243,7 @@ class World:
             ("tab", "get"): self.tab_get,
             ("workspace", "close"): self.workspace,
             ("workspace", "get"): self.workspace,
+            ("workspace", "create"): self.workspace_create,
             ("agent", "start"): self.agent_start,
             ("agent", "get"): self.agent_get,
             ("agent", "wait"): self.agent_wait,
