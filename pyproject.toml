@@ -73,7 +73,6 @@ extend-include = [
   "tests/fixtures/lane-report/gh",
   "tests/fixtures/lane-report/herdr",
   "tests/fixtures/reflection-director",
-  "tests/fixtures/reflection-input",
   "tests/fixtures/start-nohup",
   "tests/fixtures/tracker-gh/gh",
   "tests/spend-out",
