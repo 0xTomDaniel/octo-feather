@@ -1,0 +1,14 @@
+Seeded defect: intake lists closed correction-lane issues beside the open ones (spec comms #acceptance-correction-intake).
+diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
+index a9b3c986..956ba811 100755
+--- a/scripts/octo-feather-lane
++++ b/scripts/octo-feather-lane
+@@ -787,7 +787,7 @@ def cmd_intake(args: list[str]) -> int:
+     for repo in repos:
+         for i in correction_issues(repo):
+             m = mark.search(str(i.get("title")))
+-            if m and str(i.get("state")).upper() == "OPEN":
++            if m:
+                 subject = m.group(1)
+                 by.setdefault(subject.split(" ")[0], []).append((repo, subject, i))
+     found = [(log, d) for log, lines in [*logs.items(), (r.DIRECTOR, director)] for d in lines
