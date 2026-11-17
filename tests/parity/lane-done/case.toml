@@ -1,10 +1,12 @@
-# The parity lever's case for tests/lane-done.sh, rewritten as tests/gate/kit/test_lane_done.py (tests/parity/lever.py --help).
+# The parity lever's case for tests/lane-done.sh, its Linear lines on the testkit's stand-in over tapes (#927), rewritten as tests/gate/kit/test_lane_done.py (tests/parity/lever.py --help).
 old = "tests/lane-done.sh"
-old_at = "b20ee656"
-# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none, its recording gh is inline.
-needs = []
+old_at = "71a2022b"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): the Linear stand-in and its tapes; its recording gh is inline.
+# Not tests/gate/kit/testkit/linear/linear, the symlink to ../linear.py the old test puts on PATH: the lever restores it as a file holding the link's text; the copy's is old_at's.
+needs = ["tests/gate/kit/testkit/linear.py", "tests/fixtures/linear-lane-done"]
 new = "tests/gate/kit/test_lane_done.py"
 
-# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit script run by the kit venv's python: coverage.py measures it.
+# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit script run by the kit venv's python: coverage.py measures it; exec: a bash tracker script run as its program.
 [ran]
 "scripts/octo-feather-lane" = "coverage"
+".agents/skills/linear/scripts/issue-done" = "exec .agents/skills/linear/scripts/issue-done"

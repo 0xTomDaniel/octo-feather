@@ -39,7 +39,6 @@ line-length = 100
 # Python ruff's list misses.
 extend-include = [
   ".agents/skills/github-pr/scripts/gh",
-  ".agents/skills/linear/scripts/linear",
   ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
   "scripts/check-behavior-smoke",
   "scripts/check-decision-log",
@@ -72,7 +71,6 @@ extend-include = [
   "tests/fixtures/classify-stub/pi",
   "tests/fixtures/install-check/pi",
   "tests/fixtures/lane-report/gh",
-  "tests/fixtures/lane-report/herdr",
   "tests/fixtures/reflection-director",
   "tests/fixtures/reflection-input",
   "tests/fixtures/start-nohup",
@@ -132,28 +130,6 @@ extraPaths = ["tests/gate"]
   "Q000",
   "Q003",
   "S607",
-  "SIM115",
-  "T201",
-]
-".agents/skills/linear/scripts/linear" = [
-  "ANN001",
-  "ANN201",
-  "ANN202",
-  "B007",
-  "C901",
-  "E401",
-  "E501",
-  "E702",
-  "E731",
-  "I001",
-  "PLR0915",
-  "PLR2004",
-  "PTH105",
-  "PTH118",
-  "PTH120",
-  "PTH123",
-  "RET503",
-  "RUF005",
   "SIM115",
   "T201",
 ]
@@ -660,16 +636,6 @@ extraPaths = ["tests/gate"]
   "SIM115",
   "T201",
 ]
-"tests/fixtures/lane-report/herdr" = [
-  "E401",
-  "E501",
-  "E702",
-  "EXE001",
-  "I001",
-  "PTH123",
-  "SIM115",
-  "T201",
-]
 "tests/gate/conftest.py" = [
   "ANN001",
   "ANN002",
@@ -720,7 +686,6 @@ extraPaths = ["tests/gate"]
 # Baseline (octo-feather-lint): taken once, only shrinks.
 exclude = [
   ".agents/skills/github-pr/scripts/gh",
-  ".agents/skills/linear/scripts/linear",
   ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
   "scripts/check-behavior-smoke",
   "scripts/check-decision-log",
@@ -741,7 +706,6 @@ exclude = [
   "scripts/pi-role",
   "scripts/review-host",
   "tests/fixtures/lane-report/gh",
-  "tests/fixtures/lane-report/herdr",
   "tests/gate/conftest.py",
   "tests/gate/test_gate.py",
   "tests/spend-out",
