@@ -1,11 +1,11 @@
 Seeded defect: the director's correction lane files in the current directory's repo, not the kit's tracker (spec issue-lifecycle #acceptance-reflection-missed-lane).
 diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
-index a9b3c986..e60d6bf7 100755
+index 4a22a60e..d37e7037 100755
 --- a/scripts/octo-feather-lane
 +++ b/scripts/octo-feather-lane
-@@ -710,7 +710,7 @@ def file_corrections(lanes: Path) -> list[str]:
-         if not mine:
-             continue
+@@ -709,7 +709,7 @@ def file_corrections(lanes: Path) -> list[str]:
+     trackers: dict[tuple[str, str | None], list[object]] = {}   # (skill, repo): the dues landing there
+     for owner in dict.fromkeys(o for d in due for o in d.owners):
          if owner == r.DIRECTOR:
 -            skill, repo = GITHUB_ISSUES, r.KIT_REPO
 +            skill, repo = GITHUB_ISSUES, None
