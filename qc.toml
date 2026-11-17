@@ -23,7 +23,7 @@ lang = "python"
 scratch_criterion = "scratch#acceptance-drive"
 scratch_criterion_text = "Given a scratch repo, When the verify-octo-feather evidence drive appends a record, Then it reads back by commit."
 # The role-launch drive's expected web roles and the servers of the kit's web list (roles spec #acceptance-web-roles).
-web_roles = "director implementer corrector code-reviewer shaper"
+web_roles = "director implementer general-worker corrector code-reviewer shaper"
 web_servers = "parallel exa"
 # The qc-capture drive's scratch demos: one whose checks pass, one whose checks fail (the pass one also the qc-fallback
 # drive's declared demo).
@@ -155,6 +155,10 @@ covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.to
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 merge-ask-proof"
 covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.toml"]
 
+# Proven by its tagged test, tests/web-tools.sh (headless roles and herdr-spawn tab launches, real Pi, codemode).
+[demo."roles#acceptance-codemode-every-role"]
+covers = ["scripts/pi-role", ".agents/skills/herdr-comms/assets/herdr-spawn", "agents/director.md", "agents/supervisor.md", "agents/general-worker.md", "agents/implementer.md", "agents/corrector.md", "agents/code-reviewer.md", "agents/qc-judge.md", "extensions/web-servers.ts", "web-mcp.json", "pi-version"]
+
 [demo."roles#acceptance-shaper-launch"]
 covers = ["scripts/octo-feather-shape", "scripts/pi-role", "agents/shaper.md", "justfile"]
 
@@ -196,6 +200,10 @@ covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
 covers = ["scripts/octo-feather-lane", "scripts/octo-feather-reflect"]
 
+# Proven by its tagged test, tests/gate/kit/test_handoff_ended.py (Herdr stand-in; the scenario prints the lane hand-off log).
+[demo."comms#acceptance-worker-ended"]
+covers = ["scripts/octo-feather-handoff", "scripts/handoff_log.py", "agents/supervisor.md", "tests/gate/kit/handoff_ended.py"]
+
 [demo."comms#acceptance-report-owner-caught-headline"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run factory-report"
 covers = ["scripts/octo-feather-lane"]
@@ -215,3 +223,23 @@ covers = ["scripts/pi-role", "extensions/skills-loaded.ts", "scripts/check-skill
 [demo."skills#acceptance-skill-frontmatter"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run skill-loading"
 covers = ["scripts/check-skills", "extensions/skills-loaded.ts"]
+
+# Proven by its tagged tests (tests/gate/kit/test_herdr_messaging.py) and this demo: herdr-say run as a general worker
+# against the testkit's Herdr stand-in: live parent delivered, peer lane refused (77), parent gone: the director stand-in
+# receives exactly the fixed alert; timeout and stall raise none, an implementer cannot reach the director.
+[demo."roles#acceptance-task-worker-route"]
+command = "python3 tests/gate/kit/herdr_messaging.py worker_route && python3 tests/gate/kit/herdr_messaging.py parent_gone"
+covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-parent-gone", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/herdr.py"]
+
+[demo."comms#acceptance-parent-gone"]
+command = "python3 tests/gate/kit/herdr_messaging.py worker_route && python3 tests/gate/kit/herdr_messaging.py parent_gone"
+covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-parent-gone", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/herdr.py"]
+
+# Proven by its tagged test (tests/gate/kit/test_herdr_messaging.py) and this demo, the kit's commands against the testkit's
+# Herdr stand-in: the director parks its general worker stand-in (herdr-close --park, appended to the director log),
+# herdr-say --parked prints that line, the director's herdr-say resumes it (pane=, recorded role, session and parent, in
+# the director's workspace) and it receives "Resumed from park as pane=..."; its --parent result reaches the director;
+# a parked lane worker still resumes in its supervisor's workspace.
+[demo."comms#acceptance-director-worker-resume"]
+command = "python3 tests/gate/kit/herdr_messaging.py director_worker_resume"
+covers = ["scripts/octo-feather-handoff", ".agents/skills/herdr-comms/assets/herdr-say", ".agents/skills/herdr-comms/assets/herdr-close", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/herdr.py"]

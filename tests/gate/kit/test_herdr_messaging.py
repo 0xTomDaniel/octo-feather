@@ -3,7 +3,10 @@ docstring), each run as that file's command through `case` (tests/gate/kit/conft
 
 from collections.abc import Callable
 
+import pytest
 from herdr_messaging import (
+    director_worker_resume,
+    parent_gone,
     post_merge_busy,
     say_lookup_fails,
     say_resumes_parked,
@@ -12,6 +15,7 @@ from herdr_messaging import (
     spawn_one_bound,
     spawn_ready_late,
     tell_supervisors,
+    worker_route,
 )
 
 Case = Callable[..., None]
@@ -47,3 +51,22 @@ def test_post_merge_busy(case: Case) -> None:
 
 def test_post_merge_tell_supervisors(case: Case) -> None:
     case(tell_supervisors)
+
+
+@pytest.mark.criterion(
+    "roles#acceptance-task-worker-route", source="tests/gate/kit/herdr_messaging.py"
+)
+def test_worker_route(case: Case) -> None:
+    case(worker_route)
+
+
+@pytest.mark.criterion("comms#acceptance-parent-gone", source="tests/gate/kit/herdr_messaging.py")
+def test_parent_gone(case: Case) -> None:
+    case(parent_gone)
+
+
+@pytest.mark.criterion(
+    "comms#acceptance-director-worker-resume", source="tests/gate/kit/herdr_messaging.py"
+)
+def test_director_worker_resume(case: Case) -> None:
+    case(director_worker_resume)

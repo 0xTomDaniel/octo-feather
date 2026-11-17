@@ -13,9 +13,12 @@
 #   list-once  roles#acceptance-web-list-once: a server added to the web list, no role file
 #              changed, reaches the implementer and not the supervisor; an unreachable server in
 #              the list leaves the role starting with the other servers' tools
+#   tab        roles#acceptance-codemode-every-role in a tab: herdr-spawn --role (fake herdr) hands the tab the
+#              role's pi-role launch, and Pi started on that argv has the same tools as the roles case
 #   check      check-roles accepts `web` and still rejects an unknown tool
 # The stub server and the fake provider are hand-written test doubles (stdlib, offline). Never
 # skips: without pi at the pin it fails naming the install command. Run by `just check`.
+# criterion: roles#acceptance-codemode-every-role
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 pin="$(tr -d '[:space:]' < "$kit/pi-version")"
@@ -119,13 +122,48 @@ run() {
 
 ro="bash find grep ls read"; rw="bash edit find grep ls read write"; web="mcp__webstub__fetch mcp__webstub__search"
 sorted() { tr ' ' '\n' <<<"$*" | sort | tr '\n' ' ' | sed 's/ $//'; }
-for rt in "director:$ro:$web" "code-reviewer:$ro:$web" "implementer:$rw:$web" "corrector:$rw:$web" "shaper:$rw:$web" "supervisor:$rw:" "qc-judge:$ro:"; do
+for rt in "director:$ro:$web" "code-reviewer:$ro:$web" "implementer:$rw:$web" "general-worker:$rw:$web" "corrector:$rw:$web" "shaper:$rw:$web" "supervisor:$rw:" "qc-judge:$ro:"; do
   IFS=: read -r role tools mcp <<<"$rt"
   want="$(sorted codemode $tools $mcp)|$(sorted $tools $mcp)"
   got="$(run "$role")"
   [[ "$got" == "$want" ]] || fail "roles: $role has declared|codemode tools $got, want $want"
 done
 echo "case roles: ok (web roles: their tools plus the web list's, declared and in codemode; supervisor, qc judge: no MCP; user and project servers reach none)"
+
+# tab: roles#acceptance-codemode-every-role's tab launches (ADR 0016). The real herdr-spawn, copied so its kit root
+# (four dirs up) is the fixture kit, opens the role's tab through the fake herdr of tests/fixtures/herdr-spawn,
+# which records the agent start argv and the tab's env instead of starting Pi. The argv must be the role's
+# `pi-role --json` args plus herdr-spawn's --session-id and Herdr's Pi integration (--extension, the file the fake
+# herdr's `integration install pi` wrote into herdr-spawn's cache dir); real Pi then starts on exactly that argv in that env
+# (the model swapped for the fake provider's, -p for no TUI) and its codemode script reaches the role's tools.
+mkdir -p "$t/kit/.agents/spawn/herdr-comms/assets" "$t/hbin"
+cp "$kit/.agents/skills/herdr-comms/assets/herdr-spawn" "$kit/.agents/skills/herdr-comms/assets/herdr_ready.py" \
+  "$t/kit/.agents/spawn/herdr-comms/assets/"
+cp "$kit/tests/fixtures/herdr-spawn/"* "$t/hbin/"; chmod +x "$t/hbin/herdr"
+tab() {
+  local d="$t/tab-$1"; mkdir -p "$d"; : > "$t/log"
+  (cd "$t/repo" && env FAKE_HERDR_DIR="$d" PATH="$t/hbin:$PATH" HOME="$t/home" XDG_CACHE_HOME="$t/cache" XDG_STATE_HOME="$t/state" \
+    HERDR_PANE_ID=w9:p0 "$t/kit/.agents/spawn/herdr-comms/assets/herdr-spawn" --workspace w9 --name "$1" --role "$1" \
+    --cwd "$t/repo" >/dev/null 2>"$d/err") || fail "tab: herdr-spawn --role $1 failed: $(cat "$d/err")"
+  local want_args; want_args="$(cd "$t/repo" && XDG_CACHE_HOME="$t/cache" XDG_STATE_HOME="$t/state" \
+    "$t/kit/scripts/pi-role" --json "$t/kit/agents/$1.md" 2>/dev/null | python3 -c 'import json,sys; print("\n".join(json.load(sys.stdin)["args"]))')"
+  [[ "$(head -n -4 "$d/start-argv")" == "$want_args" && "$(tail -n 4 "$d/start-argv" | head -1)" == --session-id \
+    && "$(tail -n 2 "$d/start-argv" | tr '\n' ' ')" == "--extension $t/cache/octo-feather/herdr-pi/herdr-agent-state.ts " ]] \
+    || fail "tab: $1's tab argv is not its pi-role --json args plus --session-id and Herdr's Pi integration: $(cat "$d/start-argv")"
+  local argv envs out; mapfile -t argv < "$d/start-argv"; mapfile -t envs < "$d/tab-env"
+  out="$(cd "$t/repo" && env -i "${envs[@]}" TMPDIR="$t" XDG_CACHE_HOME="$t/cache" PI_CODING_AGENT_DIR="$t/agent" PI_OFFLINE=1 \
+    PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0 XDG_STATE_HOME="$t/state" pi "${argv[@]}" --model fake/fake -p go 2>"$d/pierr")" \
+    || fail "tab: $1: pi on the tab argv exited non-zero: $(cat "$d/pierr")"
+  [[ "$out" == *fake-done* ]] || fail "tab: $1: no answer after the codemode call: $out"
+  python3 "$t/seen.py" "$t/log"
+}
+for rt in "director:$ro:$web" "supervisor:$rw:" "general-worker:$rw:$web" "implementer:$rw:$web" "corrector:$rw:$web" "code-reviewer:$ro:$web"; do
+  IFS=: read -r role tools mcp <<<"$rt"
+  want="$(sorted codemode $tools $mcp)|$(sorted $tools $mcp)"
+  got="$(tab "$role")"
+  [[ "$got" == "$want" ]] || fail "tab: $role has declared|codemode tools $got, want $want"
+done
+echo "case tab: ok (herdr-spawn --role hands each tab its pi-role launch; Pi started on it has its role file's tools plus codemode, and codemode reaches exactly those)"
 
 # list-once: one more server and an unreachable one in the list; no role file changed.
 echo "{\"mcpServers\":{$(stub webstub),$(stub second),\"dead\":{\"url\":\"http://127.0.0.1:9/mcp\"}}}" > "$t/kit/web-mcp.json"
