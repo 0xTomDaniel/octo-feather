@@ -5,11 +5,16 @@ from collections.abc import Callable
 
 import pytest
 from lane_correction import (
+    counts,
     kit_lane,
+    lifecycle,
     malformed,
+    missed_at_once,
     one_target,
+    other_lane,
     recurrence,
     reflection_missed,
+    routed,
     two_targets,
 )
 
@@ -40,3 +45,23 @@ def test_lane_correction_two_targets(case: Case) -> None:
 
 def test_lane_correction_one_target(case: Case) -> None:
     case(one_target)
+
+
+def test_lane_correction_missed_at_once(case: Case) -> None:
+    case(missed_at_once)
+
+
+def test_lane_correction_routed(case: Case) -> None:
+    case(routed)
+
+
+def test_lane_correction_counts(case: Case) -> None:
+    case(counts)
+
+
+def test_lane_correction_lifecycle(case: Case) -> None:
+    case(lifecycle)
+
+
+def test_lane_correction_other_lane(case: Case) -> None:
+    case(other_lane)

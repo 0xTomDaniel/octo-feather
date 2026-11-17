@@ -45,11 +45,13 @@ FAKES = {
 # too), and gh.py (above) on a PATH of its own; each file's header says what it answers.
 # Unset in every scenario: a user's config, state and auth, a Herdr pane's session, and a check
 # run's marker (a scenario's commands start outside any check run: scripts/check-gate-free).
+# GH_REPO, gh's repo override, too: the fake gh's request names it (testkit/gh.py).
 CLEARED = (
     "XDG_CONFIG_HOME",
     "XDG_STATE_HOME",
     "XDG_CACHE_HOME",
     "GH_CONFIG_DIR",
+    "GH_REPO",
     "OPENROUTER_API_KEY",
     "OCTO_FEATHER_CHECK_RUN",
 )

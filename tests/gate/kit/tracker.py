@@ -284,7 +284,7 @@ def github(s: Scratch) -> None:
     assert [i12["title"], i12["body"]] == ["New one", "hi\n"], i12
     r = s.run([str(GI / "issue-comment"), "7"], cwd=t, stdin="a note\n")
     assert r.out == "https://github.com/o/r/issues/7#issuecomment-1001", r.out
-    assert s.gh.log()[-1] == "issue comment 7 --body-file -", s.gh.log()
+    assert s.gh.log()[-1] == 'issue comment 7 --body-file "a note\\n"', s.gh.log()
     i7 = json.loads((s.gh.dir / "issue" / "7.json").read_text())
     assert [c["body"] for c in i7["comments"]] == ["a note\n"], i7
     for n in ("7", "6"):  # 6 already closed
