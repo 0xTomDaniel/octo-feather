@@ -64,7 +64,19 @@ _Avoid_: Layer task, horizontal slice
 
 **Pilot**:
 A lane's first ticket, run alone through the whole path before the rest fan out, to test the brief, the verification and the ticket size.
-_Avoid_: Spike, trial run
+_Avoid_: Trial run
+
+**Spike**:
+Disposable code written to answer one technical question. What it leaves is what was learned, written into a spec or an ADR; its code is never promoted.
+_Avoid_: Proof of concept, experiment
+
+**Throwaway prototype**:
+Disposable code built to answer one design question by letting the owner see or use it: what an interface should look like, or whether a flow feels right. What it leaves is the decision, written into the spec; its code is never promoted.
+_Avoid_: Prototype (unqualified), sketch, wireframe
+
+**Evolutionary prototype**:
+A running interface the owner tunes by experience before accepting its spec, kept as the starting point of the build. An interface is anything a person judges by using it (a screen, a command line, a voice); a web screen is the common case. Spec Chat's name for it is the running prototype.
+_Avoid_: Prototype (unqualified), demo
 
 **Spec handoff**:
 The accepted spec, at an exact commit, passing from shaping (done with the owner, outside the factory) to the director. It is the only thing that crosses; no work item exists before it.

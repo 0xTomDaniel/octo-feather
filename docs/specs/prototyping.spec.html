@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spikes and prototypes: exploring before Accept - octo-feather spec</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="./.style/spec.css">
+<script defer src="./.viz/runtime.js"></script>
+</head>
+<body>
+<article class="spec" data-spec-version="1" data-spec-contract="shaped-sections-v1">
+
+<header data-anchor="header">
+<h1 data-anchor="title">Spikes and prototypes: exploring before Accept</h1>
+<nav data-anchor="breadcrumbs">docs / <a href="./index.spec.html">specs</a> / prototyping.spec.html</nav>
+<p class="lede" data-anchor="context">While a spec is being shaped, the owner may explore with running code: a spike, a throwaway prototype or an evolutionary prototype (GLOSSARY.md).
+A prototyper writes that code for the shaper, who never does.
+Disposable code never reaches the product; an evolutionary prototype reaches main only by promotion in a build lane, under the full gate, review and QC (ADR 0032).
+What happens after Accept is in <a href="./issue-lifecycle.spec.html">issue-lifecycle</a>; the roles are in <a href="./roles.spec.html">roles</a>.</p>
+</header>
+
+<section data-spec-section="user-stories" data-anchor="user-stories" id="user-stories">
+<h2>User stories</h2>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-live">As the owner, I point at a part of the running interface, write a note and watch it change, with no round, video or batch to wait on, so I stay in flow while I tune it.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-keep-tuning">As the owner, the interface I tuned is the starting point of the build, so what ships is what I tuned and nobody redraws it from a description or a picture.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-disposable">As the owner, I ask for a spike or a throwaway prototype to answer one question fast, with no process around it, and get the answer written down while its code never reaches the product.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-accept-frozen">As the owner, I accept an interface from a frozen copy of it, so what I accept cannot change under me.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-clean-main">As the owner, no code written before I accept reaches main's tree without the gate, review and QC, so exploring fast never lowers the product's standards.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-safe">As the owner, nothing I press in a prototype reaches real data or a real service.</p>
+<p data-user-story data-user-facing="false" data-anchor="story-shaper-clean">As the shaper, a prototyper writes the code and tells me only discoveries, blockers and decisions that need shaping, so my conversation stays on the spec.</p>
+<p data-user-story data-user-facing="false" data-anchor="story-build-context">As a supervisor building an accepted spec, I get the spec and its accepted prototype, and nothing of the conversation that shaped them.</p>
+</section>
+
+<section data-spec-section="acceptance" data-acceptance-scope="traceability" data-anchor="acceptance" id="acceptance">
+<h2>Acceptance criteria</h2>
+<p data-acceptance-criterion data-anchor="acceptance-live-change" data-story="story-live"><span data-acceptance-scenario>Given the owner on a desktop with a live session on a web screen's evolutionary prototype, When the owner points at a part of the running screen, then writes a note and sends it,</span> <span data-acceptance-observable>Then the running screen shows the change the note asked for, and the owner pressed nothing more to see it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-live-second-note" data-story="story-live"><span data-acceptance-scenario>Given the owner with a live session whose prototyper is partway through a change, When the owner sends a second note,</span> <span data-acceptance-observable>Then the running screen shows both changes, the second after the first.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-freeze" data-story="story-accept-frozen"><span data-acceptance-scenario>Given the owner with a live session whose notes are all settled, When the owner asks to review the screen for acceptance,</span> <span data-acceptance-observable>Then the review link opens the screen served from the frozen candidate, and the page names the candidate it shows.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-freeze-open-note" data-story="story-accept-frozen"><span data-acceptance-scenario>Given the owner with a live session holding a note that is not yet settled, When the owner asks to review the screen for acceptance,</span> <span data-acceptance-observable>Then the answer refuses to freeze and names the unsettled note.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-unfreeze" data-story="story-accept-frozen"><span data-acceptance-scenario>Given the owner reviewing a frozen candidate, When the owner sends a new note on its screen, then asks the shaper for the session's state,</span> <span data-acceptance-observable>Then the shaper answers that the session is live again and that candidate is withdrawn.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-spec-pr-artifacts" data-story="story-clean-main"><span data-acceptance-scenario>Given a director at kickoff with a spec accepted together with an evolutionary prototype, When the director opens the spec pull request,</span> <span data-acceptance-observable>Then the pull request's changed files are the spec's artifacts and its status file, and none of the prototype's code.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-merge-mode" data-story="story-clean-main"><span data-acceptance-scenario>Given a director at kickoff with a spec accepted together with an evolutionary prototype, in a target repository that does not allow merge commits, When the director runs the kickoff check,</span> <span data-acceptance-observable>Then the check refuses the kickoff and names the repository setting to change.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-promotion" data-story="story-keep-tuning"><span data-acceptance-scenario>Given a supervisor whose lane owns an accepted evolutionary prototype, When the supervisor promotes it in the lane's first ticket,</span> <span data-acceptance-observable>Then the lane's draft pull request shows the accepted prototype's whole change, applied on current main, as its first commit.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-promotion-conflict" data-story="story-keep-tuning"><span data-acceptance-scenario>Given a supervisor whose lane owns an accepted evolutionary prototype, with main changed since Accept in a file the prototype changed, When the supervisor promotes it,</span> <span data-acceptance-observable>Then the promotion stops, naming each conflicting file, and the lane branch is where it was before.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-qc-compare" data-story="story-keep-tuning"><span data-acceptance-scenario>Given a supervisor whose lane promoted and then hardened an accepted evolutionary prototype, When the supervisor runs QC on the lane's head,</span> <span data-acceptance-observable>Then QC's record compares each step of the screen's walkthrough on the built screen with the accepted prototype, and names each step that differs.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-disposable-findings" data-story="story-disposable"><span data-acceptance-scenario>Given the owner shaping a spec with a shaper, When the owner asks for a spike on a technical question and waits for it to finish,</span> <span data-acceptance-observable>Then the shaper shows the owner its findings: the question, what was seen, the limits and the conclusion.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-disposable-outside" data-story="story-disposable story-clean-main"><span data-acceptance-scenario>Given a maintainer of a target repository whose shaping session ran a spike to its end, When the maintainer lists the repository's branches and worktrees,</span> <span data-acceptance-observable>Then the list holds the shaping branch and nothing from the spike.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-disposable-no-promotion" data-story="story-clean-main"><span data-acceptance-scenario>Given a supervisor whose lane's spec was shaped with a throwaway prototype, When the supervisor asks the kit to promote that prototype's code,</span> <span data-acceptance-observable>Then the kit refuses, saying a spike and a throwaway prototype have no promotion.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-fixture-write" data-story="story-safe"><span data-acceptance-scenario>Given the owner with a live session on a prototype whose screen saves a value, When the owner saves a new value, then asks for the prototype to be restarted, then opens the screen,</span> <span data-acceptance-observable>Then the screen shows the fixture's own value, not the one the owner saved.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-shaper-discovery" data-story="story-shaper-clean"><span data-acceptance-scenario>Given a shaper parenting a prototyper in a live session, When the prototyper finds that a behavior the spec states cannot work as written,</span> <span data-acceptance-observable>Then the shaper receives one message naming the discovery and the decision it needs.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-shaper-quiet" data-story="story-shaper-clean"><span data-acceptance-scenario>Given a shaper parenting a prototyper in a live session, When the prototyper makes the edits the owner's notes ask for,</span> <span data-acceptance-observable>Then the shaper's conversation still ends at its last exchange with the owner, with no message about those edits.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-build-context" data-story="story-build-context"><span data-acceptance-scenario>Given a supervisor starting a lane from a spec accepted together with an evolutionary prototype, When the supervisor reads its kickoff,</span> <span data-acceptance-observable>Then the kickoff names the spec, its accepted commit and its prototype, and nothing from the shaping conversation.</span></p>
+</section>
+
+<section data-spec-section="modular-boundaries" data-anchor="modular-boundaries" id="modular-boundaries">
+<h2>Modular boundaries</h2>
+<p data-modular-boundary data-anchor="boundary-prototyper"><span data-boundary-responsibility>The prototyper owns the code of a session: a spike, a throwaway prototype or an evolutionary prototype, and running it for the owner.</span> <span data-boundary-seam>Caller-facing seam: the shaper's brief naming the session's kind and question, the owner's notes, and the messages it sends its parent.</span> <span data-boundary-dependency>Dependency direction: external-provider; it depends on the target's prototype command and on Spec Chat for the owner's notes.</span> <span data-boundary-scope>Observable scope: the running interface, its commits on the session's own branch, and its messages to the shaper.</span></p>
+<p data-modular-boundary data-anchor="boundary-shaper"><span data-boundary-responsibility>The shaper owns the spec, the session's kind and question, and what a session's findings change in the spec; it writes no code.</span> <span data-boundary-seam>Caller-facing seam: its conversation with the owner, and the brief it gives the prototyper.</span> <span data-boundary-dependency>Dependency direction: self-contained; it reads what the prototyper reports and the running interface, never the prototyper's edits as they happen.</span> <span data-boundary-scope>Observable scope: the spec, its ADRs and glossary terms on the shaping branch.</span></p>
+<p data-modular-boundary data-anchor="boundary-freeze"><span data-boundary-responsibility>Freezing owns the candidate the owner may accept: the shaping branch's commit that holds the spec, its mockup files and the prototype's code together, and the prototype served from it.</span> <span data-boundary-seam>Caller-facing seam: one kit command the shaper runs, which refuses while a note is unsettled.</span> <span data-boundary-dependency>Dependency direction: external-provider; it reads the prototyper's branch and Spec Chat's record of the session's notes.</span> <span data-boundary-scope>Observable scope: the candidate commit, the address the frozen prototype answers at, and the session's state, live or frozen.</span></p>
+<p data-modular-boundary data-anchor="boundary-spec-pr"><span data-boundary-responsibility>The spec pull request owns carrying an accepted spec to main without its prototype's code in the tree.</span> <span data-boundary-seam>Caller-facing seam: the director's kickoff, as issue-lifecycle states it.</span> <span data-boundary-dependency>Dependency direction: external-provider; it depends on the accepted commit and on the target repository allowing merge commits.</span> <span data-boundary-scope>Observable scope: the pull request's commits and changed files.</span></p>
+<p data-modular-boundary data-anchor="boundary-promotion"><span data-boundary-responsibility>Promotion owns bringing an accepted evolutionary prototype's whole change onto a lane branch, once, for one owning lane.</span> <span data-boundary-seam>Caller-facing seam: one kit command the supervisor runs in a ticket.</span> <span data-boundary-dependency>Dependency direction: self-contained; it reads main's history and writes the lane branch.</span> <span data-boundary-scope>Observable scope: the lane branch's first commit, or the conflicting files it names.</span></p>
+<p data-modular-boundary data-anchor="boundary-spec-chat"><span data-boundary-responsibility>Spec Chat owns pointing at the running interface, the owner's notes and their threads, the review page and Accept spec.</span> <span data-boundary-seam>Caller-facing seam: its lane command, its prototype address, its mockup files and its hand-offs.</span> <span data-boundary-dependency>Dependency direction: external-provider; the kit depends on it, and it names nothing of the kit.</span> <span data-boundary-scope>Observable scope: the review page and what the owner writes on it.</span></p>
+<p data-modular-boundary data-anchor="boundary-target"><span data-boundary-responsibility>The target repository owns its prototype command and its fixtures.</span> <span data-boundary-seam>Caller-facing seam: the one command its AGENTS.md names, which serves the interface on fixture data.</span> <span data-boundary-dependency>Dependency direction: external-provider; the kit runs it and depends on its fixtures reaching no real data or service.</span> <span data-boundary-scope>Observable scope: the interface it serves and the scratch state it keeps.</span></p>
+</section>
+
+<section data-anchor="kinds" id="kinds">
+<h2>Three kinds of exploration</h2>
+<p data-anchor="kinds-named">A session is one kind, named when it starts, and the kind fixes what happens to its code.</p>
+<div class="table-scroll" data-anchor="kinds-table-wrap">
+<table data-anchor="kinds-table"><caption>What each kind answers and what becomes of it</caption>
+<thead><tr><th>Kind</th><th>Answers</th><th>Judged by</th><th>Its code</th><th>What it leaves</th></tr></thead>
+<tbody>
+<tr data-anchor="kind-spike"><td>Spike</td><td>One technical question: can this work, does this design hold</td><td>Measurement or a test</td><td>Disposable, in a checkout outside the target's worktrees</td><td>Findings, written into a spec or an ADR</td></tr>
+<tr data-anchor="kind-throwaway"><td>Throwaway prototype</td><td>One design question: what an interface should look like, whether a flow feels right</td><td>The owner, by seeing or using it</td><td>Disposable, in a checkout outside the target's worktrees</td><td>The decision, written into the spec</td></tr>
+<tr data-anchor="kind-evolutionary"><td>Evolutionary prototype</td><td>The interface itself, tuned until it is right</td><td>The owner, by using it</td><td>Retained on the shaping branch, then promoted</td><td>The accepted interface, as code the build starts from</td></tr>
+</tbody></table>
+</div>
+<p data-anchor="kinds-disposable">A spike and a throwaway prototype have no promotion: nothing of theirs is copied into the product, and a build lane never reads their checkout.</p>
+<p data-anchor="kinds-retained">Retained means reviewed for promotion, never shipped as written: the owning lane hardens each part or rewrites it, and the gate, the review and QC judge the result.</p>
+<p data-anchor="kinds-real-logic">An evolutionary prototype may hold real interaction logic, such as how a control answers a press or keeps focus; everything behind the interface answers from fixtures.</p>
+<p data-anchor="kinds-nested">A technical question that comes up inside an evolutionary prototype's session is answered by a spike of its own, in its own checkout.</p>
+<p data-anchor="kinds-no-spec-first">None of the three needs a spec, an issue or a lane before it starts: the session is how the spec is found (ADR 0032).</p>
+</section>
+
+<section data-anchor="interfaces" id="interfaces">
+<h2>Any interface</h2>
+<p data-anchor="interfaces-rule">A prototype is of an interface: anything a person judges by using it, such as a screen, a command line or a voice.</p>
+<p data-anchor="interfaces-web">A web screen is the common case and the one this page states in full, because Spec Chat's review page shows web pages.</p>
+<p data-anchor="interfaces-other">For any other interface the kinds, the two states, freezing and promotion hold unchanged; the owner's notes come through the shaper's conversation until that interface has a review page.</p>
+</section>
+
+<section data-anchor="who" id="who">
+<h2>Who does what</h2>
+<p data-anchor="who-shaper">The shaper starts a session by spawning one prototyper and stays its parent for the session's life.</p>
+<p data-anchor="who-prototyper">One prototyper role runs all three kinds; what it may write and where differs by kind, and a spike or a throwaway prototype never gains a promotion.</p>
+<p data-anchor="who-notes">The owner's notes on the running interface reach the prototyper directly, through the pane the session registered with Spec Chat, never through a pane the page names.</p>
+<p data-anchor="who-messages">The prototyper tells the shaper discoveries, blockers and decisions that need shaping, as they happen, and nothing about its edits.</p>
+<p data-anchor="who-worktrees">The shaper and the prototyper each work in a checkout of their own, so neither commits over the other.</p>
+<p data-anchor="who-check">The prototyper checks its own change in a browser, with the browsing tool the kit already gives its workers (<a href="./skills.spec.html#skill-agent-browser">agent-browser</a>).</p>
+</section>
+
+<section data-anchor="states" id="states">
+<h2>Live and frozen</h2>
+<p data-anchor="states-two">An evolutionary prototype's session is in one of two states.</p>
+<div class="table-scroll" data-anchor="states-table-wrap">
+<table data-anchor="states-table"><caption>The two states of an evolutionary prototype's session</caption>
+<thead><tr><th>State</th><th>What the owner does</th><th>What the prototype runs from</th><th>Leaves it</th></tr></thead>
+<tbody>
+<tr data-anchor="state-live"><td>Live</td><td>Points, writes notes, watches each change</td><td>The prototyper's checkout, changing as it edits</td><td>The shaper freezes, once every note is settled</td></tr>
+<tr data-anchor="state-frozen"><td>Frozen</td><td>Reviews the spec and the interface, and may press Accept spec</td><td>A clean checkout of the candidate commit</td><td>A new note from the owner, which makes it live again</td></tr>
+</tbody></table>
+</div>
+<p data-anchor="states-live-rule">Live makes no commit per note, no hand-off batch, no video and no round.</p>
+<p data-anchor="states-settled">A note is settled when it is implemented, withdrawn, or deferred with the owner's agreement; an acknowledgement settles nothing.</p>
+<p data-anchor="states-candidate">Freezing makes the candidate: one commit on the shaping branch that joins the spec, its mockup files and the prototype's whole change.</p>
+<p data-anchor="states-withdrawn">A note that arrives while frozen withdraws that candidate; a later freeze makes a new one, and only the newest can be accepted.</p>
+</section>
+
+<section data-anchor="to-main" id="to-main">
+<h2>From Accept to main</h2>
+<p data-anchor="to-main-rule">Main's tree never holds code the gate has not passed; an accepted prototype's code stays in main's history until a lane promotes it.</p>
+<ol data-anchor="to-main-steps">
+<li data-anchor="to-main-accept">The owner accepts the spec at the candidate commit, which holds the spec, its mockup files and the prototype's code.</li>
+<li data-anchor="to-main-strip">The spec pull request is that commit, then one commit that removes exactly the prototype's change, then one commit that adds the status file.</li>
+<li data-anchor="to-main-merge">It merges with a merge commit, so the candidate commit stays in main's history and the accepted spec reads the same there.</li>
+<li data-anchor="to-main-promote">The owning lane's first ticket promotes the prototype: it undoes the removing commit on the lane branch, which applies the prototype's whole change to current main and names every conflict.</li>
+<li data-anchor="to-main-harden">The lane hardens or rewrites each part under the full gate and the review, and QC drives the built screen against the accepted prototype.</li>
+</ol>
+<p data-anchor="to-main-owner">One lane owns an accepted prototype's change; a lane that depends on it starts after the owning lane merges.</p>
+<p data-anchor="to-main-merge-mode">A target repository that takes specs with prototypes allows merge commits; the kickoff check refuses one that does not, before any spec pull request opens.</p>
+<p data-anchor="to-main-compare">QC's comparison is a check that hardening changed nothing the owner tuned; it is no promise to rebuild a screen from pictures.</p>
+</section>
+
+<section data-anchor="safety" id="safety">
+<h2>Safety</h2>
+<p data-anchor="safety-fixtures">Everything behind a prototype's interface answers from the target's fixtures, in scratch state that ends when the prototype stops.</p>
+<p data-anchor="safety-target">The target's prototype command is what keeps a prototype's writes from reaching real data or a real service; no proxy or page is relied on for it.</p>
+<p data-anchor="safety-private">A prototype's address is reached as a review page is reached (<a href="./remote.spec.html">remote</a>).</p>
+</section>
+
+<section data-anchor="pace" id="pace">
+<h2>Pace</h2>
+<p data-anchor="pace-aim">The aim is a change on screen within ten seconds of the owner's note on a plain web app.</p>
+<p data-anchor="pace-kit-share">The kit's own share, everything but the model's edit, aims at three seconds.</p>
+<p data-anchor="pace-shown">Neither figure fails a gate: the prototyper's model is chosen by its measured edit time, and the owner sees how long each change took.</p>
+</section>
+
+<section data-anchor="open" id="open">
+<h2>Open questions</h2>
+<p data-anchor="tbd-embedded-host" data-spec-tbd>How does a part that lives inside another product's window, such as a plugin, run as an evolutionary prototype? It waits on the measurements from a browser on another machine.
+  <button type="button" data-spec-choice="Inside the real host">Inside the real host</button>
+  <button type="button" data-spec-choice="As a harness page outside the host">As a harness page outside the host</button>
+</p>
+<p data-anchor="tbd-live-transport" data-spec-tbd>Which way does a live change reach the page the owner points at, when the owner's browser is on another machine? Spec Chat owns the mechanism; this page only needs one that works for a plain web app and for a plugin.
+  <button type="button" data-spec-choice="Spec Chat's proxy carries the app's own reload and its writes">Spec Chat's proxy carries the app's own reload and its writes</button>
+  <button type="button" data-spec-choice="The review page reloads its frame, the proxy stays read-only">The review page reloads its frame, the proxy stays read-only</button>
+  <button type="button" data-spec-choice="The app's own page loads Spec Chat's comments">The app's own page loads Spec Chat's comments</button>
+</p>
+<p data-anchor="tbd-other-interfaces" data-spec-tbd="later">TBD: a review page for an interface that is not a web screen.</p>
+<p data-anchor="tbd-prototyper-model" data-spec-tbd="later">TBD: the prototyper's model, chosen once edit times are measured on a real target.</p>
+</section>
+
+</article>
+</body>
+</html>
