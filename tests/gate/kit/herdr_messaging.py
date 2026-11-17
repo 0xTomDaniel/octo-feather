@@ -117,22 +117,28 @@ def spawn_fails_closed(s: Scratch) -> None:
 
 
 def spawn_one_bound(s: Scratch) -> None:
-    """A Pi that reports 3 s after its start and then stays working: herdr-spawn exits 69 naming
-    it not idle, no tab left, within one HERDR_SPAWN_READY_TIMEOUT for the report and the idle wait
-    together, never a fresh bound for the idle wait after the report."""
+    """A Pi that reports at once and then stays working, through a Herdr whose `agent get` takes
+    at least 1 s: herdr-spawn exits 69 naming it not idle within the 60 s
+    HERDR_SPAWN_READY_TIMEOUT, no tab left, one bound for the report and the idle wait together,
+    never a fresh bound for the idle wait after the report (owner ruling #941: judged by what
+    herdr-spawn reports and passes Herdr, no stopwatch): the report poll spends at least that 1 s
+    of the bound, so the one `agent wait` gets --timeout at most 59000 ms, under any load; the
+    60 s only guards a hang."""
     d = herdr_world(s)
-    (d / "ready_after").write_text("3")
+    (d / "get-delay").write_text("1")
     (d / "start-status").write_text("working")
     s.identity()
     wt = s.root / "wt"
     wt.mkdir()
     spawn = [str(ASSETS / "herdr-spawn"), "--workspace", "w1", "--name", "implementer-gh1"]
     spawn += ["--role", "implementer", "--cwd", str(wt)]
-    t0 = time.monotonic()
-    ran = s.run(spawn, want=69, env=SUPERVISOR | {"HERDR_SPAWN_READY_TIMEOUT": "4"})
-    took = time.monotonic() - t0
-    assert "not idle within 4s" in ran.err, ran.err
-    assert took < 4 + 2, f"took {took:.1f}s, past the 4 s bound"
+    ran = s.run(spawn, want=69, env=SUPERVISOR | {"HERDR_SPAWN_READY_TIMEOUT": "60"})
+    assert "not idle within 60s" in ran.err, ran.err
+    log = lines(d / "log")
+    waits = [x.split() for x in log if x.startswith("agent wait ")]
+    assert len(waits) == 1, log
+    timeout_ms = int(waits[0][waits[0].index("--timeout") + 1])
+    assert timeout_ms <= 59000, f"the idle wait got a {timeout_ms} ms bound past the report"
     assert json.loads((d / "agents.json").read_text()) == {}, "tab left open"
 
 

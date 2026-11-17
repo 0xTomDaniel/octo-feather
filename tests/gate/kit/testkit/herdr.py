@@ -30,8 +30,10 @@ $HOME/.pi/agent/extensions); with no agent dir it fails, as Herdr does, and so w
 `agent get T` (by name or pane), as Herdr 0.9.5 prints it:
 found, the agent on stdout; else agent_not_found on stderr, exit 1; a file `get-down` makes it
 fail plain (`herdr: server not reachable`, exit 1), for the targets it lists, one a line, or for
-every target when it is empty. `agent wait T --until S... --timeout MS`
-returns once T reads a state S, else `timeout`. `agent prompt T TEXT --wait [--until S...]
+every target when it is empty; a file `get-delay` holding S makes it answer no sooner than S
+seconds after the call (a slow Herdr). `agent wait T --until S... --timeout MS`
+returns once T reads a state S, else `timeout`: at once when T has booted, as its state then never
+changes. `agent prompt T TEXT --wait [--until S...]
 [--timeout MS]`: blocked is `agent_blocked`, nothing sent; an agent not yet taking input gets
 TEXT typed, unsent (a line in `typed`), `agent_prompt_stalled`; any other gets it submitted (a line
 "PANE<TAB>TEXT" in `prompts`): an idle one turns working, then idle, so the wait matches; a
@@ -188,6 +190,9 @@ class World:
         if down.exists() and a[2] in (down.read_text().split() or [a[2]]):
             sys.stderr.write("herdr: server not reachable\n")
             return 1
+        delay = self.dir / "get-delay"
+        if delay.exists():
+            time.sleep(float(delay.read_text()))
         g = self.find(a[2])
         if g is None:
             return fail("agent_not_found")
@@ -204,7 +209,7 @@ class World:
         ms = opts(a, "--timeout")
         end = time.time() + int(ms[0]) / 1000 if ms else float("inf")
         while self.status(g) not in until:
-            if time.time() >= end:
+            if time.time() >= end or not self.booting(g):
                 return fail("timeout")
             time.sleep(0.05)
         return say({"agent_status": self.status(g)})
