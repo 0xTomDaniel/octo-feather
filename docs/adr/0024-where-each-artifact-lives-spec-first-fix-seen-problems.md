@@ -1,5 +1,7 @@
 # Each artifact has one home; behavior changes start in the spec; we fix problems we have seen
 
+Superseded by ADR 0032 (2026-11-13), for exploration code written before Accept.
+
 This ADR owns the first principles below that no other file owned. Each part another file owns is a pointer here, never a restatement: one owner per fact and a term's owner (docs/adr/0008 rung 1), who builds what and the eval question (docs/adr/0008, Who builds what and its eval paragraph), where a correction goes (docs/adr/0020, Where the fix goes), calibrated advisory judgment (judgment spec `#rule-calibration`, `#rule-advisory`), shell as thin glue and every kit mechanism built for any target repo (AGENTS.md Rules). Decided by Tom (owner), 2026-10-26 (issue #190), as worded here by the director's rulings of 2026-10-27 (ticket #192).
 
 **Where each artifact lives.**

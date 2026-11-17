@@ -1,6 +1,7 @@
 # The accepted spec is the handoff; it merges first, with a status per criterion and logged calls for later changes
 
 Superseded by ADR 0031 (2026-11-13), for who merges the spec PR.
+Superseded by ADR 0032 (2026-11-13), for the spec pull request of a spec accepted together with an evolutionary prototype.
 
 Brainstorming and shaping happen outside the factory. An owner chat in the target repo (`just shape`: the shaper role, `agents/shaper.md`, outside the factory; or Exo) shapes the spec with `spec-chat-shape`, commits the spec on branch `spec/<slug>`, pushes it, and registers it with the review service under `--slug <spec slug>`; no issue exists yet. Gate 1 is the owner pressing Accept spec: the acceptance is the hand-off the review page writes on that press, when it is the spool's newest hand-off and the version it accepted is the spec at the review-host row's `base` commit (the exact commit). An Accept of any other text of the spec, or one followed by a comment hand-off, is not one. Decided by Tom (owner), 2026-10-18 and 2026-10-20. The button is the only way to accept a spec: an acceptance said in chat is not one, and no agent records one on the owner's behalf. Decided by Tom (owner), 2026-10-19.
 
