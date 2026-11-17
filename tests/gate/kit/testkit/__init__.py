@@ -523,7 +523,8 @@ class Shown(NamedTuple):
 
 def shown(s: Scratch, who: str) -> Shown | None:
     """What WHO's reflector was shown in its last run (pi_agent.py's records, then removed), None
-    when none ran since; the run's captured sources gone once it ended."""
+    when none ran since or its run was killed before its records were whole (argv.WHO, written
+    last); the run's captured sources gone once it ended."""
     argv, brief, seen = (s.root / f"{n}.{who}" for n in ("argv", "prompt", "seen"))
     if not argv.exists():
         return None
