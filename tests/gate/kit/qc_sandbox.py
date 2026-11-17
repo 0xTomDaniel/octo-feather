@@ -7,7 +7,8 @@ node_modules (no pnpm install yet), it refuses before any judge, naming the inst
 network: a run with no Pi reaches no host, a Pi run only the hosts of Pi's models.json (here a
 local provider, through srt's proxy), an allowed host never an attempt; a refused host is one
 attempt-record entry; the judge's stdio stays blocking; every process the run starts is reaped
-within it; run by hand inside a qc sandbox (nested), its proof passes."""
+within it; run by hand inside a qc sandbox (nested), its proof passes; two runs of one session at
+once each pass setup, neither removing a file the other holds on the shared /tmp."""
 
 from __future__ import annotations
 
@@ -16,6 +17,7 @@ import http.server
 import json
 import os
 import re
+import secrets
 import select
 import shutil
 import signal
@@ -23,12 +25,9 @@ import subprocess
 import sys
 import threading
 import time
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 from testkit import ROOT, Scratch, kit, main, tool_homes
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 SRT = "qc sandbox: ok   judge runs in the srt sandbox (@anthropic-ai/sandbox-runtime "
 
@@ -280,6 +279,83 @@ def nested(s: Scratch) -> None:
     assert all(v == "0" for _, v in masked), masked
 
 
+def _held(pid: int) -> bool:
+    """PID or a process below it blocked opening a FIFO no reader holds yet."""
+    kids: dict[int, list[int]] = {}
+    for d in Path("/proc").iterdir():
+        if d.name.isdigit():
+            try:
+                stat = (d / "stat").read_text()
+            except OSError:
+                continue
+            kids.setdefault(int(stat.rsplit(")", 1)[1].split()[1]), []).append(int(d.name))
+    todo = [pid]
+    while todo:
+        p = todo.pop()
+        try:
+            if (Path("/proc") / str(p) / "wchan").read_text() == "wait_for_partner":
+                return True
+        except OSError:
+            pass
+        todo += kids.get(p, [])
+    return False
+
+
+def same_session(s: Scratch) -> None:
+    """Two runs of one session at once each pass setup, and neither removes a file of the shared
+    /tmp it did not make. The overlap is forced by event order: a FIFO at the session's old probe
+    name (/tmp/qc-tmp-probe-<session>) holds any run opening that name in open(2); the test
+    releases them only once each run is held there or has exited, so runs sharing the name are
+    both inside create-then-unlink together."""
+    r = repo(s)
+    session = f"qc-same-{secrets.token_hex(4)}"
+    fifo = Path("/tmp") / f"qc-tmp-probe-{session}"  # noqa: S108 (the shared /tmp under test)
+    os.mkfifo(fifo)
+    env = {
+        **s.env,
+        **tool_homes(),
+        "QC_SESSION": session,
+        "QC_HISTORY": "none",
+        "QC_PI": "none",
+        "QC_KEEP": os.path.realpath(s.root),  # bound back when under /tmp, as by hand
+    }
+    logs = [(s.root / f"out{i}").open("w+") for i in range(2)]
+    runs = [
+        subprocess.Popen(
+            [kit("octo-feather-qc-sandbox"), "--", "true"],
+            cwd=r,
+            env=env,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+        )
+        for log in logs
+    ]
+    try:
+        while not all(p.poll() is not None or _held(p.pid) for p in runs):
+            time.sleep(0.01)
+        held = [p.pid for p in runs if p.poll() is None]
+        sys.stdout.write(f"runs held at the session probe name: {held}\n")
+        if held:  # release: one reader lets every writer held on the FIFO through
+            os.close(os.open(fifo, os.O_RDONLY))
+        for p, log in zip(runs, logs, strict=True):
+            rc = p.wait()
+            log.seek(0)
+            said = log.read()
+            assert rc == 0, (rc, said)
+            assert "qc sandbox: FAIL" not in said, said
+            assert "Traceback" not in said, said
+            assert "ok   /tmp is private" in said, said
+        assert fifo.exists(), "a run removed a file of the shared /tmp it did not make"
+    finally:
+        for p in runs:
+            if p.poll() is None:
+                p.kill()
+            p.wait()
+        for log in logs:
+            log.close()
+        fifo.unlink(missing_ok=True)
+
+
 class _Ok(http.server.BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         self.send_response(200)
@@ -315,4 +391,14 @@ def network(s: Scratch) -> None:
 
 
 if __name__ == "__main__":
-    main(by_hand, srt_missing, network, nested, refused_host, blocking_stdio, reaped, live_survivor)
+    main(
+        by_hand,
+        srt_missing,
+        network,
+        nested,
+        refused_host,
+        blocking_stdio,
+        reaped,
+        live_survivor,
+        same_session,
+    )
