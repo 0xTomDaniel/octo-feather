@@ -169,16 +169,19 @@
     },
     "acceptance-reflect-files-correction": {
       "status": "built",
-      "pr": 545,
-      "record": "20261104T220546Z-ce40bf04",
-      "commit": "f3f94b3d92eab5d176d173261fd8cbbbe4642de6",
-      "tests": [
-        "tests/lane-correction.sh"
-      ]
+      "pr": 962,
+      "record": "20261117T200508Z-e696724c",
+      "commit": "6e0c6a26f2c3b9b9ca0c415e978b1d73cb61ade1",
+      "tests": []
     },
     "acceptance-reflect-recurrence-comments": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 962,
+      "record": "20261117T200337Z-17c1673e",
+      "commit": "6e0c6a26f2c3b9b9ca0c415e978b1d73cb61ade1",
+      "tests": [
+        "tests/gate/kit/test_lane_correction.py"
+      ]
     },
     "acceptance-report-reflection": {
       "status": "built",
