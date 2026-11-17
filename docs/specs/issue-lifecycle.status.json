@@ -52,10 +52,12 @@
     },
     "acceptance-qc-interim": {
       "status": "built",
-      "pr": 420,
-      "record": "20261030T042422Z-ccff2e1d",
-      "commit": "b8060c2a7e98a796fb77658c2d0e65b83cb95c46",
-      "tests": []
+      "pr": 880,
+      "record": "20261114T005603Z-9ac4d4f6",
+      "commit": "7175d8e59ee4198e07d0e1eee8dbac799b4a1074",
+      "tests": [
+        "tests/gate/kit/test_qc_one_execution.py"
+      ]
     },
     "acceptance-parallel": {
       "status": "planned",

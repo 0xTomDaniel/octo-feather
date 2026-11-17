@@ -1,21 +1,202 @@
 #!/usr/bin/env python3
-"""Encode a handoff record, or find a parked record in the caller's lane logs.
+"""Encode a handoff record, or find a parked record in the caller's director and lane logs.
 
 Kit-only stdlib json suffices; Herdr still owns transport. Encode prints one JSON
 line for redirection, with string fields via --field KEY VALUE and arbitrary JSON
 fields via --json-field KEY JSON. No handoff schema or policy is imposed.
+
+parked TARGET LANES prints the latest parked line naming TARGET by pane or name, among
+LANES/*.handoffs.jsonl and the director log beside LANES (director.handoffs.jsonl; comms spec
+#session-state, #roles-park), or exits 1 when none does. A lane line gains `lane` (its log's
+stem), and one without a name is the supervisor: the lane's name. A director line names its
+own general worker and gains no lane.
+
+resume-workspace reads a worker's parked line on stdin and prints the workspace it resumes in:
+its recorded parent's (`herdr agent get PARENT`) while that parent is live, else the caller's
+HERDR_WORKSPACE_ID (comms spec #roles-park); an empty line when neither.
+
+spawn [--ticket T] [--caller PANE] reads herdr-spawn's printed line on stdin (name= role= tab=
+pane= cwd= contract= provider_session_id=) and prints one spawn line for redirection into the
+lane hand-off log: {at, kind: spawn, name, role, pane, cwd, session, ticket: T, else the name's
+part after `<role>-` when it has one}. With --caller PANE (herdr-spawn passes its caller's
+HERDR_PANE_ID) it prints nothing and appends the line to PANE's own log in the caller's session
+state (octo-feather-state): the lane hand-off log beside the lane record whose `supervisor` is
+PANE, else the director log when director.toml's `pane` is PANE; a PANE owning neither records
+nothing (exit 0).
+
+attempt --ended-unreported LOG PANE --partial X --recovery Y [--commit C] prints the
+attempt line for a worker that ended without reporting (fields: comms spec
+#handoff-fields, attempt): role, ticket, worker, session and duration_s come from
+the latest spawn or worker-spawn line in LOG naming PANE. Refused, nothing printed:
+exit 65 when no such line, or one without a session; exit 75 while `herdr agent
+get PANE` still finds the agent (close it first, so no competing writer remains);
+exit 69 when that lookup fails another way.
 """
 
 import argparse
+import datetime as dt
 import json
+import os
+import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import cast
 
+import tomllib
 from handoff_log import encode, read_log
 
+SPAWN_KINDS = ("spawn", "worker-spawn")
+DIRECTOR_LOG = "director.handoffs.jsonl"
 
-def main() -> int:
+
+def now() -> str:
+    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def spawn_line(text: str, ticket: str | None) -> dict[str, object] | None:
+    """The spawn line for herdr-spawn's printed TEXT, or None when it names no pane or session."""
+    line = next((x for x in text.splitlines() if x.startswith("name=")), "")
+    got = dict(re.findall(r"(\w+)=(.*?)(?= \w+=|$)", line))
+    if not got.get("pane") or not got.get("provider_session_id"):
+        return None
+    record: dict[str, object] = {"at": now(), "kind": "spawn"}
+    record |= {k: got.get(k, "") for k in ("name", "role", "pane", "cwd")}
+    record["session"] = got["provider_session_id"]
+    role, name = str(record["role"]), str(record["name"])
+    if not ticket and role and name.startswith(f"{role}-"):
+        ticket = name.removeprefix(f"{role}-")  # <role>-<ticket>: roles spec #transport-spawn-name
+    if ticket:
+        record["ticket"] = ticket
+    return record
+
+
+def toml_key(path: Path, key: str) -> object:
+    """KEY of the TOML file at PATH, or None when it is absent or unreadable."""
+    try:
+        return tomllib.loads(path.read_text()).get(key)
+    except (OSError, tomllib.TOMLDecodeError):
+        return None
+
+
+def owned_log(pane: str) -> Path | None:
+    """The hand-off log PANE writes in the caller's session state, or None (module docstring)."""
+    state = subprocess.run(
+        [str(Path(__file__).resolve().parent / "octo-feather-state")],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.strip()
+    lanes = sorted((Path(state) / "lanes").glob("*.toml"))
+    lane = next((r for r in lanes if toml_key(r, "supervisor") == pane), None)
+    if lane is not None:
+        return lane.with_suffix(".handoffs.jsonl")
+    director = Path(state) / "director.toml"
+    return director.with_name(DIRECTOR_LOG) if toml_key(director, "pane") == pane else None
+
+
+def refuse(why: str, code: int) -> int:
+    """CODE, after naming WHY on stderr: nothing printed, nothing to record."""
+    sys.stderr.write(f"octo-feather-handoff: {why}; not recorded\n")
+    return code
+
+
+def record_spawn(args: argparse.Namespace) -> int:
+    """Print the spawn line for herdr-spawn's line on stdin, or refuse (module docstring)."""
+    line = spawn_line(sys.stdin.read(), args.ticket)
+    if line is None:
+        return refuse("stdin holds no herdr-spawn line with pane= and provider_session_id=", 65)
+    if not args.caller:
+        sys.stdout.write(encode(line) + "\n")
+        return 0
+    log = owned_log(args.caller)
+    if log is not None:
+        with log.open("a", encoding="utf-8") as f:
+            f.write(encode(line) + "\n")
+    return 0
+
+
+def agent_gone(pane: str) -> int:
+    """0 when Herdr finds no agent at PANE, else the refusal's exit code (message on stderr)."""
+    get = ["herdr", "agent", "get", pane]
+    try:
+        got = subprocess.run(get, capture_output=True, text=True, check=False)
+    except OSError as e:
+        return refuse(f"herdr agent get {pane} failed ({e})", 69)
+    if got.returncode == 0:
+        why = f"herdr agent get {pane} still finds the agent; close it first (herdr-close {pane})"
+        return refuse(f"{why} so no competing writer remains", 75)
+    if "agent_not_found" in got.stdout + got.stderr:
+        return 0
+    said = (got.stderr or got.stdout).strip().splitlines()
+    why = f"herdr agent get {pane} failed ({said[-1] if said else 'no output'})"
+    return refuse(f"{why}: cannot check the agent is gone", 69)
+
+
+def seconds_since(at: object) -> int | None:
+    """Whole seconds from the UTC instant AT (a log line's `at`) to now, or None when unreadable."""
+    try:
+        began = dt.datetime.fromisoformat(str(at).replace("Z", "+00:00"))
+        return int((dt.datetime.now(dt.timezone.utc) - began).total_seconds())
+    except (TypeError, ValueError):
+        return None
+
+
+def ended_unreported(args: argparse.Namespace) -> int:
+    """Print the ended-unreported attempt line for ARGS' pane, or refuse (module docstring)."""
+    log, pane = cast("Path", args.log), cast("str", args.pane)
+    records = read_log(log)[0] if log.is_file() else []
+    spawns = [r for r in records if r.get("kind") in SPAWN_KINDS and r.get("pane") == pane]
+    if not spawns:
+        return refuse(f"no spawn or worker-spawn line names pane {pane} in {log}", 65)
+    spawn = spawns[-1]
+    worker = str(spawn.get("name") or spawn.get("worker") or spawn.get("to") or "")
+    if not spawn.get("session"):
+        named = f"pane {pane} ({worker or 'unnamed'})"
+        return refuse(f"the latest spawn line for {named} in {log} records no session", 65)
+    refused = agent_gone(pane)
+    if refused:
+        return refused
+    # A worker's name is <role>-<ticket> (roles spec #transport-spawn-name).
+    role, _, ticket = worker.rpartition("-")
+    record: dict[str, object] = {"at": now(), "kind": "attempt", "role": spawn.get("role") or role}
+    record |= {"ticket": spawn.get("ticket") or ticket, "worker": worker, "pane": pane}
+    record["session"] = spawn["session"]
+    if args.commit:
+        record["commit"] = args.commit
+    record["result"] = "ended-unreported"
+    record["duration_s"] = seconds_since(spawn.get("at"))
+    record |= {"partial": args.partial, "recovery": args.recovery}
+    sys.stdout.write(encode(record) + "\n")
+    return 0
+
+
+def resume_workspace(_: argparse.Namespace) -> int:
+    """Print the workspace a parked worker resumes in, or refuse (module docstring)."""
+    try:
+        line = json.loads(sys.stdin.read())
+    except ValueError:
+        line = None
+    if not isinstance(line, dict):
+        return refuse("stdin holds no parked JSON line", 65)
+    parent, space = str(cast("dict[str, object]", line).get("parent") or ""), ""
+    if parent:
+        get = ["herdr", "agent", "get", parent]
+        try:
+            got = subprocess.run(get, capture_output=True, text=True, check=False)
+            out = cast("dict[str, dict[str, dict[str, object]]]", json.loads(got.stdout))
+            if got.returncode == 0:
+                space = str(out["result"]["agent"].get("workspace_id") or "")
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            space = ""  # no live parent found: the caller's workspace
+    sys.stdout.write((space or os.environ.get("HERDR_WORKSPACE_ID", "")) + "\n")
+    return 0
+
+
+LEVERS = {"spawn": record_spawn, "attempt": ended_unreported, "resume-workspace": resume_workspace}
+
+
+def main() -> int:  # noqa: C901 (encode and parked, then the levers' dispatch)
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     writer = commands.add_parser("encode")
@@ -24,7 +205,20 @@ def main() -> int:
     parked = commands.add_parser("parked")
     parked.add_argument("target")
     parked.add_argument("lanes", type=Path)
+    commands.add_parser("resume-workspace")
+    spawn = commands.add_parser("spawn")
+    spawn.add_argument("--ticket")
+    spawn.add_argument("--caller")
+    attempt = commands.add_parser("attempt")
+    attempt.add_argument("--ended-unreported", action="store_true", required=True)
+    attempt.add_argument("log", type=Path)
+    attempt.add_argument("pane")
+    attempt.add_argument("--partial", required=True)
+    attempt.add_argument("--recovery", required=True)
+    attempt.add_argument("--commit")
     args = parser.parse_args()
+    if args.command in LEVERS:
+        return LEVERS[args.command](args)
     if args.command == "encode":
         record: dict[str, object] = dict(args.field)
         for key, value in args.json_field:
@@ -32,16 +226,24 @@ def main() -> int:
         sys.stdout.write(encode(record) + "\n")
         return 0
     matches: list[dict[str, object]] = []
-    for path in sorted(args.lanes.glob("*.handoffs.jsonl")):
+    logs: list[tuple[Path, str | None]] = [
+        (path, path.name.removesuffix(".handoffs.jsonl"))
+        for path in sorted(args.lanes.glob("*.handoffs.jsonl"))
+    ]
+    director = cast("Path", args.lanes).parent / DIRECTOR_LOG
+    if director.is_file():
+        logs.append((director, None))
+    for path, lane in logs:
         records, bad = read_log(path)
         for number in bad:
             sys.stderr.write(f"herdr-say: {path}:{number}: skipping malformed handoff line\n")
         for record in records:
             if record.get("kind") != "parked":
                 continue
-            record["lane"] = path.name.removesuffix(".handoffs.jsonl")
-            if record.get("name") is None or record.get("name") is False:
-                record["name"] = record["lane"]
+            if lane is not None:
+                record["lane"] = lane
+                if record.get("name") is None or record.get("name") is False:
+                    record["name"] = lane
             if args.target in (record.get("pane"), record.get("name")):
                 matches.append(record)
     if not matches:

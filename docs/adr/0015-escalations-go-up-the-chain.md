@@ -10,7 +10,7 @@ Exception, the shaper: roles spec `#roles-shaper` (owner ruling 2026-11-04, #520
 ## How it is held
 
 - Structure: `herdr-spawn` records the spawning pane in the new tab as `OCTO_FEATHER_PARENT`, keeps it across park and resume, and `herdr-say --parent` sends there, so a brief need not name a pane. A headless run (`pi-role -p`, ADR 0016) has no message channel: its stdout returns to the agent that ran it.
-- Accident guard, not security: `herdr-say` refuses (exit 77) when a worker targets anything other than its parent, or the director pane in `director.toml` once its parent is unreachable, and when a supervisor targets anything other than its parent or an agent in its own lane workspace. Any process can still call `herdr` directly; the guard only stops an agent from following the wrong habit.
+- Accident guard, not security: `herdr-say` refuses (exit 77) when a worker targets anything other than its parent (a gone parent: [ADR 0030](0030-a-gone-parent-is-reported-by-the-tool-not-the-worker.md)), and when a supervisor targets anything other than its parent or an agent in its own lane workspace. Any process can still call `herdr` directly; the guard only stops an agent from following the wrong habit.
 - Prose: the role files say who each role escalates to and that the supervisor never addresses the owner. The duty to try first, and the content of an escalation (blocked, tried, options), are prose only.
 
 ## Considered options

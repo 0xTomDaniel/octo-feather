@@ -5,11 +5,17 @@ from collections.abc import Callable
 
 import pytest
 from herdr_messaging import (
+    director_worker_resume,
+    parent_gone,
     post_merge_busy,
     queued_completion,
     say_lookup_fails,
+    say_resumes_parked,
     say_stalled,
+    spawn_fails_closed,
+    spawn_one_bound,
     spawn_ready_late,
+    worker_route,
 )
 
 Case = Callable[..., None]
@@ -17,6 +23,18 @@ Case = Callable[..., None]
 
 def test_spawn_ready_late(case: Case) -> None:
     case(spawn_ready_late)
+
+
+def test_spawn_fails_closed(case: Case) -> None:
+    case(spawn_fails_closed)
+
+
+def test_spawn_one_bound(case: Case) -> None:
+    case(spawn_one_bound)
+
+
+def test_say_resumes_parked(case: Case) -> None:
+    case(say_resumes_parked)
 
 
 def test_say_lookup_fails(case: Case) -> None:
@@ -36,3 +54,22 @@ def test_post_merge_busy(case: Case) -> None:
 )
 def test_queued_completion(case: Case) -> None:
     case(queued_completion)
+
+
+@pytest.mark.criterion(
+    "roles#acceptance-task-worker-route", source="tests/gate/kit/herdr_messaging.py"
+)
+def test_worker_route(case: Case) -> None:
+    case(worker_route)
+
+
+@pytest.mark.criterion("comms#acceptance-parent-gone", source="tests/gate/kit/herdr_messaging.py")
+def test_parent_gone(case: Case) -> None:
+    case(parent_gone)
+
+
+@pytest.mark.criterion(
+    "comms#acceptance-director-worker-resume", source="tests/gate/kit/herdr_messaging.py"
+)
+def test_director_worker_resume(case: Case) -> None:
+    case(director_worker_resume)
