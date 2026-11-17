@@ -71,7 +71,6 @@ extend-include = [
   "tests/fixtures/classify-stub/pi",
   "tests/fixtures/install-check/pi",
   "tests/fixtures/lane-report/gh",
-  "tests/fixtures/lane-report/herdr",
   "tests/fixtures/reflection-director",
   "tests/fixtures/start-nohup",
   "tests/fixtures/tracker-gh/gh",
@@ -636,16 +635,6 @@ extraPaths = ["tests/gate"]
   "SIM115",
   "T201",
 ]
-"tests/fixtures/lane-report/herdr" = [
-  "E401",
-  "E501",
-  "E702",
-  "EXE001",
-  "I001",
-  "PTH123",
-  "SIM115",
-  "T201",
-]
 "tests/gate/conftest.py" = [
   "ANN001",
   "ANN002",
@@ -716,7 +705,6 @@ exclude = [
   "scripts/pi-role",
   "scripts/review-host",
   "tests/fixtures/lane-report/gh",
-  "tests/fixtures/lane-report/herdr",
   "tests/gate/conftest.py",
   "tests/gate/test_gate.py",
   "tests/spend-out",

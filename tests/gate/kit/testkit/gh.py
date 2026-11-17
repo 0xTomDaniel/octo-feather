@@ -36,6 +36,14 @@ create/create.go, close/close.go; pkg/cmd/pr/shared/commentable.go): `issue crea
 comment N --body-file F|-` appends to issue N's comments and prints the comment URL; `issue close
 N` closes it, on stderr `✓ Closed issue o/r#N (TITLE)`, or `! Issue o/r#N (TITLE) is already
 closed`. Anything else exits 2 naming it.
+
+Recorded answers instead of the store: a $FAKE_GH/tape.json (a list of recordings, as
+testkit/recordings/*.json hold real gh's, each {request, out, err, exit, source}) answers every
+call alone: the Nth call of a request (its argv, one line as the log writes it) replays the Nth
+recording of it, its stdout, stderr and exit as gh gave them; a request with no recording left
+exits 2 naming it. A request's `--input FILE` stands as FILE's text, in the log and a recording
+alike: the kit writes its body to a fresh temp file each call (octo-feather-lane post_comment),
+so the path never repeats, and the body sent is what the recording pins.
 """
 
 import json
@@ -144,6 +152,30 @@ def watch(a: list[str]) -> None:
         d |= {"status": "completed", "conclusion": d["completes"]}
         p.write_text(json.dumps(d))
     sys.exit(0 if d["conclusion"] == "success" else 1)
+
+
+def replay(a: list[str]) -> None:
+    """With a tape.json, the Nth call of this request replays its Nth recording, exiting."""
+    p = STORE / "tape.json"
+    if not p.is_file():
+        return
+    req = request(a)
+    said = [r for r in json.loads(p.read_text()) if r["request"] == req]
+    nth = log().count(req)  # this call already logged
+    if nth > len(said):
+        die(f"fake gh: no recording for call {nth} of {req!r} ({len(said)} in tape.json)", 2)
+    r = said[nth - 1]
+    sys.stdout.write(r["out"])
+    sys.stderr.write(r["err"])
+    sys.exit(r["exit"])
+
+
+def request(a: list[str]) -> str:
+    """The call as one log line: its argv, `--input FILE` as FILE's text."""
+    if "--input" in a[:-1]:
+        i = a.index("--input") + 1
+        a = [*a[:i], Path(a[i]).read_text(), *a[i + 1 :]]
+    return " ".join(a)
 
 
 def opt(a: list[str], flag: str) -> str | None:
@@ -273,11 +305,12 @@ def issue_write(a: list[str]) -> None:
 
 def main(a: list[str]) -> None:
     with (STORE / "log").open("a") as f:
-        f.write(" ".join(a) + "\n")
+        f.write(request(a) + "\n")
     if (STORE / "down").exists():
         die("error connecting to api.github.com")
     if not os.environ.get("GH_TOKEN"):
         die("To get started with GitHub CLI, please run:  gh auth login", 4)
+    replay(a)
     watch(a)
     issue_write(a)
     two = tuple(a[:2])

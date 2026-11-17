@@ -4,7 +4,7 @@ tests/lib/qa.sh's: a session's socket is a file under the config dir naming the 
 
 `server` writes it and sleeps; `session stop S` removes S's socket, `session delete S` its dir;
 with no socket a call fails `server_not_running`; `pane list` prints nothing; `agent list` prints
-no agent in Herdr's envelope (as tests/fixtures/lane-report/herdr); any other call prints
+no agent in Herdr's envelope; any other call prints
 {"session": S}.
 
 With FAKE_HERDR set, it stands for Herdr's agents instead (#666): a world in that dir, each call one
@@ -39,7 +39,10 @@ TEXT typed, unsent (a line in `typed`), `agent_prompt_stalled`; any other gets i
 "PANE<TAB>TEXT" in `prompts`): an idle one turns working, then idle, so the wait matches; a
 working one (busy, as #619 saw it) never matches, so the wait ends only at --timeout
 (`timeout`), else never.
-`pane read` shows a ready Pi prompt; `pane send-keys|send-text` log only. Anything else exits 2.
+`pane read` shows a ready Pi prompt; `pane send-keys|send-text` log only. `agent list` prints every
+agent in Herdr's envelope ({"id", "result": {"agents"}}), as `agent get` shows one. A file `down`
+fails every call as a herdr with no server does (`error: could not connect to herdr server`,
+exit 1). Anything else exits 2.
 """
 
 import json
@@ -50,6 +53,7 @@ import time
 from pathlib import Path
 
 IDLE_FALLBACK = 0.3  # s: Herdr 0.9.5 reads a booting Pi idle after about 5 s; scaled down
+HIDDEN = ("ready_at", "started_at", "reports", "label", "env")  # the world's own, never shown
 INTEGRATION = "// installed by herdr\n// HERDR_INTEGRATION_ID=pi\n"  # the file Herdr writes
 
 
@@ -192,8 +196,7 @@ class World:
         g = self.find(a[2])
         if g is None:
             return fail("agent_not_found")
-        hidden = ("ready_at", "started_at", "reports", "label", "env")
-        out = {k: v for k, v in g.items() if k not in hidden} | {"agent_status": self.status(g)}
+        out = {k: v for k, v in g.items() if k not in HIDDEN} | {"agent_status": self.status(g)}
         if g.get("reports") and not self.booting(g):
             out["agent_session"] = {"source": "herdr:pi", "agent": "pi", "kind": "id", "value": "s"}
         return say({"agent": out, "type": "agent_info"})
@@ -231,6 +234,16 @@ class World:
     def call(self, a: list[str]) -> int:
         """One call A, logged."""
         self.note("log", " ".join(a))
+        if (self.dir / "down").exists():
+            sys.stderr.write("error: could not connect to herdr server\n")
+            return 1
+        if a == ["agent", "list"]:
+            agents = [
+                {k: v for k, v in g.items() if k not in HIDDEN} | {"agent_status": self.status(g)}
+                for g in self.agents.values()
+            ]
+            sys.stdout.write(json.dumps({"id": "1", "result": {"agents": agents}}) + "\n")
+            return 0
         two = (a[0], a[1]) if len(a) > 1 else (" ".join(a), "")
         if two == ("pane", "read"):
             sys.stdout.write(" pi\n\n > \n")

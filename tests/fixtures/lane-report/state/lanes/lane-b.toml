@@ -1,8 +1,8 @@
 supervisor = "w6:p1"
-repository = "o/b"
+repository = "0xTomDaniel/octo-feather"
 issue = "gh3"
 goal = "Escalated to the director"
-pr = 5
+pr = 946
 started_at = "2026-10-21T10:00:00Z"
 last_handoff_at = "2026-10-21T11:15:00Z"
 waiting_on = "director"
