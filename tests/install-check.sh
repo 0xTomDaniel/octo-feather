@@ -4,8 +4,9 @@
 # One section of the `just install-check` test per gate item (#508): tests/install-check.sh and each tests/install-check-*.sh (mise, browser, box, models).
 #   Linear target (tests/fixtures/install-check/linear), no linear on PATH: exit 1, linear listed missing with the
 #     pinned v3.1.0 and the install path (release binary, or npx @schpet/linear-cli);
-#   the linear skill's fake linear on PATH (reports the pin): linear ok, exit 0; a linear reporting another
-#     release: listed with the wanted v3.1.0, exit 1;
+#   the testkit's Linear stand-in on PATH answering `linear --version` from a tape
+#     (tests/fixtures/linear-install-check): at the pin, linear ok, exit 0; another release (3.0.0): listed with the
+#     wanted v3.1.0, exit 1;
 #   GitHub target (no config): linear never checked;
 #   pi at the kit's pin (pi-version): its version line ok; pi reporting another release: WRONG VERSION naming
 #     the pin and the npm install command, exit 1;
@@ -23,9 +24,10 @@ grep -q '^tracker linear ' <<<"$out" || fail "Linear target: no tracker line: $o
 grep -qx "mise   version $mpin ok (mise-version)" <<<"$out" || fail "linear hidden from a dir it shares with mise: mise gone too: $out"
 grep -E '^linear MISSING \(want v3\.1\.0\)' <<<"$out" | grep -q 'releases/tag/v3\.1\.0' \
   && grep -q 'npx @schpet/linear-cli' <<<"$out" || fail "Linear target without linear: not listed missing with v3.1.0 and the install path: $out"
-check 0 "$t" "$kit/.agents/skills/linear/scripts" "$lin_target"
-grep -qE '^linear ok  .*/linear \(v3\.1\.0\)$' <<<"$out" || fail "Linear target, fake linear at the pin: not ok: $out"
-check 1 "$lin_target" "$t/old"
+tape() { mkdir -p "$t/fl/$1"; cp "$kit/tests/fixtures/linear-install-check/$1/tape.json" "$t/fl/$1/"; echo "$t/fl/$1"; }   # a FAKE_LINEAR dir
+FAKE_LINEAR="$(tape pin)" check 0 "$t" "$kit/tests/gate/kit/testkit/linear" "$lin_target"
+grep -qE '^linear ok  .*/linear \(v3\.1\.0\)$' <<<"$out" || fail "Linear target, linear at the pin: not ok: $out"
+FAKE_LINEAR="$(tape old)" check 1 "$lin_target" "$kit/tests/gate/kit/testkit/linear"
 grep -qE '^linear WRONG VERSION .* reports 3\.0\.0, want v3\.1\.0; .*npx @schpet/linear-cli' <<<"$out" || fail "Linear target, linear 3.0.0: $out"
 check 0 "$gh_target" ""
 grep -q '^tracker github-issues ' <<<"$out" && ! grep -qi linear <<<"$out" || fail "GitHub target checked linear: $out"

@@ -1,0 +1,8 @@
+{
+ "source": "Not recorded: LINEAR_API_KEY is not set in the factory (director decision on #921). Built from schpet/linear-cli v3.1.0's source (the linear skill's cli-version) and Linear's GraphQL schema, as tests/fixtures/linear-tracker/tape.json's source says, stdout and stderr not a terminal: `issue create` with no --team files in the configured default team (ENG), `Creating issue in ENG` on stderr (create.rs header), done() on stdout (outcome.rs: `✓ Created issue KEY: TITLE`, the url below); the description read from standard input (--description-file -).",
+ "calls": [
+  {"argv": ["issue", "create", "--title", "T", "--description-file", "-", "--no-input"], "stdin": "body\n", "answers": [
+   {"rc": 0, "err": "Creating issue in ENG\n", "out": "✓ Created issue ENG-1: T\nhttps://linear.app/acme/issue/ENG-1/t\n"}
+  ]}
+ ]
+}
