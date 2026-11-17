@@ -170,15 +170,15 @@
     "acceptance-reflect-files-correction": {
       "status": "built",
       "pr": 962,
-      "record": "20261117T203349Z-daaa5a05",
-      "commit": "80687034b535c3f3dd948af2ea09084819d85566",
+      "record": "20261117T210007Z-a79fc8bd",
+      "commit": "8ae54387da0943f931274c62a2e7d0ab129db3cd",
       "tests": []
     },
     "acceptance-reflect-recurrence-comments": {
       "status": "built",
       "pr": 962,
-      "record": "20261117T203336Z-d17effb6",
-      "commit": "80687034b535c3f3dd948af2ea09084819d85566",
+      "record": "20261117T205924Z-6cff09d2",
+      "commit": "8ae54387da0943f931274c62a2e7d0ab129db3cd",
       "tests": [
         "tests/gate/kit/test_lane_correction.py"
       ]
