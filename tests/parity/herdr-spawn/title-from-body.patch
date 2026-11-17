@@ -1,0 +1,14 @@
+Seeded defect: linear's issue-create files the ticket titled with its body file's name, not --title (the script's header).
+diff --git a/.agents/skills/linear/scripts/issue-create b/.agents/skills/linear/scripts/issue-create
+index 98d4b4af..c2e8bbf7 100755
+--- a/.agents/skills/linear/scripts/issue-create
++++ b/.agents/skills/linear/scripts/issue-create
+@@ -16,7 +16,7 @@ while (($#)); do
+   esac
+ done
+ [[ -n "$title" && -n "$body" ]] || usage
+-out="$(linear issue create --title "$title" --description-file "$body" "${args[@]}" --no-input 2>&1)" \
++out="$(linear issue create --title "$body" --description-file "$body" "${args[@]}" --no-input 2>&1)" \
+   || { echo "issue-create: $out" >&2; exit 1; }
+ [[ "$out" =~ https://linear\.app/[^/]+/issue/([A-Z][A-Z0-9]*-[0-9]+) ]] || { echo "issue-create: linear printed no issue url: $out" >&2; exit 1; }
+ new="${BASH_REMATCH[1]}"

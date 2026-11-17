@@ -127,11 +127,11 @@ covers = ["scripts/octo-feather-lane", "scripts/octo-feather-gate", "scripts/oct
 [demo."issue-lifecycle#acceptance-ci-status-only"]
 covers = ["scripts/octo-feather-lane", ".github/workflows/check.yml", "templates/python/.github/workflows/check.yml", "templates/typescript/.github/workflows/check.yml"]
 
-# Proven by tests/lane-review-resolution.sh's tagged cases (the rule: issue-lifecycle #lanes-one-head).
+# Proven by tests/gate/kit/test_lane_review_resolution.py's tagged item (the rule: issue-lifecycle #lanes-one-head).
 [demo."issue-lifecycle#acceptance-review-resolution"]
 covers = ["scripts/octo-feather-lane", "agents/code-reviewer.md", "agents/supervisor.md"]
 
-# Proven by tests/lane-ci-start.sh's tagged cases (the rule: issue-lifecycle #lanes-one-head); the role naming the
+# Proven by tests/gate/kit/test_lane_ci_start.py's tagged items (the rule: issue-lifecycle #lanes-one-head); the role naming the
 # command: owed eval docs/owed-evals/589.md.
 [demo."issue-lifecycle#acceptance-ci-alongside"]
 covers = ["scripts/octo-feather-lane", "agents/supervisor.md", ".skillfile/patches/skills/implement-spec/SKILL.md.patch", ".agents/skills/implement-spec/SKILL.md"]
@@ -207,6 +207,14 @@ covers = ["scripts/octo-feather-lane", "scripts/octo-feather-reflect"]
 # Proven by its tagged test, tests/gate/kit/test_handoff_ended.py (Herdr stand-in; the scenario prints the lane hand-off log).
 [demo."comms#acceptance-worker-ended"]
 covers = ["scripts/octo-feather-handoff", "scripts/handoff_log.py", "agents/supervisor.md", "tests/gate/kit/handoff_ended.py"]
+
+# Proven by its tagged test, tests/gate/kit/test_lane_correction.py (gh stand-in's store; the scenario prints each archive's output).
+[demo."comms#acceptance-reflect-recurrence-comments"]
+covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane", "tests/gate/kit/lane_correction.py"]
+
+# Proven by its tagged test, tests/gate/kit/test_lane_correction.py (gh stand-in's store; the scenario prints each reflect --director's output).
+[demo."issue-lifecycle#acceptance-reflection-missed-lane"]
+covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane", "tests/gate/kit/lane_correction.py"]
 
 [demo."comms#acceptance-report-owner-caught-headline"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run factory-report"

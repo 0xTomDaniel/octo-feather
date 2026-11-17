@@ -207,6 +207,14 @@
           ],
           "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}]}}\n",
           "exit": 0
+        },
+        {
+          "args": [
+            "tab",
+            "close"
+          ],
+          "stdout": "{\"id\":\"cli:tab:close\",\"result\":{\"type\":\"ok\"}}\n",
+          "exit": 0
         }
       ],
       "herdr-spawn": [
@@ -214,14 +222,14 @@
           "args": [
             "--help"
           ],
-          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\n",
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
           "exit": 0
         },
         {
           "args": [
             "-h"
           ],
-          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\n",
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
           "exit": 0
         },
         {
@@ -528,6 +536,14 @@
           ],
           "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}]}}\n",
           "exit": 0
+        },
+        {
+          "args": [
+            "tab",
+            "close"
+          ],
+          "stdout": "{\"id\":\"cli:tab:close\",\"result\":{\"type\":\"ok\"}}\n",
+          "exit": 0
         }
       ],
       "herdr-spawn": [
@@ -535,14 +551,94 @@
           "args": [
             "--help"
           ],
-          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\n",
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
           "exit": 0
         },
         {
           "args": [
             "-h"
           ],
-          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\n",
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--role",
+            "implementer",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--role",
+            "implementer",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo} contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo} contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--role",
+            "implementer",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo} contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--role",
+            "implementer",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo} contract=ok provider_session_id=s-w2:p10\n",
           "exit": 0
         }
       ],
@@ -555,6 +651,330 @@
       ]
     },
     "task": "Goal check-in, lane gh12 (parent issue #12, \"app hello --shout\"; spec docs/specs/hello.spec.html, this lane builds acceptance-shout and acceptance-shout-json), lane branch gh12 checked out in this directory (head {head}), cut from main, lane space w2. Tickets: #13 `--shout` upper-cases the greeting and adds `!`, #14 `--shout` with `--json`, #15 a `--shout --json` test for a second name; none is Blocked by another.\nSince your last check-in:\n- implementer-gh13 (pane w2:p3) reported DONE: ticket #13, the pilot; you integrated it on gh12 with `just integrate`.\n- code-reviewer-gh13 (pane w2:p5) reported DONE: verdict pass, no blocking finding.\n- implementer-gh14 (pane w2:p6, branch implementer-gh14) reported DONE: ticket #14; you integrated it on gh12, head {head}, consumed its result and closed its pane.\n- implementer-gh15 (pane w2:p4, branch implementer-gh15, cut from {head}) reported BLOCKED: \"`just check` is red on my branch before any change of mine: `ruff format --check .` says tests/test_cli.py would be reformatted, in #14's test, outside my ticket. Tried: reran `just check` on a clean checkout of {head}, same failure. Options: you assign the format fix, or let me fix it in my branch.\"\nAct on this check-in.\nSandbox run: GitHub is offline, and lane state outside this repo is masked (the lane record is absent); this run's lane hand-off log is notes/gh12.handoffs.jsonl in this directory, empty so far: append to it as to the lane's log."
+  },
+  {
+    "id": "spec-conflict-and-local-repair",
+    "role": "supervisor",
+    "fixture": "lane-shout-main",
+    "head": {
+      "fixture": "lane-shout-conflict",
+      "branch": "gh12",
+      "message": "feat(hello): --shout (#13, #14, #15 integrated)"
+    },
+    "stand_ins": {
+      "herdr-say": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr": [
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p6"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p6 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh14 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p3"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p3 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p3"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh13 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p3"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p3"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "pane",
+            "read",
+            "w2:p3"
+          ],
+          "stdout": "$ pi\n> idle\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p5"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p5 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p5"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh13"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target code-reviewer-gh13 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p5"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p5"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh13"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "pane",
+            "read",
+            "w2:p5"
+          ],
+          "stdout": "$ pi\n> idle\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "tab",
+            "close"
+          ],
+          "stdout": "{\"id\":\"cli:tab:close\",\"result\":{\"type\":\"ok\"}}\n",
+          "exit": 0
+        }
+      ],
+      "herdr-spawn": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "-h"
+          ],
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--role",
+            "implementer",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--role",
+            "implementer",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo} contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo} contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--role",
+            "implementer",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo} contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--role",
+            "implementer",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo} contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        }
+      ],
+      "herdr-close": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ]
+    },
+    "task": "Goal check-in, lane gh12 (parent issue #12, \"app hello --shout\"; spec docs/specs/hello.spec.html, this lane builds acceptance-shout and acceptance-shout-json), lane branch gh12 checked out in this directory (head {head}), cut from main, lane space w2. Tickets: #13 `--shout` upper-cases the greeting and adds `!`, #14 `--shout` with `--json`, #15 a `--shout --json` test for a second name; none is Blocked by another.\nSince your last check-in:\n- implementer-gh13 (pane w2:p3) reported DONE: ticket #13, the pilot; you integrated it on gh12 with `just integrate`.\n- code-reviewer-gh13 (pane w2:p5) reported DONE: verdict pass, no blocking finding.\n- implementer-gh14 (pane w2:p6, branch implementer-gh14) reported DONE: ticket #14; you integrated it on gh12 and closed its pane.\n- implementer-gh15 (pane w2:p4, branch implementer-gh15) reported DONE: ticket #15, test_shout_second_name; you integrated it on gh12, head {head}, and closed its pane. Its note: \"Parent issue #12's body, which the owner edited after the spec was accepted, now says: `--shout ends the greeting with three exclamation marks, HELLO, GRACE!!!`. The accepted spec, acceptance-shout-json, says the text is `HELLO, GRACE!`. I wrote the test to the issue; it fails against the code, which follows the spec. Which of the two the owner wants is not mine to pick.\"\n- `just check` on the lane head {head} is red: `ruff format --check .` says tests/test_cli.py would be reformatted (#14's test), and `pytest` fails test_shout_second_name (expected `HELLO, GRACE!!!`, got `HELLO, GRACE!`). Every other step passed.\nAct on this check-in.\nSandbox run: GitHub is offline, and lane state outside this repo is masked (the lane record is absent); this run's lane hand-off log is notes/gh12.handoffs.jsonl in this directory, empty so far: append to it as to the lane's log."
   },
   {
     "id": "owner-access-blocker-and-ready-work",
@@ -775,6 +1195,14 @@
           ],
           "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}]}}\n",
           "exit": 0
+        },
+        {
+          "args": [
+            "tab",
+            "close"
+          ],
+          "stdout": "{\"id\":\"cli:tab:close\",\"result\":{\"type\":\"ok\"}}\n",
+          "exit": 0
         }
       ],
       "herdr-spawn": [
@@ -782,14 +1210,14 @@
           "args": [
             "--help"
           ],
-          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\n",
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
           "exit": 0
         },
         {
           "args": [
             "-h"
           ],
-          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\n",
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
           "exit": 0
         },
         {
@@ -830,6 +1258,46 @@
             "implementer-gh15"
           ],
           "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo} contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--role",
+            "implementer",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--role",
+            "implementer",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
           "exit": 0
         }
       ],
@@ -1062,6 +1530,14 @@
           ],
           "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}]}}\n",
           "exit": 0
+        },
+        {
+          "args": [
+            "tab",
+            "close"
+          ],
+          "stdout": "{\"id\":\"cli:tab:close\",\"result\":{\"type\":\"ok\"}}\n",
+          "exit": 0
         }
       ],
       "herdr-spawn": [
@@ -1069,14 +1545,14 @@
           "args": [
             "--help"
           ],
-          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\n",
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
           "exit": 0
         },
         {
           "args": [
             "-h"
           ],
-          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\n",
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
           "exit": 0
         },
         {
@@ -1117,6 +1593,46 @@
             "implementer-gh15"
           ],
           "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo} contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--role",
+            "implementer",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--role",
+            "implementer",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
           "exit": 0
         }
       ],

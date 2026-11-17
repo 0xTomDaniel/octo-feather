@@ -15,6 +15,7 @@ missing fixture fails naming it.
 from __future__ import annotations
 
 import fcntl
+import hashlib
 import json
 import os
 import shutil
@@ -23,11 +24,12 @@ import sys
 import tempfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple, TypeVar, cast
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
 
+T = TypeVar("T")
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[3]
 FIXTURES = ROOT / "tests" / "fixtures"
@@ -43,11 +45,13 @@ FAKES = {
 # too), and gh.py (above) on a PATH of its own; each file's header says what it answers.
 # Unset in every scenario: a user's config, state and auth, a Herdr pane's session, and a check
 # run's marker (a scenario's commands start outside any check run: scripts/check-gate-free).
+# GH_REPO, gh's repo override, too: the fake gh's request names it (testkit/gh.py).
 CLEARED = (
     "XDG_CONFIG_HOME",
     "XDG_STATE_HOME",
     "XDG_CACHE_HOME",
     "GH_CONFIG_DIR",
+    "GH_REPO",
     "OPENROUTER_API_KEY",
     "OCTO_FEATHER_CHECK_RUN",
 )
@@ -296,3 +300,286 @@ def main(*scenarios: Callable[..., None]) -> None:
     finally:
         shutil.rmtree(t, ignore_errors=True)
     sys.stdout.write(f"{name}: ok\n")
+
+
+# The reflection's world and readers (the lane and director reflection tests): what
+# scripts/octo-feather-reflect shows its reflector and writes, read once into typed records (quality
+# #edge-validation-kit), each window checked as a reflector reads it.
+QUESTIONS = {
+    "lane": [
+        "caught-by-hand",
+        "slow-or-from-memory",
+        "undetected-rule",
+        "check-misfired",
+        "mechanical-step",
+        "writer-mistake",
+        "reflection-missed",
+    ],
+    "director": [
+        "owner-asked",
+        "answered-from-memory",
+        "rework-decision",
+        "unblocking-first",
+        "outside-owner-gates",
+        "fact-already-recorded",
+        "writer-route",
+        "director-mechanical-step",
+        "director-reflection-missed",
+    ],
+}
+DIRECTOR = {"type": "session", "id": "synthetic-director", "cwd": "/synthetic/director"}
+MODEL_DOWN = "echo 'Error: 503 model openai/gpt-6.1-sol unreachable' >&2; exit 1"
+WINDOW = 32768
+
+
+def reflector(s: Scratch) -> Path:
+    """S's reflection world, its state dir's octo-feather dir: Pi the testkit's agent in print
+    mode first on PATH (pi_agent.py: records and turn in S), each reflector replying no gap; the
+    director record naming pane w9:p99, its Pi session S/director.jsonl named natively there
+    (director)."""
+    for k in ("HERDR_PANE_ID", "PI_SESSION_FILE", "PI_SESSION_ID", "OCTO_FEATHER_REFLECT_ARGS"):
+        s.env.pop(k, None)
+    (s.bin / "pi").unlink()
+    (s.bin / "pi").symlink_to(HERE / "pi_agent.py")
+    top = s.root / "state" / "octo-feather"
+    top.mkdir(parents=True)
+    s.env |= {"XDG_STATE_HOME": str(s.root / "state"), "HERDR_SESSION": ""}
+    s.env |= {"STUB_REPLY_DIR": str(s.root), "FAKE_HERDR": str(s.root / "herdr")}
+    (s.root / "herdr").mkdir()
+    for who in QUESTIONS:
+        reply(s, who)
+    (top / "director.toml").write_text('pane = "w9:p99"\n')
+    (s.root / "director.jsonl").write_text(json.dumps(DIRECTOR) + "\n")
+    director(s)
+    return top
+
+
+def director(s: Scratch, native: str | None = "path", pane: str = "w9:p99") -> None:
+    """Herdr's world (testkit herdr): the director's Pi working at PANE, its session named
+    natively by NATIVE (`path` S/director.jsonl, `id` its header's id) or not (None)."""
+    g: dict[str, object] = {"name": "director", "pane_id": pane, "workspace_id": "w9"}
+    g |= {"tab_id": "w9:t1", "agent": "pi", "agent_status": "working", "terminal_id": "t"}
+    g["cwd"] = DIRECTOR["cwd"]
+    if native:
+        v = str(s.root / "director.jsonl") if native == "path" else DIRECTOR["id"]
+        g["agent_session"] = {"source": "herdr:pi", "agent": "pi", "kind": native, "value": v}
+    (s.root / "herdr" / "agents.json").write_text(json.dumps({pane: g}))
+
+
+def reply(s: Scratch, who: str, *findings: str) -> None:
+    """WHO's reflector replies its questions, then FINDINGS (`class: ... | summary: ...`)."""
+    body = "".join(f"Finding: {f}\n" for f in findings) or "Findings: none\n"
+    (s.root / f"reply.{who}").write_text(f"Questions: {', '.join(QUESTIONS[who])}\n{body}")
+
+
+def turn(s: Scratch, who: str, cmd: str = "") -> None:
+    """WHO's model turn the shell command CMD (pi_agent.py print mode); none when empty."""
+    (s.root / f"turn.{who}").unlink(missing_ok=True)
+    if cmd:
+        (s.root / f"turn.{who}").write_text(cmd)
+
+
+def tree(d: Path) -> list[tuple[str, str]]:
+    """Every entry under D: its path and a file's sha256 (a dir: d)."""
+    return sorted(
+        (str(p), hashlib.sha256(p.read_bytes()).hexdigest() if p.is_file() else "d")
+        for p in d.rglob("*")
+    )
+
+
+def get(d: Mapping[str, object], key: str, t: type[T], where: str) -> T:
+    """D's KEY, a T (a bool no int), else fail naming the field."""
+    v = d.get(key)
+    ok = isinstance(v, t) and (t is bool or not isinstance(v, bool))
+    assert ok, f"{where}: field {key} is no {t.__name__}: {v!r}"
+    return cast("T", v)
+
+
+def maybe(d: Mapping[str, object], key: str, where: str) -> str | None:
+    v = d.get(key)
+    assert v is None or isinstance(v, str), f"{where}: field {key} is no string: {v!r}"
+    return v
+
+
+def obj(v: object, where: str) -> Mapping[str, object]:
+    assert isinstance(v, dict), f"{where} is no JSON object: {v!r}"
+    return cast("Mapping[str, object]", v)
+
+
+def items(d: Mapping[str, object], key: str, where: str) -> list[object]:
+    return cast("list[object]", get(d, key, list, where))
+
+
+class Source(NamedTuple):
+    """A source or derived report the reflector was shown: DATA rebuilt from its windows, SPANS
+    each window's LF line span in the original; LINES the director log's window of lines."""
+
+    original: str
+    size: int
+    sha256: str
+    data: bytes = b""
+    spans: tuple[tuple[int, int], ...] = ()
+    windows: int = 0
+    lines: list[int] | None = None
+
+    def text(self) -> str:
+        all_ = self.data.decode("utf-8", "surrogateescape").splitlines(keepends=True)
+        return "".join(all_ if self.lines is None else [all_[i - 1] for i in self.lines])
+
+
+class Manifest(NamedTuple):
+    """A reflection's inputs: the manifest it was shown, the provenance its line keeps. SOURCES:
+    the available ones by identity."""
+
+    mode: str | None  # the director binding's
+    pane: str | None
+    session: str | None
+    lane: str | None  # the scope's
+    sources: dict[str, Source]
+    derived: dict[str, Source]
+
+    def text(self) -> str:
+        return "".join(x.text() for x in [*self.sources.values(), *self.derived.values()])
+
+
+def windows(p: Mapping[str, object], seen: Path, at: str) -> tuple[bytes, list[tuple[int, int]]]:
+    """The bytes and LF line spans of presentation P's windows, read in SEEN."""
+    sid = get(p, "source_id", str, at)
+    assert sid.split("-", 1)[1].isdigit(), f"{at}: field source_id {sid}"
+    assert get(p, "encoded_bytes", int, at) == WINDOW, f"{at}: field encoded_bytes"
+    pattern = Path(get(p, "pattern", str, at))
+    out, spans = bytearray(), list[tuple[int, int]]()
+    for i in range(get(p, "count", int, at)):
+        raw = (seen / pattern.parent.name / pattern.name.format(index=i)).read_bytes()
+        w, wat = obj(json.loads(raw), f"{at} window {i}"), f"{at} window {i}"
+        assert len(raw) <= WINDOW, f"{wat}: over {WINDOW} bytes"
+        assert raw.count(b"\n") == 1, f"{wat}: not one line"
+        assert raw.endswith(b"\n"), f"{wat}: no final LF"
+        text = get(w, "text", str, wat)
+        assert text, f"{wat}: field text empty"
+        assert get(w, "source_id", str, wat) == sid, f"{wat}: field source_id"
+        assert get(w, "index", int, wat) == i, f"{wat}: field index"
+        assert get(w, "start_byte", int, wat) == len(out), f"{wat}: field start_byte"
+        out += text.encode("utf-8", errors="surrogateescape")
+        assert get(w, "end_byte", int, wat) == len(out), f"{wat}: field end_byte"
+        spans.append((get(w, "start_line", int, wat), get(w, "end_line", int, wat)))
+    return bytes(out), spans
+
+
+def source(d: Mapping[str, object], at: str, seen: Path | None) -> Source:
+    """D, one manifest entry; read in SEEN, its windows rebuilt to its snapshot's bytes, sha256,
+    size and line count."""
+    derived = d.get("kind") == "DERIVED"
+    original = "" if derived else get(d, "original", str, at)
+    size = 0 if derived else get(d, "bytes", int, at)
+    sha, p = get(d, "sha256", str, at), obj(d.get("presentation"), f"{at} presentation")
+    lines = None
+    if "selected_lines" in d:
+        lines = [
+            get({"i": i}, "i", int, f"{at} selected_lines") for i in items(d, "selected_lines", at)
+        ]
+    elif "start_line" in d:
+        lines = list(range(get(d, "start_line", int, at), get(d, "end_line", int, at) + 1))
+    if seen is None:
+        return Source(original, size, sha, windows=get(p, "count", int, at), lines=lines)
+    data, spans = windows(p, seen, at)
+    assert data == (seen / Path(get(d, "snapshot", str, at)).name).read_bytes(), f"{at}: windows"
+    assert hashlib.sha256(data).hexdigest() == sha, f"{at}: field sha256"
+    if derived:
+        assert get(d, "captured_at", str, at), f"{at}: field captured_at"
+    else:
+        assert len(data) == size, f"{at}: field bytes"
+        assert len(data.splitlines()) == get(d, "lines", int, at), f"{at}: field lines"
+    return Source(original, size, sha, data, tuple(spans), get(p, "count", int, at), lines)
+
+
+def manifest(raw: object, seen: Path | None = None) -> Manifest:
+    """RAW, a manifest or a reflection line's inputs; read in SEEN (pi_agent.py's seen.WHO), every
+    window rebuilt (source)."""
+    d = obj(raw, "manifest")
+    none: Mapping[str, object] = {}
+    bind = obj(d["director"], "manifest director") if d.get("director") is not None else none
+    srcs: dict[str, Source] = {}
+    for x in items(d, "sources", "manifest"):
+        e = obj(x, "manifest source")
+        at = f"manifest source {get(e, 'identity', str, 'manifest source')}"
+        if get(e, "available", bool, at):
+            srcs[str(e["identity"])] = source(e, at, seen)
+    derived = {k: source(obj(v, f"derived {k}"), f"derived {k}", seen)
+               for k, v in obj(d.get("derived"), "manifest derived").items()}  # fmt: skip
+    return Manifest(
+        maybe(bind, "mode", "manifest director"),
+        maybe(bind, "pane", "manifest director"),
+        maybe(bind, "session", "manifest director"),
+        maybe(obj(d.get("scope"), "manifest scope"), "lane", "manifest scope"),
+        srcs,
+        derived,
+    )
+
+
+class Shown(NamedTuple):
+    argv: str
+    brief: str
+    inputs: Manifest
+
+
+def shown(s: Scratch, who: str) -> Shown | None:
+    """What WHO's reflector was shown in its last run (pi_agent.py's records, then removed), None
+    when none ran since; the run's captured sources gone once it ended."""
+    argv, brief, seen = (s.root / f"{n}.{who}" for n in ("argv", "prompt", "seen"))
+    if not argv.exists():
+        return None
+    got = Shown(argv.read_text().replace("\0", "\n"), brief.read_text(),
+                manifest(json.loads((seen / "manifest.json").read_text()), seen))  # fmt: skip
+    run = next(x[22:] for x in got.brief.splitlines() if x.startswith("Read source manifest: "))
+    assert not Path(run).parent.exists(), f"the run left its captured sources: {run}"
+    argv.unlink()
+    brief.unlink()
+    shutil.rmtree(seen)
+    return got
+
+
+class Finding(NamedTuple):
+    cls: str
+    question: str
+    route: str
+    summary: str
+    blocking: bool | None  # a lane reflection's: False; a director reflection's: none
+
+
+class Reflection(NamedTuple):
+    findings: int
+    questions: list[str]
+    inputs: Manifest
+
+
+FINDING_FIELDS = ("class", "question", "route", "summary")
+FINDING_KEYS = {"at", "kind", "source", *FINDING_FIELDS}
+
+
+def finding(raw: str) -> Finding:
+    """RAW, a log line, as a reflection's finding (spec comms #reflection-output)."""
+    d = obj(json.loads(raw), "finding line")
+    assert set(d) - {"blocking"} == FINDING_KEYS, f"finding line fields {sorted(d)}"
+    assert (d["kind"], d["source"]) == ("finding", "reflection"), raw
+    cls, q, route, summary = (get(d, k, str, "finding line") for k in FINDING_FIELDS)
+    blocking = get(d, "blocking", bool, "finding line") if "blocking" in d else None
+    return Finding(cls, q, route, summary, blocking)
+
+
+def reflection(raw: str) -> Reflection:
+    """RAW, a hand-off log line, as a reflection line, its inputs the run's manifest."""
+    d = obj(json.loads(raw), "reflection line")
+    assert d.get("kind") == "reflection", f"reflection line: field kind {d.get('kind')!r}"
+    qs = [
+        get({"q": q}, "q", str, "reflection line questions")
+        for q in items(d, "questions", "reflection line")
+    ]
+    return Reflection(get(d, "findings", int, "reflection line"), qs, manifest(d.get("inputs")))
+
+
+def appended(log: Path, before: int) -> tuple[list[Finding], Reflection]:
+    """The lines one reflection appended to LOG after its first BEFORE lines: its findings, then
+    its reflection line."""
+    *fs, r = log.read_text().splitlines()[before:]
+    return [finding(x) for x in fs], reflection(r)

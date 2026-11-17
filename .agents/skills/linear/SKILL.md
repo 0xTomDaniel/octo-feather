@@ -41,7 +41,3 @@ and names the install path when missing: the release binary on `PATH` as
 Tracker writes are only these: a ticket filed, commented on, and moved to
 done. No other state change and no label. Writes need consent (the
 `github-pr` skill's Consent section).
-
-`scripts/linear` is the offline fake of the CLI for the kit's tests, never
-for lane work: put this skill's `scripts/` first on `PATH` and point
-`OCTO_FEATHER_LINEAR_STORE` at its JSON store.

@@ -63,8 +63,9 @@ spawn_from cwd-jira "$t/cwd" "$t/jira"
 
 # 1c. remote#acceptance-linear-key-panes: LINEAR_API_KEY set in the caller reaches the tab's env (the fake
 #     herdr's tab-env), no file the spawn writes (home, state, cache, worktree) holds it, and a ticket filed
-#     from that env through the linear skill's issue-create reaches the fake linear, which takes it only
-#     with the key. Unset in the caller: not set in the tab.
+#     from that env through the linear skill's issue-create reaches the testkit's Linear stand-in (tape
+#     tests/fixtures/linear-herdr-spawn), which answers it only with the key. Unset in the caller: not set
+#     in the tab.
 key="lin-test-$(od -An -N8 -tx8 /dev/urandom | tr -d ' ')"
 lk="$t/lk"; mkdir -p "$lk/home" "$lk/state" "$lk/lbin"; ident "$lk/state"
 spawn key LINEAR_API_KEY="$key" HOME="$lk/home" XDG_STATE_HOME="$lk/state"
@@ -73,13 +74,14 @@ grep -qxF "LINEAR_API_KEY=$key" "$t/key/tab-env" || fail "tab env lacks LINEAR_A
 hits="$(grep -rlF -- "$key" "$lk" "$t/cache" "$t/cwd" "$t/key/out" "$t/key/err" 2>/dev/null || true)"
 [[ -z "$hits" ]] || fail "files written by the spawn hold the Linear key: $hits"
 printf '#!/usr/bin/env bash\n[[ "${LINEAR_API_KEY:-}" == %q ]] || { echo "linear: no API key" >&2; exit 1; }\nexec %q "$@"\n' \
-  "$key" "$kit/.agents/skills/linear/scripts/linear" >"$t/key/linear"; chmod +x "$t/key/linear"
-echo '{"workspace": "acme", "default_team": "ENG", "issues": {}}' >"$t/key/store.json"
+  "$key" "$kit/tests/gate/kit/testkit/linear/linear" >"$t/key/linear"; chmod +x "$t/key/linear"
+mkdir "$t/key/fl"; cp "$kit/tests/fixtures/linear-herdr-spawn/tape.json" "$t/key/fl/"
 mapfile -t tabenv <"$t/key/tab-env"
 filed="$(echo body | env -i "${tabenv[@]}" PATH="$t/key:$(sed -n 's/^PATH=//p' "$t/key/tab-env")" \
-  OCTO_FEATHER_LINEAR_STORE="$t/key/store.json" "$kit/.agents/skills/linear/scripts/issue-create" --title T --body-file -)" \
+  FAKE_LINEAR="$t/key/fl" "$kit/.agents/skills/linear/scripts/issue-create" --title T --body-file -)" \
   || fail "issue-create from the tab env failed"
-[[ "$filed" == ENG-1 && "$(jq -r '.issues["ENG-1"].title' "$t/key/store.json")" == T ]] || fail "ticket did not reach the fake linear: $filed"
+[[ "$filed" == ENG-1 && "$(cat "$t/key/fl/log")" == '[["issue", "create", "--title", "T", "--description-file", "-", "--no-input"], "body\n"]' ]] \
+  || fail "ticket did not reach the Linear stand-in: $filed $(cat "$t/key/fl/log")"
 unset LINEAR_API_KEY; spawn nokey
 [[ "$rc" == 0 ]] || fail "spawn without LINEAR_API_KEY: exit $rc: $(cat "$t/nokey/err")"
 ! grep -q '^LINEAR_API_KEY=' "$t/nokey/tab-env" || fail "LINEAR_API_KEY set in a tab whose caller had none"
@@ -226,4 +228,4 @@ run "$kit/scripts/octo-feather-start" --issue 2 --cwd "$t/cwd"
 [[ "$rc" == 73 ]] || fail "resume: fresh start on existing gh2: exit $rc, want 73: $(cat "$c/err")"
 grep -qE '^(tab|workspace) create' "$c/argv" && fail "resume: fresh start on existing gh2: created a tab or workspace"
 
-echo "herdr-spawn: ok (pane and headless launch carry --approve; pi-role runs in --cwd (its tracker, not the caller's); LINEAR_API_KEY reaches the tab only from the caller's env, mise's shims before the system dirs on the tab's PATH in a mise.toml repo (none elsewhere or without mise), the caller's stub pi before ~/.local/bin's (its fallback, last), in no written file, files a ticket in the fake linear; Pi trust dialog fails closed, exit 69, no key, also on a failed read; did-not-clear closes on a failed read; live-space resume: parked supervisor resumes in a new tab of its live lane workspace, no exit 73; space gone opens a new lane workspace; resumed supervisor and worker told resumed with their new pane; fresh start on an existing workspace exits 73)"
+echo "herdr-spawn: ok (pane and headless launch carry --approve; pi-role runs in --cwd (its tracker, not the caller's); LINEAR_API_KEY reaches the tab only from the caller's env, mise's shims before the system dirs on the tab's PATH in a mise.toml repo (none elsewhere or without mise), the caller's stub pi before ~/.local/bin's (its fallback, last), in no written file, files a ticket in the Linear stand-in; Pi trust dialog fails closed, exit 69, no key, also on a failed read; did-not-clear closes on a failed read; live-space resume: parked supervisor resumes in a new tab of its live lane workspace, no exit 73; space gone opens a new lane workspace; resumed supervisor and worker told resumed with their new pane; fresh start on an existing workspace exits 73)"

@@ -1,5 +1,5 @@
 supervisor = "w8:p1"
-repository = "o/b"
+repository = "0xTomDaniel/spec-chat"
 issue = "gh6"
 goal = "Spec review awaits the owner"
 started_at = "2026-10-21T08:30:00Z"
