@@ -470,9 +470,15 @@
     "role": "supervisor",
     "fixture": "lane-shout-base",
     "head": {
-      "fixture": "lane-shout-integrated",
+      "fixture": "lane-shout-merged",
       "branch": "gh12",
-      "message": "qc: built acceptance-shout acceptance-shout-json"
+      "message": "Merge implementer-gh13 and implementer-gh14 into gh12 (#13, #14)",
+      "then": [
+        {
+          "fixture": "lane-shout-integrated",
+          "message": "qc: built acceptance-shout acceptance-shout-json"
+        }
+      ]
     },
     "origin": true,
     "stand_ins": {
@@ -506,7 +512,7 @@
             "pr",
             "view"
           ],
-          "stdout": "{\"body\": \"Closes #12\\n\\nLane gh12: app hello --shout (docs/specs/hello.spec.html).\\n\\n## Merge ask\\n\\nPR #12 (app hello --shout), the lane's one PR.\\nHead: {head}\\nChecks: CI green on {head}\\nJudged: {head:12} is the PR head\\nBuilt: hello#acceptance-shout hello#acceptance-shout-json\\nFailed: none\\nReview verdict: https://github.com/probe/app/pull/12#issuecomment-1001\\n\\n| criterion | qc verdict | judged | evidence |\\n|---|---|---|---|\\n| hello#acceptance-shout | pass | judged {head} | evidence/2026-11-13-gh12-qc.md |\\n| hello#acceptance-shout-json | pass | judged {head} | evidence/2026-11-13-gh12-qc.md |\\n\", \"baseRefName\": \"main\", \"headRefName\": \"gh12\", \"headRefOid\": \"{head}\", \"statusCheckRollup\": [{\"__typename\": \"CheckRun\", \"name\": \"check\", \"workflowName\": \"CI\", \"status\": \"COMPLETED\", \"conclusion\": \"SUCCESS\"}], \"comments\": [{\"url\": \"https://github.com/probe/app/pull/12#issuecomment-1001\", \"body\": \"<!-- octo-feather-review-verdict -->\\nHead: {head}\\nVerdict: clear\\nChecks: none\\n\\n### Findings\\n\\nNone blocking.\\n\", \"author\": {\"login\": \"probe\"}}], \"number\": 12, \"state\": \"OPEN\", \"isDraft\": true, \"title\": \"app hello --shout\", \"url\": \"https://github.com/probe/app/pull/12\"}\n",
+          "stdout": "{\"body\": \"Closes #12\\n\\nLane gh12: app hello --shout (docs/specs/hello.spec.html).\\n\\n## Merge ask\\n\\nPR #12 (app hello --shout), the lane's one PR.\\nHead: {head}\\nChecks: CI green on {head}\\nJudged: {head:12} is the PR head\\nBuilt: hello#acceptance-shout hello#acceptance-shout-json\\nFailed: none\\nReview verdict: https://github.com/probe/app/pull/12#issuecomment-1001\\n\\n| criterion | qc verdict | judged | evidence |\\n|---|---|---|---|\\n| hello#acceptance-shout | pass | judged {head} | qc report of {head:12} |\\n| hello#acceptance-shout-json | pass | judged {head} | qc report of {head:12} |\\n\", \"baseRefName\": \"main\", \"headRefName\": \"gh12\", \"headRefOid\": \"{head}\", \"statusCheckRollup\": [{\"__typename\": \"CheckRun\", \"name\": \"check\", \"workflowName\": \"CI\", \"status\": \"COMPLETED\", \"conclusion\": \"SUCCESS\"}], \"comments\": [{\"url\": \"https://github.com/probe/app/pull/12#issuecomment-1001\", \"body\": \"<!-- octo-feather-review-verdict -->\\nHead: {head}\\nVerdict: clear\\nChecks: none\\n\\n### Findings\\n\\nNone blocking.\\n\", \"author\": {\"login\": \"probe\"}}], \"number\": 12, \"state\": \"OPEN\", \"isDraft\": true, \"title\": \"app hello --shout\", \"url\": \"https://github.com/probe/app/pull/12\"}\n",
           "exit": 0,
           "after": [
             "gh",
@@ -572,7 +578,7 @@
         }
       ]
     },
-    "task": "Goal check-in, lane gh12 (parent issue #12, \"app hello --shout\"; spec docs/specs/hello.spec.html, this lane builds acceptance-shout and acceptance-shout-json), lane branch gh12 checked out in this directory (head {head}), draft PR #12 open for it. Tickets: #13 `--shout` upper-cases the greeting and adds `!` (plain and `--json`), #14 an end-to-end test for a second name; the lane's last tickets.\nSince your last check-in:\n- implementer-gh13 and implementer-gh14 reported DONE; you consumed both results, integrated them on gh12 with `just integrate` and closed both panes.\n- `just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json` on the integrated head passed both criteria; its status flip is {head} (evidence/2026-11-13-gh12-qc.md).\n- code-reviewer-gh12 reported DONE: verdict clear on {head}, no blocking finding; you posted it with `octo-feather-lane verdict 12 {head} report.md`, comment https://github.com/probe/app/pull/12#issuecomment-1001, and closed it.\n- CI on {head}: green.\nAct on this check-in: take the lane's next step.\nSandbox run: GitHub answers through gh for PR #12 only, and the lane record and log under octo-feather-state are absent."
+    "task": "Goal check-in, lane gh12 (parent issue #12, \"app hello --shout\"; spec docs/specs/hello.spec.html, this lane builds acceptance-shout and acceptance-shout-json), lane branch gh12 checked out in this directory (head {head}), draft PR #12 open for it. Tickets: #13 `--shout` upper-cases the greeting and adds `!` (plain and `--json`), #14 an end-to-end test for a second name; the lane's last tickets.\nSince your last check-in:\n- implementer-gh13 and implementer-gh14 reported DONE; you consumed both results, integrated them on gh12 with `just integrate` and closed both panes.\n- `just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json` on the integrated head passed both criteria; its status-only flip commit is {head}.\n- code-reviewer-gh12 reported DONE: verdict clear on {head}, no blocking finding; you posted it with `octo-feather-lane verdict 12 {head} report.md`, comment https://github.com/probe/app/pull/12#issuecomment-1001, and closed it.\n- CI on {head}: green.\nAct on this check-in: take the lane's next step.\nSandbox run: GitHub answers through gh for PR #12 only, and the lane record and log under octo-feather-state are absent."
   },
   {
     "id": "worker-repair-integrated",

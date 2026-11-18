@@ -168,7 +168,7 @@ def check_suite(d, evals, errs):
             if isinstance(c.get("id"), str):
                 errs.append(f"{at}: field id: no expectations in reference/expectations.json")
             continue
-        tree = c["head"].get("fixture") if isinstance(c.get("head"), dict) else c.get("fixture")   # the tree the agent sees
+        tree = seen_tree(cast("dict[str, object]", c))   # the tree the agent sees
         check_exp(f"{name}/reference/expectations.json case {cid}", exp, errs,
                   evals / "fixtures" / tree if isinstance(tree, str) and re.fullmatch(r"[A-Za-z0-9._-]+", tree) else None,
                   review="review" in c and "review" in extra)
@@ -179,7 +179,7 @@ def check_suite(d, evals, errs):
             if k and c.get(k) is not True:
                 errs.append(f"{name}/reference/expectations.json case {cid} fact #{n + 1}: field before: {f['before']} "
                             f"needs the case's {k}: true (nothing else can reach it)")
-            fx = c["head"].get("fixture") if isinstance(c.get("head"), dict) else c.get("fixture")
+            fx = seen_tree(cast("dict[str, object]", c))
             if isinstance(f, dict) and f.get("before") == "test_write" and isinstance(fx, str) and not declares_tests(evals, fx):
                 errs.append(f"{name}/reference/expectations.json case {cid} fact #{n + 1}: field before: test_write needs fixture "
                             f"{fx} to declare its tests (pyproject.toml [tool.pytest.ini_options] testpaths, and uv.lock); it declares none")
@@ -468,6 +468,16 @@ def check_setup(at, c, evals, errs):
         check_tree(cast("str", at), f, t, used, cast("Path", evals), cast("list[str]", errs))
 
 
+def seen_tree(c: dict[str, object]) -> object:
+    """The fixture the agent sees (schema.md, Case): head's last then entry's, else head's, else the case's."""
+    h = c.get("head")
+    if not isinstance(h, dict):
+        return c.get("fixture")
+    hd = cast("dict[str, object]", h); then = hd.get("then")
+    last = cast("list[object]", then)[-1] if isinstance(then, list) and then else None
+    return cast("dict[str, object]", last).get("fixture") if isinstance(last, dict) else hd.get("fixture")
+
+
 def check_tree(at: str, f: str, t: object, used: list[object], evals: Path, errs: list[str]) -> None:
     """A fixture tree committed on a new branch, a case's head or one of its branches (rule: schema.md, Case)."""
     if not isinstance(t, dict):
@@ -477,8 +487,20 @@ def check_tree(at: str, f: str, t: object, used: list[object], evals: Path, errs
         return isinstance(v, str) and bool(BRANCH.fullmatch(v)) and ".." not in v and not v.endswith(("/", ".lock"))
     for k in sorted({"fixture", "branch", "message"} - set(h)):
         errs.append(f"{at}: field {f}.{k}: missing")
-    for k in sorted(set(h) - {"fixture", "branch", "message"}):
+    for k in sorted(set(h) - {"fixture", "branch", "message"} - ({"then"} if f == "head" else set())):
         errs.append(f"{at}: field {f}.{k}: unknown field")
+    then = h.get("then", [])
+    if "then" in h and not (isinstance(then, list) and then):
+        errs.append(f"{at}: field head.then: must be a non-empty list of {{\"fixture\", \"message\"}}"); then = []
+    for i, n in enumerate(cast("list[object]", then)):
+        g = f"head.then[{i}]"
+        if not (isinstance(n, dict) and set(cast("dict[str, object]", n)) == {"fixture", "message"}):
+            errs.append(f"{at}: field {g}: must be an object {{\"fixture\", \"message\"}}"); continue
+        d = cast("dict[str, object]", n); nf, nm = d["fixture"], d["message"]
+        if not (isinstance(nf, str) and re.fullmatch(r"[A-Za-z0-9._-]+", nf) and (evals / "fixtures" / nf).is_dir()):
+            errs.append(f"{at}: field {g}.fixture: no fixture dir {evals / 'fixtures' / str(nf)}")
+        if not (isinstance(nm, str) and nm.strip()):
+            errs.append(f"{at}: field {g}.message: must be a non-empty string")
     fx = h.get("fixture")
     hist = isinstance(fx, dict)
     if hist:

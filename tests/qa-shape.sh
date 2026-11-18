@@ -40,6 +40,8 @@ bad 'c[0]["fake_gh"] = "yes"' "rt/cases.json case order: field fake_gh: must be 
 bad 'del c[4]["head"]["message"]' "rt/cases.json case setup: field head.message: missing" "$t/rt-good" rt
 bad 'c[4]["head"]["fixture"] = "nope"' "rt/cases.json case setup: field head.fixture: no fixture dir" "$t/rt-good" rt
 bad 'c[4]["head"]["branch"] = "work"' "rt/cases.json case setup: field head.branch: must be a new branch name" "$t/rt-good" rt
+bad 'c[4]["head"]["then"] = [{"fixture": "nope", "message": "m"}]' "rt/cases.json case setup: field head.then[0].fixture: no fixture dir" "$t/rt-good" rt
+bad 'c[4]["branches"][0]["then"] = []' "rt/cases.json case setup: field branches[0].then: unknown field" "$t/rt-good" rt
 bad 'c[4]["head"] = "fx2"' "rt/cases.json case setup: field head: must be an object" "$t/rt-good" rt
 bad 'c[4]["branches"][0]["branch"] = "hb"' "rt/cases.json case setup: field branches[0].branch: must be a new branch name" "$t/rt-good" rt
 bad 'c[4]["branches"] = []' "rt/cases.json case setup: field branches: must be a non-empty list" "$t/rt-good" rt
