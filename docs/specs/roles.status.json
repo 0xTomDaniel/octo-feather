@@ -72,8 +72,11 @@
       "pr": 271
     },
     "acceptance-delegated-pr": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 882,
+      "record": "20261118T030828Z-17640417",
+      "commit": "cff59b3d42020e7b95361ba32c28704c6adc82dd",
+      "tests": []
     },
     "acceptance-fresh-independent-worker": {
       "status": "planned",
@@ -117,11 +120,8 @@
       "pr": null
     },
     "acceptance-general-worker-no-implementation": {
-      "status": "built",
-      "pr": 882,
-      "record": "20261117T232728Z-093dc7cd",
-      "commit": "414ea2aa55836bd61037f7df7a56a9e6749c6d3c",
-      "tests": []
+      "status": "planned",
+      "pr": null
     },
     "acceptance-supervisor-delegates-execution": {
       "status": "planned",
