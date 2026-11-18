@@ -915,4 +915,9 @@ def qc(s: Scratch) -> None:
 if __name__ == "__main__":
     if sys.argv[1:2] != ["creds"]:
         offline()
+    elif (
+        sys.platform == "darwin"
+    ):  # creds runs no offline(): its own skip, as tests/qc-creds.sh had
+        say("qc-creds: skipped, not on macOS (just qc needs Linux; CI runs it)")
+        sys.exit(0)
     main(qc, copies, judge, uv_cache, mise, oauth, vendored, escapes, creds)

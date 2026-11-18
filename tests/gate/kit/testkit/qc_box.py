@@ -9,8 +9,8 @@ session, gh and git credentials, live and archived lanes, another repo, Pi's aut
 models.json), the judged test repo, the reports dir, a per-run token, and run, report, jr, copycase
 and piok.
 
-Stand-ins, only for systems the kit does not own: Pi, tests/fixtures/qc-judge/pi with FAKE_QC set
-(its header: the judge's turn per mode); Herdr, the testkit's herdr (FAKES), in a dir of its own
+Stand-ins, only for systems the kit does not own: Pi, the testkit's pi_agent.py with FAKE_QC set
+(its docstring: the judge's turn per mode); Herdr, the testkit's herdr (FAKES), in a dir of its own
 after the Pi's, as the pane case's real-Herdr mode (QC_TEST_HERDR=real, `just qc-real-herdr`)
 takes it off PATH. Real: the qc sandbox, user namespaces, srt, mise, just (the kit's mise.lock
 pin), git, gh (offline, so every call fails, as on the old box).
@@ -34,13 +34,14 @@ from pathlib import Path
 from typing import TYPE_CHECKING, NoReturn, Self, cast
 
 from testkit import FIXTURES, HERE, ROOT, Scratch, kit
+from testkit.install_check import field
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
     from types import TracebackType
 
 STATUS = "docs/specs/demo.status.json"
-PI = FIXTURES / "qc-judge" / "pi"
+PI = HERE / "pi_agent.py"
 
 
 def fail(msg: str) -> NoReturn:
@@ -97,10 +98,9 @@ def mise_dir(d: str) -> str:
     """mise's D dir as mise reports it for the caller's HOME (`mise doctor --json`)."""
     cmd = ["mise", "doctor", "--json"]
     p = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    dirs = cast("dict[str, object]", json.loads(p.stdout)).get("dirs")
-    v = cast("dict[str, object]", dirs).get(d) if isinstance(dirs, dict) else None
-    assert isinstance(v, str), f"mise doctor --json: no dirs.{d}: {p.stdout[:300]}"
-    return v
+    # The testkit's one typed JSON reader (field): kit test code is stdlib-only (AGENTS.md
+    # Rules), so no schema library; it reads only the named path and fails naming it.
+    return field(p.stdout, "mise doctor --json", "dirs", d)
 
 
 def at(v: object, *keys: str) -> object:
