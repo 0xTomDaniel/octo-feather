@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Integration test for the launch's side of spec skills#loading-refuse (skills#acceptance-launch-refuses-unloaded,
 # skills#acceptance-only-listed; #558): real Pi, at the kit's pin (pi-version), started through a copy of the kit's
-# scripts/pi-role against a fake OpenAI-compatible provider on 127.0.0.1 that logs each request. Cases:
+# scripts/pi-role against the testkit's model provider (tests/gate/kit/testkit/provider.py), which logs each request. Cases:
 #   ok        the implementer starts in a target declaring a good repo skill: the request offers every skill its
 #             role file lists (tdd, python, typescript among them) and not the declared one
 #   own copy  the target declares a skill the role lists from its own copy: the role starts, offered it once, that copy
@@ -10,41 +10,26 @@
 #   declared  the same for a skill the target's AGENTS.md declares on its Repo skills: line
 #   unresolved  a declared entry with no folder, a dangling link or a folder with no SKILL.md: the same refusal,
 #             naming the skill and why
-#   parent    a pane launch (no -p, OCTO_FEATHER_PARENT set) tells the parent through herdr-say --parent
+#   parent    a pane launch (no -p, OCTO_FEATHER_PARENT set) tells the parent through the kit's herdr-say --parent:
+#             Herdr (the testkit's stand-in, its FAKE_HERDR world, parent pane w9:p9 idle) gets exactly one prompt,
+#             to w9:p9, naming the role and the skill
 # No call leaves the test: every start runs under env -i (no Herdr or parent route but the parent case's own
-# OCTO_FEATHER_PARENT), with stub herdr-say and herdr first on PATH recording each call; the parent case asserts
-# exactly one herdr-say call, and every case that herdr never ran.
-# The fake provider, herdr-say and herdr are hand-written test doubles (stdlib, offline). Never skips: without pi at the
-# pin it fails naming the install command. Run by `just check`.
+# OCTO_FEATHER_PARENT), the copy's herdr-say and the testkit's herdr first on PATH, its world logging each call;
+# every case but parent reaches Herdr not once.
+# Stand-ins only for what the kit does not own: the testkit's provider and Herdr (stdlib, offline). Never skips:
+# without pi at the pin it fails naming the install command. Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 pin="$(tr -d '[:space:]' < "$kit/pi-version")"
 install="npm install -g --ignore-scripts @earendil-works/pi-coding-agent@$pin"
 command -v pi >/dev/null || { echo "skills-loaded test: pi not on PATH; install Pi $pin: $install" >&2; exit 1; }
+v="$(pi --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
+[[ "$v" == "$pin" ]] || { echo "skills-loaded test: pi reports ${v:-no version}, the kit pins $pin (pi-version); $install" >&2; exit 1; }
 t="$(mktemp -d)"; srv=""
 XDG_STATE_HOME="$t/state" "$kit/scripts/pi-role" --set-identity t t@t >/dev/null   # the commit identity a role launch needs (#665)
 trap '[[ -z "$srv" ]] || kill "$srv" 2>/dev/null || true; rm -rf "$t"' EXIT
 fail() { echo "skills-loaded test: $*" >&2; exit 1; }
 
-cat > "$t/fake.py" <<'EOF'
-import http.server, json, os, sys
-port_file, log = sys.argv[1], sys.argv[2]
-class H(http.server.BaseHTTPRequestHandler):
-    def log_message(self, *a): pass
-    def do_POST(self):
-        body = json.loads(self.rfile.read(int(self.headers.get("content-length", 0))))
-        with open(log, "a") as f: f.write(json.dumps(body) + "\n")
-        self.send_response(200); self.send_header("content-type", "text/event-stream"); self.end_headers()
-        base = {"id": "x", "object": "chat.completion.chunk", "created": 0, "model": "fake"}
-        for d, fin in [({"role": "assistant", "content": "fake-done"}, None), ({}, "stop")]:
-            c = {**base, "choices": [{"index": 0, "delta": d, "finish_reason": fin}]}
-            if fin: c["usage"] = {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
-            self.wfile.write(b"data: " + json.dumps(c).encode() + b"\n\n")
-        self.wfile.write(b"data: [DONE]\n\n")
-s = http.server.HTTPServer(("127.0.0.1", 0), H)
-open(port_file + ".tmp", "w").write(str(s.server_address[1])); os.replace(port_file + ".tmp", port_file)
-s.serve_forever()
-EOF
 # The skill names the first request's system prompt offers, sorted, space-separated.
 cat > "$t/offered.py" <<'EOF'
 import json, re, sys
@@ -54,7 +39,7 @@ print(" ".join(sorted(re.findall(r"<name>([^<]+)</name>", m))))
 EOF
 
 # The fixture kit: the real scripts, roles, extensions and web list; its skills a copy, so one can be broken.
-mkdir -p "$t/kit" "$t/agent" "$t/home" "$t/cache" "$t/bin"
+mkdir -p "$t/kit" "$t/agent" "$t/home" "$t/cache" "$t/bin" "$t/herdr"
 cp -r "$kit/scripts" "$kit/agents" "$kit/extensions" "$kit/web-mcp.json" "$t/kit/"
 mkdir -p "$t/kit/.agents"; cp -r "$kit/.agents/skills" "$t/kit/.agents/"
 # The target: a git repo whose AGENTS.md declares a kit skill and its own skill `local`.
@@ -64,11 +49,12 @@ printf '# target\n\nRepo skills: python, local\n' > "$tgt/AGENTS.md"
 good='---\nname: local\ndescription: "A local skill: fine when quoted."\n---\nBody.\n'
 bad='---\nname: %s\ndescription: A broken skill: plain value holding a colon.\n---\nBody.\n'
 printf -- "$good" > "$tgt/.agents/skills/local/SKILL.md"
-for b in herdr-say herdr; do
-  printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "%s/%s.calls"\n' "$t" "$b" > "$t/bin/$b"; chmod +x "$t/bin/$b"
-done
+# Herdr: the testkit's stand-in, its world holding the parent pane w9:p9, idle.
+ln -s "$kit/tests/gate/kit/testkit/herdr.py" "$t/bin/herdr"
+echo '{"w9:p9": {"name": "supervisor", "pane_id": "w9:p9", "workspace_id": "w9", "tab_id": "w9:t9", "agent_status": "idle", "ready_at": 0}}' \
+  > "$t/herdr/agents.json"
 
-python3 "$t/fake.py" "$t/port" "$t/log" & srv=$!
+python3 "$kit/tests/gate/kit/testkit/provider.py" --log "$t/log" > "$t/port" & srv=$!
 for _ in $(seq 50); do [[ -s "$t/port" ]] && break; sleep 0.1; done
 [[ -s "$t/port" ]] || fail "fake provider did not start"
 printf '{"providers":{"fake":{"baseUrl":"http://127.0.0.1:%s/v1","api":"openai-completions","apiKey":"x","models":[{"id":"fake"}]}}}\n' \
@@ -79,7 +65,7 @@ start() {
   local role=$1; shift
   : > "$t/log"
   set +e
-  out="$(cd "$tgt" && env -i PATH="$t/bin:$PATH" HOME="$t/home" TMPDIR="$t" XDG_CACHE_HOME="$t/cache" PI_CODING_AGENT_DIR="$t/agent" \
+  out="$(cd "$tgt" && env -i PATH="$t/bin:$t/kit/.agents/skills/herdr-comms/assets:$PATH" FAKE_HERDR="$t/herdr" HOME="$t/home" TMPDIR="$t" XDG_CACHE_HOME="$t/cache" PI_CODING_AGENT_DIR="$t/agent" \
     PI_OFFLINE=1 PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0 XDG_STATE_HOME="$t/state" ${PARENT:+OCTO_FEATHER_PARENT=$PARENT} \
     "$t/kit/scripts/pi-role" "$t/kit/agents/$role.md" --model fake/fake --no-session "$@" 2>"$t/err" </dev/null)"; rc=$?
   set -e
@@ -141,13 +127,13 @@ printf '# target\n\nRepo skills: python, local\n' > "$tgt/AGENTS.md"
 printf -- "$bad" local > "$tgt/.agents/skills/local/SKILL.md"
 echo "case unresolved: a declared entry with no folder, a dangling link or no SKILL.md refuses the launch naming it and why"
 
-[[ ! -e "$t/herdr-say.calls" && ! -e "$t/herdr.calls" ]] || fail "a start with no parent route called Herdr: $(cat "$t"/herdr*.calls)"
-# parent: a pane launch (RPC here: not -p, so pi-role keeps OCTO_FEATHER_PARENT) tells the parent, through the stub.
+[[ ! -e "$t/herdr/log" ]] || fail "a start with no parent route called Herdr: $(cat "$t/herdr/log")"
+# parent: a pane launch (RPC here: not -p, so pi-role keeps OCTO_FEATHER_PARENT) tells the parent, through the kit's
+# herdr-say: Herdr's world gets one prompt (a line "PANE<TAB>TEXT" in its prompts file).
 PARENT=w9:p9 start implementer --mode rpc; refused parent local
-for _ in $(seq 50); do [[ -s "$t/herdr-say.calls" ]] && break; sleep 0.1; done
+for _ in $(seq 50); do [[ -s "$t/herdr/prompts" ]] && break; sleep 0.1; done
 sleep 0.5  # a second send would land by now
-[[ "$(wc -l < "$t/herdr-say.calls" 2>/dev/null)" == 1 ]] && grep -qF -- "--parent implementer did not start" "$t/herdr-say.calls" \
-  && grep -qF "skill local" "$t/herdr-say.calls" || fail "parent: not exactly one herdr-say --parent call naming local: $(cat "$t/herdr-say.calls" 2>/dev/null)"
-[[ ! -e "$t/herdr.calls" ]] || fail "parent: herdr itself ran: $(cat "$t/herdr.calls")"
+[[ "$(wc -l < "$t/herdr/prompts" 2>/dev/null)" == 1 ]] && grep -qF $'w9:p9\timplementer did not start' "$t/herdr/prompts" \
+  && grep -qF "skill local" "$t/herdr/prompts" || fail "parent: not exactly one prompt to w9:p9 naming local: $(cat "$t/herdr/prompts" 2>/dev/null)"
 printf -- "$good" > "$tgt/.agents/skills/local/SKILL.md"
 echo "skills-loaded: ok (listed and declared skills Pi cannot load refuse the launch before any request, naming skill and reason; a pane launch tells its parent; good skills offered exactly as listed)"

@@ -1,0 +1,14 @@
+Seeded defect: a refused pane launch no longer tells its parent (skills#loading-refuse; herdr-say --parent).
+diff --git a/extensions/skills-loaded.ts b/extensions/skills-loaded.ts
+index f1c7b8d..b08f533 100644
+--- a/extensions/skills-loaded.ts
++++ b/extensions/skills-loaded.ts
+@@ -83,7 +83,7 @@ export default function (pi: Pi) {
+     const lines = problems.map((p) => p.loaded ? `octo-feather: skill ${p.skill} (${p.path}): ${p.reason}`
+       : `octo-feather: Pi did not load skill ${p.skill} (${p.path}): ${p.reason}`);
+     process.stderr.write(`${lines.join("\n")}\nocto-feather: the role does not start (spec skills#loading-refuse)\n`);
+-    if (process.env["OCTO_FEATHER_PARENT"]) {
++    if (process.env["OCTO_FEATHER_PARENT_PANE"]) {
+       const role = req.role ?? "agent";
+       const msg = oneLine(`${role} did not start in ${process.cwd()}: ${lines.join("; ")}`).slice(0, 1500);
+       try {
