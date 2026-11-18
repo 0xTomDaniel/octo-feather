@@ -1,0 +1,67 @@
+{
+  "implementer-rework-new-seam": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "gh",
+        "args": [
+          "issue",
+          "comment",
+          "1015"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "octo-feather-lane",
+        "args": [
+          "seam",
+          "1015"
+        ],
+        "exit": 0
+      }
+    ]
+  },
+  "supervisor-brief-new-seam": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "octo-feather-lane",
+        "args": [
+          "seam",
+          "1015"
+        ],
+        "exit": 0
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-spawn",
+        "args": [
+          "--role",
+          "implementer"
+        ]
+      }
+    ]
+  },
+  "reviewer-unlisted-seam": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "octo-feather-lane",
+        "args": [
+          "seam",
+          "1015"
+        ],
+        "exit": 1
+      },
+      {
+        "fact": "field_lines",
+        "field": "Verdict",
+        "includes": [
+          {
+            "text": "blocking"
+          }
+        ]
+      }
+    ]
+  }
+}
