@@ -31,7 +31,8 @@ from typing import Any, NoReturn, cast
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "pilot-pr", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "template-edge", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history", "run-slots", "queued-completion")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "pilot-pr", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "template-edge", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history", "run-slots", "queued-completion",
+            "parent-resumed", "result-file", "result-missing")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -3180,6 +3181,176 @@ def drive_queued_completion(f: Feature) -> None:
     say(f"queued-completion evidence: {f.d}")
 
 
+COMMS_REPORT = "DONE commit abc123: implementer-gh7's report\nevidence: just fast green\nnext: review"
+COMMS_LEAKS = ("HERDR_", "OCTO_FEATHER_", "XDG_STATE_HOME", "XDG_CACHE_HOME")  # the driving agent's own, never a case's
+
+
+@dataclass
+class CommsWorld:
+    """A lane's agents in a testkit Herdr world (tests/gate/kit/testkit/herdr.py, FAKE_HERDR) and its scratch
+    octo-feather state: director w0:p1, lane gh7's supervisor w1:p1, its implementer-gh7 at w1:p2 (spawn line in the
+    lane log, session S-impl-gh7). Cases: features/parent-resumed.md, result-file.md, result-missing.md."""
+
+    sc: Path
+    world: Path
+    state: Path
+    base: dict[str, str]
+
+    def agents(self) -> dict[str, dict[str, object]]:
+        return cast("dict[str, dict[str, object]]", json.loads((self.world / "agents.json").read_text()))
+
+    def put(self, agents: dict[str, dict[str, object]]) -> None:
+        (self.world / "agents.json").write_text(json.dumps(agents))
+
+    def received(self, pane: str) -> list[str]:
+        p = self.world / "prompts"
+        got = p.read_text().splitlines() if p.exists() else []
+        return [x.split("\t", 1)[1] for x in got if x.split("\t")[0] == pane]
+
+    def attempts(self, pane: str) -> int:
+        return sum(x.startswith(f"agent prompt {pane} ") for x in (self.world / "log").read_text().splitlines())
+
+    def result_file(self) -> Path:
+        return self.state / "lanes" / "gh7.results" / "S-impl-gh7.md"
+
+    def worker(self) -> dict[str, str]:
+        return self.base | {"OCTO_FEATHER_ROLE": "implementer", "OCTO_FEATHER_PARENT": "w1:p1",
+                            "OCTO_FEATHER_SESSION_ID": "S-impl-gh7", "HERDR_PANE_ID": "w1:p2", "HERDR_WORKSPACE_ID": "w1"}
+
+    def supervisor(self, pane: str = "w1:p1") -> dict[str, str]:
+        return self.base | {"OCTO_FEATHER_ROLE": "supervisor", "OCTO_FEATHER_PARENT": "w0:p1",
+                            "HERDR_PANE_ID": pane, "HERDR_WORKSPACE_ID": pane.split(":", maxsplit=1)[0]}
+
+
+def comms_agent(pane: str, name: str, **more: object) -> dict[str, object]:
+    w, n = pane.split(":p")
+    return {"name": name, "pane_id": pane, "workspace_id": w, "tab_id": f"{w}:t{n}", "agent_status": "idle"} | more
+
+
+def comms_world(f: Feature, feature: str) -> CommsWorld:
+    """A fresh CommsWorld under the run's scratch for FEATURE (its class docstring)."""
+    sc = RUN_DIR / "scratch" / feature
+    shutil.rmtree(sc, ignore_errors=True)
+    (sc / "bin").mkdir(parents=True)
+    (sc / "bin" / "herdr").symlink_to(Path(f.s.repo) / "tests" / "gate" / "kit" / "testkit" / "herdr.py")
+    (sc / "home").mkdir()
+    world = sc / "herdr"
+    world.mkdir()
+    state = sc / "home" / ".local" / "state" / "octo-feather" / "sessions" / "verify"
+    (state / "lanes").mkdir(parents=True)
+    (state / "director.toml").write_text('pane = "w0:p1"\n')
+    (state / "lanes" / "gh7.toml").write_text('issue = "7"\nsupervisor = "w1:p1"\ngoal = "g"\n')
+    spawn = {"at": now(), "kind": "spawn", "name": "implementer-gh7", "role": "implementer", "pane": "w1:p2",
+             "cwd": str(sc), "session": "S-impl-gh7", "ticket": "gh7"}
+    (state / "lanes" / "gh7.handoffs.jsonl").write_text(json.dumps(spawn) + "\n")
+    # A reflection just ran: an octo-feather-start runs none in the background (scripts/octo-feather-start).
+    (state / "director.handoffs.jsonl").write_text(json.dumps({"at": now(), "kind": "reflection"}) + "\n")
+    base = {"PATH": f"{sc / 'bin'}:{os.environ['PATH']}", "FAKE_HERDR": str(world), "HOME": str(sc / "home"),
+            "HERDR_SESSION": "verify"}
+    w = CommsWorld(sc=sc, world=world, state=state, base=base)
+    w.put({"w0:p1": comms_agent("w0:p1", "director"), "w1:p1": comms_agent("w1:p1", "gh7"),
+           "w1:p2": comms_agent("w1:p2", "implementer-gh7")})
+    return w
+
+
+def comms_env(f: Feature, env: dict[str, str]) -> None:
+    """The next cases run with ENV only of the driving agent's own Herdr, kit and state variables."""
+    f.env = env
+    f.pre = ["env", *[a for k in os.environ if k.startswith(COMMS_LEAKS) and k not in env for a in ("-u", k)]]
+
+
+def herdr_say(f: Feature) -> str:
+    return str(Path(f.s.repo) / ".agents" / "skills" / "herdr-comms" / "assets" / "herdr-say")
+
+
+def drive_parent_resumed(f: Feature) -> None:
+    """comms#acceptance-parent-resumed: lane gh7's supervisor gone from Herdr without a park (a restart), resumed by
+    `octo-feather-start --name gh7 --resume S-sup-gh7` on a new pane; its implementer's `herdr-say --parent REPORT`
+    (OCTO_FEATHER_PARENT still the old pane) reaches the new pane as the notice naming its result file; the director
+    receives nothing. Cases: features/parent-resumed.md."""
+    w = comms_world(f, "parent-resumed")
+    agents = w.agents()
+    del agents["w1:p1"]
+    w.put(agents)
+    say("supervisor gh7 w1:p1 gone from Herdr without a park (its session restarted)")
+    target = w.sc / "target"
+    for argv in (["git", "init", "-q", "-b", "main", str(target)],
+                 [str(Path(f.s.repo) / "scripts" / "pi-role"), "--set-identity", "t", "t@t"]):
+        subprocess.run(argv, env={k: v for k, v in os.environ.items() if not k.startswith(COMMS_LEAKS)} | w.base,
+                       check=True, capture_output=True)
+    comms_env(f, w.base)
+    f.run("resume", "octo-feather-start", "--cwd", str(target), "--name", "gh7", "--resume", "S-sup-gh7")
+    out = (f.d / "resume.stdout").read_text()
+    new = next((x.removeprefix("pane=") for x in out.split() if x.startswith("pane=")), "")
+    record = (w.state / "lanes" / "gh7.toml").read_text()
+    f.obs("resume", "record", record)
+    say(f"resume: new pane {new}; lanes/gh7.toml: {record.strip()!r}")
+    f.check("resume", lambda c: c.code == 0 and new not in ("", "w1:p1") and f'supervisor = "{new}"' in c.o["record"])
+    comms_env(f, w.worker())
+    f.run("report", herdr_say(f), "--parent", COMMS_REPORT)
+    rf = w.result_file()
+    f.obs("report", "new-pane", "\n".join(w.received(new)))
+    f.obs("report", "director", "\n".join(w.received("w0:p1")))
+    f.obs("report", "result-file", rf.read_text() if rf.is_file() else "")
+    say(f"report: {new} received {w.received(new)}; director w0:p1 received {w.received('w0:p1')}")
+    say(f"report: {rf} holds the report: {COMMS_REPORT in (rf.read_text() if rf.is_file() else '')}")
+    f.check("report", lambda c: c.code == 0 and c.o["director"] == "" and str(rf) in c.o["new-pane"]
+            and len(c.o["new-pane"].splitlines()) == 1 and COMMS_REPORT in c.o["result-file"])
+    f.env, f.pre = {}, []
+    say(f"parent-resumed evidence: {f.d}")
+
+
+def drive_result_file(f: Feature) -> None:
+    """comms#acceptance-result-file: lane gh7's supervisor w1:p1 compacting for 3 s; its implementer's `herdr-say
+    --parent REPORT` (one send, queued, taken after compaction); then the supervisor's `octo-feather-handoff results`
+    names the result file and reading it shows REPORT whole; the director received nothing. Cases:
+    features/result-file.md."""
+    w = comms_world(f, "result-file")
+    agents = w.agents()
+    agents["w1:p1"]["compacting_until"] = datetime.now(UTC).timestamp() + 3
+    w.put(agents)
+    comms_env(f, w.worker())
+    f.run("report", herdr_say(f), "--parent", COMMS_REPORT)
+    f.obs("report", "attempts", str(w.attempts("w1:p1")))
+    f.obs("report", "supervisor", "\n".join(w.received("w1:p1")))
+    say(f"report: send attempts {w.attempts('w1:p1')}; supervisor w1:p1 received {w.received('w1:p1')}")
+    f.check("report", lambda c: c.code == 0 and c.o["attempts"] == "1" and len(c.o["supervisor"].splitlines()) == 1)
+    rf = w.result_file()
+    comms_env(f, w.supervisor())
+    f.run("results", "octo-feather-handoff", "results")
+    f.check("results", lambda c: c.code == 0 and c.out == f"implementer-gh7\tw1:p2\tlive idle\t{rf}\n")
+    f.run("read", "cat", str(rf))
+    f.obs("read", "director", "\n".join(w.received("w0:p1")))
+    f.obs("read", "attempts", str(w.attempts("w1:p1")))
+    say(f"read: director w0:p1 received {w.received('w0:p1')}; send attempts in all {w.attempts('w1:p1')}")
+    f.check("read", lambda c: c.code == 0 and COMMS_REPORT in c.out and c.o["director"] == "" and c.o["attempts"] == "1")
+    f.env, f.pre = {}, []
+    say(f"result-file evidence: {f.d}")
+
+
+def drive_result_missing(f: Feature) -> None:
+    """comms#acceptance-result-missing: lane gh7's implementer-gh7 exits mid-ticket without reporting (gone from Herdr,
+    no parked line, no result file) while general-worker-gh7 still works; the supervisor's `octo-feather-handoff
+    results` shows implementer-gh7 `ended, no result file` and the live one `none yet`. Cases:
+    features/result-missing.md."""
+    w = comms_world(f, "result-missing")
+    agents = w.agents()
+    del agents["w1:p2"]
+    agents["w1:p3"] = comms_agent("w1:p3", "general-worker-gh7", agent_status="working")
+    w.put(agents)
+    spawn = {"at": now(), "kind": "spawn", "name": "general-worker-gh7", "role": "general-worker", "pane": "w1:p3",
+             "cwd": str(w.sc), "session": "S-gw-gh7", "ticket": "gh7"}
+    with (w.state / "lanes" / "gh7.handoffs.jsonl").open("a") as log:
+        log.write(json.dumps(spawn) + "\n")
+    say("implementer-gh7 w1:p2: its session exited mid-ticket, no report, no parked line")
+    comms_env(f, w.supervisor())
+    f.run("results", "octo-feather-handoff", "results")
+    f.check("results", lambda c: c.code == 0 and c.out == (
+        "implementer-gh7\tw1:p2\tended\tended, no result file\ngeneral-worker-gh7\tw1:p3\tlive working\tnone yet\n"))
+    f.env, f.pre = {}, []
+    say(f"result-missing evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
@@ -3216,6 +3387,9 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "qa-history": drive_qa_history,
     "run-slots": drive_run_slots,
     "queued-completion": drive_queued_completion,
+    "parent-resumed": drive_parent_resumed,
+    "result-file": drive_result_file,
+    "result-missing": drive_result_missing,
 }
 
 

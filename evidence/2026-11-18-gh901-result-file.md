@@ -3,7 +3,7 @@
 A worker's `herdr-say --parent REPORT` appends REPORT to `<parent log stem>.results/<its session>.md` before any prompt and sends the parent one notice naming the file; `octo-feather-handoff results` lists the caller's outstanding workers with their files; `octo-feather-lane archive` moves a lane's results dir, `octo-feather-start` prunes the director's old files of gone workers.
 
 Smoke: .agents/skills/herdr-comms/SKILL.md the kit scenarios over the testkit FAKE_HERDR world, `python3 tests/gate/kit/herdr_messaging.py SCENARIO` for each of result_compacting, result_resumed, results_listing, director_prune, each ok (output below); `tests/herdr-say.sh`, `tests/herdr-spawn.sh`, `tests/herdr-close.sh`, `tests/start.sh` ok.
-Smoke: agents/supervisor.md owed, not run: the eval slot is queued by the director for gh901. Command and expected verdicts: docs/owed-evals/954.md.
+Smoke: agents/supervisor.md `scripts/octo-feather-qa --case result-file-after-compaction --case result-file-after-resume --baseline d1ef2e5f` at kit 20793d7d (artifacts: ~/.local/state/octo-feather/qa/<run>): smoke 20261118T215918Z-b7141a (--runs 1): both FAIL 0/1 on d1ef2e5f, PASS 1/1 at head; proof 20261118T220330Z-1f3317 (--runs 3): both FAIL 0/3 on d1ef2e5f, PASS 3/3 at head, pass rate +1.00 each. Baseline runs fail on `ran octo-feather-handoff results` (never run) and `ran herdr pane read` count 0 (2 to 3 pane reads, w2:p7 and w2:p4); head runs ran `octo-feather-handoff results`, no pane read, no `herdr-say --parent`.
 Removed: agents/supervisor.md: the goal check-in's `herdr agent get <pane>` per awaited worker and its `herdr pane read` of a finished result, replaced by `octo-feather-handoff results` and the result files it names.
 
 ## Demo: `octo-feather-handoff results` as the supervisor after its worker's `herdr-say --parent`
@@ -24,3 +24,7 @@ result_resumed: ok
 director start: removed f907308f-236d-443a-a1b7-43d09ecca280.md (8 days, worker gone); kept ['54e3ee35-a3d3-46a2-9ad6-60003097f4dc.md', 'aa2b2680-b70f-4e26-9398-911d75ed891f.md']
 director_prune: ok
 ```
+
+## qc demos (comms#acceptance-parent-resumed, #acceptance-result-file, #acceptance-result-missing)
+
+Smoke: .agents/skills/verify-octo-feather/ `verify-octo-feather run parent-resumed`, `run result-file`, `run result-missing`: each `run PASS`, exit 0 (cases resume, report; report, results, read; results). The qc.toml demos run these same commands.
