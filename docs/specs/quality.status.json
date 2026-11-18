@@ -277,6 +277,10 @@
       "status": "planned",
       "pr": null
     },
+    "acceptance-qc-eval-verdict": {
+      "status": "planned",
+      "pr": null
+    },
     "acceptance-qc-sandbox-maintained": {
       "status": "built",
       "pr": 741,
