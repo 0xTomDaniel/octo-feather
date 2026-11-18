@@ -1,0 +1,14 @@
+[
+ {
+  "request": "pr diff 999999 -R 0xTomDaniel/octo-feather",
+  "out": "",
+  "err": "GraphQL: Could not resolve to a PullRequest with the number of 999999. (repository.pullRequest)\n",
+  "exit": 1,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather",
+   "command": "gh pr diff 999999 -R 0xTomDaniel/octo-feather",
+   "date": "2026-11-18"
+  }
+ }
+]

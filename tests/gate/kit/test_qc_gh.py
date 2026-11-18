@@ -6,6 +6,7 @@ from collections.abc import Callable
 
 import pytest
 from qc_gh import (
+    diff_too_large,
     fetch_fails,
     killed,
     kit_on_kit,
@@ -52,6 +53,10 @@ def test_status_commit_fails(case: Case) -> None:
 
 def test_snapshot_misses(case: Case) -> None:
     case(snapshot_misses)
+
+
+def test_diff_too_large(case: Case) -> None:
+    case(diff_too_large)
 
 
 def test_kit_on_kit(case: Case) -> None:
