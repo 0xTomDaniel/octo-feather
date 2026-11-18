@@ -1,14 +1,9 @@
 """An eval-backed criterion judged from pinned stored eval runs (spec quality
-#acceptance-qc-eval-verdict; rules: scripts/octo-feather-qa --help, Verdict; docs/adr/0022): a
-scratch target holding a kit's role, launch, skill, case and fixture files declares a demo whose
-command is `octo-feather-qa --verdict RUN/s1/c1`, a stored run under OCTO_FEATHER_QA_DIR whose kit
-sha is the target's first commit. octo-feather-qc (what `just qc` runs) judges it in its sandbox,
-which binds the qa runs dir read-only (its proof line): the same result at one head twice and at a
-second head that leaves those files unchanged, decision source the demo's checks; a head changing
-the role file, or a pinned run gone, is insufficient evidence naming the file or the run. The
---verdict command alone: a stored FAIL exits 1, each other stale input (fixture, case,
-expectations, an unknown kit sha) or a review case without a recorded verdict exits 77 naming it.
-No model, no live Herdr."""
+#acceptance-qc-eval-verdict; the --verdict rules: scripts/octo-feather-qa --help, Verdict; the
+sandbox's qa runs bind: docs/adr/0022, sandbox paragraph), at the seams posted on #992: a scratch
+target holding a kit's role, launch, skill, case and fixture files, a stored run under
+OCTO_FEATHER_QA_DIR at its first commit, judged through octo-feather-qc running a qc.toml demo of
+`octo-feather-qa --verdict RUN/s1/c1`, and through that command alone. No model, no live Herdr."""
 
 from __future__ import annotations
 
@@ -149,14 +144,19 @@ def same_verdict(s: Scratch) -> None:
 
 
 def insufficient(s: Scratch) -> None:
-    """A head changing the run's role file, and a pinned run gone: insufficient evidence naming
-    the file, then the run."""
+    """A head changing the run's role file, one adding a sibling case to the suite's cases.json,
+    and a pinned run gone: insufficient evidence naming the file, then the run."""
     r, h1 = world(s)
-    (r / "agents" / "worker.md").write_text("the worker role, changed\n")
-    s.git(r, "commit", "-qam", "role")
-    res = judged(s, r, 2)
-    assert res["verdict"] == "insufficient evidence", res
-    assert "agents/worker.md changed" in str(res["why"]), res
+    for path, text in (
+        ("agents/worker.md", "the worker role, changed\n"),
+        ("evals/s1/cases.json", json.dumps([CASE, dict(CASE, id="c2")])),
+    ):
+        s.git(r, "reset", "-q", "--hard", h1)
+        (r / path).write_text(text)
+        s.git(r, "commit", "-qam", f"change {path}")
+        res = judged(s, r, 2)
+        assert res["verdict"] == "insufficient evidence", res
+        assert f"{path} changed" in str(res["why"]), res
     s.git(r, "reset", "-q", "--hard", h1)
     shutil.move(s.root / "qa" / RUN, s.root / "gone")
     res = judged(s, r, 2)
@@ -174,8 +174,9 @@ def verdict(s: Scratch, r: Path, *pins: str, want: int) -> str:
 
 
 def cli_rules(s: Scratch) -> None:
-    """--verdict alone, in the judged repo: fresh PASS 0; a stored FAIL 1; each stale input 77
-    naming it; an unknown kit sha and a review case with no recorded verdict 77; usage 64."""
+    """--verdict alone, in the judged repo: fresh PASS 0; a stored FAIL 1; each stale whole file,
+    another case's edit included, 77 naming it; an unknown kit sha and a review case with no
+    recorded verdict 77; usage 64."""
     r, h1 = world(s)
     sha = s.git(r, "rev-parse", "HEAD~1")
     out = verdict(s, r, PIN, want=0)
@@ -185,18 +186,13 @@ def cli_rules(s: Scratch) -> None:
     out = verdict(s, r, PIN, "20260101T000000Z-fa1fa1/s1/c1", want=1)
     assert "FAIL s1/c1: stored FAIL, run 20260101T000000Z-fa1fa1, kit" in out, out
     assert "runs 1/2 passed" in out, out
-    for path, text, named in (
-        ("evals/fixtures/fx/a.txt", "fixture, changed\n", "evals/fixtures/fx/a.txt changed"),
-        (".agents/skills/s/SKILL.md", "the skill, changed\n", ".agents/skills/s/SKILL.md changed"),
-        (
-            "evals/s1/cases.json",
-            json.dumps([dict(CASE, task="Other.")]),
-            "evals/s1/cases.json case c1 differs",
-        ),
+    for path, text in (
+        ("evals/fixtures/fx/a.txt", "fixture, changed\n"),
+        (".agents/skills/s/SKILL.md", "the skill, changed\n"),
+        ("evals/s1/cases.json", json.dumps([CASE, dict(CASE, id="c2")])),
         (
             "evals/s1/reference/expectations.json",
-            json.dumps({"c1": {"facts": [*FACTS, *FACTS]}}),
-            "evals/s1/reference/expectations.json facts for c1 differ",
+            json.dumps({"c1": {"facts": FACTS}, "c2": {"facts": FACTS}}),
         ),
     ):
         s.git(r, "reset", "-q", "--hard", h1)
@@ -204,13 +200,15 @@ def cli_rules(s: Scratch) -> None:
         s.git(r, "commit", "-qam", f"change {path}")
         out = verdict(s, r, PIN, want=77)
         assert f"INSUFFICIENT s1/c1: stored PASS, run {RUN}" in out, out
-        assert named in out.splitlines()[-1], out
+        assert f"{path} changed" in out.splitlines()[-1], out
     s.git(r, "reset", "-q", "--hard", h1)
     store(s, "0" * 40, run="20260101T000000Z-0bad00")
     out = verdict(s, r, "20260101T000000Z-0bad00/s1/c1", want=77)
     assert f"kit sha {'0' * 40} of run 20260101T000000Z-0bad00 is not a commit" in out, out
     rv = dict(CASE, id="rv", review={"question": "Good?"})
-    store(s, sha, ("REVIEW",), case=rv, run="20260101T000000Z-4e4e4e")
+    (r / "evals" / "s1" / "cases.json").write_text(json.dumps([CASE, rv]))
+    s.git(r, "commit", "-qam", "review case")
+    store(s, s.git(r, "rev-parse", "HEAD"), ("REVIEW",), case=rv, run="20260101T000000Z-4e4e4e")
     rpin = "20260101T000000Z-4e4e4e/s1/rv"
     out = verdict(s, r, rpin, want=77)
     assert (
@@ -221,8 +219,6 @@ def cli_rules(s: Scratch) -> None:
     rf.write_text(
         json.dumps({"run_id": "20260101T000000Z-4e4e4e", "verdict": "fail", "note": "n"}) + "\n"
     )
-    (r / "evals" / "s1" / "cases.json").write_text(json.dumps([CASE, rv]))
-    s.git(r, "commit", "-qam", "review case")
     out = verdict(s, r, rpin, want=1)
     assert "FAIL s1/rv: stored FAIL, run 20260101T000000Z-4e4e4e" in out, out
     assert "review; fresh at HEAD" in out, out

@@ -146,25 +146,20 @@ the cases. Each RUN_ID/SUITE/CASE is the case in the stored run <qa dir>/RUN_ID/
 verdict is read from what the run stored, never judged again: each current-kit run (result.json `runs`, each `dir`
 holding the run's input.json, grading.json and result.json) passed when its result.json verdict is PASS, and the
 case is PASS when every run passed, else FAIL; a review case takes the latest maintainer verdict recorded for that
-run id (Review: REVIEWS/SUITE/CASE.jsonl), pass PASS, fail FAIL. The run is fresh against HEAD when, from the
-run's kit sha K (its kit_sha) to HEAD, nothing it depended on changed:
-  - git diff K HEAD names no file under the kit paths the role's launch read (scripts/pi-role --help) or under the
-    case's fixtures: agents/<role>.md (the role the run recorded), scripts/pi-role, .agents/skills/, extensions/,
-    web-mcp.json, and evals/fixtures/<name>/ for each fixture dir the case names at any depth (every string value of
-    a `fixture` key in the case; a history fixture {repo, commit} is pinned by its commit);
-  - HEAD's evals/SUITE/cases.json entry for CASE equals the case each run's input.json recorded (without the keys
-    the run added: suite, model, fixture_head, max_tool_calls, timeout_s, kit_ref, kit_sha, run, of, config);
-  - HEAD's evals/SUITE/reference/expectations.json facts for CASE equal the facts each run graded (grading.json
-    `facts` without status and evidence; a run that graded none, not run or a review case, is compared by its case).
-The grader (this script) is not in the set: a grading change shows as a fact change or a rerun. Prints one line per
+run id (Review: REVIEWS/SUITE/CASE.jsonl), pass PASS, fail FAIL. Freshness (the rule: spec quality#qc-fallback): the
+run is stale when git diff K HEAD, K the run's kit sha (its kit_sha), names a file, whole files only, under
+agents/<role>.md (the role the run recorded), the kit paths the role's launch read (scripts/pi-role --help):
+scripts/pi-role, .agents/skills/, extensions/, web-mcp.json; the suite's case files evals/SUITE/cases.json and
+evals/SUITE/reference/expectations.json; and evals/fixtures/<name>/ for each fixture dir the case names at any depth
+(every string value of a `fixture` key in the case; a history fixture {repo, commit} is pinned by its commit). So
+any edit to the suite's case files, another case's included, needs that suite's pinned runs rerun. The grader (this
+script) is not in the set: a grading change shows as an expectations change or a rerun. Prints one line per
 argument: the verdict (PASS, FAIL, or INSUFFICIENT when not fresh or not readable), SUITE/CASE, the stored verdict,
 the run id, kit sha, runs passed/total, and its freshness against HEAD, each stale file named. Insufficient
 evidence (exit 77, schemas/qc.v2.schema.json demo command: did not run to its end) when any run is missing or
 unreadable (no result.json, a run's input.json, grading.json or result.json, a kit sha the repo does not hold, a
 run made with --kit-ref, whose fixtures' commit it does not record, a review case with no verdict recorded for the
-run) or stale; the last stderr line names each. The consequence: a merge that touches the run's role, skill,
-launch, case, expectations or fixture files makes the verdict insufficient evidence until the evals are rerun and
-the qc.toml demo's pinned run id is updated. Not refused inside a `just check` run, as --analyze and --review are
+run) or stale; the last stderr line names each. Not refused inside a `just check` run, as --analyze and --review are
 not: it calls no model, runs no eval and decides from stored data only, so the gate stays deterministic and free.
 Exit: 0 every named case PASS and fresh, 1 any FAIL (none insufficient), 77 any insufficient, 64 usage (no
 argument, one not RUN_ID/SUITE/CASE, an option, or not in a git repo).
@@ -2051,12 +2046,6 @@ def stored(p: Path) -> "Result | None":
     return cast("Result", raw) if isinstance(raw, dict) else None
 
 
-def at_head(top: str, rel: str) -> object:
-    """HEAD's JSON at REL, None when HEAD has none."""
-    p = subprocess.run(["git", "-C", top, "show", f"HEAD:{rel}"], capture_output=True, text=True)
-    return safe_json(p.stdout) if p.returncode == 0 else None
-
-
 def pinned(root: Path, top: str, head: str, arg: str) -> tuple[str, str, list[str]]:
     """(verdict PASS, FAIL or INSUFFICIENT, its line, what makes it insufficient) for one RUN_ID/SUITE/CASE."""
     rid, suite, cid = arg.split("/")
@@ -2090,27 +2079,14 @@ def pinned(root: Path, top: str, head: str, arg: str) -> tuple[str, str, list[st
         verdict, count = ("PASS" if got and ok == len(runs) else "FAIL"), f"runs {ok}/{len(runs)} passed"
     stale: list[str] = []
     if not missing:
-        cases = at_head(top, f"evals/{suite}/cases.json")
-        listed = [cast("Result", c) for c in cast("list[object]", cases) if isinstance(c, dict)] if isinstance(cases, list) else []
-        case = next((c for c in listed if c.get("id") == cid), None)
-        exps = at_head(top, f"evals/{suite}/reference/expectations.json")
-        exp = cast("Result", cast("Result", exps).get(cid) or {}) if isinstance(exps, dict) else {}
         role = {str(i.get("role")) for i, _, _ in got}
         fx = sorted({n for i, _, _ in got for n in fixture_names({k: v for k, v in i.items() if k not in RUN_INPUT_KEYS})})
-        paths = [*(f"agents/{r}.md" for r in sorted(role)), *LAUNCH_PATHS, *(f"evals/fixtures/{n}/" for n in fx)]
+        paths = [*(f"agents/{r}.md" for r in sorted(role)), *LAUNCH_PATHS, f"evals/{suite}/cases.json",
+                 f"evals/{suite}/reference/expectations.json", *(f"evals/fixtures/{n}/" for n in fx)]
         diff = subprocess.run(["git", "-C", top, "diff", "--no-renames", "--name-status", sha, head, "--", *paths],
                               capture_output=True, text=True)
         how = {"A": "added", "D": "deleted"}
         stale += [f"{p} {how.get(k[:1], 'changed')}" for k, _, p in (ln.partition("\t") for ln in diff.stdout.splitlines()) if p]
-        if case is None:
-            stale.append(f"evals/{suite}/cases.json has no case {cid}")
-        elif any({k: v for k, v in i.items() if k not in RUN_INPUT_KEYS} != case for i, _, _ in got):
-            stale.append(f"evals/{suite}/cases.json case {cid} differs from the case the run recorded")
-        graded = [[{k: v for k, v in f.items() if k not in ("status", "evidence")} for f in cast("list[Result]", g.get("facts") or [])]
-                  for _, g, _ in got]
-        if any(g and g != exp.get("facts") for g in graded):
-            stale.append(f"evals/{suite}/reference/expectations.json " + (f"facts for {cid} differ from the facts the run graded"
-                                                                          if exp else f"has no facts for {cid}"))
     fresh = (f"missing: {'; '.join(missing)}" if missing else
              f"stale at HEAD {head[:12]}: {'; '.join(stale)}" if stale else f"fresh at HEAD {head[:12]}")
     word = "INSUFFICIENT" if missing or stale else verdict
