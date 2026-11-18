@@ -10,10 +10,12 @@ is done: `git commit --amend` on the last commit, `git rebase -i --rebase-merges
 
 from __future__ import annotations
 
-import os
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from testkit import ROOT, Scratch, kit, main
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 REAL = """docs(evidence): run-slots pass-over and manual-move smoke, demo and owed eval (#977)
 
@@ -46,7 +48,8 @@ def _lane(s: Scratch) -> Path:
     _commit(s, repo, "old", "feat: an old writer commit, before the check")
     s.git(repo, "checkout", "-q", "main")
     (repo / "scripts").mkdir()
-    (repo / "scripts" / "check-owner-field").write_text((ROOT / "scripts" / "check-owner-field").read_text())
+    src = ROOT / "scripts" / "check-owner-field"
+    (repo / "scripts" / "check-owner-field").write_text(src.read_text())
     s.git(repo, "add", "-A")
     s.git(repo, "commit", "-q", "-m", "feat: check-owner-field\n\nOwners: none")
     s.git(repo, "checkout", "-q", "gh7")
@@ -66,8 +69,14 @@ def refuse_then_amend(s: Scratch) -> None:
     repo = _lane(s)
     out, err = check(s, repo, 1)
     assert "1 commit(s) older than the check" in out, out
-    assert "run-slots pass-over" in err and "report names no owned rule" in err, err
-    assert "`Owners: none` when there is none" in err and "git commit --amend" in err and "--rebase-merges <sha>^" in err, err
+    for said in (
+        "run-slots pass-over",
+        "report names no owned rule",
+        "`Owners: none` when there is none",
+    ):
+        assert said in err, err
+    for fix in ("git commit --amend", "--rebase-merges <sha>^"):
+        assert fix in err, err
     s.git(repo, "commit", "-q", "--amend", "-m", REAL + "\nOwners: none\n")
     out, _ = check(s, repo, 0)
     assert "ok (1 commit(s)" in out, out  # the amended one; the old one only noticed
@@ -85,11 +94,15 @@ def reword_older(s: Scratch) -> None:
     editor.write_text('#!/bin/sh\nprintf "\\nOwners: none\\n" >> "$1"\n')
     editor.chmod(0o755)
     seq = "sed -i '0,/^pick/s/^pick/reword/'"
-    s.run(["git", "-C", str(repo), "-c", "user.email=t@example.com", "-c", "user.name=t", "rebase", "-q", "-i",
-           "--rebase-merges", f"{bad}^"], env={"GIT_SEQUENCE_EDITOR": seq, "GIT_EDITOR": str(editor)})
+    ident = ["-c", "user.email=t@example.com", "-c", "user.name=t"]
+    rebase = ["rebase", "-q", "-i", "--rebase-merges", f"{bad}^"]
+    s.run(
+        ["git", "-C", str(repo), *ident, *rebase],
+        env={"GIT_SEQUENCE_EDITOR": seq, "GIT_EDITOR": str(editor)},
+    )
     check(s, repo, 0)
     assert s.git(repo, "log", "-1", "--format=%H", "--grep", "an old writer commit") == old
-    assert os.path.exists(repo / "later")
+    assert (repo / "later").exists()
 
 
 if __name__ == "__main__":
