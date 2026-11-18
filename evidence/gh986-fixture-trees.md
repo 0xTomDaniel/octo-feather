@@ -2872,3 +2872,43 @@ worker-uncertain-send reviewer-queued-timeout-sent-once fixture 4a3473e74902878c
 worker-uncertain-send reviewer-queued-timeout-sent-once head b06a7b1961826e5c5af18e7f7c2720077f7b0776a6f54b7cfe99f251a580f051
 worker-uncertain-send blocked-refusal-sent-again fixture d62e648fb7da7209de833069a58585c615e69ba400878838ef585197d6837050
 ```
+
+## #1007: check-evals refuses an ancestor restore; quote-app-seams-bad's test_cli.py to the pool
+
+Rule (owner ruling 2026-11-18 #986): schema.md, Fixtures, No pool or cross-fixture duplicate (the ancestor clause). Seam:
+#1007 comment 6994618054. Test: tests/check-evals-base-dup.sh (root, mid overriding sub/swap.txt, top re-holding root's).
+
+The hole on 7033687f: quote-app-inline <- quote-app <- quote-app-seams-bad; quote-app overrides tests/test_cli.py,
+seams-bad held inline's bytes (682 B, sha1 9768cab0). The base refusal saw only quote-app's version; the cross-fixture
+refusal skips chain pairs. Manifests are never compared (own paths exclude `.eval-fixture.json`).
+
+### Red proof (this code on 7033687f's evals)
+
+```
+$ git archive 7033687f evals evidence | tar -x -C /tmp/gh1007-base2
+$ scripts/check-evals /tmp/gh1007-base2/evals; echo "exit $?"
+check-evals: fixtures/quote-app-seams-bad/tests/test_cli.py: field pool: the same file ancestor quote-app-inline holds (fixtures/quote-app-inline/tests/test_cli.py), which a nearer base overrides; move it to fixtures/.pool/ and list it in both (sources: check-evals --sources quote-app-seams-bad)
+check-evals: 1 problem(s) above; fix the case (check-evals --help lists the shape)
+exit 1
+```
+
+### Fix
+
+quote-app-inline/tests/test_cli.py moved to `.pool/test_cli-quote.py`; quote-app-inline and quote-app-seams-bad list
+`"tests/test_cli.py": "test_cli-quote.py"`; seams-bad's copy deleted.
+
+```
+$ scripts/check-evals; echo "exit $?"
+evals: ok (17 suites, 517 cases)
+exit 0
+$ scripts/check-evals --trees /tmp/gh1007-base/evals > base.trees   # exit 0, 427 lines
+$ scripts/check-evals --trees > head.trees                          # exit 0, 427 lines
+$ diff base.trees head.trees && echo DIFF-EMPTY                     # DIFF-EMPTY
+$ sha256sum base.trees head.trees                                   # both 902ebb01c49f6705..., as #1007's lift
+$ scripts/check-evals --export xb /tmp/gh1007-base/evals; scripts/check-evals --export xa; diff -r xb xa && echo EXPORT-SAME
+EXPORT-SAME (70 dirs)
+$ find evals/fixtures -type f ! -name .eval-fixture.json -exec sha1sum {} + | sort | uniq -w40 -D | wc -l
+0
+```
+
+Manifests alone: 27 files in groups of identical bytes (siblings naming the same base), never part of a tree.

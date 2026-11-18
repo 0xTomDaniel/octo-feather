@@ -1,1 +1,1 @@
-{"base": "quote-app"}
+{"base": "quote-app", "pool": {"tests/test_cli.py": "test_cli-quote.py"}}

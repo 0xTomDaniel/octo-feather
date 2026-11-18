@@ -355,7 +355,7 @@ def fixture_errors(evals: Path) -> list[str]:
         if e and e not in out:
             out.append(e)
         if not e:
-            out += base_duplicates(evals, p.name) + pool_duplicates(evals, p.name)
+            out += base_duplicates(evals, p.name) + ancestor_duplicates(evals, p.name) + pool_duplicates(evals, p.name)
     return out + cross_duplicates(evals)
 
 
@@ -386,6 +386,22 @@ def base_duplicates(evals: Path, name: str) -> list[str]:
             if entry(Path(dp, n)) is not None and entry(Path(dp, n)) == entry(base / rel):
                 out.append(f"fixtures/{name}/{rel.as_posix()}: field base: the same file base {chain[0]} supplies "
                            f"({src[rel.as_posix()]}); delete it: the base supplies it (sources: check-evals --sources {name})")
+    return out
+
+
+def ancestor_duplicates(evals: Path, name: str) -> list[str]:
+    """Fixture NAME's ancestor restores (rule: schema.md, Fixtures), one message each."""
+    top, chain = evals / "fixtures" / name, bases(evals, name)
+    if not chain:
+        return []
+    base, owns = fixture_tree(evals, chain[0], scratch()), {a: set(own(evals / "fixtures" / a)) for a in chain}
+    out: list[str] = []
+    for rel in own(top):
+        e = entry(top / rel)
+        a = next((a for a in chain if rel in owns[a] and entry(evals / "fixtures" / a / rel) == e), None)
+        if a and e is not None and e != entry(base / rel):
+            out.append(f"fixtures/{name}/{rel}: field pool: the same file ancestor {a} holds (fixtures/{a}/{rel}), which a nearer base "
+                       f"overrides; move it to fixtures/{POOL}/ and list it in both (sources: check-evals --sources {name})")
     return out
 
 

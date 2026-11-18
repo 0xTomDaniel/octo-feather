@@ -32,6 +32,12 @@ rm -r "$F/top/sub" "$F/top/keep.txt"; mkdir -p "$F/top/sub"; cp -p "$F/mid/sub/s
 run 1 "$C" "$t/evals"
 grep -qxF "check-evals: fixtures/top/sub/swap.txt: field base: the same file base mid supplies (fixtures/mid/sub/swap.txt); delete it: the base supplies it (sources: check-evals --sources top)" <<< "$out" \
   || fail "duplicate of the middle base not refused: $out"
+# An ancestor restore (schema.md, Fixtures; seam: #1007 comment 6994618054): top re-holds root's sub/swap.txt, which mid overrides.
+rm -r "$F/top/sub"; mkdir -p "$F/top/sub"; cp -p "$F/root/sub/swap.txt" "$F/top/sub/swap.txt"
+run 1 "$C" "$t/evals"
+grep -qxF "check-evals: fixtures/top/sub/swap.txt: field pool: the same file ancestor root holds (fixtures/root/sub/swap.txt), which a nearer base overrides; move it to fixtures/.pool/ and list it in both (sources: check-evals --sources top)" <<< "$out" \
+  || fail "ancestor restore not refused as the rule words it: $out"
+[[ "$(grep -c 'check-evals: fixtures/' <<< "$out")" == 1 ]] || fail "a passing file refused: $out"
 # Pool, cross-fixture and pool duplicates, --sources (schema.md, Fixtures; seam: #1007 comment 6991399341).
 rm -r "$F/top/sub"; mkdir -p "$F/.pool" "$F/sib" "$F/nest" "$F/whole/cfg"
 echo pooled > "$F/.pool/shared.txt"; printf '#!/bin/sh\nexit 0\n' > "$F/.pool/hook"; chmod +x "$F/.pool/hook"
@@ -79,4 +85,4 @@ run 2 "$C" --export "$t/out" "$t/evals"; grep -qF "exists and is not an empty di
 echo '{"base": "nosuch"}' > "$F/mid/.eval-fixture.json"
 run 1 "$C" --export "$t/out2" "$t/evals"
 grep -qF "check-evals: fixtures/mid/.eval-fixture.json: field base: no fixture dir $F/nosuch" <<< "$out" || fail "--export: refused base not named: $out"
-echo "check-evals-base-dup: ok (base duplicates refused, through a chain; pool laid, --sources names each file's source; cross-fixture and pool duplicates and malformed pools refused; differing files and new paths pass; --export writes every tree, refuses a non-empty DIR and a refused base)"
+echo "check-evals-base-dup: ok (base duplicates refused, through a chain; ancestor restores refused; pool laid, --sources names each file's source; cross-fixture and pool duplicates and malformed pools refused; differing files and new paths pass; --export writes every tree, refuses a non-empty DIR and a refused base)"
