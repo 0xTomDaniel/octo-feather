@@ -31,7 +31,7 @@ from typing import Any, NoReturn, cast
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "template-edge", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history", "run-slots")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-eval-verdict", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "template-edge", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history", "run-slots")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -1497,6 +1497,80 @@ def drive_qc_insufficient(f: Feature) -> None:
         r"[^)]*\): needs GitHub.*; qc report [0-9a-f]{40}-.*\.json\): never triaged", c.err))
     f.pre, f.env = [], {}
     say(f"qc-insufficient evidence: {f.d}")
+
+
+def drive_qc_eval_verdict(f: Feature) -> None:
+    """`just qc` on a scratch target whose declared demo is `octo-feather-qa --verdict` over a scratch stored eval run
+    pinned at the target's first commit: pass at one head and at a second head leaving the run's files unchanged,
+    insufficient evidence naming the role file at a head that changes it (octo-feather-qa --help, Verdict)."""
+    sc = RUN_DIR / "scratch" / "qc-eval-verdict"
+    r = sc / "repo"
+    shutil.rmtree(sc, ignore_errors=True)
+    (r / "docs" / "specs").mkdir(parents=True)
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(r), *args], check=True, capture_output=True, text=True).stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    for k, val in (("user.name", "verify-octo-feather"), ("user.email", "verify@octo-feather.invalid"), ("core.hooksPath", "/dev/null")):
+        git("config", k, val)
+    case = {"id": "c1", "role": "worker", "fixture": "fx", "task": "Do it."}
+    facts = [{"fact": "skill_read", "skill": "s"}]
+    run, pin = "20260101T000000Z-abc123", "20260101T000000Z-abc123/s1/c1"
+    for rel, text in (("agents/worker.md", "the worker role\n"), ("scripts/pi-role", "the launcher\n"), (".agents/skills/s/SKILL.md", "the skill\n"),
+                      ("evals/s1/cases.json", json.dumps([case])), ("evals/s1/reference/expectations.json", json.dumps({"c1": {"facts": facts}})),
+                      ("evals/fixtures/fx/a.txt", "fixture\n"), ("README.md", "target\n"),
+                      ("qc.toml", ('format = 2\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n[demo."demo#acceptance-a"]\n'
+                                   f'command = "{f.s.repo}/scripts/octo-feather-qa --verdict {pin}"\ncovers = ["agents"]\n'))):
+        (r / rel).parent.mkdir(parents=True, exist_ok=True)
+        (r / rel).write_text(text)
+    shutil.copy(f"{f.s.repo}/tests/fixtures/spec-status/good/demo.spec.html", r / "docs" / "specs")
+    git("add", "-A")
+    git("commit", "-q", "-m", "accepted")
+    kit = git("rev-parse", "HEAD")
+    init = subprocess.run([f.s.kit, "octo-feather-spec-status", "init", str(r / "docs" / "specs" / "demo.spec.html"), kit[:12]],
+                          capture_output=True, text=True, check=False)
+    if init.returncode:
+        die(f"qc-eval-verdict: scratch status file not made: {init.stderr.strip()}")
+    git("add", "-A")
+    git("commit", "-q", "-m", "status")
+    head = git("rev-parse", "HEAD")
+    # The stored run (octo-feather-qa's layout, two runs at kit KIT) in the scratch box state's qa dir, never the real one.
+    d = sc / "state" / "octo-feather" / "qa" / run / "s1" / "c1"
+    for k in (1, 2):
+        kits = {"kit_ref": "HEAD", "kit_sha": kit, "run": k, "of": 2, "config": ""}
+        (d / f"run-{k}").mkdir(parents=True)
+        (d / f"run-{k}" / "input.json").write_text(json.dumps({"suite": "s1", **case, "model": "m", "max_tool_calls": 12, "timeout_s": 600, **kits}))
+        (d / f"run-{k}" / "grading.json").write_text(json.dumps({"facts": [dict(x, status="pass", evidence="e") for x in facts], "deciding": []}))
+        (d / f"run-{k}" / "result.json").write_text(json.dumps({"suite": "s1", "id": "c1", "verdict": "PASS", **kits}))
+    (d / "result.json").write_text(json.dumps({"suite": "s1", "id": "c1", "verdict": "PASS", "role": "worker", "kit_ref": "HEAD", "kit_sha": kit,
+                                               "runs": [{"run": k, "dir": f"run-{k}", "verdict": "PASS"} for k in (1, 2)], "runs_passed": 2}))
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "OCTO_FEATHER_QC_PATH": classify_stub(f, sc)}
+    f.pre = ["env", "-C", str(r)]
+    qc = ("just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a")
+    bound = re.escape(f"qc sandbox: ok   qa runs read-only: {sc / 'state' / 'octo-feather' / 'qa'} at ")
+    fresh = r"PASS s1/c1: stored PASS, run \S+, kit \w+, runs 2/2 passed; fresh at HEAD"
+    for name, at in (("fresh", head), ("second-head", None), ("stale", "role")):
+        git("reset", "-q", "--hard", head)
+        if at is None:
+            (r / "README.md").write_text("target, changed\n")
+            git("commit", "-q", "-am", "readme")
+        elif at == "role":
+            (r / "agents" / "worker.md").write_text("the worker role, changed\n")
+            git("commit", "-q", "-am", "role")
+        judged = git("rev-parse", "HEAD")
+        f.run(name, *qc)
+        # the demo's output, as the qc report keeps it (octo-feather-qc --help, Report)
+        rep = sorted((sc / "state" / "octo-feather" / "qc").glob(f"{judged}-*.json"))
+        res = [x for x in json.loads(rep[-1].read_text())["results"] if x["id"] == "acceptance-a"] if rep else []
+        f.obs(name, "demo", f"{res[0].get('output', '') if res else 'no qc report'}\n")
+    f.check("fresh", lambda c: c.code == 0 and re.search(r"(?m)^PASS acceptance-a", c.out) and re.search(fresh, c.o["demo"])
+            and re.search(bound, c.err))
+    f.check("second-head", lambda c: c.code == 0 and re.search(r"(?m)^PASS acceptance-a", c.out) and re.search(fresh, c.o["demo"]))
+    f.check("stale", lambda c: c.code == 2 and re.search(r"(?m)^INSUFFICIENT EVIDENCE acceptance-a", c.out)
+            and "agents/worker.md changed" in c.out and not re.search(r"(?m)^FAIL ", c.out))
+    f.pre, f.env = [], {}
+    say(f"qc-eval-verdict evidence: {f.d}")
 
 
 def drive_qc_browser(f: Feature) -> None:
@@ -3084,6 +3158,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "qc-sandbox-cost": drive_qc_sandbox_cost,
     "qc-advisory": drive_qc_advisory,
     "qc-fallback": drive_qc_fallback,
+    "qc-eval-verdict": drive_qc_eval_verdict,
     "qc-stale": drive_qc_stale,
     "qc-insufficient": drive_qc_insufficient,
     "gate-tiers": drive_gate_tiers,

@@ -45,6 +45,7 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [shape](./shape.md) covers the owner starting the shaper with `just shape` in a target with Spec Chat linked (`just spec-chat`): Pi offered exactly the role file's skills, Spec Chat's from the target, none from home (criterion: roles#acceptance-shaper-launch).
 - [qc-capture](./qc-capture.md) covers `just qc` capturing each declared demo into the evidence store and deciding from its checks.
 - [qc-insufficient](./qc-insufficient.md) covers `just qc` giving insufficient evidence when a declared demo cannot run to its end, and `octo-feather-lane merge-ask` failing naming it.
+- [qc-eval-verdict](./qc-eval-verdict.md) covers `just qc` judging an eval-backed criterion's declared demo, `octo-feather-qa --verdict`, from pinned stored runs: the same pass at two heads, insufficient evidence naming a changed role file.
 - [qc-browser](./qc-browser.md) covers `just qc` running a declared browser demo in the qc sandbox and storing its screenshots in the record.
 - [qc-sandbox](./qc-sandbox.md) covers the qc sandbox run by hand (`scripts/octo-feather-qc-sandbox -- CMD`) on srt: its proof and its refused escapes.
 - [qc-sandbox-cost](./qc-sandbox-cost.md) covers the qc sandbox's CPU per run around a judge that does nothing, run after run.

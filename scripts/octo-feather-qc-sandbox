@@ -41,7 +41,8 @@ Setup (this process, outside the judge's namespaces):
         overlay, so an offline `uv sync` finds the box's packages and nothing reaches the real cache; Pi's
         auth.json and models.json per-run copies there, bound over the real files (never written back; none with
         QC_PI=none, a run with no Pi such as a declared demo); the caller's archived lanes and director log bound
-        at a scratch state dir (none with QC_HISTORY=none: a factory eval sees no lane history), and the box
+        at a scratch state dir (none with QC_HISTORY=none: a factory eval sees no lane history), the qa runs dir QC_QA
+     at its qa/ (a declared demo: an eval-backed one reads its pinned stored runs; none without QC_QA), and the box
         onboarding file (the commit identity a role launch applies) at its top
   S. srt's policy (one settings file on the private /tmp): denyRead /tmp (the judge's own empty /tmp), the Herdr and
      gh config dirs, ~/.ssh, git credential files, live lanes/, sessions/, director.toml and director log, every
@@ -85,7 +86,7 @@ Then setup:
      dies with the discard stage: nothing the judge wrote anywhere persists.
 Inputs (env, data only): QC_SESSION, QC_STATE caller's state dir, QC_WORKTREE, QC_KIT, QC_UID/QC_GID, QC_HERDR /
 QC_GH real binaries (empty: not installed), QC_KEEP and QC_RO_BINDS newline-separated paths, QC_PATH_PREPEND,
-QC_RECORD, QC_GHSNAP / QC_GHSNAP_LINE or QC_GHSNAP_OFF, QC_HISTORY=none, QC_PI=none, QC_BROWSER, QC_SHOTS,
+QC_RECORD, QC_GHSNAP / QC_GHSNAP_LINE or QC_GHSNAP_OFF, QC_HISTORY=none, QC_QA, QC_PI=none, QC_BROWSER, QC_SHOTS,
 QC_FD_PROOF / QC_FD_POST / QC_FD_ERR pipe fds.
 Exit: the judge's exit, or 66 when the sandbox or a proof check failed (judge never started).
 """
@@ -168,6 +169,7 @@ INPUTS = (
     "QC_RECORD",
     "QC_KIT",
     "QC_HISTORY",
+    "QC_QA",
     "QC_SESSION",
     "QC_STATE",
     "QC_HERDR",
@@ -789,6 +791,7 @@ def setup(judge: list[str]) -> NoReturn:
     uid, gid = int(E.get("QC_UID") or os.getuid()), int(E.get("QC_GID") or os.getgid())
     nohist = E.get("QC_HISTORY", "none" if hand else "") == "none"
     nopi = E.get("QC_PI", "none" if hand else "") == "none"
+    QA = E.get("QC_QA", "")
     ghoff = E.get("QC_GHSNAP_OFF") or ("" if E.get("QC_GHSNAP") else "github: none (run by hand)")
     ro_binds = [p for p in E.get("QC_RO_BINDS", "").split("\n") if p]
     SCR = f"/tmp/.qc-{S}"
@@ -1040,6 +1043,10 @@ def setup(judge: list[str]) -> NoReturn:
             mount(f"{RS}/director.handoffs.jsonl", f"{SB}/director.handoffs.jsonl", None, MS_BIND)
             hist += 1
             hro.append(f"{SB}/director.handoffs.jsonl")
+        if QA and os.path.isdir(QA):  # read-only through srt's allowRead, as history
+            os.mkdir(f"{SB}/qa")
+            mount(QA, f"{SB}/qa", None, MS_BIND)
+            hro.append(f"{SB}/qa")
         # The box onboarding file read-only at the scratch state dir's top, where a role launch inside (pi-role, under
         # this XDG_STATE_HOME) reads the factory commit identity it applies (scripts/pi-role --help, Commit identity).
         # A bind at another path: srt cannot (its schema binds a path only at itself).
@@ -1241,6 +1248,8 @@ def setup(judge: list[str]) -> NoReturn:
     )
     if E.get("QC_SHOTS"):
         jenv["QC_SCREENSHOTS"] = f"{SCR}/shots"
+    if QA:  # the bound runs, never the caller's path
+        jenv["OCTO_FEATHER_QA_DIR"] = f"{SB}/qa"
     inner = {
         "S": S,
         "SCR": SCR,
@@ -1258,6 +1267,7 @@ def setup(judge: list[str]) -> NoReturn:
         "PI": PI,
         "nopi": nopi,
         "hist": "none" if nohist else hist,
+        "qa": QA,
         "masked": masked,
         "repos": [[r, "/".join(nm)] for r, _, nm in rmask],
         "kept": [KUT, wtp, *sorted({b for _, bs, _ in rmask for b in bs}, key=back.index)],
@@ -1901,6 +1911,17 @@ def inner(cfgp: str, judge: list[str]) -> NoReturn:
         check(
             not w and live == 0 and got == c["hist"],
             f"history read-only ({got} of {c['hist']} bound: archive {af} files, director log {dl} lines); live records masked ({nm} paths, {live} bytes or entries visible)",
+        )
+    if c["qa"] and os.path.isdir(f"{SB}/qa"):
+        qn = len([e for e in os.listdir(f"{SB}/qa") if e != "reviews"])
+        check(
+            not touchable(f"{SB}/qa/.w") and os.environ.get("OCTO_FEATHER_QA_DIR") == f"{SB}/qa",
+            f"qa runs read-only: {c['qa']} at {SB}/qa ({qn} run dirs; OCTO_FEATHER_QA_DIR names it)",
+        )
+    elif c["qa"]:
+        check(
+            not os.path.exists(f"{SB}/qa"),
+            f"qa runs none: {c['qa']} absent, nothing bound",
         )
     HM = os.path.realpath(os.environ["HOME"])
     rbad: list[str] = []
