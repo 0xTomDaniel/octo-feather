@@ -107,9 +107,9 @@ Neither skips a reachable parent, and only the director brings anything to the o
 <table data-anchor="say-table"><caption>How <code>herdr-say</code> answers</caption>
 <thead><tr><th>Situation</th><th>Result</th></tr></thead>
 <tbody>
-<tr data-anchor="say-parent"><td>Sender uses <code>--parent</code></td><td>Delivered to the pane that spawned the sender; the parent survives park and resume</td></tr>
+<tr data-anchor="say-parent"><td>Sender uses <code>--parent</code></td><td>Delivered to the agent that spawned the sender, at the pane its lane record or the director's record names when the message is sent; the parent survives park, restart and resume</td></tr>
 <tr data-anchor="say-wrong-target"><td>A worker targets anything but its parent, or a supervisor targets anything but its parent or an agent in its own workspace</td><td>Refused, exit 77, nothing typed. An accident guard, not security: any process can still call Herdr directly</td></tr>
-<tr data-anchor="say-parent-gone"><td>A worker's parent is gone: Herdr finds no agent and no parked record names it</td><td>Not delivered; the worker keeps its result and stops. <code>herdr-say</code> itself sends the director one fixed alert naming the lane, the gone parent and the worker holding the result, with no text from the worker. Timeouts and uncertain delivery never trigger it, and a worker never messages the director (ADR 0030)</td></tr>
+<tr data-anchor="say-parent-gone"><td>A worker's parent is gone: Herdr finds no agent at its parent's current pane and no parked record names it</td><td>Not delivered; the worker keeps its result and stops. <code>herdr-say</code> itself sends the director one fixed alert naming the lane, the gone parent and the worker holding the result, with no text from the worker. Timeouts and uncertain delivery never trigger it, and a worker never messages the director (ADR 0030)</td></tr>
 <tr data-anchor="say-blocked"><td>The target waits on an interactive prompt</td><td>Not delivered, exit 75, nothing typed; the sender retries once it frees</td></tr>
 <tr data-anchor="say-no-parent"><td><code>--parent</code> with no recorded parent</td><td>Refused, exit 64</td></tr>
 </tbody>
@@ -182,7 +182,7 @@ No custom inbox, daemon, scheduler or new message protocol is added.</p>
 <section data-anchor="lane-record" id="lane-record">
 <h2>Lane state</h2>
 <p data-anchor="session-state">Each Herdr session has its own state directory holding <code>lanes/</code> (each lane's record, hand-off log and <code>archive/</code>) and the director's <code>director.toml</code> and director log. An agent sees and acts only on lanes of its own session.</p>
-<p data-anchor="octo-lane-record-intent">One TOML file per open lane, named after the supervisor agent. The director creates it at launch; only the supervisor updates it in place.</p>
+<p data-anchor="octo-lane-record-intent">One TOML file per open lane, named after the supervisor agent. The director creates it at launch; only the supervisor updates it in place, except its <code>supervisor</code> key, which a supervisor's resume rewrites and the director may correct by hand.</p>
 <div class="table-scroll" data-anchor="lane-record-table-wrap">
 <table data-anchor="lane-record-table"><caption>Lane record keys</caption>
 <thead><tr><th>Key</th><th>Value</th></tr></thead>
@@ -191,7 +191,7 @@ No custom inbox, daemon, scheduler or new message protocol is added.</p>
 <tr data-anchor="octo-lane-record-key-repository"><td><code>repository</code></td><td><code>owner/name</code> where the pull request lives</td></tr>
 <tr data-anchor="octo-lane-record-key-goal"><td><code>goal</code></td><td>One line: the lane title</td></tr>
 <tr data-anchor="octo-lane-record-key-pr"><td><code>pr</code></td><td>Pull request number; absent until one opens</td></tr>
-<tr data-anchor="octo-lane-record-key-supervisor"><td><code>supervisor</code></td><td>The supervisor's Herdr pane id, never its name or tab; a resumed supervisor rewrites it</td></tr>
+<tr data-anchor="octo-lane-record-key-supervisor"><td><code>supervisor</code></td><td>The supervisor's Herdr pane id, never its name or tab; the supervisor's resume rewrites it, and its workers' messages to their parent follow it</td></tr>
 <tr data-anchor="octo-lane-record-key-started"><td><code>started_at</code></td><td>Quoted UTC instant the lane started, written once</td></tr>
 <tr data-anchor="octo-lane-record-key-last-handoff"><td><code>last_handoff_at</code></td><td>Quoted UTC instant of the last worker start, close or hand-off consumed</td></tr>
 <tr data-anchor="octo-lane-record-key-waiting"><td><code>waiting_on</code></td><td><code>""</code>, <code>"blocked"</code>, <code>"director"</code> while escalated, or another lane's issue while parked on it. An owner gate leaves it <code>""</code></td></tr>
