@@ -9,22 +9,47 @@ Removed: agents/supervisor.md "run the implementers of independent tickets (no `
 
 roles `#acceptance-fresh-independent-worker`: "Given a supervisor with a fixture ... containing a closed implementation assignment and independent ready work within actual resource limits, When the supervisor assigns the independent work, Then its worker has a different provider-session identity from the closed assignment and a self-contained task brief."
 
+Two facts chain to the criterion. Each is proven by its own record.
+
+1. **The supervisor starts the independent work with a new spawn, never a resume of the closed session, and sends it a self-contained brief.** This is a model's behaviour, so it is proven by the eval records (step A).
+2. **A new spawn has a different provider-session identity from the closed one, and only a `--resume` reuses it.** This is the real `herdr-spawn`'s behaviour, so it is proven by a kit test the judge can run (step B).
+
+So a worker started as in 1 has, by 2, a provider session different from the closed assignment's.
+
+### A. The supervisor: a new spawn, no `--resume`, a self-contained brief (eval records)
+
 - Fixture: case `closed-assignment-fresh-worker` (evals/supervisor-fresh-worker/cases.json). The closed assignment is implementer-gh13's #13: DONE, integrated, result consumed, parked with provider session `s-w2:p3`. The independent ready work is ticket #14, with room for two more workers. #15 is Blocked by #14.
-- Demo: `scripts/octo-feather-qa --suite supervisor-fresh-worker --runs 3 --baseline b20ee656`, run as part of the lane's final evaluation 20261117T151829Z-60554a (head kit 4c7e2433, baseline b20ee656). closed-assignment-fresh-worker passed 3/3 at the head, every fact in every run, and 3/3 on the baseline. On the earlier baseline, origin/main 7bb5c703, the same case failed in 7 of 13 runs, each by `--resume s-w2:p3` (below, Proof). origin/main b20ee656 passes it too.
+- Run: `scripts/octo-feather-qa --suite supervisor-fresh-worker --runs 3 --baseline b20ee656`, part of the lane's final evaluation 20261117T151829Z-60554a (head kit 4c7e2433, baseline b20ee656). closed-assignment-fresh-worker passed 3/3 at the head, every fact in every run. Each head run spawned `implementer-gh14` with `--role implementer` and no `--resume` (fact `ran herdr-spawn --resume count 0`: pass), sent nothing to the closed worker (`ran herdr-say w2:p3 count 0`, `ran herdr-say implementer-gh13 count 0`: pass), and sent one brief to the new worker. The argvs are copied whole per run below. The baseline b20ee656 passes 3/3 too. On the earlier baseline, origin/main 7bb5c703, the same case failed in 7 of 13 runs, each by `--resume s-w2:p3` (below, Proof).
+- Self-contained brief: this is review, not a fact (schema.md, Facts: `ran` matches arguments only). Each brief below is the only `herdr-say` to the new worker in its run, copied whole. Each names the goal, its write scope and forbidden paths, its worktree and branch with the base commit, the ticket, the spec criterion and the prior commit as pointers, the acceptance criteria with the demo command, the verify gate, and a timebox. None refers to earlier chat with implementer-gh13.
 - Held-out (written by a separate author, run 20261117T194315Z-52b234, head beside b20ee656): `heldout-fw-fresh-worker-new-session` PASS 3/3. The review case `heldout-fw-brief-self-contained` has a recorded verdict of **pass**, read with `scripts/octo-feather-qa --review <run dir> gh840-heldout/heldout-fw-brief-self-contained`: "reviewer code-reviewer-gh840-cases: current PASS r1-3 fresh implementer-24, self-contained brief, no reuse; baseline PASS", 2026-11-17T22:26:18Z. The held-out cases themselves stay private with their author.
+- Stated limit: in the eval sandbox Herdr is a stand-in. Its spawn answer (`provider_session_id=s-w2:p9`) is canned per name, does not look at `--resume`, and is no proof of the session. The session proof is B.
 
-### Why a fresh herdr-spawn yields a new provider session, so the stand-in's distinct id is faithful
+### B. A new spawn's provider session: the real herdr-spawn (kit test, judge-runnable)
 
-The live spawn wrapper, `.agents/skills/herdr-comms/assets/herdr-spawn` (at gh840 9a0248f8):
+Demo: `python3 tests/gate/kit/herdr_messaging.py fresh_worker_session`. It is also the gate item `tests/gate/kit/test_herdr_messaging.py::test_fresh_worker_session`, tagged `roles#acceptance-fresh-independent-worker` (pytest `criterion` marker, tests/gate/conftest.py). It runs the real `.agents/skills/herdr-comms/assets/herdr-spawn` and `herdr-close` against the testkit's Herdr stand-in (tests/gate/kit/testkit/herdr.py), which records each `herdr agent start` argv. Pi's launch is stood in, the spawn wrapper is not.
 
-- lines 87-88: `session="$resume"`, and when there is no `--resume`, `session="$(cat /proc/sys/kernel/random/uuid ...)"`. Every spawn without `--resume` gets a new random UUID.
-- line 94: `launch_argv+=(--session-id "$session")`. Pi starts with that id as its provider session (line 138, `herdr agent start ... -- "${launch_argv[@]}"`).
-- line 240: `line="name=$name ... provider_session_id=$session"`. The spawn prints the id it launched with.
-- herdr-comms SKILL.md line 59: "Each agent gets a fresh `--session-id`, reported as `provider_session_id=`". Line 104: "`--resume SESSION` starts a parked agent with its old `--session-id`".
+1. As supervisor zt1:p0, spawn implementer-gh13 (#13), then close its tab: its assignment is closed.
+2. Spawn implementer-gh14 for the independent #14 without `--resume`. Its `provider_session_id` differs from implementer-gh13's (asserted). The recorded `agent start` argv carries `--session-id <that id>` (asserted for every spawn), so Pi's provider session is the printed one.
+3. Spawn implementer-gh13 with `--resume <its closed session>`. It prints the same `provider_session_id` (asserted), the only way a session is reused.
 
-So the only way a spawn reuses the closed assignment's session is `--resume s-w2:p3`. The `--resume count 0` fact rules that out on the recorded run, and with it any reused identity: live, a spawn without `--resume` gets a new UUID. In the sandbox there is no live Herdr. The case's `herdr-spawn` stand-in (schema.md, Case, stand_ins) answers the wrapper's own output line with a per-pane id, `s-w2:p9` for implementer-gh14, which differs from `s-w2:p3` just as a new UUID would. The stand-in answers by `--workspace w2|"" --name implementer-gh14` and does not look at `--resume`. So a resumed spawn would still print `s-w2:p9`, and the stand-in's id alone is no proof. The `--resume count 0` fact on the recorded argv is the proof, and the argvs are copied whole below.
+Output at this commit (UUIDs differ per run, exit 0):
 
-What makes a brief self-contained is review, not a fact (schema.md, Facts: `ran` matches arguments only). Each brief below is a `herdr-say` to the new worker's pane or name, the only `herdr-say` to that worker in its run, copied whole. Each names the goal, its write scope and forbidden paths, its worktree and branch with the base commit, the ticket, the spec criterion and the prior commit as pointers, the acceptance criteria with the demo command, the verify gate, and a timebox. None refers to earlier chat with implementer-gh13. The held-out review verdict above is the recorded judgment on the same question.
+```
+herdr-spawn --name implementer-gh13 : name=implementer-gh13 role=implementer tab=zt1:t1 pane=zt1:p1 cwd=/tmp/fresh_worker_session-o1hr3_s5/wt-implementer-gh13 contract=pi-role provider_session_id=2510991b-f291-4e8d-aa95-00cd97e56ae4
+herdr-close zt1:t1: implementer-gh13's assignment closed
+herdr-spawn --name implementer-gh14 : name=implementer-gh14 role=implementer tab=zt1:t2 pane=zt1:p2 cwd=/tmp/fresh_worker_session-o1hr3_s5/wt-implementer-gh14 contract=pi-role provider_session_id=92758ab2-8344-4b0f-a320-8dcd81cf381a
+herdr-spawn --name implementer-gh13 --resume 2510991b-f291-4e8d-aa95-00cd97e56ae4: name=implementer-gh13 role=implementer tab=zt1:t3 pane=zt1:p3 cwd=/tmp/fresh_worker_session-o1hr3_s5/wt-implementer-gh13 contract=pi-role provider_session_id=2510991b-f291-4e8d-aa95-00cd97e56ae4
+fresh_worker_session: ok
+```
+
+Proven to catch a reuse: with herdr-spawn's session line 88 changed to a fixed id (a scratch edit, reverted), the scenario fails at step 2's assertion. Gate run: `just test tests/gate/kit/test_herdr_messaging.py::test_fresh_worker_session`, 1 passed.
+
+Source of the rule it proves, `.agents/skills/herdr-comms/assets/herdr-spawn`:
+
+- lines 87-88: `session="$resume"`, and when there is no `--resume`, a new random UUID.
+- line 94: `--session-id "$session"`.
+- line 240: `provider_session_id=$session`.
+- herdr-comms SKILL.md line 59: "Each agent gets a fresh `--session-id`, reported as `provider_session_id=`".
 
 ### Per run, closed-assignment-fresh-worker, run 20261117T151829Z-60554a
 
