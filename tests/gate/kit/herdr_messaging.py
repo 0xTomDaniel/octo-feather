@@ -494,7 +494,8 @@ def parent_resumed(s: Scratch) -> None:
     lane gh7's supervisor gone with no park (a Herdr restart), resumed by `octo-feather-start
     --name gh7 --resume S` on a new pane: the lane record's `supervisor` names it, every other line
     unchanged, and its implementer's `herdr-say --parent RESULT` (OCTO_FEATHER_PARENT still the old
-    pane) lands there, exit 0, the director receiving nothing; the director then edits the record
+    pane) lands there as the notice naming its result file, exit 0, the director receiving
+    nothing; the director then edits the record
     by hand and the next send follows it; that pane gone with no parked line, the director gets the
     one parent-gone alert, exit 68. Parked with `herdr-close --park` and resumed the same way:
     the same. Each observation printed, for the qc demo."""
@@ -509,7 +510,7 @@ def parent_resumed(s: Scratch) -> None:
     show(f"octo-feather-start --resume: {record.name} supervisor = {new}, other lines unchanged")
     ran = s.run([SAY, "--parent", RESULT], env=worker)
     assert worker["OCTO_FEATHER_PARENT"] == sup["pane"], worker
-    assert to(d, new) == [RESULT], lines(d / "prompts")
+    assert to(d, new) == [noted(s, worker)], lines(d / "prompts")
     assert to(d, "w0:p1") == [], lines(d / "prompts")
     show(f"implementer --parent: exit 0 {ran.err.strip()}; {new} received: {to(d, new)}")
 
@@ -517,8 +518,8 @@ def parent_resumed(s: Scratch) -> None:
     (d / "agents.json").write_text(json.dumps(agents | {"w9:p1": agent("w9:p1", "gh7b", "idle")}))
     record.write_text(record.read_text().replace(new, "w9:p1"))
     s.run([SAY, "--parent", RESULT], env=worker)
-    assert to(d, "w9:p1") == [RESULT], lines(d / "prompts")
-    assert to(d, new) == [RESULT], lines(d / "prompts")
+    assert to(d, "w9:p1") == [noted(s, worker)], lines(d / "prompts")
+    assert to(d, new) == [noted(s, worker)], lines(d / "prompts")
     show(f"record hand-edited to w9:p1: the next --parent reached w9:p1: {to(d, 'w9:p1')}")
     drop(d, "w9:p1")
     ran = s.run([SAY, "--parent", RESULT], want=68, env=worker)
@@ -547,7 +548,7 @@ def parked_resumed(s: Scratch) -> None:
     new = start(s, "--name", "gh7", "--resume", json.loads(park.out)["session"])["pane"]
     assert f'supervisor = "{new}"' in record.read_text(), record.read_text()
     s.run([SAY, "--parent", RESULT], env=worker)
-    assert to(d, new) == [RESULT], lines(d / "prompts")
+    assert to(d, new) == [noted(s, worker)], lines(d / "prompts")
     assert to(d, "w0:p1") == [], lines(d / "prompts")
     show(f"supervisor parked, resumed as {new}: implementer --parent exit 0, {new} received it")
 
@@ -578,8 +579,158 @@ def director_moved(s: Scratch) -> None:
     assert toml == f'# the director\npane = "{new}"\n', toml
     ran = s.run([SAY, "--parent", RESULT], env=worker)
     assert worker["OCTO_FEATHER_PARENT"] == "w0:p1", worker
-    assert to(d, new) == [RESULT], lines(d / "prompts")
+    assert to(d, new) == [noted(s, worker, "director", "general-worker-a1")], lines(d / "prompts")
     show(f"director resumed as {new}: general worker --parent exit 0 {ran.err.strip()}")
+
+
+REPORT = "DONE commit abc123: the report\nevidence: just fast green\nnext: review"
+
+
+def results_dir(s: Scratch, owner: str = "lanes/gh7") -> Path:
+    """OWNER's results dir in S's state: a lane's, or `director` for the director's own."""
+    return state_dir(s) / f"{owner}.results"
+
+
+def reported(s: Scratch, worker: dict[str, str], owner: str = "lanes/gh7") -> Path:
+    """The result file WORKER's report sits in, asserted holding REPORT whole."""
+    f = results_dir(s, owner) / f"{worker['OCTO_FEATHER_SESSION_ID']}.md"
+    assert REPORT in f.read_text(), f.read_text()
+    return f
+
+
+def notice(f: Path, first: str = REPORT.splitlines()[0], name: str = "implementer-gh7") -> str:
+    """The notice herdr-say sends the parent for a report (FIRST its first line) by worker NAME
+    (`<role>-<ticket>`) kept in result file F."""
+    role = name.rpartition("-")[0]
+    return f"{name} reported ({role}); read {f}. First line: {first}"
+
+
+def noted(s: Scratch, worker: dict[str, str], owner: str = "lanes/gh7", name: str = "") -> str:
+    """The notice for WORKER's one-line report RESULT (NAME, else implementer-gh7), its file
+    in OWNER's results dir."""
+    f = results_dir(s, owner) / f"{worker['OCTO_FEATHER_SESSION_ID']}.md"
+    return notice(f, RESULT, name or "implementer-gh7")
+
+
+def result_compacting(s: Scratch) -> None:
+    """comms result file (owner ruling 2026-11-18 #954): lane gh7's implementer reports with
+    `herdr-say --parent REPORT` while its supervisor compacts for 4 s: the result file
+    lanes/gh7.results/<its session>.md holds REPORT before any prompt, with a heading naming it;
+    the supervisor receives one notice naming the file and REPORT's first line, one prompt sent,
+    no resend (#882's queued path kept), exit 0. Each observation printed, for the qc demo."""
+    d, sup, worker = supervised(s)
+    agents = json.loads((d / "agents.json").read_text())
+    agents[sup["pane"]]["compacting_until"] = time.time() + 4
+    (d / "agents.json").write_text(json.dumps(agents))
+    ran = s.run([SAY, "--parent", REPORT], env=worker)
+    f = reported(s, worker)
+    heading = r"^## \S+Z implementer-gh7 \(implementer\)$"
+    assert re.search(heading, f.read_text(), re.MULTILINE), f.read_text()
+    sent = [x for x in lines(d / "log") if x.startswith("agent prompt ")]
+    assert to(d, sup["pane"]) == [notice(f)], lines(d / "prompts")
+    assert len(sent) == 1, sent
+    assert "queued" in ran.err, ran.err
+    show(f"result file {f.name}: {f.read_text().splitlines()[0]}")
+    show(f"supervisor compacting: {len(sent)} prompt, received: {to(d, sup['pane'])}")
+
+
+def result_resumed(s: Scratch) -> None:
+    """comms result file: lane gh7's supervisor gone (a Herdr restart), resumed by
+    `octo-feather-start --resume` on a new pane; its implementer's `herdr-say --parent REPORT`:
+    the new pane receives the notice naming the result file, which holds REPORT; the old pane and
+    the director nothing."""
+    d, sup, worker = supervised(s)
+    drop(d, sup["pane"])
+    new = start(s, "--name", "gh7", "--resume", sup["provider_session_id"])["pane"]
+    s.run([SAY, "--parent", REPORT], env=worker)
+    f = reported(s, worker)
+    assert to(d, new) == [notice(f)], lines(d / "prompts")
+    assert [x.split("\t")[0] for x in lines(d / "prompts")] == [new], lines(d / "prompts")
+    show(f"supervisor resumed as {new}: received {to(d, new)}")
+
+
+def spawned(s: Scratch, d: Path, sup: dict[str, str], name: str, role: str) -> dict[str, str]:
+    """Worker NAME (ROLE) spawned by lane gh7's supervisor through herdr-spawn: its tab env."""
+    spawn = [str(ASSETS / "herdr-spawn"), "--workspace", sup["workspace"], "--name", name]
+    spawn += ["--label", name, "--role", role, "--cwd", str(s.root)]
+    got = dict(x.split("=", 1) for x in s.run(spawn, env=tab_env(d, sup["pane"])).out.split())
+    return tab_env(d, got["pane"])
+
+
+def results_listing(s: Scratch) -> None:
+    """comms result file, the parent's listing: lane gh7's supervisor spawns implementer-gh7
+    (reports with `herdr-say --parent`), general-worker-a (live, no report), corrector-gh7 (then
+    gone from Herdr, no report, no parked line), code-reviewer-gh7 (parked) and general-worker-b
+    (an attempt line closes it). `octo-feather-handoff results` run as the supervisor lists, one
+    line each, name, pane, state and result: implementer-gh7 its result file, general-worker-a
+    `none yet`, corrector-gh7 `ended, no result file`, code-reviewer-gh7 parked `none yet`, and
+    not general-worker-b; the lane log unchanged. The demo: each line printed."""
+    d, sup, impl = supervised(s)
+    log = state_dir(s) / "lanes" / "gh7.handoffs.jsonl"
+    live = spawned(s, d, sup, "general-worker-a", "general-worker")
+    ended = spawned(s, d, sup, "corrector-gh7", "corrector")
+    parked = spawned(s, d, sup, "code-reviewer-gh7", "code-reviewer")
+    done = spawned(s, d, sup, "general-worker-b", "general-worker")
+    drop(d, ended["HERDR_PANE_ID"])
+    drop(d, parked["HERDR_PANE_ID"])
+    line = {"at": "2026-11-18T00:00:00Z", "kind": "parked", "pane": parked["HERDR_PANE_ID"]}
+    line |= {"name": "code-reviewer-gh7", "session": parked["OCTO_FEATHER_SESSION_ID"]}
+    attempt = {"at": "2026-11-18T00:00:01Z", "kind": "attempt", "worker": "general-worker-b"}
+    attempt |= {"session": done["OCTO_FEATHER_SESSION_ID"], "result": "done"}
+    with log.open("a") as f:
+        f.write(json.dumps(line) + "\n" + json.dumps(attempt) + "\n")
+    s.run([SAY, "--parent", REPORT], env=impl)
+    f = reported(s, impl)
+    before = log.read_text()
+    out = s.run([kit("octo-feather-handoff"), "results"], env=tab_env(d, sup["pane"])).out
+    got = [x.split("\t") for x in out.splitlines()]
+    for row in got:
+        show("results: " + " | ".join(row))
+    want = [
+        ["implementer-gh7", impl["HERDR_PANE_ID"], "live idle", str(f)],
+        ["general-worker-a", live["HERDR_PANE_ID"], "live idle", "none yet"],
+        ["corrector-gh7", ended["HERDR_PANE_ID"], "ended", "ended, no result file"],
+        ["code-reviewer-gh7", parked["HERDR_PANE_ID"], "parked", "none yet"],
+    ]
+    assert got == want, got
+    assert log.read_text() == before, "results wrote the log"
+
+
+def director_prune(s: Scratch) -> None:
+    """comms result file, the director's remover: the director w0:p1 spawns general workers
+    a1, a2 and a3, each reporting with `herdr-say --parent` into director.results/; a1's and
+    a2's files 8 days old, a3's fresh; a1 and a3 then gone from Herdr. `octo-feather-start
+    --director --resume` removes a1's file only (old, its worker gone), keeps a2's (live) and
+    a3's (fresh)."""
+    d = herdr_world(s, {"w0:p1": agent("w0:p1", "director", "idle")})
+    s.env["HERDR_SESSION"] = f"prune-{os.getpid()}"
+    s.identity()
+    s.git(s.root, "init", "-q", "-b", "main", "target")
+    state = state_dir(s)
+    (state / "lanes").mkdir(parents=True)
+    (state / "director.toml").write_text('pane = "w0:p1"\n')
+    hand = {"HERDR_PANE_ID": "w0:p1", "HERDR_WORKSPACE_ID": "w0"}
+    files: dict[str, Path] = {}
+    for n in ("a1", "a2", "a3"):
+        spawn = [str(ASSETS / "herdr-spawn"), "--workspace", "w0", "--name", f"general-worker-{n}"]
+        spawn += ["--label", n, "--role", "general-worker", "--cwd", str(s.root)]
+        pane = dict(x.split("=", 1) for x in s.run(spawn, env=hand).out.split())["pane"]
+        worker = tab_env(d, pane)
+        s.run([SAY, "--parent", REPORT], env=worker)
+        files[n] = reported(s, worker, "director")
+        if n != "a2":
+            drop(d, pane)
+    old = time.time() - 8 * 86400
+    for n in ("a1", "a2"):
+        os.utime(files[n], (old, old))
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    with (state / "director.handoffs.jsonl").open("a") as f:  # no background reflection
+        f.write(json.dumps({"at": stamp, "kind": "reflection"}) + "\n")
+    drop(d, "w0:p1")
+    start(s, "--director", "--resume", "D1")
+    left = sorted(p.name for p in results_dir(s, "director").iterdir())
+    assert left == sorted([files["a2"].name, files["a3"].name]), left
+    show(f"director start: removed {files['a1'].name} (8 days, worker gone); kept {left}")
 
 
 def merged_repo(s: Scratch) -> tuple[Path, str]:
@@ -1051,4 +1202,8 @@ if __name__ == "__main__":
         fresh_worker_session,
         parent_resumed,
         director_moved,
+        result_compacting,
+        result_resumed,
+        results_listing,
+        director_prune,
     )

@@ -574,6 +574,11 @@ def cmd_archive(args: list[str]) -> int:
         raise Refuse(f"move failed ({e}); nothing archived, every file left in {lanes}: fix the cause, then rerun") from e
     for f in files:
         print(f"archived: {archive / f.name} sha256={before[f.name]}")
+    results = lanes / f"{name}.results"   # its workers' result files (herdr-say): moved here, their one remover
+    if results.is_dir() and not os.path.lexists(archive / results.name):
+        results.rename(archive / results.name); print(f"archived: {archive / results.name}")
+    elif results.is_dir():
+        print(f"not archived: {results}: {archive / results.name} exists; move it by hand", file=sys.stderr)
     return 0
 
 

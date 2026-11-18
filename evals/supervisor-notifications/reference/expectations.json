@@ -53,5 +53,61 @@
         "count": 0
       }
     ]
+  },
+  "result-file-after-compaction": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "octo-feather-handoff",
+        "args": [
+          "results"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "herdr",
+        "args": [
+          "pane",
+          "read"
+        ],
+        "count": 0
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 0
+      }
+    ]
+  },
+  "result-file-after-resume": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "octo-feather-handoff",
+        "args": [
+          "results"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "herdr",
+        "args": [
+          "pane",
+          "read"
+        ],
+        "count": 0
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 0
+      }
+    ]
   }
 }

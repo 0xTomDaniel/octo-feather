@@ -69,7 +69,7 @@ while (($#)); do
     --parent) [[ -n "${OCTO_FEATHER_PARENT:-}" ]] || { echo "herdr-say: no parent recorded for this pane" >&2; exit 64; }
               resolved="$("$here/../../../../scripts/octo-feather-handoff" parent "$OCTO_FEATHER_PARENT")" &&
                 [[ -n "$resolved" ]] && OCTO_FEATHER_PARENT="$resolved"
-              shift; set -- "$OCTO_FEATHER_PARENT" "$@"; break ;;
+              to_parent=1; shift; set -- "$OCTO_FEATHER_PARENT" "$@"; break ;;
     --) shift; break ;;
     -*) echo "herdr-say: unknown option $1" >&2; exit 64 ;;
     *) break ;;
@@ -77,6 +77,12 @@ while (($#)); do
 done
 (($# == 2)) || { usage; exit 64; }
 target="$1"; message="$2"; bound="${bound:-900}"
+# A worker's --parent report goes to its result file before any prompt, and the parent gets the
+# notice naming it (octo-feather-handoff --help, report); no file written: the report whole.
+if [[ -n "${to_parent:-}" ]] && notice="$("$here/../../../../scripts/octo-feather-handoff" report <<<"$message")" &&
+  [[ -n "$notice" ]]; then
+  message="$notice"
+fi
 
 # The up-chain guard. Resolves TARGET to a pane and workspace through Herdr.
 allowed() {

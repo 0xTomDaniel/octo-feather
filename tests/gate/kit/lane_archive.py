@@ -3,7 +3,8 @@
 scratch state dir (default and named HERDR_SESSION): a lane closed through the command, sha256
 before = after (the hand-off log: its lines unchanged, then the lane reflection's line, spec comms
 #reflection-lane), lanes/ no longer lists it, archive/ holds both; a lane without a hand-off log;
-each refusal leaves every entry in place; a failed move rolls back. The world is
+each refusal leaves every entry in place; a failed move rolls back. The lane's results dir
+(its workers' result files) moves into archive/ with it. The world is
 testkit.reflector's, each reflector finding no gap (test_lane_reflect.py covers the reflection)."""
 
 from __future__ import annotations
@@ -93,8 +94,12 @@ def archived(s: Scratch) -> None:
     top = st.top
     st.seed(top, "gh0")
     st.seed(top, "gh1")
+    (top / "gh0.results").mkdir()
+    (top / "gh0.results" / "S0.md").write_text("## report\n")
     other = [(p.name, p.read_bytes()) for p in sorted(top.glob("gh1.*"))]
     st.archive_ok(top, "gh0", "")
+    moved = top / "archive" / "gh0.results" / "S0.md"
+    assert moved.read_text() == "## report\n", "results dir not moved with the lane"
     assert [(p.name, p.read_bytes()) for p in sorted(top.glob("gh1.*"))] == other, (
         "another lane changed"
     )

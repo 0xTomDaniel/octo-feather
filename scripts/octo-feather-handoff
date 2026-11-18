@@ -31,6 +31,27 @@ director log) names it through its owner record, the lane record's `supervisor` 
 `pane`, as that record reads now, so a hand edit is what the next call follows. PANE (the frozen
 OCTO_FEATHER_PARENT) when no such line or no such key. Whether that pane is live is herdr-say's.
 
+report reads a worker's report on stdin, for its `herdr-say --parent` (comms spec #notify-done):
+for a worker role (OCTO_FEATHER_ROLE implementer, code-reviewer, corrector or general-worker)
+whose spawn line `parent` finds, it appends the report (a `## AT NAME (ROLE)` heading, UTC, then
+the report whole) to its result file beside that log, `<log stem>.results/<session>.md`
+(lanes/<lane>.results/ or director.results/), and prints the one-line notice herdr-say sends
+instead: the file and the report's first line. Prints nothing (herdr-say sends the report whole)
+for any other role or with no such line; a write that fails is named on stderr, exit 1.
+
+results lists the caller's outstanding workers, read-only: each spawn or worker-spawn line in the
+log HERDR_PANE_ID owns (as spawn --caller finds it) whose session no later attempt line names, the
+latest per session; one tab-separated line each: name, pane, state, result. State is `live STATUS`
+while `herdr agent get NAME` finds it (its current pane shown), `parked` when not and a parked
+line in that log names it, else `ended`; `unknown (...)` when that lookup fails another way.
+Result is its result file when one exists, else `ended, no result file` for an ended worker and
+`none yet` otherwise. Exit 65 when the caller owns no log.
+
+prune-results removes the director's result files (director.results/*.md) older than 7 days whose
+worker (named by the director log's spawn line for that session) Herdr no longer finds;
+each removal named on stderr. octo-feather-start runs it. A lane's results dir moves with the
+lane at `octo-feather-lane archive`.
+
 repoint NAME reads the line herdr-spawn printed for a resumed agent on stdin and writes its pane=
 into NAME's record in the caller's session state: lanes/NAME.toml `supervisor`, or director.toml
 `pane` for NAME `director`; only that key's line, in place (added first when absent), every other
@@ -52,6 +73,7 @@ import os
 import re
 import subprocess
 import sys
+import time
 from pathlib import Path
 from typing import cast
 
@@ -60,6 +82,8 @@ from handoff_log import encode, read_log
 
 SPAWN_KINDS = ("spawn", "worker-spawn")
 DIRECTOR_LOG = "director.handoffs.jsonl"
+WORKER_ROLES = ("implementer", "code-reviewer", "corrector", "general-worker")
+PRUNE_AGE_S = 7 * 86400  # a director result file's age before prune-results may remove it
 
 
 def now() -> str:
@@ -121,18 +145,137 @@ def owner_record(log: Path) -> tuple[Path, str]:
     return log.with_name(log.name.removesuffix(".handoffs.jsonl") + ".toml"), "supervisor"
 
 
+def own_spawn() -> tuple[Path, dict[str, object]] | None:
+    """The hand-off log holding the caller's spawn line (its `session` OCTO_FEATHER_SESSION_ID;
+    lane logs first, then the director log) and its latest such line, or None."""
+    session = os.environ.get("OCTO_FEATHER_SESSION_ID", "")
+    if not session:
+        return None
+    state = state_dir()
+    logs = [*sorted((state / "lanes").glob("*.handoffs.jsonl")), state / DIRECTOR_LOG]
+    for log in (x for x in logs if x.is_file()):
+        spawns = [r for r in read_log(log)[0] if r.get("kind") in SPAWN_KINDS]
+        mine = [r for r in spawns if r.get("session") == session]
+        if mine:
+            return log, mine[-1]
+    return None
+
+
 def parent(args: argparse.Namespace) -> int:
     """Print the caller's parent pane (module docstring)."""
-    pane, session = cast("str", args.pane), os.environ.get("OCTO_FEATHER_SESSION_ID", "")
-    state = state_dir() if session else None
-    if state is not None:
-        logs = [*sorted((state / "lanes").glob("*.handoffs.jsonl")), state / DIRECTOR_LOG]
-        for log in (x for x in logs if x.is_file()):
-            spawns = (r for r in read_log(log)[0] if r.get("kind") in SPAWN_KINDS)
-            if any(r.get("session") == session for r in spawns):
-                pane = str(toml_key(*owner_record(log)) or pane)
-                break
+    pane, found = cast("str", args.pane), own_spawn()
+    if found is not None:
+        pane = str(toml_key(*owner_record(found[0])) or pane)
     sys.stdout.write(pane + "\n")
+    return 0
+
+
+def results_dir(log: Path) -> Path:
+    """The result files' dir beside hand-off LOG: `<its stem>.results`."""
+    return log.with_name(log.name.removesuffix(".handoffs.jsonl") + ".results")
+
+
+def report(_: argparse.Namespace) -> int:
+    """Append a worker's report to its result file and print the notice, or nothing (docstring)."""
+    role = os.environ.get("OCTO_FEATHER_ROLE", "")
+    found = own_spawn() if role in WORKER_ROLES else None
+    text = sys.stdin.read()
+    if found is None:
+        return 0
+    log, spawn = found
+    name = str(spawn.get("name") or spawn.get("worker") or "")
+    path = results_dir(log) / f"{spawn['session']}.md"
+    try:
+        path.parent.mkdir(exist_ok=True)
+        with path.open("a", encoding="utf-8") as f:
+            f.write(f"## {now()} {name} ({role})\n\n{text.rstrip()}\n\n")
+    except OSError as e:
+        sys.stderr.write(f"octo-feather-handoff: result file {path} not written ({e})\n")
+        return 1
+    first = next((x.strip() for x in text.splitlines() if x.strip()), "")
+    sys.stdout.write(f"{name} reported ({role}); read {path}. First line: {first}\n")
+    return 0
+
+
+def herdr_agent(target: str) -> dict[str, object] | str | None:
+    """Herdr's agent TARGET (`herdr agent get`): its fields, None when Herdr finds none, or why
+    the lookup failed."""
+    get = ["herdr", "agent", "get", target]
+    try:
+        got = subprocess.run(get, capture_output=True, text=True, check=False)
+    except OSError as e:
+        return str(e)
+    if got.returncode == 0:
+        try:
+            out = cast("dict[str, dict[str, dict[str, object]]]", json.loads(got.stdout))
+            return out["result"]["agent"]
+        except (ValueError, KeyError, TypeError):
+            return f"unreadable answer: {got.stdout.strip()[:200]}"
+    if "agent_not_found" in got.stdout + got.stderr:
+        return None
+    said = (got.stderr or got.stdout).strip().splitlines()
+    return said[-1] if said else "no output"
+
+
+def outstanding(records: list[dict[str, object]]) -> list[dict[str, object]]:
+    """RECORDS' spawn lines whose session no later attempt line names, the latest per session."""
+    open_: dict[str, dict[str, object]] = {}
+    for r in records:
+        session = str(r.get("session") or "")
+        if r.get("kind") in SPAWN_KINDS and session:
+            open_.pop(session, None)
+            open_[session] = r
+        elif r.get("kind") == "attempt":
+            open_.pop(session, None)
+    return list(open_.values())
+
+
+def results(_: argparse.Namespace) -> int:
+    """List the caller's outstanding workers and their result files (module docstring)."""
+    pane = os.environ.get("HERDR_PANE_ID", "")
+    log = owned_log(pane) if pane else None
+    if log is None:
+        why = f"pane {pane or '(no HERDR_PANE_ID)'} owns no lane record nor director.toml"
+        sys.stderr.write(f"octo-feather-handoff: {why}: no hand-off log to list\n")
+        return 65
+    records = read_log(log)[0] if log.is_file() else []
+    parked = [r for r in records if r.get("kind") == "parked"]
+    for spawn in outstanding(records):
+        name = str(spawn.get("name") or spawn.get("worker") or "")
+        at, file = str(spawn.get("pane") or ""), results_dir(log) / f"{spawn['session']}.md"
+        found = herdr_agent(name or at)
+        if isinstance(found, dict):
+            at, state = str(found.get("pane_id") or at), f"live {found.get('agent_status')}"
+        elif isinstance(found, str):
+            state = f"unknown (herdr agent get {name or at} failed: {found})"
+        elif any({p.get("name"), p.get("pane")} & {name, at} - {None, ""} for p in parked):
+            state = "parked"
+        else:
+            state = "ended"
+        none = "ended, no result file" if state == "ended" else "none yet"
+        sys.stdout.write("\t".join((name, at, state, str(file) if file.is_file() else none)) + "\n")
+    return 0
+
+
+def prune_results(_: argparse.Namespace) -> int:
+    """Remove the director's old result files of gone workers (module docstring)."""
+    state = state_dir()
+    log, files = state / DIRECTOR_LOG, sorted((state / "director.results").glob("*.md"))
+    spawns = read_log(log)[0] if files and log.is_file() else []
+    names = {
+        str(r.get("session")): str(r.get("name") or r.get("worker") or "")
+        for r in spawns
+        if r.get("kind") in SPAWN_KINDS
+    }
+    for f in files:
+        name = names.get(f.stem, "")
+        try:
+            old = time.time() - f.stat().st_mtime > PRUNE_AGE_S
+        except OSError:
+            continue
+        if old and name and herdr_agent(name) is None:
+            f.unlink(missing_ok=True)
+            sys.stderr.write(f"octo-feather-handoff: removed {f} ({name} gone, over 7 days)\n")
     return 0
 
 
@@ -261,6 +404,9 @@ LEVERS = {
     "resume-workspace": resume_workspace,
     "parent": parent,
     "repoint": repoint,
+    "report": report,
+    "results": results,
+    "prune-results": prune_results,
 }
 
 
@@ -276,6 +422,9 @@ def main() -> int:  # noqa: C901 (encode and parked, then the levers' dispatch)
     commands.add_parser("resume-workspace")
     commands.add_parser("parent").add_argument("pane")
     commands.add_parser("repoint").add_argument("name")
+    commands.add_parser("report")
+    commands.add_parser("results")
+    commands.add_parser("prune-results")
     spawn = commands.add_parser("spawn")
     spawn.add_argument("--ticket")
     spawn.add_argument("--caller")

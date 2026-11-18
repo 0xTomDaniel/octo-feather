@@ -230,6 +230,9 @@ resumes, `herdr-say`'s header. A resumed agent gets the message prefixed
 `herdr-say --parked TARGET` prints that line, or exits 1.
 `herdr-say --parent` finds the parent by identity at each send, not by the pane
 frozen at spawn: `octo-feather-handoff --help`, parent.
+A worker's `herdr-say --parent` report goes to a result file, and the parent
+gets a notice naming it: `octo-feather-handoff --help`, report. The parent's
+listing of its workers and their result files: `octo-feather-handoff results`.
 `herdr-wake check` counts a parked supervisor as present, so a spec review hand-off
 resumes it.
 

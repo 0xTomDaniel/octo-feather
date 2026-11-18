@@ -76,6 +76,8 @@ reflect_due() {
   local state; state="$("$root/scripts/octo-feather-state")"; mkdir -p "$state"
   (cd "$cwd" && exec nohup "$root/scripts/octo-feather-lane" reflect --director --due) \
     >>"$state/director-reflection.out" 2>&1 </dev/null &
+  # The director's old result files of gone workers: octo-feather-handoff --help, prune-results.
+  "$root/scripts/octo-feather-handoff" prune-results >&2 || true
 }
 spawn() { # $1: workspace id; run in the target, where pi-role resolves {tracker}
   cd "$cwd" && "$root/.agents/skills/herdr-comms/assets/herdr-spawn" --workspace "$1" --name "$name" \
