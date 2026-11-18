@@ -1,0 +1,14 @@
+Seeded defect: the mise proof failing for a dir with tools not installed names no install command (octo-feather-mise-install DIR).
+diff --git a/scripts/octo-feather-qc-sandbox b/scripts/octo-feather-qc-sandbox
+index 97ef12ba..cafb588e 100755
+--- a/scripts/octo-feather-qc-sandbox
++++ b/scripts/octo-feather-qc-sandbox
+@@ -1518,7 +1518,7 @@ def mise_tools(wt: str, kit: str, env: Mapping[str, str]) -> tuple[bool, str]:
+                 m = [f"{tn}@{v.get('version')}" for tn, v in own if not v.get("installed")]
+             if m:
+                 miss.append(f"{dr}: {' '.join(m)}")
+-                fix.append(f"{shlex.quote(helper)} {shlex.quote(dr)}")
++                pass
+             names = " ".join(f"{tn}@{v.get('version')}" for tn, v in own)
+             judged.append(f"{dr}: {names or 'none'}")
+     finally:

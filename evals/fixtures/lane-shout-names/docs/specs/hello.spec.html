@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Hello spec</title></head>
+<body>
+<h1>Hello</h1>
+<p>The app greets people from its CLI.</p>
+<h2 id="acceptance">Acceptance</h2>
+<p data-acceptance-criterion data-anchor="acceptance-greet">Given a name, When <code>app hello Ada</code> runs, Then it prints <code>Hello, Ada</code> and exits 0.</p>
+<p data-acceptance-criterion data-anchor="acceptance-shout">Given a name, When <code>app hello Ada --shout</code> runs, Then it prints <code>HELLO, ADA!</code>.</p>
+<p data-acceptance-criterion data-anchor="acceptance-shout-json">Given a name, When <code>app hello Grace --shout --json</code> runs, Then the <code>text</code> field is <code>HELLO, GRACE!</code>.</p>
+</body>
+</html>

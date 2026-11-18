@@ -6,6 +6,11 @@ tests/lib/qa.sh's: a session's socket is a file under the config dir naming the 
 with no socket a call fails `server_not_running`; `pane list` prints nothing; `agent list` prints
 no agent in Herdr's envelope; any other call prints
 {"session": S}.
+Its panes, one per workspace, as the qc sandbox's judge spawns one (#997): `workspace create`
+prints a root pane, `pane run P CMD` starts CMD detached (sh -c, its own session) and logs P in
+the session's dir, `pane list` prints each logged pane. FAKE_HERDR_LEAK set: once past `server`
+and `session stop|delete`, every call answers the default session, as a Herdr reaching its live
+server past every mask would.
 
 With FAKE_HERDR set, it stands for Herdr's agents instead (#666): a world in that dir, each call one
 line in its `log`. `agents.json` maps each pane id to its agent, {name, pane_id, workspace_id,
@@ -39,6 +44,10 @@ TEXT typed, unsent (a line in `typed`), `agent_prompt_stalled`; any other gets i
 "PANE<TAB>TEXT" in `prompts`): an idle one turns working, then idle, so the wait matches; a
 working one (busy, as #619 saw it) never matches, so the wait ends only at --timeout
 (`timeout`), else never.
+An agent holding `compacting_until` (an epoch time) is a Pi compacting until then: a prompt to it
+is queued, not submitted (a line in `queued`), Herdr seeing no turn start (`agent_prompt_stalled`),
+and `agent read` shows Pi's compaction line and each queued text as Pi does (`Steering: TEXT`);
+once that time passed, the next call has Pi take each queued text (a line in `prompts`).
 `pane read` shows a ready Pi prompt; `pane send-keys|send-text` log only. `agent list` prints every
 agent in Herdr's envelope ({"id", "result": {"agents"}}), as `agent get` shows one. A file `down`
 fails every call as a herdr with no server does (`error: could not connect to herdr server`,
@@ -48,6 +57,7 @@ exit 1). Anything else exits 2.
 import json
 import os
 import shutil
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -104,6 +114,36 @@ class World:
             fell_back = isinstance(started, float) and time.time() >= started + IDLE_FALLBACK
             return "idle" if fell_back else "unknown"
         return str(g["agent_status"])
+
+    @staticmethod
+    def compacting(g: dict[str, object]) -> bool:
+        until = g.get("compacting_until")
+        return isinstance(until, (int, float)) and time.time() < until
+
+    def settle(self) -> None:
+        """Pi takes what it queued once its compaction ended: each queued text submitted."""
+        q = self.dir / "queued"
+        kept = list[str]()
+        for x in q.read_text().splitlines() if q.exists() else []:
+            g = self.agents.get(x.split("\t")[0])
+            if g and self.compacting(g):
+                kept.append(x)
+            else:
+                self.note("prompts", x)
+        if q.exists():
+            q.write_text("".join(f"{x}\n" for x in kept))
+
+    def agent_read(self, a: list[str]) -> int:
+        g = self.find(a[2])
+        if g is None:
+            return fail("agent_not_found")
+        q = self.dir / "queued"
+        pane = f"{g['pane_id']}\t"
+        queued = q.read_text().splitlines() if q.exists() else []
+        shown = [f"Steering: {x[len(pane) :]}" for x in queued if x.startswith(pane)]
+        busy = ["Auto-compacting... (escape to cancel)"] if self.compacting(g) else []
+        sys.stdout.write("\n".join([" pi", "", *busy, *shown, " > "]) + "\n")
+        return 0
 
     def tab_create(self, a: list[str]) -> int:
         pane, tab = self.tab(opts(a, "--workspace")[0], a)
@@ -221,6 +261,9 @@ class World:
         s = self.status(g)
         if s == "blocked":
             return fail("agent_blocked")
+        if self.compacting(g):
+            self.note("queued", f"{g['pane_id']}\t{a[3]}")
+            return fail("agent_prompt_stalled")
         if self.booting(g):
             self.note("typed", f"{g['pane_id']}\t{a[3]}")
             return fail("agent_prompt_stalled")
@@ -237,6 +280,7 @@ class World:
         if (self.dir / "down").exists():
             sys.stderr.write("error: could not connect to herdr server\n")
             return 1
+        self.settle()
         if a == ["agent", "list"]:
             agents = [
                 {k: v for k, v in g.items() if k not in HIDDEN} | {"agent_status": self.status(g)}
@@ -261,6 +305,7 @@ class World:
             ("agent", "get"): self.agent_get,
             ("agent", "wait"): self.agent_wait,
             ("agent", "prompt"): self.agent_prompt,
+            ("agent", "read"): self.agent_read,
             ("integration", "install"): self.integration_install,
         }
         if two not in verbs:
@@ -292,8 +337,24 @@ if a[:2] == ["session", "stop"] and len(a) == 3:
 if a[:2] == ["session", "delete"] and len(a) == 3:
     shutil.rmtree(home / "sessions" / a[2], ignore_errors=True)
     sys.exit(0)
+if os.environ.get("FAKE_HERDR_LEAK"):
+    sys.stdout.write(json.dumps({"session": "default"}) + "\n")
+    sys.exit(0)
 if not sock.is_file():
     sys.exit("server_not_running")
+if a[:2] == ["workspace", "create"]:
+    sys.stdout.write(json.dumps({"result": {"root_pane": {"pane_id": "w1:p1"}}}) + "\n")
+    sys.exit(0)
+if a[:2] == ["pane", "run"] and len(a) > 3:
+    with (sock.parent / "panes").open("a") as f:
+        f.write(json.dumps({"pane_id": a[2]}) + "\n")
+    io = subprocess.DEVNULL
+    cmd = ["sh", "-c", " ".join(a[3:])]
+    subprocess.Popen(cmd, stdin=io, stdout=io, stderr=io, start_new_session=True)
+    sys.exit(0)
+if a == ["pane", "list"] and (sock.parent / "panes").is_file():
+    sys.stdout.write((sock.parent / "panes").read_text())
+    sys.exit(0)
 if a == ["agent", "list"]:
     sys.stdout.write(json.dumps({"id": "1", "result": {"agents": []}}) + "\n")
 elif a != ["pane", "list"]:
