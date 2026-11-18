@@ -2,26 +2,28 @@
 (testkit.main): scripts/octo-feather-lane seam, is a test's seam written down on its ticket from the
 ticket's criteria before the test (AGENTS.md Rules, integration test seam; rules: octo-feather-lane
 --help (seam); correction lane #987), offline. The ticket is real: lane gh840's #876, read through
-the github-issues skill's issue-notes from real gh's recorded answers
-(testkit/recordings/lane-seam.json: issue-view 876 --notes), and the test commit a scratch commit carrying the real test
-commit's author time (74f80a78, fresh_worker_session at the herdr-spawn CLI, 2026-11-18T03:24:33Z).
+the github-issues skill's issue-view --notes from real gh's recorded answers
+(testkit/recordings/lane-seam.json), and the test commit a scratch commit carrying the real test
+commit's author time (74f80a78, fresh_worker_session at the herdr-spawn CLI, 03:24:33Z).
 As recorded #876 holds no seam record for herdr-spawn: refused. The same answers with a seam
 record added before the test pass; added at the real late comment's time, or edited after the test,
 refused. A Linear target reads the same through the linear skill's issue-view --notes, the testkit's
-Linear stand-in (testkit/linear.py) replaying a tape built here: a description record counts by the
-issue's last update (Linear keeps no description edit time), so one updated after the test is refused."""
+Linear stand-in (testkit/linear.py) replaying a tape built here: a description record counts by
+the issue's last update (Linear keeps no description edit time), so one updated after the test is
+refused."""
 
 from __future__ import annotations
 
 import json
-from pathlib import Path
-
 import os
+from pathlib import Path
+from typing import Any, cast
 
 from lane_tickets import VIEW
 from testkit import HERE, Ran, Scratch, kit, main
 
-# gh 2.102.0 on 0xTomDaniel/octo-feather, 2026-11-18 (each recording's source): issue-notes 876.
+# gh 2.102.0 on 0xTomDaniel/octo-feather, 2026-11-18 (each recording's source):
+# issue-view 876 --notes.
 TAPE = Path(__file__).parent / "testkit" / "recordings" / "lane-seam.json"
 CRIT = "roles#acceptance-fresh-independent-worker"
 TEST_AT = "2026-11-18T03:24:33+00:00"  # 74f80a78's author time on origin/gh840
@@ -29,12 +31,13 @@ RECORD = f"Seam: {CRIT}: `herdr-spawn` kit integration test, Herdr stood in"
 
 
 def answers(*comments: tuple[str, str | None, str]) -> list[dict[str, object]]:
-    """The recorded answers, #876 given COMMENTS (createdAt, lastEditedAt, body) after its real ones."""
-    tape = json.loads(TAPE.read_text())
+    """The recorded answers, #876 given COMMENTS (createdAt, lastEditedAt, body) after its real
+    ones."""
+    tape = cast("list[dict[str, object]]", json.loads(TAPE.read_text()))
     for r in tape:
-        if r["request"].startswith("api graphql"):
-            d = json.loads(r["out"])
-            nodes = d["data"]["repository"]["issue"]["comments"]["nodes"]
+        if str(r["request"]).startswith("api graphql"):
+            d = cast("dict[str, Any]", json.loads(str(r["out"])))
+            nodes = cast("list[object]", d["data"]["repository"]["issue"]["comments"]["nodes"])
             for i, (at, edited, body) in enumerate(comments):
                 url = f"https://github.com/0xTomDaniel/octo-feather/issues/876#issuecomment-{i + 1}"
                 nodes.append({"url": url, "createdAt": at, "lastEditedAt": edited, "body": body})
@@ -66,14 +69,20 @@ def gh840(s: Scratch) -> None:
     ), f"real #876: {r.out}"
     assert "tell your supervisor" in r.out, f"a test already written names the escalation: {r.out}"
     r = seam(s, answers(), CRIT, "herdr-spawn", want=1)
-    assert "post `Seam: " in r.out and "tell your supervisor" not in r.out, f"no --before: {r.out}"
+    assert "post `Seam: " in r.out, f"no --before: {r.out}"
+    assert "tell your supervisor" not in r.out, f"no --before: {r.out}"
     r = seam(s, answers(("2026-11-18T03:22:00Z", None, RECORD)), *before)
     want = f"876: seam {CRIT} `herdr-spawn` recorded at 2026-11-18T03:22:00Z ("
-    assert r.out.startswith(want) and r.out.endswith(", before commit " + r.out[-8:]), r.out
-    for late in (("2026-11-18T04:21:10Z", None, RECORD), ("2026-11-18T03:00:00Z", "2026-11-18T04:21:10Z", RECORD)):
+    assert r.out.startswith(want), r.out
+    assert r.out.endswith(", before commit " + r.out[-8:]), r.out
+    for late in (
+        ("2026-11-18T04:21:10Z", None, RECORD),
+        ("2026-11-18T03:00:00Z", "2026-11-18T04:21:10Z", RECORD),
+    ):
         r = seam(s, answers(late), *before, want=1)
         said = "recorded on 876 at 2026-11-18T04:21:10Z"
-        assert said in r.out and "at 2026-11-18T03:24:33Z" in r.out, f"late {late[:2]}: {r.out}"
+        assert said in r.out, f"late {late[:2]}: {r.out}"
+        assert "at 2026-11-18T03:24:33Z" in r.out, f"late {late[:2]}: {r.out}"
     fenced = f"```\n{RECORD}\n```"
     r = seam(s, answers(("2026-11-18T03:22:00Z", None, fenced)), *before, want=1)
     assert "no seam record" in r.out, f"a record in a fence: {r.out}"
@@ -96,15 +105,31 @@ def linear_tape(d: Path, updated: str, desc: str, comments: list[dict[str, objec
     linear-cli v3.1.0 prints Linear's answers. Built, not recorded: LINEAR_API_KEY is not set in
     the factory (director decision on #921)."""
     url = "https://linear.app/acme/issue/ENG-1/t"
-    view = {"identifier": "ENG-1", "title": "t", "description": desc, "url": url,
-            "state": {"type": "started"}, "parent": None,
-            "children": {"nodes": [], "pageInfo": {"hasNextPage": False}},
-            "inverseRelations": {"nodes": []}}
-    notes = {"url": url, "createdAt": "2026-11-13T05:37:26.000Z", "updatedAt": updated,
-             "description": desc, "comments": {"nodes": comments, "pageInfo": {"hasNextPage": False}}}
-    calls = [{"argv": ["api", "--no-input", "--variable", "id=ENG-1", q], "stdin": None,
-              "answers": [{"rc": 0, "err": "", "json": {"data": {"issue": i}}}]}
-             for q, i in ((VIEW, view), (NOTES, notes))]
+    view: dict[str, object] = {
+        "identifier": "ENG-1",
+        "title": "t",
+        "description": desc,
+        "url": url,
+        "state": {"type": "started"},
+        "parent": None,
+        "children": {"nodes": [], "pageInfo": {"hasNextPage": False}},
+        "inverseRelations": {"nodes": []},
+    }
+    notes: dict[str, object] = {
+        "url": url,
+        "createdAt": "2026-11-13T05:37:26.000Z",
+        "updatedAt": updated,
+        "description": desc,
+        "comments": {"nodes": comments, "pageInfo": {"hasNextPage": False}},
+    }
+    calls: list[dict[str, object]] = [
+        {
+            "argv": ["api", "--no-input", "--variable", "id=ENG-1", q],
+            "stdin": None,
+            "answers": [{"rc": 0, "err": "", "json": {"data": {"issue": i}}}],
+        }
+        for q, i in ((VIEW, view), (NOTES, notes))
+    ]
     d.mkdir(exist_ok=True)
     (d / "tape.json").write_text(json.dumps({"source": linear_tape.__doc__, "calls": calls}))
     (d / "log").write_text("")
@@ -115,7 +140,10 @@ def linear(s: Scratch) -> None:
     description record passes while the issue was last updated before the test, and is refused
     once it was updated after (a state move counts: Linear keeps no description edit time)."""
     fl = s.root / "fl"
-    s.env |= {"FAKE_LINEAR": str(fl), "PATH": f"{s.bin}{os.pathsep}{HERE / 'linear'}{os.pathsep}{s.env['PATH']}"}
+    s.env |= {
+        "FAKE_LINEAR": str(fl),
+        "PATH": f"{s.bin}{os.pathsep}{HERE / 'linear'}{os.pathsep}{s.env['PATH']}",
+    }
     s.git(s.root, "init", "-q", "-b", "main", "t")
     (s.root / "t" / ".octo-feather.toml").write_text('tracker = "linear"\n')
     s.git(s.root / "t", "add", ".")
@@ -127,13 +155,19 @@ def linear(s: Scratch) -> None:
         return s.run(cmd, want=want, cwd=s.root / "t").out
 
     def note(at: str, edited: str | None) -> dict[str, object]:
-        return {"url": "https://linear.app/acme/issue/ENG-1/t#comment-1", "createdAt": at, "editedAt": edited, "body": RECORD}
+        return {
+            "url": "https://linear.app/acme/issue/ENG-1/t#comment-1",
+            "createdAt": at,
+            "editedAt": edited,
+            "body": RECORD,
+        }
 
     early, late = "2026-11-18T03:22:00.000Z", "2026-11-18T04:21:10.000Z"
     out = run(early, DESC, [note(early, None)], 0)
     assert out.startswith(f"ENG-1: seam {CRIT} `herdr-spawn` recorded at 2026-11-18T03:22:00Z"), out
     out = run(late, DESC, [note(early, late)], 1)
-    assert "class: unlisted-test-seam" in out and "at 2026-11-18T04:21:10Z" in out, f"edited after: {out}"
+    assert "class: unlisted-test-seam" in out, f"edited after: {out}"
+    assert "at 2026-11-18T04:21:10Z" in out, f"edited after: {out}"
     out = run(early, DESC + RECORD + "\n", [], 0)
     assert "recorded at 2026-11-18T03:22:00Z" in out, f"description, updated before: {out}"
     out = run(late, DESC + RECORD + "\n", [], 1)
