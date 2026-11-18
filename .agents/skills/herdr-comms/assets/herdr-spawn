@@ -10,9 +10,7 @@
 # freshly created pane is not yet at a shell prompt, and the agent may open a
 # trust dialog that traps the session. Both are handled and verified.
 # Between them, the pane's shell is adopted into the agent's own systemd user
-# scope (#1000; see scope_shell below): on Linux with no reachable user manager
-# the spawn refuses (exit 69, tab closed, the need named); macOS launches
-# unscoped, its stated limit.
+# scope (herdr_scope.py adopt; rule: herdr-comms SKILL.md, Spawn an agent).
 #
 # The role is this kit's agents/<role>.md. pi-role turns its frontmatter into
 # Pi flags (model, thinking, tool allowlist, skills, system prompt); every agent
@@ -133,31 +131,10 @@ pane="$(jq -r '.result.root_pane.pane_id // empty' <<<"$out")"
 
 close_orphan_tab() { herdr tab close "$tab" >/dev/null 2>&1 || true; }
 
-# The agent's own user scope (#1000): the pane's fresh shell is adopted into a new systemd transient
-# scope, octo-feather-agent-PANE-N.scope, so Pi and everything it starts, detached or not, are its
-# members and herdr-close ends them from that scope alone. Adopted, not wrapped: agent start types
-# `pi ARGS` into the shell itself, and systemd-run cannot adopt a running pid, so this is systemd's
-# D-Bus StartTransientUnit with PIDs (busctl). The scope lives while the pane's shell does, so it
-# outlasts an exited Pi; a member that ignores TERM is killed 10 s into herdr-close's stop. How an agent launches is decided here only: macOS has no systemd and
-# launches unscoped (its stated limit: herdr-close sweeps nothing there); on Linux a failed
-# adoption refuses, the tab closed. That refusal is the one branch that could become an unscoped launch.
-scope_err=""
-scope_shell() {
-  local shell_pid unit
-  shell_pid="$(herdr pane process-info --pane "$pane" | jq -r '.result.process_info.shell_pid // empty')"
-  [[ "$shell_pid" =~ ^[0-9]+$ ]] || { scope_err="herdr pane process-info gave no shell_pid"; return 1; }
-  unit="octo-feather-agent-$pane-$(od -An -N4 -tx4 /dev/urandom | tr -d ' ').scope"
-  scope_err="$(busctl --user call org.freedesktop.systemd1 /org/freedesktop/systemd1 org.freedesktop.systemd1.Manager \
-    StartTransientUnit 'ssa(sv)a(sa(sv))' "$unit" fail 3 PIDs au 1 "$shell_pid" \
-    CollectMode s inactive-or-failed TimeoutStopUSec t 10000000 0 2>&1 >/dev/null)" || { scope_err="busctl: ${scope_err:-failed}"; return 1; }
-  # The call only queues the job: wait until the shell is a member, or what it starts next escapes.
-  for _ in $(seq 1 50); do systemctl --user is-active -q "$unit" && return 0; sleep 0.1; done
-  scope_err="$unit never became active"; return 1
-}
-if [[ "$(uname -s)" != Darwin ]] && ! scope_shell; then
-  echo "herdr-spawn: could not start the agent in its own systemd user scope ($scope_err); it needs a reachable systemd user manager (on a server: loginctl enable-linger $USER, then XDG_RUNTIME_DIR=/run/user/$(id -u)); closing tab $tab" >&2
-  close_orphan_tab; exit 69
-fi
+# The agent's own user scope, adopted before Pi starts (rule: herdr-comms SKILL.md, Spawn an agent;
+# how: herdr_scope.py beside this script). Any failure closes the tab.
+rc=0; "$(dirname "$(readlink -f "$0")")/herdr_scope.py" adopt "$pane" || rc=$?
+if ((rc)); then echo "herdr-spawn: closing tab $tab" >&2; close_orphan_tab; exit "$rc"; fi
 
 # A new root pane may not have reached its shell prompt yet; herdr reports that
 # as the structured error agent_pane_busy. Only that code retries. Any other

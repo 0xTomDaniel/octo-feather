@@ -43,8 +43,9 @@ An agent holding `compacting_until` (an epoch time) is a Pi compacting until the
 is queued, not submitted (a line in `queued`), Herdr seeing no turn start (`agent_prompt_stalled`),
 and `agent read` shows Pi's compaction line and each queued text as Pi does (`Steering: TEXT`);
 once that time passed, the next call has Pi take each queued text (a line in `prompts`).
-`pane list --workspace W` lists W's panes ({pane_id, tab_id, workspace_id, agent_status}), as
-Herdr 0.9.5 does; `pane process-info --pane P` gives P's `shell_pid`: the agent's `shell_pid` a
+`pane list [--workspace W]` lists every pane, or W's ({pane_id, tab_id, workspace_id,
+agent_status, terminal_id, focused, revision}: PaneInfo's required fields), as Herdr 0.9.5
+does; `pane process-info --pane P` gives P's `shell_pid`: the agent's `shell_pid` a
 scenario wrote (a real process standing in for the pane's shell), else a stand-in shell it starts
 (a real process, ending once this world's dir is gone) and records; `tab close` and `workspace
 close` send each closed pane's shell SIGHUP, as Herdr's close does.
@@ -196,7 +197,8 @@ class World:
         w = opts(a, "--workspace")
         panes = [
             {k: g[k] for k in ("pane_id", "tab_id", "workspace_id")}
-            | {"agent_status": self.status(g)}
+            | {"agent_status": self.status(g), "terminal_id": f"term_{g['pane_id']}"}
+            | {"focused": False, "revision": 0}
             for g in self.agents.values()
             if not w or g["workspace_id"] == w[0]
         ]

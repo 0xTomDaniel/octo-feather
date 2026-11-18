@@ -5,18 +5,9 @@
 # Ported from octo-lite (varelaseb/octo-lite@cc6fa4e, Apache-2.0).
 #
 # Closing a tab or space kills its panes, but a detached command child (setsid)
-# survives, reparented. herdr-spawn starts every agent in its own systemd user
-# scope (the pane's shell adopted into octo-feather-agent-PANE-N.scope), so the
-# kernel knows all an agent started, and that scope, not the process tree or any
-# environ tag, is what ends them. Before the close, each closed pane's scope is
-# read from Herdr's own handles only: `herdr pane list --workspace` names the
-# tab's or space's panes, `herdr pane process-info` each pane's shell pid, and
-# /proc/<that pid>/cgroup its scope; no other process is read, so a process
-# elsewhere carrying the closed tab's HERDR_TAB_ID is untouched. After the close,
-# each owned scope is stopped (systemctl --user stop: TERM, then KILL 10 s on);
-# killed= counts its members then. A pane outside such a scope (an agent started
-# before scopes, a hand-started director, macOS, which launches unscoped) is
-# unowned: closed, nothing swept, named in unowned=PANE[,PANE...].
+# survives, reparented: plain close then ends each closed pane's own agent
+# scope, never reading another process (herdr_scope.py close; the rule:
+# herdr-comms SKILL.md, Close an agent or a lane space).
 # A tab id is <space>:<tab>; an id without a colon is a space. A pane id
 # (<space>:p<n>) is mapped to its tab the way --park maps one (herdr agent get)
 # and that tab is closed; one it cannot map fails with nothing closed. Run it
@@ -77,29 +68,8 @@ if [[ "$id" == *:p* ]]; then
   id="$tab"
 fi
 
-if [[ "$id" == *:* ]]; then kind=tab; cmd=(tab close); sel='.tab_id == $id'
-else kind=space; cmd=(workspace close); sel=true; fi
-
-scopes=(); unowned=()
-panes="$(herdr pane list --workspace "${id%%:*}" 2>/dev/null |
-  jq -r --arg id "$id" ".result.panes[]? | select($sel) | .pane_id" 2>/dev/null)" || panes=""
-for p in $panes; do
-  sp="$(herdr pane process-info --pane "$p" 2>/dev/null | jq -r '.result.process_info.shell_pid // empty' 2>/dev/null)" || sp=""
-  cg=""; [[ "$sp" =~ ^[0-9]+$ ]] && cg="$(sed -n 's|^0::||p' "/proc/$sp/cgroup" 2>/dev/null)"
-  if [[ "$cg" == */user@"$(id -u)".service/*/octo-feather-agent-*.scope ]]; then scopes+=("$cg"); else unowned+=("$p"); fi
-done
-
-rc=0
-herdr "${cmd[@]}" "$id" >/dev/null 2>&1 || rc=$?
-
-killed=0
-for cg in "${scopes[@]}"; do
-  n="$(wc -l 2>/dev/null <"/sys/fs/cgroup$cg/cgroup.procs")" || n=0
-  systemctl --user stop "${cg##*/}" >/dev/null 2>&1 && killed=$((killed + n))
-done
-
-report="$kind=$id ${kind}_close_rc=$rc killed=$killed"
-((${#unowned[@]} == 0)) || report+=" unowned=$(IFS=,; echo "${unowned[*]}")"
-if [[ -z "$line" ]]; then echo "$report"
-else echo "$report" >&2; echo "$line"; fi
+scope="$(dirname "$(readlink -f "$0")")/herdr_scope.py"
+[[ -n "$line" ]] || exec "$scope" close "$id"
+rc=0; "$scope" close "$id" >&2 || rc=$?
+echo "$line"
 exit "$rc"

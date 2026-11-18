@@ -150,7 +150,9 @@ detached children close alone leaves running, also when the agent's Pi already
 exited. It reads no other process: one elsewhere tagged with the closed tab's
 `HERDR_TAB_ID` is untouched. A pane outside any agent scope (an agent spawned
 before scopes, a hand-started director, macOS) is unowned: closed, nothing
-swept, named in the report. Run it from outside
+swept, named in the report. A Herdr answer that fails or breaks the shape
+Herdr states for it stops the close before anything is closed (Herdr's exit, or
+76 for a malformed one, the field named; `assets/herdr_scope.py`). Run it from outside
 what it closes: the spawner closes a tab, the director closes a finished lane's
 own space, or only its supervisor tab when the lane started in a shared space.
 Prints `tab= tab_close_rc= killed=` or `space= space_close_rc= killed=`
