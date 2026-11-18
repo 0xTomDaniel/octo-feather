@@ -260,10 +260,11 @@ covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-q
 # origin/main), which needs the eval slot and a real model route: not a qc demo. The agent fallback judge reads its run
 # in evidence/2026-11-13-gh840-supervisor-delegation.md (pass rates on both kits).
 [demo."roles#acceptance-supervisor-delegates-execution"]
-covers = ["agents/supervisor.md", "evals/supervisor-delegation", "evidence/2026-11-13-gh840-supervisor-delegation.md"]
+covers = ["agents/supervisor.md", "agents/implementer.md", "evals/supervisor-delegation", "evals/fixtures/lane-shout-qc-red", "evals/fixtures/lane-shout-qc-red-lane", "evals/fixtures/lane-shout-qc-repaired", "evals/fixtures/lane-shout-qc-fixed", "evidence/2026-11-13-gh840-supervisor-delegation.md"]
 
+# Its merge-ask-on-lane-pr case needs octo-feather-qa's head `then` commits and the stand-in's {head:N} (schema.md, Case).
 [demo."roles#acceptance-delegated-pr"]
-covers = ["agents/supervisor.md", "evals/supervisor-delegation", "evals/supervisor-notifications", "evidence/2026-11-13-gh840-supervisor-delegation.md"]
+covers = ["agents/supervisor.md", "evals/supervisor-delegation", "evals/supervisor-notifications", "evals/fixtures/lane-shout-base", "evals/fixtures/lane-shout-names", "evals/fixtures/lane-shout-qc-fixed", "evals/fixtures/lane-shout-merged", "evals/fixtures/lane-shout-integrated", "scripts/octo-feather-qa", "evidence/2026-11-13-gh840-supervisor-delegation.md"]
 
 # No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-autonomy --runs 3 --baseline
 # origin/main), which needs the eval slot and a real model route: not a qc demo. The agent fallback judge reads its run in
@@ -271,9 +272,11 @@ covers = ["agents/supervisor.md", "evals/supervisor-delegation", "evals/supervis
 [demo."comms#acceptance-autonomous-local"]
 covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11-13-gh840-supervisor-autonomy.md"]
 
-# As comms#acceptance-autonomous-local above; the message content is the review case owner-access-blocker-message.
+# As comms#acceptance-autonomous-local above; the message content is the review case owner-access-blocker-message. The
+# evidence's "How this meets comms #acceptance-real-blocker" maps each Then clause to recorded argv; herdr-say's delivery
+# is proven by the tagged tests in tests/gate/kit/test_herdr_messaging.py.
 [demo."comms#acceptance-real-blocker"]
-covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11-13-gh840-supervisor-autonomy.md"]
+covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11-13-gh840-supervisor-autonomy.md", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/herdr_messaging.py"]
 
 # No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-general-worker --runs 3 --baseline
 # origin/main), which needs the eval slot and a real model route: not a qc demo. The agent fallback judge reads its run in

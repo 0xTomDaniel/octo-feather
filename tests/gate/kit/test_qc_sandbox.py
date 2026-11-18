@@ -13,6 +13,7 @@ from qc_sandbox import (
     network,
     reaped,
     refused_host,
+    same_session,
     srt_missing,
 )
 
@@ -57,3 +58,8 @@ def test_reaped(case: Case) -> None:
 @pytest.mark.e2e  # real live descendant outside the judge PID namespace
 def test_live_survivor(case: Case) -> None:
     case(live_survivor)
+
+
+@pytest.mark.e2e  # real srt and namespaces, two runs of one session at once
+def test_same_session(case: Case) -> None:
+    case(same_session)

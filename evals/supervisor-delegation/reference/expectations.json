@@ -77,5 +77,69 @@
         ]
       }
     ]
+  },
+  "implementer-repairs-qc-failure": {
+    "facts": [
+      {
+        "fact": "branch_paths",
+        "touched": [
+          "src/app/cli.py",
+          "tests/"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "just",
+        "args": [
+          "check"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ]
+      }
+    ]
+  },
+  "merge-ask-on-lane-pr": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "octo-feather-lane",
+        "args": [
+          "merge-ask",
+          "12"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 1
+      }
+    ]
+  },
+  "worker-repair-integrated": {
+    "facts": [
+      {
+        "fact": "branch_paths",
+        "touched": [
+          "src/app/cli.py",
+          "tests/test_cli.py"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 0
+      }
+    ]
   }
 }

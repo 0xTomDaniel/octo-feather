@@ -40,6 +40,8 @@ bad 'c[0]["fake_gh"] = "yes"' "rt/cases.json case order: field fake_gh: must be 
 bad 'del c[4]["head"]["message"]' "rt/cases.json case setup: field head.message: missing" "$t/rt-good" rt
 bad 'c[4]["head"]["fixture"] = "nope"' "rt/cases.json case setup: field head.fixture: no fixture dir" "$t/rt-good" rt
 bad 'c[4]["head"]["branch"] = "work"' "rt/cases.json case setup: field head.branch: must be a new branch name" "$t/rt-good" rt
+bad 'c[4]["head"]["then"] = [{"fixture": "nope", "message": "m"}]' "rt/cases.json case setup: field head.then[0].fixture: no fixture dir" "$t/rt-good" rt
+bad 'c[4]["branches"][0]["then"] = []' "rt/cases.json case setup: field branches[0].then: unknown field" "$t/rt-good" rt
 bad 'c[4]["head"] = "fx2"' "rt/cases.json case setup: field head: must be an object" "$t/rt-good" rt
 bad 'c[4]["branches"][0]["branch"] = "hb"' "rt/cases.json case setup: field branches[0].branch: must be a new branch name" "$t/rt-good" rt
 bad 'c[4]["branches"] = []' "rt/cases.json case setup: field branches: must be a non-empty list" "$t/rt-good" rt
@@ -69,6 +71,7 @@ bad 'e["rpass"]["facts"][0]["count"] = -1' "case rpass fact #1: field count: mus
 bad 'c[0]["stand_ins"] = {"herdr": [{"args": [], "stdout": "", "exit": 300}]}' "case rpass: field stand_ins.herdr: must be a non-empty list of" "$t/ran-good" ran
 bad 'c[0]["stand_ins"] = {"herdr": [{"args": [], "argc": -1, "stdout": "", "exit": 0}]}' "case rpass: field stand_ins.herdr: must be a non-empty list of" "$t/ran-good" ran
 bad 'c[0]["stand_ins"] = {"pi": [{"args": [], "stdout": "", "exit": 0}]}' "case rpass: field stand_ins.pi: must be a command name" "$t/ran-good" ran
+bad 'c[0]["stand_ins"] = {"herdr": [{"args": [], "stdout": "at {head:6}", "exit": 0}]}' "case rpass: field stand_ins.herdr: {head:N} in a stdout must have N from 7 to 40" "$t/ran-good" ran
 bad 'e["rpass"]["facts"][0]["count"] = True' "case rpass fact #1: field count: must be an integer >= 0, got True" "$t/ran-good" ran
 bad 'e["rpass"]["facts"][0]["exit"] = 300' "case rpass fact #1: field exit: must be an integer 0 to 255, got 300" "$t/ran-good" ran
 bad 'e["fweb"]["facts"][0]["tools"] = []' "case fweb fact #1: field tools: must be a non-empty list of tool names" "$t/fl-good" fl

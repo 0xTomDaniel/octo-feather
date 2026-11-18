@@ -792,7 +792,8 @@ def prep(setup):
         env["QA_STAND_LOG"] = f"{QA_TMP}/stand-ins.log"
         here, head = os.getcwd(), subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
         for p, answers in stands.items():
-            fill = [dict(a, stdout=str(a["stdout"]).replace("{repo}", here).replace("{head}", head)) for a in answers]
+            fill = [dict(a, stdout=re.sub(r"\{head:(\d+)\}", lambda m: head[:int(m.group(1))],
+                                          str(a["stdout"]).replace("{repo}", here).replace("{head}", head))) for a in answers]
             Path(f"{QA_TMP}/bin/{p}").write_text(STAND_IN.replace("@NAME@", p).replace("@ANSWERS@", repr(fill)))
             os.chmod(f"{QA_TMP}/bin/{p}", 0o755)
     if fakes:
@@ -1007,6 +1008,13 @@ def fixture_copy(src, scratch, case=None, evals=None):
         shutil.copytree(src, cast("Path", repo), symlinks=True, dirs_exist_ok=True)
         for a in (["add", "-A"], [*commit, h["message"]]):
             subprocess.run(["git", *a], cwd=repo, env=env, check=True, capture_output=True)
+        then = cast("list[dict[str, str]]", cast("dict[str, object]", case["head"]).get("then") or [])
+        for n in then:   # schema.md, Case, head then
+            subprocess.run(["git", "rm", "-rq", "--", "."], cwd=cast("Path", repo), env=env, check=True, capture_output=True)
+            shutil.copytree(fixture_src(*cast("tuple[Path, object, Path]", (evals, n["fixture"], scratch))), cast("Path", repo),
+                            symlinks=True, dirs_exist_ok=True)
+            for a in (["add", "-A"], [*commit, n["message"]]):
+                subprocess.run(["git", *a], cwd=cast("Path", repo), env=env, check=True, capture_output=True)
     on = cast("dict[str, object]", case)
     back = str(cast("dict[str, object]", on["head"])["branch"]) if on.get("head") else "main"
     for b in cast("list[dict[str, str]]", on.get("branches") or []):   # schema.md, Case, branches

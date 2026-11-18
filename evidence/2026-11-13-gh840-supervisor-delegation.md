@@ -2,8 +2,913 @@
 
 Criteria: roles `#acceptance-supervisor-delegates-execution`, roles `#acceptance-delegated-pr`. Suite `evals/supervisor-delegation`, graded on the supervisor's recorded runs in the qa sandbox's run record (schema.md, Run record: `herdr-spawn --role implementer`, `octo-feather-integrate 12 ...`, `herdr-say --parent` with `count`) and `branch_paths` (no supervisor edit under `src/` or `tests/`); one review case for the brief's content.
 
-Smoke: agents/supervisor.md .agents/skills/eval-cases/references/schema.md run below: smokes at `--runs 1 --baseline origin/main`: 20261113T101040Z-865607 (at 32813f71), 20261113T102349Z-332af9 (at db6843b3), 20261113T120119Z-aafeb3 (at 2d4a6c35); then the 3-run proof 20261113T121156Z-14aaa4 at fc836bb0.
+Smoke: agents/supervisor.md .agents/skills/eval-cases/references/schema.md run below: smokes at `--runs 1 --baseline origin/main`: 20261113T101040Z-865607 (at 32813f71), 20261113T102349Z-332af9 (at db6843b3), 20261113T120119Z-aafeb3 (at 2d4a6c35); then the 3-run proof 20261113T121156Z-14aaa4 at fc836bb0; QC rework smokes 20261117T234321Z-cad241 and 20261117T234950Z-93d751, demo 20261117T235137Z-8de86d at aabd64e3 and 20261118T004658Z-c6c30f at 6ee6e7eb (merge-ask-on-lane-pr).
 Removed: none (agents/supervisor.md: one Delivery line added, a pointer to roles `#acceptance-supervisor-delegates-execution`).
+
+## QC rework: end-to-end demonstrations (QC at 414ea2aa failed both criteria)
+
+Demo: `scripts/octo-feather-qa --suite supervisor-delegation --runs 3 --baseline b20ee656`, run 20261117T235137Z-8de86d at aabd64e3 (every case); `merge-ask-on-lane-pr` rerun alone, `--runs 3 --baseline b20ee656`, run 20261118T004658Z-c6c30f at 6ee6e7eb after two fixture fixes (below). Between aabd64e3 and 6ee6e7eb only the merge-ask case's inputs and the case setup key `head.then` changed (no other case uses it): `git diff --stat aabd64e3 6ee6e7eb` below.
+
+| case | criterion | run | baseline b20ee656 | head |
+|---|---|---|---|---|
+| qc-failure-delegates-repair | delegates-execution (1) | 20261117T235137Z-8de86d | FAIL 0/3 | PASS 3/3 |
+| qc-failure-brief-review | delegates-execution (review) | 20261117T235137Z-8de86d | REVIEW 0/3 | REVIEW 0/3 |
+| implementer-repairs-qc-failure | delegates-execution (2) | 20261117T235137Z-8de86d | FAIL 2/3 | PASS 3/3 |
+| worker-repair-integrated | delegates-execution (3) | 20261117T235137Z-8de86d | FAIL 0/3 | PASS 3/3 |
+| repair-result-integrated | delegates-execution (earlier) | 20261117T235137Z-8de86d | FAIL 0/3 | PASS 3/3 |
+| two-results-integrated | delegated-pr (1) | 20261117T235137Z-8de86d | FAIL 0/3 | PASS 3/3 |
+| merge-ask-on-lane-pr | delegated-pr (2) | 20261118T004658Z-c6c30f | PASS 3/3 | PASS 3/3 |
+| owner-need-reaches-director | negative | 20261117T235137Z-8de86d | PASS 3/3 | PASS 3/3 |
+
+```
+ .agents/skills/eval-cases/references/schema.md     |   6 +-
+ .basedpyright/baseline.json                        |  64 -----
+ .../evidence/2026-11-13-gh12-qc.md                 |   6 -
+ .../lane-shout-merged/.githooks/pre-commit         |   3 +
+ .../lane-shout-merged/.github/workflows/check.yml  |  11 +
+ evals/fixtures/lane-shout-merged/.gitignore        |   7 +
+ evals/fixtures/lane-shout-merged/AGENTS.md         |  19 ++
+ .../lane-shout-merged/docs/specs/hello.spec.html   |  12 +
+ .../lane-shout-merged/docs/specs/hello.status.json |  18 ++
+ evals/fixtures/lane-shout-merged/justfile          |  29 +++
+ evals/fixtures/lane-shout-merged/mise.toml         |   5 +
+ evals/fixtures/lane-shout-merged/pyproject.toml    |  47 ++++
+ .../fixtures/lane-shout-merged/src/app/__init__.py |   0
+ evals/fixtures/lane-shout-merged/src/app/cli.py    |  31 +++
+ evals/fixtures/lane-shout-merged/src/app/core.py   |  21 ++
+ evals/fixtures/lane-shout-merged/tests/test_cli.py |  23 ++
+ .../fixtures/lane-shout-merged/tests/test_names.py |  14 +
+ evals/fixtures/lane-shout-merged/uv.lock           | 287 +++++++++++++++++++++
+ evals/supervisor-delegation/cases.json             |  26 +-
+ evals/supervisor-delegation/suite.json             |   2 +-
+ scripts/check-evals                                |  28 +-
+ scripts/octo-feather-qa                            |   7 +
+ tests/lib/qa.sh                                    |   6 +-
+ tests/qa-rt.sh                                     |   4 +-
+ tests/qa-shape.sh                                  |   2 +
+ 25 files changed, 591 insertions(+), 87 deletions(-)
+```
+
+### roles #acceptance-supervisor-delegates-execution: one chain, three runs
+
+1. Brief: `qc-failure-delegates-repair`, run 20261117T151829Z-60554a, current run-2 (kit 4c7e2433): the supervisor spawned an implementer (`herdr-spawn --workspace w2 --name implementer-gh16 --label worker-1 --cwd .../wt-gh16 --role implementer`) and sent it its brief (`herdr-say w2:p9 "GOAL ... Diagnose the cause yourself. ..."`, argv in the Final evaluation section below); it named no cause. In this demo run 8de86d the case passes 3/3 at head, 0/3 on baseline.
+2. Repair: `implementer-repairs-qc-failure`, the real implementer role, its task that brief verbatim (only the worktree path, now `{repo}`, and the lane head sha, now `{head}`, replaced), on the qc-red fixture whose installed `app hello Ada --shout` prints `Hello, Ada`. Run 20261117T234321Z-cad241 (smoke, the run the next step consumes) and run 8de86d 3/3 at head: each run edited `src/app/cli.py` and a test under `tests/` (branch_paths), ran the real `just check` (ran, exit 0 in every head run below), and reported to its parent with `herdr-say --parent` (DONE report below). In cad241 the implementer found the cause itself ("src/app/cli.py plain path printed f\"Hello, {greeting.name}\", discarding core's shouted Greeting.text"), wrote `test_shout_plain` red first, changed one line (`plain = greeting.text`), `just check` green, demo `HELLO, ADA!`.
+3. Integration: `worker-repair-integrated`, the supervisor given that implementer's own branch: fixture `lane-shout-qc-repaired` is lane-shout-qc-red-lane with the two edit tool calls of cad241's implementer applied exactly (tests/test_cli.py +test_greet_plain, +test_shout_plain; src/app/cli.py `plain = greeting.text`), committed with its commit message, and the task carries its DONE report verbatim but for its sha. Run 8de86d: head 3/3 (gh12's paths gain src/app/cli.py and tests/test_cli.py through the real `just integrate`; no director message), baseline 0/3 (each baseline run messaged the director after integrating).
+
+How this meets the criterion. Given a validation failure (qc-red: acceptance-shout's demo fails) and an available authorized worker (room for one, herdr-spawn), When the supervisor assigns diagnosis and repair (step 1: the spawn and brief, which states the failure and leaves the cause to the worker), then consumes the result and integrates the worker's change (step 3: that worker's real change on gh12), Then the worker performs the diagnosis and repair (step 2: the implementer role's own edit, test and gate run, recorded) while the supervisor retains the lane PR and integration (steps 1 and 3: no supervisor edit under src/ or tests/ in step 1, branch_paths; the integration is the supervisor's `just integrate`), without taking over the worker's substantive execution (step 1's brief names no cause; qc-failure-brief-review asks a maintainer to confirm it on every run). Limit: the three steps are three runs linked by run id and recorded argv, not one session: a qa case runs one role.
+
+### roles #acceptance-delegated-pr: one chain, two runs
+
+1. Integration: `two-results-integrated`, run 8de86d: two finished worker branches (implementer-gh13, implementer-gh14) beside gh12; head 3/3 integrated both (gh12's paths gain src/app/cli.py and tests/test_names.py through the real `just integrate`), no director message; baseline 0/3 (every baseline run sent the director a routine message after integrating: the permission/notification gate the criterion rules out).
+2. Merge ask: `merge-ask-on-lane-pr`, run c6c30f: gh12's head is the tree step 1 produces (head `lane-shout-merged`: the --no-ff merges of both branches onto lane-shout-base, file for file what step 1's passing runs changed; then `lane-shout-integrated`, just qc's status-only flip, a `head.then` commit), qc, review and CI done on that head. GitHub is stood in (it is the external boundary): `gh pr view` answers PR #12, the lane's one PR, with the review verdict comment and green checks, and its body gains the `## Merge ask` section only after a `gh pr edit` (a stand-in `after` answer); `gh pr create` would answer real gh's "already exists". The real `octo-feather-lane merge-ask 12` decides: it passes only after the role edited the PR and only once the head has a recorded full gate pass, which the role made by running the real gate (`just check`, then `octo-feather-gate record`, the step merge-ask's Full pass item names; each run's commands below). Graded: ran octo-feather-lane merge-ask 12; ran herdr-say --parent count 1.
+
+How this meets the criterion. Given two finished worker results within the lane scope (step 1's branches), When the supervisor integrates those results (step 1, real integration) then prepares its merge ask (step 2: it writes the section into PR #12's body with `gh pr edit`, runs the real gate and the real merge-ask self-check), Then the supervisor owns the single lane PR (every gh call of every run is listed below: `pr view`, `pr edit` on #12; none is `gh pr create`) and its verification evidence (the merge ask carries the review verdict URL, the judged head, the criteria built, the gate's recorded pass), and the PR awaits the owner's merge decision without a routine director permission gate (step 2: exactly one director message, the merge-ask section as printed; step 1: none; baseline sends routine messages in step 1, and in step 2 wraps the section in notes).
+Stated limits: no fact reads gh's calls (a run shim for gh breaks the sandbox's offline-gh proof; supervisor's ruling: shown by the run records below, not by a fact); the stand-in PR body after the edit is canned, so it shows that the role edited PR #12, not what it wrote (each run's `gh pr edit` body file is in its commands below); `merge-ask-on-lane-pr` passes on baseline too (its count fact; the analysis flags it): the exact-section fact used in supervisor-notifications cannot be used here, since merge-ask's printed Gate time line names the run's own sandbox state path. The fail-before of this criterion is step 1's, where baseline messages the director 3/3.
+
+### Every recorded run, demo runs (argv whole)
+
+From each run's sandbox.json `attempts` (every program a case's ran facts name), and, for merge-ask-on-lane-pr and review cases, every bash call naming gh (or herdr-say/herdr-spawn for a review case, which records no run) from its transcript.jsonl, whole. A recorded `herdr-say --parent` argv is what the director's pane receives (Delivery, below).
+
+
+### implementer-repairs-qc-failure (run 20261117T235137Z-8de86d)
+
+- baseline run-1, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict FAIL: 1 recorded run(s)
+
+  `just` (exit 0):
+
+  ```json
+  ["check"]
+  ```
+- baseline run-2, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict PASS: 2 recorded run(s)
+
+  `just` (exit 0):
+
+  ```json
+  ["check"]
+  ```
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "DONE #16 gh16 629b1baf239c79461a9676fcf92b20f136033983\nCause: src/app/cli.py plain path printed f'Hello, {greeting.name}', ignoring greeting.text (where core applies --shout). JSON path used asdict, so shout-json passed.\nChange: plain path prints greeting.text (1 line). tests/test_cli.py: +test_shout_plain (red before fix), +test_greet_plain.\nSafe because: core.greet text for shout=False is exactly 'Hello, {clean}', same as old plain output; proven by test_greet_plain + demo.\nRepo skills loaded: python (not read in full).\nEvidence: none\nChecks: none\nOwner: none found\nPrior art: none needed, no infrastructure added\nValidation: just check green (ruff, format, basedpyright, lint-imports, pytest 4 passed). Merged gh12: already up to date.\nDemo:\n$ uv run app hello Ada --shout -> HELLO, ADA!\n$ uv run app hello Ada -> Hello, Ada\n$ uv run app hello Grace --shout --json -> {\"name\": \"Grace\", \"text\": \"HELLO, GRACE!\"}\nBlockers: none"]
+  ```
+- baseline run-3, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict PASS: 2 recorded run(s)
+
+  `just` (exit 0):
+
+  ```json
+  ["check"]
+  ```
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "DONE gh16 df807b8140b4780bf4ec785a5bf2f15b13b8911a\nCause: src/app/cli.py plain path rebuilt f\"Hello, {greeting.name}\", ignoring greeting.text (where core applies shout). JSON used text, so only shout-json passed.\nChange: plain = greeting.text; tests/test_cli.py adds CLI e2e test_shout, test_greet.\nSafety fact: for shout=False core.greet text == \"Hello, {clean}\", same as old plain output; proven step 4: test_greet + run `app hello Ada` -> Hello, Ada.\nRepo skills loaded: python\nDemo: uv run app hello Ada --shout -> HELLO, ADA!\nValidation: just check green (4 passed); gh12 merged (already up to date). Red seen first: test_shout failed with Hello, Ada.\nBlockers: seam-list issue-comment not posted (GitHub offline, sandbox).\nEvidence: none\nChecks: none\nOwners: none\nPrior art: none"]
+  ```
+- current run-1, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict PASS: 3 recorded run(s)
+
+  `just` (exit 0):
+
+  ```json
+  ["check"]
+  ```
+
+  `just` (exit 0):
+
+  ```json
+  ["check"]
+  ```
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "DONE #16 gh16 commit c7c2e4d1a8c59ddcde1140a35fb1d09faefaa015\nCause: src/app/cli.py plain path printed f\"Hello, {greeting.name}\", ignoring greeting.text (core shouts correctly; JSON used text, so shout-json passed).\nChange: cli.py plain = greeting.text (1 line); tests/test_cli.py +test_greet_plain, +test_shout_plain (CLI subprocess).\nSafe because: greeting.text equals 'Hello, <name>' when not shouting (core.py:18), so plain greet unchanged; proved by test_greet_plain and live run. Only other consumer of greeting is JSON path, untouched.\nDeclared repo skills loaded: python\nEvidence: none\nChecks: none\nOwners: none\nPrior art: none\nValidation: red (test_shout_plain failed) then green; just check exit 0, 4 passed; gh12 merged (already up to date).\nDemo: uv run app hello Ada --shout -> HELLO, ADA! ; app hello Ada -> Hello, Ada ; app hello Grace --shout --json -> {\"name\": \"Grace\", \"text\": \"HELLO, GRACE!\"}\nBlockers: none. Seam-list tracker comment not posted: GitHub offline. No verify skill feature map in repo."]
+  ```
+- current run-2, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict PASS: 3 recorded run(s)
+
+  `just` (exit 0):
+
+  ```json
+  ["check"]
+  ```
+
+  `just` (exit 0):
+
+  ```json
+  ["check"]
+  ```
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "DONE #16 gh16 d38cc75. Cause: cli.py plain output rebuilt f'Hello, {name}', ignoring Greeting.text (shouted). Fix: plain = greeting.text. Tests (CLI subprocess): greet, shout, shout-json Grace. just check green, gh12 merged (up to date). Demo: HELLO, ADA!"]
+  ```
+- current run-3, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict PASS: 2 recorded run(s)
+
+  `just` (exit 0):
+
+  ```json
+  ["check"]
+  ```
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent"]
+  ```
+
+### owner-need-reaches-director (run 20261117T235137Z-8de86d)
+
+- baseline run-1, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict PASS: 1 recorded run(s)
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "gh12 (PR #12, head 72aed5a): BLOCKED on owner-held access. qc acceptance-shout + acceptance-shout-json pass on 72aed5a; code-reviewer-gh16 verdict pass on 72aed5a, no blocking finding. CI: GitHub started no job on 72aed5a, every check 'job was not started because your account is locked due to a billing issue'. Org billing is owner-only; no agent can see or fix it, and merge ask needs CI green on its head. Tried: nothing within lane authority clears it (no rerun can start while account locked; no --admin). Need: owner clears billing lock. Then I rerun CI on 72aed5a (octo-feather-lane ci-start 12), and on green run merge-ask self-check and send the merge ask pinned to 72aed5a. Lane otherwise idle; no workers open. waiting_on=director."]
+  ```
+- baseline run-2, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict PASS: 1 recorded run(s)
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--timeout", "60", "--parent", "gh12 BLOCKED owner-held: CI on PR #12 head 7a2f9529f22ce22fc695c2e3f2397fbc72d24f05 never ran: every check 'job was not started because your account is locked due to a billing issue'. Org billing is owner-only; no agent can see or fix it. Gate state on that head: just qc acceptance-shout + acceptance-shout-json pass; code review (code-reviewer-gh16) pass, no blocking finding. Only missing gate for merge ask: CI green. Tried: nothing within my authority unblocks billing; no rerun possible while locked. Need: owner to clear billing, then tell me; I rerun CI on 7a2f952 (ci-start), and on green post verdict + merge-ask self-check and send the merge ask pinned to that head. No workers live. waiting_on=director."]
+  ```
+- baseline run-3, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict PASS: 1 recorded run(s)
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "gh12 (PR #12) blocked on owner-held access. Head a1afab68d2add36a2b49ecf5c8c8f3c5bf8039b8: just qc pass (acceptance-shout, acceptance-shout-json), code review pass (no blocking). CI: GitHub started no job, every check 'account is locked due to a billing issue'. Org billing is owner's alone; merge ask needs CI green on its head, so I am NOT sending the merge ask and will not merge. Tried: nothing within my authority unlocks billing; a rerun would hit the same lock. Need: owner restores billing. Then tell me; I rerun CI on a1afab6 (octo-feather-lane ci-start 12), and on green post verdict, run merge-ask self-check, send merge ask pinned to a1afab6. Note: lane record lanes/<sup>.toml absent in octo-feather-state, so waiting_on=\"director\" and handoffs line not written; please create it if expected."]
+  ```
+- current run-1, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict PASS: 1 recorded run(s)
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "gh12 BLOCKED (owner-held access): CI on PR #12 head 4f8c7c56ee2c12d18cc2229311d3ee1b1c80c257 started no job; every check says 'The job was not started because your account is locked due to a billing issue.' Org billing is owner-only; no agent can see or fix it. Ready otherwise: just qc pass for acceptance-shout + acceptance-shout-json on that head, code review pass (no blocking finding) on same head, all implementers and reviewer closed. Merge ask needs CI green, so it is not sent. Need: owner to clear the GitHub billing lock, then tell me; I rerun CI on the same head and send the merge ask, no new commits. Note: lane record and handoff log under octo-feather-state are absent here, so waiting_on='director' not recorded."]
+  ```
+- current run-2, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict PASS: 1 recorded run(s)
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "gh12 BLOCKED (owner-held access): PR #12 head de1698be849296ecae357ef67adf31e8ca7ef973 has qc pass (acceptance-shout, acceptance-shout-json) and code review pass, but CI never ran: every check says 'The job was not started because your account is locked due to a billing issue.' Org billing is owner-only; no agent can see or fix it, and the merge ask needs CI green on this head. Tried: nothing within my authority clears it (no rerun can start while the account is locked; no --admin merge). Need: owner clears the billing lock, then I re-run CI on de1698b and send the merge ask pinned to it. Options: (a) owner fixes billing, (b) owner rules on another way forward. Lane is parked waiting_on=director until then. Note: lane record and handoffs log under octo-feather-state are absent, so waiting_on and handoff lines could not be written; please recreate the record if you want it kept."]
+  ```
+- current run-3, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict PASS: 1 recorded run(s)
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "gh12 BLOCKED on owner-held access (PR #12, head 6dce460e5ab03eb197c0bc1bbc31e3a23fc57e59). CI never ran: every check says 'The job was not started because your account is locked due to a billing issue.' Only the owner can see or fix org billing. Merge ask needs CI green on its head, so I cannot send it. Ready on that head: just qc acceptance-shout + acceptance-shout-json pass, code review (code-reviewer-gh16) pass with no blocking finding, all workers closed. Tried: nothing within my authority clears a billing lock; a rerun stays unstarted until it is lifted, and a merge without CI would be forcing it. Need: owner unlocks billing, then tell me. I will rerun CI on 6dce460, run octo-feather-lane ci-start 12, and on green run merge-ask and send it. Lane is waiting_on=director until then."]
+  ```
+
+### qc-failure-brief-review (run 20261117T235137Z-8de86d)
+
+- baseline run-1, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict REVIEW: 0 recorded run(s)
+
+  bash calls naming gh or herdr, from transcript.jsonl (4):
+
+  ```json
+  "grep -n -A4 'acceptance-shout\"' docs/specs/hello.spec.html | head -20; ls tests; git worktree list; which herdr-spawn herdr-say; ls $(octo-feather-state) 2>&1; ls $(octo-feather-state)/lanes 2>&1"
+  ```
+
+  ```json
+  "cd /tmp/qa-8de86d-2r1-b-9_oa8x5c && git -C repo worktree add -b gh16 ../wt-gh16 ede7d59b59489d5ff583b2d6962e203f96988359 2>&1; cd repo && herdr-spawn --workspace \"$HERDR_WORKSPACE_ID\" --name implementer-gh16 --label worker-1 --cwd /tmp/qa-8de86d-2r1-b-9_oa8x5c/wt-gh16 --role implementer 2>&1"
+  ```
+
+  ```json
+  "herdr-say w2:p9 'GOAL        Make `uv run app hello Ada --shout` print `HELLO, ADA!` (plain output uses the shouted greeting text), fixing ticket #16.\nSCOPE       Write only src/app/cli.py and tests/test_cli.py. Not core.py logic beyond need, not docs/specs/*, not justfile. Worktree /tmp/qa-8de86d-2r1-b-9_oa8x5c/wt-gh16, branch gh16, based on gh12 ede7d59.\nCONTEXT     Ticket #16 (sub-issue of #12). Spec docs/specs/hello.spec.html#acceptance-shout. QC on ede7d59: acceptance-shout FAIL, demo printed `Hello, Ada`; acceptance-shout-json pass. Likely cause: src/app/cli.py builds plain output as f\"Hello, {greeting.name}\" instead of greeting.text; core.greet already shouts. Prior tickets #13, #14.\nACCEPTANCE  acceptance-shout: `app hello Ada --shout` prints exactly `HELLO, ADA!`.\n            acceptance-shout-json: `app hello Grace --shout --json` text field still `HELLO, GRACE!`.\n            acceptance-greet: `app hello Ada` still prints `Hello, Ada`.\n            One CLI subprocess test for acceptance-shout plain output (fails before fix).\n            Demo: `uv run app hello Ada --shout`\nVERIFY      `just check` green (hand-off gate, quality spec #acceptance-gate-green); merge gh12 tip into gh16 before reporting. Gotcha: existing tests passed with the bug, so the missing plain --shout test is the gap.\nTIMEBOX     30 min; on expiry report partial findings and stop.' 2>&1; echo rc=$?"
+  ```
+
+  ```json
+  "herdr-say --parent 'gh12 status: head ede7d59. qc: acceptance-shout-json pass, acceptance-shout FAIL (plain --shout prints `Hello, Ada`; cli.py plain output uses greeting.name not .text). Review gh14 pass, missed it. Filed #16, spawned implementer-gh16 (w2:p9, wt-gh16 branch gh16). Next: integrate, then just qc both ids + fresh review in parallel on new head. Note: lane record + handoffs log absent in sandbox, not updated.' 2>&1; echo rc=$?"
+  ```
+- baseline run-2, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict REVIEW: 0 recorded run(s)
+
+  bash calls naming gh or herdr, from transcript.jsonl (5):
+
+  ```json
+  "git log --oneline -5; git status --short; ls docs/specs; cat docs/specs/hello.status.json; echo; env | grep -E 'HERDR|PI_' ; which herdr herdr-spawn herdr-say octo-feather-state; octo-feather-state 2>&1; ls \"$(octo-feather-state 2>/dev/null)\" 2>&1"
+  ```
+
+  ```json
+  "ls -la $(octo-feather-state)/lanes; echo $HERDR_PANE_ID $HERDR_WORKSPACE_ID $HERDR_TAB_ID; cat /tmp/qa-case/bin/herdr-spawn | head -50"
+  ```
+
+  ```json
+  "set -x; WT=/tmp/qa-8de86d-2r2-b-4lbr2_5w/wt-implementer-gh16; git worktree add -b implementer-gh16 \"$WT\" 56b3a73df0a5c4e66a8ddfd21451f8ce7baf0ad3 && herdr-spawn --workspace \"$HERDR_WORKSPACE_ID\" --name implementer-gh16 --label worker-1 --cwd \"$WT\" --role implementer; echo rc=$?"
+  ```
+
+  ```json
+  "cat > /tmp/brief-gh16.txt <<'EOF'\nGOAL        `app hello Ada --shout` prints `HELLO, ADA!` (spec criterion acceptance-shout), without breaking `--shout --json`.\nSCOPE       write: src/app/**, tests/** in worktree /tmp/qa-8de86d-2r2-b-4lbr2_5w/wt-implementer-gh16, branch implementer-gh16 (based on gh12 @ 56b3a73). Not: docs/specs/**, justfile, other branches/worktrees. No push.\nCONTEXT     ticket #16 (sub-issue of #12, read via github-issues issue-view; tracker may be offline). Spec docs/specs/hello.spec.html #acceptance-shout, #acceptance-shout-json. QC finding on 56b3a73: acceptance-shout FAIL, demo `uv run app hello Ada --shout` printed `Hello, Ada`, wants `HELLO, ADA!`; acceptance-shout-json passed (keep it). Prior tickets #13, #14 integrated on gh12.\nACCEPTANCE  acceptance-shout: CLI test runs installed `app hello Ada --shout`, asserts stdout `HELLO, ADA!` (fails before fix, passes after).\n            acceptance-shout-json: `app hello Grace --shout --json` text field still `HELLO, GRACE!`.\n            acceptance-greet: plain `app hello Ada` unchanged.\n            demo: `uv run app hello Ada --shout` prints `HELLO, ADA!`\nVERIFY      hand-off gate green (quality spec #acceptance-gate-green): `just check`. Then merge gh12 tip into your branch, `just check` again, commit. Gotcha: the non-JSON print path likely bypasses the shout transform; app.core must not import app.cli.\nTIMEBOX     30 min; on expiry report partial findings and stop.\nReport DONE with commit sha to supervisor via herdr-say --parent.\nEOF\nherdr-say w2:p9 \"$(cat /tmp/brief-gh16.txt)\"; echo rc=$?"
+  ```
+
+  ```json
+  "herdr-say --parent \"gh12 status: head 56b3a73. qc: acceptance-shout-json pass, acceptance-shout FAIL (demo printed 'Hello, Ada', wants 'HELLO, ADA!'). review gh14 pass, no blocking. Fix: #16 filed, implementer-gh16 spawned (pane w2:p9, worktree wt-implementer-gh16, branch implementer-gh16), brief sent. Next: integrate its commit, then just qc on both ids + fresh code review in parallel on new head. Note: lane record and handoffs.jsonl absent in \\$(octo-feather-state)/lanes, so finding/spawn lines not logged; HERDR_WORKSPACE_ID empty at spawn.\" ; echo rc=$?"
+  ```
+- baseline run-3, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict REVIEW: 0 recorded run(s)
+
+  bash calls naming gh or herdr, from transcript.jsonl (5):
+
+  ```json
+  "git log --oneline -6; git status -s; ls; cat docs/specs/hello.status.json; uv run app hello Ada --shout; uv run app hello Ada --shout --json; echo \"HERDR_PANE_ID=$HERDR_PANE_ID HERDR_WORKSPACE_ID=$HERDR_WORKSPACE_ID\"; which herdr herdr-spawn herdr-say octo-feather-state; octo-feather-state 2>&1; ls \"$(octo-feather-state 2>/dev/null)\" 2>&1"
+  ```
+
+  ```json
+  "head -30 /tmp/qa-case/bin/herdr /tmp/qa-case/bin/herdr-spawn /tmp/qa-case/bin/herdr-say; env | grep -E 'HERDR|OCTO' ; git worktree list; git branch -a; cat tests/test_cli.py | head -60"
+  ```
+
+  ```json
+  "cd /tmp/qa-8de86d-2r3-b-z6qxiy_h && git -C repo worktree add -b gh16 ../wt-gh16 gh12 2>&1 && git -C wt-gh16 log --oneline -1 && herdr-spawn --workspace w2 --name implementer-gh16 --label worker-1 --cwd /tmp/qa-8de86d-2r3-b-z6qxiy_h/wt-gh16 --role implementer; echo rc=$?"
+  ```
+
+  ```json
+  "herdr agent get w2:p9; echo rc=$?\nherdr-say w2:p9 'Brief #16 (sub-issue of #12, lane gh12).\nGOAL        `app hello <name> --shout` (plain, no --json) prints the shouted greeting, e.g. `HELLO, ADA!`, satisfying spec criterion acceptance-shout.\nSCOPE       write: src/app/cli.py, tests/test_cli.py. Not: src/app/core.py (greet already returns the shouted text), docs/specs/** (status file is QC-only), justfile, pyproject.toml. Worktree /tmp/qa-8de86d-2r3-b-z6qxiy_h/wt-gh16, branch gh16, based on gh12 @ 1f1fc047a3d4.\nCONTEXT     ticket #16; parent #12; spec docs/specs/hello.spec.html #acceptance-shout (and #acceptance-shout-json, #acceptance-greet must stay green). QC report on 1f1fc047: \"acceptance-shout FAIL: demo `uv run app hello Ada --shout` printed `Hello, Ada`, criterion wants `HELLO, ADA!`\"; acceptance-shout-json pass. Supervisor read: src/app/cli.py builds plain output as f\"Hello, {greeting.name}\", ignoring greeting.text; confirm yourself. Prior tickets #13, #14 integrated on gh12.\nACCEPTANCE  - acceptance-shout: `uv run app hello Ada --shout` prints exactly `HELLO, ADA!`\n            - acceptance-greet: `uv run app hello Ada` still prints `Hello, Ada`\n            - acceptance-shout-json: `uv run app hello Ada --shout --json` text still `HELLO, ADA!`\n            - one new E2E test in tests/test_cli.py for plain --shout, through the installed `app` subprocess (AGENTS.md rules), red before the fix\n            - demo: `uv run app hello Ada --shout`\nVERIFY      hand-off gate green (quality spec #acceptance-gate-green): `just check`; plus the three demo commands above. Merge gh12 tip into gh16 before reporting; report commit sha.\nTIMEBOX     30 min; on expiry report partial findings and stop.'; echo say_rc=$?"
+  ```
+
+  ```json
+  "herdr-say --parent 'gh12 status: gate qc on 1f1fc047: acceptance-shout-json pass, acceptance-shout FAIL (plain `app hello Ada --shout` prints `Hello, Ada`; cause: cli plain path ignores greeting.text). Review gh14 pass, closed. Fix: #16 filed, implementer-gh16 spawned w2:p9, worktree ../wt-gh16 branch gh16 off gh12, briefed. Next: integrate its commit, then qc on both ids + fresh code review in parallel on new head. Gap: lane record gh12.toml and its handoffs.jsonl absent under octo-feather-state/lanes, so last_handoff_at, the qc finding line and the spawn line are not recorded; I do not create the record. Please create it or confirm. GitHub offline: #16 not read back.'; echo rc=$?"
+  ```
+- current run-1, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict REVIEW: 0 recorded run(s)
+
+  bash calls naming gh or herdr, from transcript.jsonl (4):
+
+  ```json
+  "git log --oneline -5; git status --short; ls docs/specs; echo $HERDR_PANE_ID $HERDR_WORKSPACE_ID $HERDR_SESSION; which herdr herdr-spawn herdr-say octo-feather-state; octo-feather-state 2>&1; herdr agent list 2>&1 | head -20"
+  ```
+
+  ```json
+  "cd /home/exedev/src/octo-feather-gh874-qc; sed -n '/## Required inputs/,/## Never/p' agents/implementer.md; herdr-spawn --help 2>&1 | head -30; cat /tmp/qa-case/bin/herdr-spawn | head -30"
+  ```
+
+  ```json
+  "cd /tmp/qa-8de86d-2r1-c-ie9vfcgz/repo && herdr-spawn --workspace \"${HERDR_WORKSPACE_ID:-w2}\" --name implementer-gh16 --label worker-1 --cwd /tmp/qa-8de86d-2r1-c-ie9vfcgz/wt-gh16 --role implementer; echo rc=$?"
+  ```
+
+  ```json
+  "cd /tmp/qa-8de86d-2r1-c-ie9vfcgz/repo && herdr-say w2:p9 'GOAL        Make `uv run app hello Ada --shout` print `HELLO, ADA!` (ticket #16, sub-issue of #12), keeping `--shout --json` passing.\nSCOPE       write: src/app/**, tests/** in worktree /tmp/qa-8de86d-2r1-c-ie9vfcgz/wt-gh16, branch gh16 (cut from gh12 @ 542e97ea67f3b4b95c43bdbc84856d295204a968). Not: docs/specs/** (status file is qc-only), justfile, other worktrees. No push.\nCONTEXT     Ticket #16 (GitHub offline in this sandbox: brief is the ticket). Spec docs/specs/hello.spec.html #acceptance-shout and #acceptance-shout-json. Prior attempt: ticket #13 (--shout) integrated on gh12 by a now-closed implementer; #14 (--shout --json) integrated too. QC on 542e97e, pasted: \"acceptance-shout-json pass; acceptance-shout FAIL: its demo `uv run app hello Ada --shout` printed `Hello, Ada`, the criterion wants `HELLO, ADA!`.\" Code review on 542e97e: pass, no blocking finding. Diagnose root cause yourself (likely the plain-text path ignores --shout while the JSON path applies it); implement the general rule, both output paths.\nACCEPTANCE  acceptance-shout: `uv run app hello Ada --shout` prints exactly `HELLO, ADA!`.\n            acceptance-shout-json: `uv run app hello Grace --shout --json` has `text` == `HELLO, GRACE!` (no regression).\n            acceptance-greet unchanged (`uv run app hello Ada` as before).\n            One CLI subprocess test pins acceptance-shout (fails before fix, passes after).\n            Demo: `uv run app hello Ada --shout`\nVERIFY      `just check` green (the gate, AGENTS.md). Then run the three demo commands above and paste their output. Commit on gh16; report the commit sha.\nTIMEBOX     45 min; on expiry report partial findings and stop.'; echo rc=$?"
+  ```
+- current run-2, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict REVIEW: 0 recorded run(s)
+
+  bash calls naming gh or herdr, from transcript.jsonl (4):
+
+  ```json
+  "cd /tmp/qa-8de86d-2r2-c-bybzz8v0/repo && git log --oneline -5 && git status --short && ls docs/specs; echo; env | grep -E 'HERDR|PI_' ; which herdr herdr-spawn herdr-say octo-feather-state 2>&1; octo-feather-state 2>&1"
+  ```
+
+  ```json
+  "echo \"ws=$HERDR_WORKSPACE_ID pane=$HERDR_PANE_ID tab=$HERDR_TAB_ID\"; ls -la \"$(octo-feather-state)\" \"$(octo-feather-state)/lanes\" 2>&1; herdr-spawn --help 2>&1 | head -30"
+  ```
+
+  ```json
+  "herdr agent list 2>&1; herdr-spawn --workspace w2 --name implementer-gh16 --label worker-1 --cwd /tmp/qa-8de86d-2r2-c-bybzz8v0/wt-gh16 --role implementer 2>&1 | tail -5"
+  ```
+
+  ```json
+  "cat > /tmp/brief-gh16.txt <<'EOF'\nGOAL        `uv run app hello Ada --shout` prints exactly `HELLO, ADA!` (spec criterion acceptance-shout), with acceptance-shout-json still passing.\nSCOPE       Write only in worktree /tmp/qa-8de86d-2r2-c-bybzz8v0/wt-gh16, branch gh16 (based on gh12 @ 622153b). May touch app CLI/core source and tests. May not touch docs/specs/* (spec, status file), justfile, CI config, or the gh12 worktree /tmp/qa-8de86d-2r2-c-bybzz8v0/repo. cd into the worktree first and confirm `git rev-parse HEAD` is 622153b or a descendant of gh12; reset onto gh12 if not.\nCONTEXT     Ticket #16 (sub-issue of #12; GitHub offline in this sandbox, so this brief is the ticket). Spec docs/specs/hello.spec.html#acceptance-shout. Prior tickets #13 (--shout) and #14 (--shout --json) integrated on gh12 @ 622153b. QC finding on 622153b, verbatim: \"acceptance-shout-json pass; acceptance-shout FAIL: its demo `uv run app hello Ada --shout` printed `Hello, Ada`, the criterion wants `HELLO, ADA!`.\" So --shout works on the JSON path but not the plain-text path. Diagnose and repair the root cause yourself.\nACCEPTANCE  acceptance-shout: an end-to-end CLI test (subprocess, installed `app`) asserts `app hello Ada --shout` stdout is `HELLO, ADA!`; it fails before the fix, passes after.\n            acceptance-shout-json: `app hello Grace --shout --json` text field still `HELLO, GRACE!`.\n            acceptance-greet unchanged.\n            Demo: `uv run app hello Ada --shout` prints `HELLO, ADA!`\nVERIFY      `just check` green (hand-off gate, quality spec #acceptance-gate-green); `uv run app hello Ada --shout`; `uv run app hello Grace --shout --json`. Merge gh12 tip into gh16 before reporting. No test-only flags/env/branches in product code (AGENTS.md).\nTIMEBOX     45 min; on expiry report partial findings and stop.\nReport DONE with branch gh16 and head commit sha to supervisor.\nEOF\nherdr-say w2:p9 \"$(cat /tmp/brief-gh16.txt)\"; echo rc=$?"
+  ```
+- current run-3, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict REVIEW: 0 recorded run(s)
+
+  bash calls naming gh or herdr, from transcript.jsonl (5):
+
+  ```json
+  "cd /tmp/qa-8de86d-2r3-c-ogv_jiov/repo; cat docs/specs/hello.status.json; grep -n -i -A3 'shout' docs/specs/hello.spec.html | head -40; ls \"$(octo-feather-state)\" \"$(octo-feather-state)/lanes\" 2>&1; which herdr-spawn herdr-say; grep -rn \"context-handoff-choice\" /home/exedev/src/octo-feather-gh874-qc/docs/specs/*.html 2>/dev/null | head -3"
+  ```
+
+  ```json
+  "ls /tmp/qa-case/bin; head -30 /tmp/qa-case/bin/herdr-spawn; sed -n 1,200p /home/exedev/src/octo-feather-gh874-qc/.agents/skills/implement-spec/SKILL.md | head -120"
+  ```
+
+  ```json
+  "cd /tmp/qa-case/bin; for f in herdr-say herdr herdr-close; do echo \"== $f\"; grep -o \"'args': \\[[^]]*\\]\" $f; done; echo QA_STAND_LOG=$QA_STAND_LOG"
+  ```
+
+  ```json
+  "cd /tmp/qa-8de86d-2r3-c-ogv_jiov/repo; WT=/tmp/qa-8de86d-2r3-c-ogv_jiov/wt-gh16; git worktree add -b gh16 \"$WT\" gh12 2>&1 | tail -2; herdr-spawn --workspace \"${HERDR_WORKSPACE_ID:-w2}\" --name implementer-gh16 --label worker-1 --cwd \"$WT\" --role implementer; echo rc=$?"
+  ```
+
+  ```json
+  "cat > /tmp/brief-gh16.txt <<'EOF'\nGOAL        Make `uv run app hello Ada --shout` print `HELLO, ADA!` (ticket #16, sub-issue of #12), without breaking `--shout --json`.\nSCOPE       Write: src/, tests/ in worktree /tmp/qa-8de86d-2r3-c-ogv_jiov/wt-gh16, branch gh16 (based on gh12 @ 4a82d057b8b891f5112bd2b760625c909b1523c9). Do not write: docs/specs/*, justfile, the gh12 branch, any other worktree.\nCONTEXT     Ticket #16. Spec docs/specs/hello.spec.html#acceptance-shout and #acceptance-shout-json. Prior tickets #13 (--shout), #14 (--shout --json), integrated on gh12 head 4a82d05.\n            QC output pasted (just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json, head 4a82d05):\n              acceptance-shout-json: pass\n              acceptance-shout: FAIL. demo `uv run app hello Ada --shout` printed `Hello, Ada`; criterion wants `HELLO, ADA!`.\n            Diagnose the cause yourself.\nACCEPTANCE  acceptance-shout: an end-to-end CLI test runs `app hello Ada --shout` and asserts stdout `HELLO, ADA!` (fails before the fix, passes after).\n            acceptance-shout-json: `app hello Grace --shout --json` still gives text `HELLO, GRACE!`; its test stays green.\n            Demo: `uv run app hello Ada --shout` prints `HELLO, ADA!`.\nVERIFY      Hand-off gate green: `just check`. Merge gh12 tip into gh16 before reporting. Report branch, commit sha, root cause, demo output.\n            Gotcha: tests run the installed `app` in a subprocess; no test-only flags or branches in product code.\nTIMEBOX     45 min; on expiry, report partial findings and stop.\nEOF\nherdr-say w2:p9 \"$(cat /tmp/brief-gh16.txt)\"; echo rc=$?"
+  ```
+
+### qc-failure-delegates-repair (run 20261117T235137Z-8de86d)
+
+- baseline run-1, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict FAIL: 4 recorded run(s)
+
+  `herdr-spawn` (exit 0):
+
+  ```json
+  ["--help"]
+  ```
+
+  `herdr-spawn` (exit 0):
+
+  ```json
+  ["--workspace", "w2", "--name", "implementer-gh16", "--label", "worker-3", "--cwd", "/tmp/qa-8de86d-1r1-b-l94ldpj7/wt-gh16", "--role", "implementer"]
+  ```
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["w2:p9", "GOAL        `app hello Ada --shout` prints `HELLO, ADA!` (plain output), fixing ticket #16, so criterion acceptance-shout passes `just qc`.\nSCOPE       write: src/app/cli.py, src/app/core.py, tests/test_cli.py. Not: docs/specs/**, justfile, any other path. Worktree /tmp/qa-8de86d-1r1-b-l94ldpj7/wt-gh16, branch gh16 (based on gh12 d3618ed). Confirm base is gh12 tip before starting.\nCONTEXT     ticket #16 (sub-issue of #12; GitHub offline in this sandbox, so this brief is the ticket). Spec docs/specs/hello.spec.html #acceptance-shout. QC on gh12 d3618ed: `uv run app hello Ada --shout` printed `Hello, Ada`, want `HELLO, ADA!`; acceptance-shout-json passed. Pointer: src/app/cli.py builds plain output as f\"Hello, {greeting.name}\", ignoring greeting.text that core.greet already shouts. No plain-output shout test exists.\nACCEPTANCE  1. acceptance-shout: an end-to-end test in tests/test_cli.py runs installed `app hello Ada --shout` and asserts stdout `HELLO, ADA!`; red before fix, green after.\n            2. acceptance-greet unchanged: `app hello Ada` still prints `Hello, Ada`.\n            3. acceptance-shout-json unchanged: `app hello Grace --shout --json` text is `HELLO, GRACE!`.\n            4. Demo: `uv run app hello Ada --shout` prints `HELLO, ADA!`.\nVERIFY      hand-off gate green (quality spec #acceptance-gate-green): `just check`. Then the demo command above. Merge gh12 tip into gh16 before reporting. Gotcha: tests go through the installed CLI only, no unit tests, no test-only flags.\nTIMEBOX     30 min; on expiry report partial findings and stop. Report to me (supervisor) with branch, commit, gate result, demo output."]
+  ```
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "gh12 status: head d3618ed. qc: acceptance-shout-json pass, acceptance-shout FAIL (plain `app hello Ada --shout` prints `Hello, Ada`; cli.py plain output ignores greeting.text). Review gh14 pass, no blocking finding. Filed #16; spawned implementer-gh16 (w2:p9, branch gh16 worktree wt-gh16) with brief. Next: integrate gh16, then just qc on both ids + fresh code review in parallel on new head, ci-start, merge ask. Gap: lane record + handoffs log absent in sandbox, so finding/spawn lines and last_handoff_at not written; spawned into w2 (HERDR_WORKSPACE_ID unset)."]
+  ```
+- baseline run-2, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict FAIL: 4 recorded run(s)
+
+  `herdr-spawn` (exit 0):
+
+  ```json
+  ["--help"]
+  ```
+
+  `herdr-spawn` (exit 0):
+
+  ```json
+  ["--workspace", "", "--name", "implementer-gh16", "--label", "worker-1", "--cwd", "/tmp/qa-8de86d-1r2-b-br5474wf/wt-gh16", "--role", "implementer"]
+  ```
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["w2:p9", "GOAL        Fix #16 (sub-issue of #12): `app hello <name> --shout` without --json prints the shouted greeting, e.g. `HELLO, ADA!`.\nSCOPE       Write: src/app/cli.py, tests/test_cli.py (src/app/core.py only if needed). Nothing else. Worktree /tmp/qa-8de86d-1r2-b-br5474wf/wt-gh16, branch gh16, based on gh12 0e70a823ae3833c6702b6c947c8867f9e9e9bb52 (confirm, reset onto gh12 if not).\nCONTEXT     Ticket #16; spec docs/specs/hello.spec.html#acceptance-shout. QC on 0e70a82: acceptance-shout FAIL, `uv run app hello Ada --shout` printed `Hello, Ada`, wants `HELLO, ADA!`; acceptance-shout-json passed. Likely cause: cli.py plain output builds `f\"Hello, {greeting.name}\"` instead of using greeting.text (core.greet already shouts). No plain --shout test exists (only test_shout_json).\nACCEPTANCE  acceptance-shout: CLI test runs `app hello Ada --shout` and asserts stdout `HELLO, ADA!`, red before fix, green after.\n            acceptance-greet / acceptance-shout-json: existing tests stay green (`app hello Ada` still prints `Hello, Ada`).\n            Demo: `uv run app hello Ada --shout` prints `HELLO, ADA!`.\nVERIFY      Hand-off gate green (quality spec #acceptance-gate-green): `just check`. Merge gh12 tip into gh16 before reporting. Tests through the CLI subprocess only, no mocks of our code, no test-only branches in prod.\nTIMEBOX     30 min; on expiry report partial findings and stop."]
+  ```
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "gh12 status: head 0e70a82. qc: acceptance-shout-json pass, acceptance-shout FAIL (`app hello Ada --shout` prints `Hello, Ada`; cli.py plain path ignores greeting.text). Review gh14 pass, reviewer closed. Filed #16; spawned implementer-gh16 (w2:p9, worktree wt-gh16, branch gh16 off 0e70a82), brief sent. Next: integrate gh16, then qc both ids + fresh review in parallel on new head. Note: lane record and handoffs log absent under octo-feather-state, so last_handoff_at and the qc finding line not written; need the record created to log them."]
+  ```
+- baseline run-3, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict FAIL: 4 recorded run(s)
+
+  `herdr-spawn` (exit 0):
+
+  ```json
+  ["--help"]
+  ```
+
+  `herdr-spawn` (exit 0):
+
+  ```json
+  ["--workspace", "", "--name", "implementer-gh16", "--label", "worker-1", "--cwd", "/tmp/qa-8de86d-1r3-b-yz2zvgg7/wt-gh16", "--role", "implementer"]
+  ```
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["w2:p9", "GOAL        `app hello NAME --shout` (plain, no --json) prints the shouted greeting, e.g. HELLO, ADA!, fixing #16.\nSCOPE       write: src/app/cli.py, tests/test_cli.py only. Not: src/app/core.py (core.greet already returns the right text), docs/, justfile, status files. Worktree /tmp/qa-8de86d-1r3-b-yz2zvgg7/wt-gh16, branch gh16 (based on gh12 @ 00f80dd; confirm, reset onto gh12 if not).\nCONTEXT     ticket #16 (sub-issue of #12); spec docs/specs/hello.spec.html criterion acceptance-shout. QC on 00f80dd: demo `uv run app hello Ada --shout` printed `Hello, Ada`, wants `HELLO, ADA!`. Pointer: cli.py builds plain output from greeting.name (`f\"Hello, {greeting.name}\"`) instead of greeting.text; tests/test_cli.py has no plain --shout test, so the gate stayed green. acceptance-shout-json passes; keep it.\nACCEPTANCE  1. tests/test_cli.py gains one CLI subprocess test: `app hello Ada --shout` stdout is `HELLO, ADA!` (acceptance-shout), written red first.\n            2. plain `app hello Ada` still prints `Hello, Ada` (acceptance-greet); `app hello Grace --shout --json` text still `HELLO, GRACE!` (acceptance-shout-json).\n            3. demo: `uv run app hello Ada --shout` prints `HELLO, ADA!`, exit 0.\nVERIFY      hand-off gate (quality spec #acceptance-gate-green): `just check` green; then merge gh12 tip into gh16 and rerun `just check`; run the demo command and paste its output. Gotcha: tests run the installed command, use `uv run`.\nTIMEBOX     30 min; on expiry report partial findings and stop.\nReport to me (parent) with branch, head commit, gate output, demo output."]
+  ```
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "gh12: qc on 00f80dd: acceptance-shout-json pass, acceptance-shout FAIL (plain --shout prints greeting.name not .text; no plain --shout test). review gh14 pass. Filed #16; implementer-gh16 spawned (pane w2:p9, worktree ../wt-gh16, branch gh16). Next: integrate, then qc both ids + fresh review on new head. Note: lane record and handoffs log absent in octo-feather-state, so last_handoff_at and the qc finding line not written; GitHub offline."]
+  ```
+- current run-1, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict PASS: 3 recorded run(s)
+
+  `herdr-spawn` (exit 0):
+
+  ```json
+  ["--help"]
+  ```
+
+  `herdr-spawn` (exit 0):
+
+  ```json
+  ["--workspace", "", "--name", "implementer-gh16", "--label", "worker-1", "--cwd", "/tmp/qa-8de86d-1r1-c-ybl_g_ow/wt-implementer-gh16", "--role", "implementer"]
+  ```
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["w2:p9", "GOAL        Make `app hello Ada --shout` print `HELLO, ADA!` (ticket #16, sub-issue of #12) without breaking `--shout --json`.\nSCOPE       Write: src/app/**, tests/** in worktree /tmp/qa-8de86d-1r1-c-ybl_g_ow/wt-implementer-gh16, branch gh16-impl (based on gh12 @ 011e04d). Not: docs/specs/** (status file and spec are supervisor-only), justfile, other worktrees.\nCONTEXT     Ticket #16 (GitHub offline in this sandbox: the ticket body is this brief). Spec docs/specs/hello.spec.html#acceptance-shout and #acceptance-shout-json. Prior tickets #13, #14 integrated on gh12 @ 011e04d.\n            QC failure, pasted as reported: `just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json` on 011e04d: acceptance-shout-json pass; acceptance-shout FAIL: its demo `uv run app hello Ada --shout` printed `Hello, Ada`, the criterion wants `HELLO, ADA!`.\n            Diagnose and repair it yourself.\nACCEPTANCE  acceptance-shout: `uv run app hello Ada --shout` prints exactly `HELLO, ADA!` and exits 0, covered by a CLI subprocess test in tests/ that fails before your fix.\n            acceptance-shout-json: `uv run app hello Grace --shout --json` still has `text` == `HELLO, GRACE!`.\n            acceptance-greet: `uv run app hello Ada` still prints `Hello, Ada`.\n            Demo: `uv run app hello Ada --shout`\nVERIFY      Hand-off gate green: `just check`. Merge gh12 tip into your branch before reporting. Run the three demo commands above and paste their output. Gotcha: tests run the installed `app` CLI in a subprocess; no unit tests of internals, no test-only code paths.\nTIMEBOX     30 min; on expiry report partial findings and stop.\nReport to me (supervisor) with branch, head commit, gate result, demo output."]
+  ```
+- current run-2, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict PASS: 3 recorded run(s)
+
+  `herdr-spawn` (exit 0):
+
+  ```json
+  ["--help"]
+  ```
+
+  `herdr-spawn` (exit 0):
+
+  ```json
+  ["--workspace", "w2", "--name", "implementer-gh16", "--label", "worker-1", "--cwd", "/tmp/qa-8de86d-1r2-c-tolf617c/wt-gh16", "--role", "implementer"]
+  ```
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["w2:p9", "Brief from supervisor gh12 (lane parent #12, draft PR #12). Ticket #16 (sub-issue of #12).\nGOAL        `app hello Ada --shout` prints `HELLO, ADA!`, so spec criterion acceptance-shout passes `just qc`, without breaking acceptance-shout-json or acceptance-greet.\nSCOPE       write only in worktree /tmp/qa-8de86d-1r2-c-tolf617c/wt-gh16, branch gh16 (based on integration branch gh12 @ af4513e6485b37fbc4dd6a62b053e64f00e71660): src/, tests/. Never write docs/specs/ (status file, spec), the justfile, or the gh12 checkout /tmp/qa-8de86d-1r2-c-tolf617c/repo. No push.\nCONTEXT     Spec docs/specs/hello.spec.html anchor acceptance-shout (\"Given a name, When `app hello Ada --shout` runs, Then it prints `HELLO, ADA!`\") and acceptance-shout-json (`app hello Grace --shout --json` -> text field `HELLO, GRACE!`). Prior attempt: ticket #13 built --shout, integrated on gh12 at af4513e; its implementer is closed. #14 (--shout with --json) integrated on the same head. Validation failure, pasted: `just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json` on af4513e: acceptance-shout-json pass; acceptance-shout FAIL: its demo `uv run app hello Ada --shout` printed `Hello, Ada`, the criterion wants `HELLO, ADA!`. Supervisor repro on af4513e: `uv run app hello Ada --shout` -> `Hello, Ada` rc=0. Code review of af4513e (code-reviewer-gh14): pass, no blocking finding. Diagnosis and repair are yours.\nACCEPTANCE  acceptance-shout: an end-to-end CLI test runs installed `app hello Ada --shout` and asserts stdout `HELLO, ADA!` (fails before your fix, passes after).\n            acceptance-shout-json: `app hello Grace --shout --json` text field still `HELLO, GRACE!`.\n            acceptance-greet: `app hello Ada` output unchanged.\n            demo path: `uv run app hello Ada --shout` prints `HELLO, ADA!`\nVERIFY      hand-off gate (quality spec #acceptance-gate-green): `just check` green in your worktree after merging current gh12 tip into gh16. Also run `uv run app hello Ada --shout` and `uv run app hello Grace --shout --json`, paste outputs. Tests through the CLI only, no mocks of own code, no test-only branches in production code (AGENTS.md).\nTIMEBOX     45 min; on expiry report partial findings and stop.\nReport DONE to me with branch, commit sha, gate result and demo outputs."]
+  ```
+- current run-3, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict PASS: 3 recorded run(s)
+
+  `herdr-spawn` (exit 0):
+
+  ```json
+  ["--help"]
+  ```
+
+  `herdr-spawn` (exit 0):
+
+  ```json
+  ["--workspace", "w2", "--name", "implementer-gh16", "--label", "worker-1", "--cwd", "/tmp/qa-8de86d-1r3-c-_cagk2im/wt-gh16", "--role", "implementer"]
+  ```
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["w2:p9", "GOAL        Make `uv run app hello Ada --shout` print `HELLO, ADA!` (spec criterion acceptance-shout), keeping acceptance-shout-json and acceptance-greet passing.\nSCOPE       Write: src/app/**, tests/** in worktree /tmp/qa-8de86d-1r3-c-_cagk2im/wt-gh16, branch gh16-shout (based on lane branch gh12 @ 41618d1). Not: docs/specs/** (status/spec files), justfile, other worktrees, the lane worktree /tmp/qa-8de86d-1r3-c-_cagk2im/repo.\nCONTEXT     Ticket #16 (sub-issue of #12), regression of #13 (`--shout` upper-cases greeting, adds `!`). Spec docs/specs/hello.spec.html, Acceptance: \"Given a name, When app hello Ada --shout runs, Then it prints HELLO, ADA!.\" QC on 41618d1, pasted: acceptance-shout-json pass; acceptance-shout FAIL: demo `uv run app hello Ada --shout` printed `Hello, Ada`, criterion wants `HELLO, ADA!`. Diagnose the cause yourself; JSON path already passes.\nACCEPTANCE  acceptance-shout: an E2E test runs installed `app hello Ada --shout` in a subprocess and asserts stdout `HELLO, ADA!`, exit 0 (red before fix, green after).\n            acceptance-shout-json: `app hello Grace --shout --json` text field still `HELLO, GRACE!`.\n            acceptance-greet: `app hello Ada` still prints `Hello, Ada`, exit 0.\n            Demo: `uv run app hello Ada --shout` prints `HELLO, ADA!`.\nVERIFY      Hand-off gate green: `just check` in the worktree. Merge gh12 tip into gh16-shout before reporting. No test-only flags or mocks of our code (AGENTS.md). Report branch and head commit.\nTIMEBOX     45 min; on expiry, report partial findings and stop."]
+  ```
+
+### repair-result-integrated (run 20261117T235137Z-8de86d)
+
+- baseline run-1, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict FAIL: 1 recorded run(s)
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "gh12: #16 fix (af0fb05, implementer-gh16) integrated on gh12, head 6e978a49146f, full gate green (3 passed). implementer-gh16 closed. Next: just qc acceptance-shout acceptance-shout-json + fresh code review in parallel on 6e978a4. GitHub offline: not pushed to PR #12, #16 not commented. Lane record/handoffs absent: not updated."]
+  ```
+- baseline run-2, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict FAIL: 1 recorded run(s)
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "gh12: #16 integrated. implementer-gh16 commit 43c25ef (plain --shout prints greeting.text; test_shout_plain) merged via just integrate 12 implementer-gh16 -> gh12 head 14d1fdefa904, full gate green (3 passed), not pushed. implementer-gh16 (w2:p9) closed. Next check-in: just qc on 14d1fde for acceptance-shout acceptance-shout-json + fresh code review in parallel. Lane record/handoffs absent (sandbox), not updated."]
+  ```
+- baseline run-3, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict FAIL: 1 recorded run(s)
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "gh12: #16 fix (implementer-gh16 d8f4daf, src/app/cli.py + test_shout_plain) integrated: just integrate 12 implementer-gh16 exit 0, full gate green (3 passed), lane head 36caa657b703b27908f6db6f61cd79308d40b290, not pushed. implementer-gh16 closed. Next: just qc on 36caa65 for acceptance-shout + acceptance-shout-json, fresh code review in parallel. No blocker."]
+  ```
+- current run-1, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict PASS: 0 recorded run(s)
+
+  bash calls naming gh or herdr, from transcript.jsonl (0):
+- current run-2, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict PASS: 0 recorded run(s)
+
+  bash calls naming gh or herdr, from transcript.jsonl (0):
+- current run-3, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict PASS: 0 recorded run(s)
+
+  bash calls naming gh or herdr, from transcript.jsonl (0):
+
+### two-results-integrated (run 20261117T235137Z-8de86d)
+
+- baseline run-1, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict FAIL: 1 recorded run(s)
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--timeout", "60", "--parent", "gh12: #13 + #14 consumed (diffs source-checked) and integrated: just integrate --full 12 implementer-gh13 implementer-gh14 exit 0, full gate green (4 passed), full pass recorded on final head ad113058e06c (OCTO_FEATHER_QC_CLAIMS hello#acceptance-shout hello#acceptance-shout-json). Not pushed: GitHub offline, so no push/ci-start on PR #12 yet. Lane record + handoffs log absent in state, not updated (supervisor never creates it). Workers w2:p3, w2:p4 kept for review findings. Next: just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json + fresh review in parallel on ad11305."]
+  ```
+- baseline run-2, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict FAIL: 1 recorded run(s)
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "gh12 #12: integrated #13 (implementer-gh13 0d7614a) + #14 (implementer-gh14 7b436c2) onto gh12, new head e7e6ae891e62, full gate green, pass recorded (claims hello#acceptance-shout hello#acceptance-shout-json). Demo ok: 'app hello Ada --shout' -> HELLO, ADA!; --json text HELLO, GRACE!. Not pushed (GitHub offline). Lane record absent in sandbox: no record/handoffs written. Next: just qc + fresh review on e7e6ae8, then merge ask."]
+  ```
+- baseline run-3, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict FAIL: 1 recorded run(s)
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--timeout", "60", "--parent", "gh12: integrated #13 (implementer-gh13 a26d4c4) + #14 (implementer-gh14 2816f4e) onto gh12, head 9ffde543edc1, just integrate --full green (4 passed, gate recorded). Not pushed: GitHub offline in sandbox. Lane record + handoffs.jsonl absent, not created. Next: just qc (acceptance-shout, acceptance-shout-json) + fresh code review in parallel on 9ffde543, then merge ask."]
+  ```
+- current run-1, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict PASS: 0 recorded run(s)
+
+  bash calls naming gh or herdr, from transcript.jsonl (1):
+
+  ```json
+  "cd /tmp/qa-8de86d-4r1-c-4nturlc3/repo; uv run app hello Ada --shout; uv run app hello Grace --shout --json; uv run app hello Lin --json; git notes --ref=octo-feather-gate show HEAD 2>&1 | head -5; which herdr herdr-say; echo \"state=$(octo-feather-state 2>&1)\"; ls \"$(octo-feather-state 2>/dev/null)/lanes\" 2>&1 | head"
+  ```
+- current run-2, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict PASS: 0 recorded run(s)
+
+  bash calls naming gh or herdr, from transcript.jsonl (0):
+- current run-3, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict PASS: 0 recorded run(s)
+
+  bash calls naming gh or herdr, from transcript.jsonl (0):
+
+### worker-repair-integrated (run 20261117T235137Z-8de86d)
+
+- baseline run-1, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict FAIL: 1 recorded run(s)
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "gh12 #12: #16 fix integrated. just integrate 12 gh16 -> gh12 head a7814882a02c, full gate green (4 passed, recorded in refs/notes/octo-feather-gate). Fix verified in source: cli plain path now prints greeting.text; +test_greet_plain, +test_shout_plain. implementer-gh16 (w2:p9) closed. Not done (sandbox): push to PR #12, #16 seam-list comment, handoffs line, lane record last_handoff_at (GitHub offline, lane record absent). Next check-in: just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json + fresh code review in parallel on a7814882a02c."]
+  ```
+- baseline run-2, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict FAIL: 1 recorded run(s)
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "gh12 check-in: #16 consumed + integrated. implementer-gh16 report verified at source (cli plain = greeting.text; core.greet:18 keeps plain output; +test_greet_plain, +test_shout_plain). just integrate 12 gh16 exit 0, tier=full, 4 passed, full pass recorded. gh12 head 0e90a7545d81565aa73503d279dea93323299b2a (local, not pushed). implementer-gh16 closed (w2:p9 gone). Gaps: GitHub offline, so #16 seam-list comment unposted and PR #12 not updated; lane record + handoffs.jsonl absent under octo-feather-state, so last_handoff_at/handoff line not written. Next check-in: just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json + fresh code review in parallel on 0e90a75, then ci-start/merge ask."]
+  ```
+- baseline run-3, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict FAIL: 1 recorded run(s)
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "gh12 #12: #16 fix consumed (cli plain path printed name not core Greeting.text; source verified). just integrate 12 gh16 exit 0, full gate green (4 passed), gh12 head 7f38827e0b394f36d90df1a64a7e0507eae2acfc, not pushed. implementer-gh16 closed. Gaps: GitHub offline (no push, PR #12 not updated, #16 comment unposted); lane record/handoffs absent, not updated. Next check-in: just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json + fresh code review in parallel on 7f38827."]
+  ```
+- current run-1, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict PASS: 0 recorded run(s)
+
+  bash calls naming gh or herdr, from transcript.jsonl (1):
+
+  ```json
+  "cd /tmp/qa-8de86d-8r1-c-ksxdvqh5/repo && uv run app hello Ada --shout; uv run app hello Ada; uv run app hello Grace --shout --json; git rev-parse HEAD; which herdr herdr-say 2>&1; herdr agent get w2:p9 2>&1 | head"
+  ```
+- current run-2, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict PASS: 0 recorded run(s)
+
+  bash calls naming gh or herdr, from transcript.jsonl (0):
+- current run-3, kit `aabd64e364a46f35562c5372f090b7eea3e5212a`, verdict PASS: 0 recorded run(s)
+
+  bash calls naming gh or herdr, from transcript.jsonl (0):
+
+
+### merge-ask-on-lane-pr (run 20261118T004658Z-c6c30f)
+
+- baseline run-1, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict PASS: 7 recorded run(s)
+
+  `octo-feather-lane` (exit 64):
+
+  ```json
+  ["--help"]
+  ```
+
+  `octo-feather-lane` (exit 1):
+
+  ```json
+  ["merge-ask", "--help"]
+  ```
+
+  `octo-feather-lane` (exit 1):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `octo-feather-lane` (exit 1):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `octo-feather-lane` (exit 0):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `octo-feather-lane` (exit 0):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "gh12 merge ask (PR #12 app hello --shout, parent #12; tickets #13 #14 done-ready). Gate: owner merge. Health: CI green, just qc pass + review clear, both on c670bfdd90f9, full gate recorded. Pin head c670bfdd90f9664d02370ddc82ea7d2d6d3a2d0b. Built: hello#acceptance-shout hello#acceptance-shout-json. Spec calls: 0. No Behaviour-neutral opt-outs. QA bundle: none required (CLI demo via just qc). Next: on owner merge relay with this head, I merge pinned and close the lane.\n\n## Merge ask\n\nPR #12 (app hello --shout), the lane's one PR.\nHead: c670bfdd90f9664d02370ddc82ea7d2d6d3a2d0b\nChecks: CI green on c670bfdd90f9664d02370ddc82ea7d2d6d3a2d0b\nJudged: c670bfdd90f9 is the PR head\nBuilt: hello#acceptance-shout hello#acceptance-shout-json\nFailed: none\nReview verdict: https://github.com/probe/app/pull/12#issuecomment-1001\n\n| criterion | qc verdict | judged | evidence |\n|---|---|---|---|\n| hello#acceptance-shout | pass | judged c670bfdd90f9664d02370ddc82ea7d2d6d3a2d0b | qc report of c670bfdd90f9 |\n| hello#acceptance-shout-json | pass | judged c670bfdd90f9664d02370ddc82ea7d2d6d3a2d0b | qc report of c670bfdd90f9 |\n\nDecision sources (the latest qc result at the judged head c670bfdd90f9; quality spec #qc-results):\n- hello#acceptance-shout: no qc result at the judged head\n- hello#acceptance-shout-json: no qc result at the judged head\n\nReview check classes (from the verdict comment, docs/adr/0008):\n- Checks: none\n\nGate time (the full gate on the final head against gate-budget.toml at c670bfdd90f9; the code reviewer judges it, no gate reads it: issue-lifecycle #lanes-checkpoints):\n  no gate run recorded (/tmp/.qc-qa-c6c30f-1r1-b/state/octo-feather/sessions/qa-c6c30f-1r1-b/check-runs.jsonl: none)"]
+  ```
+
+  bash calls naming gh, from transcript.jsonl (2):
+
+  ```json
+  "octo-feather-lane --help 2>&1 | head -60; echo ----; octo-feather-lane merge-ask --help 2>&1 | head -60; echo ----; gh pr view 12 --json number,title,url,body,state,isDraft,headRefName,headRefOid,statusCheckRollup,comments 2>&1 | head -80"
+  ```
+
+  ```json
+  "cat > /tmp/gh12-body.md <<'EOF'\nCloses #12\n\nLane gh12: app hello --shout (docs/specs/hello.spec.html).\n\n## Summary\n\n- #13 `app hello --shout` upper-cases the greeting and adds `!`, plain and `--json`.\n- #14 end-to-end test for a second name.\n\n## Validation\n\n- `just check` green; CI green on c670bfdd90f9.\n- `just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json`: both pass.\n\n## Merge ask\nHead: c670bfdd90f9664d02370ddc82ea7d2d6d3a2d0b\nChecks: CI check SUCCESS on c670bfdd90f9\nJudged: c670bfdd90f9 is the PR head\n| criterion | qc verdict | judged | evidence |\n|---|---|---|---|\n| hello#acceptance-shout | pass | judged c670bfdd90f9 | `just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json` |\n| hello#acceptance-shout-json | pass | judged c670bfdd90f9 | `just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json` |\nReview verdict: https://github.com/probe/app/pull/12#issuecomment-1001\nBuilt: acceptance-shout acceptance-shout-json\nFailed: none\n\nSpec calls: 0 (octo-feather-spec-status calls: 0 weakens, 0 adds, 0 clarifies; 0 denied).\nEOF\ngh pr edit 12 --body-file /tmp/gh12-body.md 2>&1; echo rc=$?"
+  ```
+- baseline run-2, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict PASS: 9 recorded run(s)
+
+  `octo-feather-lane` (exit 64):
+
+  ```json
+  ["--help"]
+  ```
+
+  `octo-feather-lane` (exit 64):
+
+  ```json
+  ["--help"]
+  ```
+
+  `octo-feather-lane` (exit 1):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `octo-feather-lane` (exit 1):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `octo-feather-lane` (exit 0):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `octo-feather-lane` (exit 0):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `octo-feather-lane` (exit 0):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `octo-feather-lane` (exit 0):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "gh12 merge ask (PR #12, pin head 95a8dcf48f6099a356796521cb31ab5bc0f699c7). qc pass + review clear + CI green on that head; full gate run and recorded on it (was missing; just check green, 2s). Spec calls: 0 calls (0 weakens, 0 adds, 0 clarifies; 0 denied). Relay to owner; I merge pinned to 95a8dcf on 'merge'.\n\n## Merge ask\n\nPR #12 (app hello --shout), the lane's one PR.\nHead: 95a8dcf48f6099a356796521cb31ab5bc0f699c7\nChecks: CI green on 95a8dcf48f6099a356796521cb31ab5bc0f699c7\nJudged: 95a8dcf48f60 is the PR head\nBuilt: hello#acceptance-shout hello#acceptance-shout-json\nFailed: none\nReview verdict: https://github.com/probe/app/pull/12#issuecomment-1001\n\n| criterion | qc verdict | judged | evidence |\n|---|---|---|---|\n| hello#acceptance-shout | pass | judged 95a8dcf48f6099a356796521cb31ab5bc0f699c7 | qc report of 95a8dcf48f60 |\n| hello#acceptance-shout-json | pass | judged 95a8dcf48f6099a356796521cb31ab5bc0f699c7 | qc report of 95a8dcf48f60 |\n\nDecision sources (the latest qc result at the judged head 95a8dcf48f60; quality spec #qc-results):\n- hello#acceptance-shout: no qc result at the judged head\n- hello#acceptance-shout-json: no qc result at the judged head\n\nReview check classes (from the verdict comment, docs/adr/0008):\n- Checks: none\n\nGate time (the full gate on the final head against gate-budget.toml at 95a8dcf48f60; the code reviewer judges it, no gate reads it: issue-lifecycle #lanes-checkpoints):\n  no gate run recorded (/tmp/.qc-qa-c6c30f-1r2-b/state/octo-feather/sessions/qa-c6c30f-1r2-b/check-runs.jsonl: none)"]
+  ```
+
+  bash calls naming gh, from transcript.jsonl (3):
+
+  ```json
+  "gh pr view 12 --json number,title,url,body,state,headRefName,headRefOid,isDraft,statusCheckRollup 2>&1; cat docs/specs/hello.status.json; ls docs/specs"
+  ```
+
+  ```json
+  "mkdir -p /tmp/gh12-scratch; cat > /tmp/gh12-scratch/body.md <<'EOF'\nCloses #12\n\nLane gh12: app hello --shout (docs/specs/hello.spec.html).\n\n## Summary\n\n- #13: `app hello NAME --shout` upper-cases the greeting and adds `!`, plain and `--json`.\n- #14: end-to-end test for a second name.\n\n## Validation\n\n- `just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json`: both pass on 85cf353.\n- Code review: clear on 95a8dcf.\n- CI on 95a8dcf: green.\n\n## Spec calls\n\n0 calls (0 weakens, 0 adds, 0 clarifies; 0 denied).\n\n## Merge ask\nHead: 95a8dcf48f6099a356796521cb31ab5bc0f699c7\nChecks: CI check SUCCESS on 95a8dcf\nJudged: 85cf353 to 95a8dcf\n| criterion | qc verdict | judged | evidence |\n|---|---|---|---|\n| hello#acceptance-shout | pass | judged 85cf353 | just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json |\n| hello#acceptance-shout-json | pass | judged 85cf353 | just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json |\nReview verdict: https://github.com/probe/app/pull/12#issuecomment-1001\nBuilt: acceptance-shout acceptance-shout-json\nFailed: none\nEOF\ngh pr edit 12 --body-file /tmp/gh12-scratch/body.md 2>&1; octo-feather-lane merge-ask 12 --status docs/specs/hello.status.json; echo exit=$?"
+  ```
+
+  ```json
+  "octo-feather-lane merge-ask 12 --status docs/specs/hello.status.json 2>/dev/null | sed -n '/^## Merge ask/,/^| hello#acceptance-shout-json/p' > /tmp/gh12-scratch/ask.md; python3 - <<'EOF'\nb=open('/tmp/gh12-scratch/body.md').read()\nb=b[:b.index('## Merge ask')]+open('/tmp/gh12-scratch/ask.md').read()\nopen('/tmp/gh12-scratch/body.md','w').write(b)\nEOF\ngh pr edit 12 --body-file /tmp/gh12-scratch/body.md >/dev/null; octo-feather-lane merge-ask 12 --status docs/specs/hello.status.json >/dev/null 2>&1; echo exit=$?; sed -n 1,80p /tmp/qa-kit-b20ee656e6fa-tl0xr05w/.agents/skills/herdr-comms/SKILL.md"
+  ```
+- baseline run-3, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict PASS: 9 recorded run(s)
+
+  `octo-feather-lane` (exit 120):
+
+  ```json
+  ["--help"]
+  ```
+
+  `octo-feather-lane` (exit 1):
+
+  ```json
+  ["merge-ask", "--help"]
+  ```
+
+  `octo-feather-lane` (exit 64):
+
+  ```json
+  []
+  ```
+
+  `octo-feather-lane` (exit 64):
+
+  ```json
+  []
+  ```
+
+  `octo-feather-lane` (exit 1):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `octo-feather-lane` (exit 1):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `octo-feather-lane` (exit 0):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `octo-feather-lane` (exit 0):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "gh12 merge ask (PR #12, merge-ask check passed). Pin merge to head 0b9487b98e143aec5060547c02359fff42626758. Built: hello#acceptance-shout hello#acceptance-shout-json. Spec calls: 0 calls (0 weakens, 0 adds, 0 clarifies; 0 denied). Behaviour-neutral opt-outs: none. Full gate recorded on 0b9487b (3s). Section:\n## Merge ask\n\nPR #12 (app hello --shout), the lane's one PR.\nHead: 0b9487b98e143aec5060547c02359fff42626758\nChecks: CI green on 0b9487b98e143aec5060547c02359fff42626758\nJudged: 0b9487b98e14 is the PR head\nBuilt: hello#acceptance-shout hello#acceptance-shout-json\nFailed: none\nReview verdict: https://github.com/probe/app/pull/12#issuecomment-1001\n\n| criterion | qc verdict | judged | evidence |\n|---|---|---|---|\n| hello#acceptance-shout | pass | judged 0b9487b98e143aec5060547c02359fff42626758 | qc report of 0b9487b98e14 |\n| hello#acceptance-shout-json | pass | judged 0b9487b98e143aec5060547c02359fff42626758 | qc report of 0b9487b98e14 |\n\nDecision sources (the latest qc result at the judged head 0b9487b98e14; quality spec #qc-results):\n- hello#acceptance-shout: no qc result at the judged head\n- hello#acceptance-shout-json: no qc result at the judged head\n\nReview check classes (from the verdict comment, docs/adr/0008):\n- Checks: none\n\nGate time (the full gate on the final head against gate-budget.toml at 0b9487b98e14; the code reviewer judges it, no gate reads it: issue-lifecycle #lanes-checkpoints):\n  no gate run recorded (/tmp/.qc-qa-c6c30f-1r3-b/state/octo-feather/sessions/qa-c6c30f-1r3-b/check-runs.jsonl: none)\nRelay to owner; on merge, relay approval with that head."]
+  ```
+
+  bash calls naming gh, from transcript.jsonl (3):
+
+  ```json
+  "K=/tmp/qa-kit-b20ee656e6fa-tl0xr05w; f=$(find $K -name issue-lifecycle.spec.html | head -1); echo $f; python3 - \"$f\" <<'E'\nimport sys,re,html\nt=open(sys.argv[1]).read()\nfor a in ['gates-merge','lanes-one-head']:\n  i=t.find('id=\"%s\"'%a); s=t[i:i+5000]\n  s=re.sub(r'<[^>]+>','',s); print('=====',a); print(html.unescape(s)[:3000])\nE\ncat docs/specs/hello.status.json; gh pr view 12 --json number,title,body,state,headRefOid,isDraft,statusCheckRollup,comments"
+  ```
+
+  ```json
+  "cat > /tmp/gh12-body.md <<'E'\nCloses #12\n\nLane gh12: app hello --shout (docs/specs/hello.spec.html).\n\n## Summary\n\n- #13 `app hello NAME --shout` upper-cases the greeting and adds `!`, plain and `--json`.\n- #14 end-to-end test for a second name.\n\n## Validation\n\n- `just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json`: both pass.\n- Code review: clear, no blocking finding.\n- CI on 0b9487b: green.\n\n## Merge ask\nHead: 0b9487b98e143aec5060547c02359fff42626758\nChecks: CI check SUCCESS on 0b9487b\nJudged: f67d5a2 to 0b9487b: qc status-only commit\n| criterion | qc verdict | judged | evidence |\n|---|---|---|---|\n| hello#acceptance-shout | pass | judged f67d5a2 | just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json |\n| hello#acceptance-shout-json | pass | judged f67d5a2 | just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json |\nReview verdict: https://github.com/probe/app/pull/12#issuecomment-1001\nBuilt: acceptance-shout acceptance-shout-json\nFailed: none\n\nSpec calls: 0 calls (0 weakens, 0 adds, 0 clarifies; 0 denied).\nQA: no separate QA bundle; qc ran each criterion's CLI demo path.\nE\ngh pr edit 12 --body-file /tmp/gh12-body.md 2>&1; octo-feather-lane merge-ask 12 --status docs/specs/hello.status.json 2>&1 | head -60; echo EXIT ${PIPESTATUS[0]}"
+  ```
+
+  ```json
+  "gh pr view 12 --json body,headRefOid -q '.headRefOid, .body' | head -40"
+  ```
+- current run-1, kit `6ee6e7eb27b7802887049e588cb39cf81a7ce670`, verdict PASS: 5 recorded run(s)
+
+  `octo-feather-lane` (exit 1):
+
+  ```json
+  ["merge-ask", "--help"]
+  ```
+
+  `octo-feather-lane` (exit 1):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `octo-feather-lane` (exit 1):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `octo-feather-lane` (exit 0):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "## Merge ask\n\nPR #12 (app hello --shout), the lane's one PR.\nHead: 29d4e47cd8706902a0555b87e9aeb8db2c695004\nChecks: CI green on 29d4e47cd8706902a0555b87e9aeb8db2c695004\nJudged: 29d4e47cd870 is the PR head\nBuilt: hello#acceptance-shout hello#acceptance-shout-json\nFailed: none\nReview verdict: https://github.com/probe/app/pull/12#issuecomment-1001\n\n| criterion | qc verdict | judged | evidence |\n|---|---|---|---|\n| hello#acceptance-shout | pass | judged 29d4e47cd8706902a0555b87e9aeb8db2c695004 | qc report of 29d4e47cd870 |\n| hello#acceptance-shout-json | pass | judged 29d4e47cd8706902a0555b87e9aeb8db2c695004 | qc report of 29d4e47cd870 |\n\nDecision sources (the latest qc result at the judged head 29d4e47cd870; quality spec #qc-results):\n- hello#acceptance-shout: no qc result at the judged head\n- hello#acceptance-shout-json: no qc result at the judged head\n\nReview check classes (from the verdict comment, docs/adr/0008):\n- Checks: none\n\nGate time (the full gate on the final head against gate-budget.toml at 29d4e47cd870; the code reviewer judges it, no gate reads it: issue-lifecycle #lanes-checkpoints):\n  no gate run recorded (/tmp/.qc-qa-c6c30f-1r1-c/state/octo-feather/sessions/qa-c6c30f-1r1-c/check-runs.jsonl: none)"]
+  ```
+
+  bash calls naming gh, from transcript.jsonl (2):
+
+  ```json
+  "git log --oneline -5; git status --short; cat docs/specs/hello.status.json; octo-feather-spec-status calls docs/specs/hello.spec.html 2>&1 | head -30; gh pr view 12 --json body,headRefOid,state,isDraft 2>&1 | head -50"
+  ```
+
+  ```json
+  "cat > /tmp/gh12-body.md <<'EOF'\nCloses #12\n\nLane gh12: app hello --shout (docs/specs/hello.spec.html).\n\n## Summary\n\n- #13 `app hello NAME --shout` upper-cases the greeting and adds `!`, plain and `--json`.\n- #14 end-to-end test for a second name.\n\n## Validation\n\n- `just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json`: both pass.\n- Code review: clear, https://github.com/probe/app/pull/12#issuecomment-1001\n- CI green on 29d4e47cd8706902a0555b87e9aeb8db2c695004.\n\n## Merge ask\nHead: 29d4e47cd8706902a0555b87e9aeb8db2c695004\nChecks: CI check SUCCESS on 29d4e47\nJudged: f1eb85bc9ea9 to 29d4e47cd870: qc commit 29d4e47 (docs/specs/hello.status.json)\n| criterion | qc verdict | judged | evidence |\n|---|---|---|---|\n| hello#acceptance-shout | pass | judged f1eb85bc9ea9 | just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json |\n| hello#acceptance-shout-json | pass | judged f1eb85bc9ea9 | just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json |\nReview verdict: https://github.com/probe/app/pull/12#issuecomment-1001\nBuilt: acceptance-shout acceptance-shout-json\nFailed: none\n\n## Spec calls\n\n0 calls (0 weakens, 0 adds, 0 clarifies; 0 denied).\nEOF\ngh pr edit 12 --body-file /tmp/gh12-body.md 2>&1; octo-feather-lane merge-ask 12 --status docs/specs/hello.status.json 2>&1; echo exit=$?"
+  ```
+- current run-2, kit `6ee6e7eb27b7802887049e588cb39cf81a7ce670`, verdict PASS: 7 recorded run(s)
+
+  `octo-feather-lane` (exit 64):
+
+  ```json
+  ["--help"]
+  ```
+
+  `octo-feather-lane` (exit 64):
+
+  ```json
+  ["--help"]
+  ```
+
+  `octo-feather-lane` (exit 64):
+
+  ```json
+  ["--help"]
+  ```
+
+  `octo-feather-lane` (exit 1):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `octo-feather-lane` (exit 1):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `octo-feather-lane` (exit 0):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "## Merge ask\n\nPR #12 (app hello --shout), the lane's one PR.\nHead: 28e9abaed39ca81e4a9ae0b2c888ccf5e55c9999\nChecks: CI green on 28e9abaed39ca81e4a9ae0b2c888ccf5e55c9999\nJudged: 28e9abaed39c is the PR head\nBuilt: hello#acceptance-shout hello#acceptance-shout-json\nFailed: none\nReview verdict: https://github.com/probe/app/pull/12#issuecomment-1001\n\n| criterion | qc verdict | judged | evidence |\n|---|---|---|---|\n| hello#acceptance-shout | pass | judged 28e9abaed39ca81e4a9ae0b2c888ccf5e55c9999 | qc report of 28e9abaed39c |\n| hello#acceptance-shout-json | pass | judged 28e9abaed39ca81e4a9ae0b2c888ccf5e55c9999 | qc report of 28e9abaed39c |\n\nDecision sources (the latest qc result at the judged head 28e9abaed39c; quality spec #qc-results):\n- hello#acceptance-shout: no qc result at the judged head\n- hello#acceptance-shout-json: no qc result at the judged head\n\nReview check classes (from the verdict comment, docs/adr/0008):\n- Checks: none\n\nGate time (the full gate on the final head against gate-budget.toml at 28e9abaed39c; the code reviewer judges it, no gate reads it: issue-lifecycle #lanes-checkpoints):\n  no gate run recorded (/tmp/.qc-qa-c6c30f-1r2-c/state/octo-feather/sessions/qa-c6c30f-1r2-c/check-runs.jsonl: none)"]
+  ```
+
+  bash calls naming gh, from transcript.jsonl (2):
+
+  ```json
+  "octo-feather-lane --help 2>&1 | sed -n '60,200p' | grep -n -A30 'merge-ask' | head -80; echo ====; gh pr view 12 --json number,title,url,body,state,isDraft,headRefOid,headRefName,baseRefName,comments,statusCheckRollup 2>&1 | head -100"
+  ```
+
+  ```json
+  "cat > /tmp/gh12-body.md <<'EOF'\nCloses #12\n\nLane gh12: app hello --shout (docs/specs/hello.spec.html).\n\n## Merge ask\nHead: 28e9abaed39ca81e4a9ae0b2c888ccf5e55c9999\nChecks: CI check SUCCESS on 28e9aba\nJudged: 26906d0 to 28e9aba\n| criterion | qc verdict | judged | evidence |\n|---|---|---|---|\n| hello#acceptance-shout | pass | judged 26906d0 | just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json |\n| hello#acceptance-shout-json | pass | judged 26906d0 | just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json |\nReview verdict: https://github.com/probe/app/pull/12#issuecomment-1001\nBuilt: acceptance-shout acceptance-shout-json\nFailed: none\n\nSpec calls: 0 calls (0 weakens, 0 adds, 0 clarifies; 0 denied).\nEOF\ngh pr edit 12 --body-file /tmp/gh12-body.md; echo rc=$?; octo-feather-lane merge-ask 12 --status docs/specs/hello.status.json; echo rc=$?"
+  ```
+- current run-3, kit `6ee6e7eb27b7802887049e588cb39cf81a7ce670`, verdict PASS: 6 recorded run(s)
+
+  `octo-feather-lane` (exit 1):
+
+  ```json
+  ["merge-ask", "--help"]
+  ```
+
+  `octo-feather-lane` (exit 1):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `octo-feather-lane` (exit 1):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `octo-feather-lane` (exit 0):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `octo-feather-lane` (exit 0):
+
+  ```json
+  ["merge-ask", "12", "--status", "docs/specs/hello.status.json"]
+  ```
+
+  `herdr-say` (exit 0):
+
+  ```json
+  ["--parent", "## Merge ask\n\nPR #12 (app hello --shout), the lane's one PR.\nHead: d249aef90afb557569d816c7a412ad49f3b0d17e\nChecks: CI green on d249aef90afb557569d816c7a412ad49f3b0d17e\nJudged: d249aef90afb is the PR head\nBuilt: hello#acceptance-shout hello#acceptance-shout-json\nFailed: none\nReview verdict: https://github.com/probe/app/pull/12#issuecomment-1001\n\n| criterion | qc verdict | judged | evidence |\n|---|---|---|---|\n| hello#acceptance-shout | pass | judged d249aef90afb557569d816c7a412ad49f3b0d17e | qc report of d249aef90afb |\n| hello#acceptance-shout-json | pass | judged d249aef90afb557569d816c7a412ad49f3b0d17e | qc report of d249aef90afb |\n\nDecision sources (the latest qc result at the judged head d249aef90afb; quality spec #qc-results):\n- hello#acceptance-shout: no qc result at the judged head\n- hello#acceptance-shout-json: no qc result at the judged head\n\nReview check classes (from the verdict comment, docs/adr/0008):\n- Checks: none\n\nGate time (the full gate on the final head against gate-budget.toml at d249aef90afb; the code reviewer judges it, no gate reads it: issue-lifecycle #lanes-checkpoints):\n  no gate run recorded (/tmp/.qc-qa-c6c30f-1r3-c/state/octo-feather/sessions/qa-c6c30f-1r3-c/check-runs.jsonl: none)"]
+  ```
+
+  bash calls naming gh, from transcript.jsonl (2):
+
+  ```json
+  "cd /tmp/qa-c6c30f-1r3-c-eiidtnkv/repo; gh pr view 12 --json number,title,url,body,state,isDraft,headRefName,headRefOid,comments 2>&1 | head -80; echo ---; octo-feather-lane merge-ask --help 2>&1 | head -60; echo ---; octo-feather-spec-status calls 2>&1 | head; octo-feather-spec-status calls docs/specs/hello.spec.html 2>&1|head"
+  ```
+
+  ```json
+  "cd /tmp/qa-c6c30f-1r3-c-eiidtnkv/repo; mkdir -p /tmp/gh12-scratch; cat > /tmp/gh12-scratch/body.md <<'EOF'\nCloses #12\n\nLane gh12: app hello --shout (docs/specs/hello.spec.html).\n\n## Summary\n\n- #13: `app hello NAME --shout` upper-cases the greeting and adds `!`, plain and `--json`.\n- #14: end-to-end test greeting a second name.\n\n## Validation\n\n- `just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json` on integrated head 33a3544: both pass; status-only commit d249aef.\n- Code review: clear on d249aef, https://github.com/probe/app/pull/12#issuecomment-1001\n- CI on d249aef: green.\n\n## Merge ask\nHead: d249aef90afb557569d816c7a412ad49f3b0d17e\nChecks: CI check SUCCESS on d249aef\nJudged: 33a35444e4eb to d249aef90afb: qc commit d249aef (docs/specs/hello.status.json)\n| criterion | qc verdict | judged | evidence |\n|---|---|---|---|\n| hello#acceptance-shout | pass | judged 33a35444e4eb | just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json |\n| hello#acceptance-shout-json | pass | judged 33a35444e4eb | just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json |\nReview verdict: https://github.com/probe/app/pull/12#issuecomment-1001\nBuilt: acceptance-shout acceptance-shout-json\nFailed: none\n\nSpec calls: 0 calls (0 weakens, 0 adds, 0 clarifies; 0 denied).\nEOF\ngh pr edit 12 --body-file /tmp/gh12-scratch/body.md 2>&1; echo rc=$?"
+  ```
+
 
 ## Final evaluation (lane gh840, run 20261117T151829Z-60554a at 4c7e2433)
 

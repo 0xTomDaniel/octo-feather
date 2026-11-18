@@ -22,9 +22,11 @@ Print mode (-p with no --mode and no -e: a headless role's text reply, as the re
 scripts/octo-feather-reflect): the prompt is -p's argument, else stdin; the reply is the file
 reply.WHO in $STUB_REPLY_DIR printed as is, WHO `director` when the prompt is a director
 reflection ("Director reflection"), else `lane`; a missing reply fails naming it. Before it, in
-that dir, its records: its argv (NUL-separated) in argv.WHO, its prompt in prompt.WHO, and a copy
-of the dir holding the manifest the prompt names ("Read source manifest: PATH"), seen.WHO, taken
-while the reflector's sources still exist; then the model's turn: a file turn.WHO there is a
+that dir, its records: its prompt in prompt.WHO, a copy of the dir holding the manifest the
+prompt names ("Read source manifest: PATH"), seen.WHO, taken while the reflector's sources still
+exist, and last its argv (NUL-separated) in argv.WHO, removed first and renamed into place, so
+argv.WHO exists only once this run's records are whole, wherever a kill (the caller's deadline)
+cuts it; then the model's turn: a file turn.WHO there is a
 shell command run then (sh -c), its stderr Pi's, its non-zero exit Pi's with no reply (a case's
 act while the reflector runs: the model failing, slow, held on a FIFO, or a source changed).
 
@@ -65,12 +67,14 @@ if "-p" in a and "--mode" not in a and "-e" not in a:  # print mode (docstring)
     d = Path(os.environ.get("STUB_REPLY_DIR", "."))
     who = "director" if "Director reflection" in prompt else "lane"
     reply = d / f"reply.{who}"
-    (d / f"argv.{who}").write_text("\0".join(a))
+    (d / f"argv.{who}").unlink(missing_ok=True)
     (d / f"prompt.{who}").write_text(prompt)
     shown = [x[22:] for x in prompt.splitlines() if x.startswith("Read source manifest: ")]
     shutil.rmtree(d / f"seen.{who}", ignore_errors=True)
     if shown:
         shutil.copytree(Path(shown[0]).parent, d / f"seen.{who}")
+    (d / f"argv.{who}.part").write_text("\0".join(a))
+    (d / f"argv.{who}.part").replace(d / f"argv.{who}")  # last, whole: the records are complete
     if (d / f"turn.{who}").is_file():  # the model's turn (docstring)
         cmd = ["sh", "-c", (d / f"turn.{who}").read_text()]
         t = subprocess.run(
