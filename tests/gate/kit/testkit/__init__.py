@@ -46,8 +46,7 @@ FAKES = {
 # provider.py stands in for a model provider, a server its caller starts (its header).
 # tests/fixtures/install-check/pi stands in for Pi at its version and its model proxy, the
 # install-check items' one (install_check.py, its header).
-# tests/fixtures/qc-judge/pi stands in for Pi as the qc judge; with FAKE_QC set, the qc sandbox
-# items' judge, each mode one judge turn (qc_box.py, its header).
+# pi_agent.py with FAKE_QC set: the qc sandbox items' judge (qc_box.py; its docstring).
 # Unset in every scenario: a user's config, state and auth, a Herdr pane's session, and a check
 # run's marker (a scenario's commands start outside any check run: scripts/check-gate-free).
 # GH_REPO, gh's repo override, too: the fake gh's request names it (testkit/gh.py).

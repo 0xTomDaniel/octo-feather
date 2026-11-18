@@ -1,4 +1,4 @@
-# The parity lever's case for tests/qc-creds.sh, its inline fake herdr and fake pi replaced by the testkit's herdr and the qc judge stand-in, its assertions into typed Python on the testkit's stand-ins (#997; tests/parity/lever.py --help).
+# The parity lever's case for tests/qc-creds.sh, its inline fake herdr and fake pi replaced by the testkit's herdr and Pi (pi_agent.py), its assertions into typed Python on the testkit's stand-ins (#997; tests/parity/lever.py --help).
 old = "tests/qc-creds.sh"
 old_at = "6af9ea37"
 # Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
