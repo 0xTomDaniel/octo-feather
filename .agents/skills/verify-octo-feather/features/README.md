@@ -38,7 +38,7 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [lane-archive](./lane-archive.md) covers closing a lane (`octo-feather-lane archive`) and the lane reflection it runs first (`octo-feather-lane reflect`).
 - [director-reflection](./director-reflection.md) covers the director reflection (`octo-feather-lane reflect --director`), which archive and start run.
 - [correction-lane](./correction-lane.md) covers the correction lane issues the reflection files at archive.
-- [correction-intake](./correction-intake.md) covers which findings make a correction lane due, the route owner's tracker each files in (the kit's or a `target:` route's target), and the read-only intake report of the open ones (`octo-feather-lane intake`).
+- [correction-intake](./correction-intake.md) covers which findings make a correction lane due, the tracker each files in (comms spec `#reflection-correction`), and the read-only intake report of the open ones (`octo-feather-lane intake`).
 - [factory-report](./factory-report.md) covers the factory report (`octo-feather-lane report`): its director reflection line, its owner-caught headline and a repository's full gate time against its gate-time budget.
 - [role-launch](./role-launch.md) covers each role's launch as Pi gets it (`pi-role --json`): tools, MCP and the web list.
 - [skill-loading](./skill-loading.md) covers which skills Pi loads for a role: a launch refused naming each skill Pi did not load, the listed skills offered exactly, and the gate's `check-skills` (criteria: skills#acceptance-launch-refuses-unloaded, skills#acceptance-only-listed, skills#acceptance-skill-frontmatter).

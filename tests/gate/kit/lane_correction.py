@@ -372,6 +372,35 @@ def recurrence(s: Scratch) -> None:
     assert (issues(s, KIT), len(comments(s, 7, KIT))) == ([7, 9], 1), f"commented again: {out}"
 
 
+def legacy_quote(s: Scratch) -> None:
+    """The kit's open test-is-check issue #4, filed before #1004 as #849 was, quotes kit lane
+    gh586's finding and target lane specchat-gh221's in full. Archiving gh5 (no finding) adds
+    nothing: specchat-gh221's finding, now quoted minimally, is the one #4 already quotes. Then
+    private lane x3's new finding: one comment, x3's alone, minimally, running count 3."""
+    top = reflector(s)
+    cls = "test-is-check"
+    old = ("2026-11-05T20:56:49Z", "2026-11-11T01:17:25Z")
+    lane(top, "gh586", cr(old[0], cls, "ci_scope scans workflow text"), repo=KIT, archived=True)
+    spec = "TIMING-QUALIFIED scan of the spec-chat gate"
+    lane(top, "specchat-gh221", cr(old[1], cls, spec), repo=TARGET, archived=True)
+    body = (
+        f"Class: {cls}\nRoute: none given by a reflection\n\nFindings (2):\n"
+        f"- gh586 {old[0]} code-review: ci_scope scans workflow text\n"
+        f"- specchat-gh221 {old[1]} code-review: {spec}\n"
+    )
+    put(s, KIT, gh_issue(4, f"[correction-lane {cls}] repeated finding class: {cls}", body))
+    lane(top, "gh5", repo=KIT)
+    out = run(s, "archive", "gh5")
+    assert NONE in out, f"a finding #4 quotes in full counted as new: {out}"
+    assert comments(s, 4, KIT) == [], out
+    target_lane(top, "x3", cr("2026-11-12T00:00:00Z", cls, "x3 private text"))
+    out = run(s, "archive", "x3")
+    (c,) = comments(s, 4, KIT)
+    assert "1 new finding; running count 3." in c, c
+    assert c.endswith("\n\n- x3 2026-11-12T00:00:00Z test-is-check"), c
+    assert issues(s, KIT) == [4], out
+
+
 def reflection_missed(s: Scratch) -> None:
     """The demo: an open legacy timestamped reflection-missed issue #5 in the kit's tracker quoting
     the director's old finding; `reflect --director` with a new one, then again with none; then #5
@@ -622,6 +651,7 @@ if __name__ == "__main__":
         counts,
         missed_at_once,
         recurrence,
+        legacy_quote,
         reflection_missed,
         malformed,
         two_targets,

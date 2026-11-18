@@ -7,6 +7,7 @@ import pytest
 from lane_correction import (
     counts,
     kit_lane,
+    legacy_quote,
     lifecycle,
     malformed,
     missed_at_once,
@@ -35,6 +36,11 @@ def test_lane_correction_refusal(case: Case) -> None:
 @pytest.mark.criterion("comms#acceptance-reflect-recurrence-comments")
 def test_lane_correction_recurrence(case: Case) -> None:
     case(recurrence)
+
+
+@pytest.mark.criterion("comms#acceptance-reflect-recurrence-comments")
+def test_lane_correction_legacy_quote(case: Case) -> None:
+    case(legacy_quote)
 
 
 @pytest.mark.criterion("issue-lifecycle#acceptance-reflection-missed-lane")
