@@ -6,7 +6,15 @@ import sys
 from collections.abc import Callable
 
 import pytest
-from agent_scope import close_owned, close_unowned, spawn_no_manager, spawn_scoped
+from agent_scope import (
+    close_owned,
+    close_unowned,
+    park_owned,
+    park_refused,
+    park_unowned,
+    spawn_no_manager,
+    spawn_scoped,
+)
 
 Case = Callable[..., None]
 linux = pytest.mark.skipif(sys.platform == "darwin", reason="systemd user scopes are Linux only")
@@ -34,3 +42,21 @@ def test_close_owned(case: Case) -> None:
 @linux
 def test_close_unowned(case: Case) -> None:
     case(close_unowned)
+
+
+@pytest.mark.e2e
+@linux
+def test_park_owned(case: Case) -> None:
+    case(park_owned)
+
+
+@pytest.mark.e2e
+@linux
+def test_park_unowned(case: Case) -> None:
+    case(park_unowned)
+
+
+@pytest.mark.e2e
+@linux
+def test_park_refused(case: Case) -> None:
+    case(park_refused)
