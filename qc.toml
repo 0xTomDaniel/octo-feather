@@ -256,6 +256,20 @@ covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-qc", "scripts/
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 queued-completion"
 covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-queued", "tests/gate/kit/testkit/herdr.py", "agents/implementer.md", "agents/code-reviewer.md", "evals/worker-uncertain-send", "evidence/2026-11-13-gh840-worker-uncertain-send.md"]
 
+# The three drives below run the kit's commands over the testkit Herdr (features/parent-resumed.md, result-file.md,
+# result-missing.md); scenario twins in tests/gate/kit/herdr_messaging.py.
+[demo."comms#acceptance-parent-resumed"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 parent-resumed"
+covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-handoff", "scripts/octo-feather-start", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/parent-resumed.md"]
+
+[demo."comms#acceptance-result-file"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 result-file"
+covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-handoff", "scripts/octo-feather-queued", "agents/supervisor.md", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/result-file.md"]
+
+[demo."comms#acceptance-result-missing"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 result-missing"
+covers = ["scripts/octo-feather-handoff", "agents/supervisor.md", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/result-missing.md"]
+
 # No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-delegation --runs 3 --baseline
 # origin/main), which needs the eval slot and a real model route: not a qc demo. The agent fallback judge reads its run
 # in evidence/2026-11-13-gh840-supervisor-delegation.md (pass rates on both kits).

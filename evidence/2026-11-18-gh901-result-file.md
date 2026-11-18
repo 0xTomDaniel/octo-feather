@@ -24,3 +24,7 @@ result_resumed: ok
 director start: removed f907308f-236d-443a-a1b7-43d09ecca280.md (8 days, worker gone); kept ['54e3ee35-a3d3-46a2-9ad6-60003097f4dc.md', 'aa2b2680-b70f-4e26-9398-911d75ed891f.md']
 director_prune: ok
 ```
+
+## qc demos (comms#acceptance-parent-resumed, #acceptance-result-file, #acceptance-result-missing)
+
+Smoke: .agents/skills/verify-octo-feather/ `verify-octo-feather run parent-resumed`, `run result-file`, `run result-missing`: each `run PASS`, exit 0 (cases resume, report; report, results, read; results). The qc.toml demos run these same commands.
