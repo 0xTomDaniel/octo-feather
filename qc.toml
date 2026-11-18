@@ -241,6 +241,64 @@ covers = ["scripts/pi-role", "extensions/skills-loaded.ts", "scripts/check-skill
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run skill-loading"
 covers = ["scripts/check-skills", "extensions/skills-loaded.ts"]
 
+# No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-notifications --runs 3 --baseline
+# origin/main), which needs the eval slot and a real model route, 18 runs of minutes each: not a qc demo. The agent
+# fallback judge reads its run in evidence/2026-11-13-gh840-supervisor-notifications.md (pass rates on both kits).
+[demo."comms#acceptance-no-routine-traffic"]
+covers = ["agents/supervisor.md", "evals/supervisor-notifications", "evidence/2026-11-13-gh840-supervisor-notifications.md"]
+
+[demo."issue-lifecycle#acceptance-pilot-pr"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 pilot-pr"
+covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-qc", "scripts/octo-feather-lane", "tests/fixtures/tracker-gh/gh"]
+
+# Proven by its tagged test (tests/gate/kit/test_herdr_messaging.py, queued_completion) and this demo, herdr-say against the
+# testkit's Herdr stand-in: a worker's --parent completion while its supervisor compacts is never resent, delivered once
+# after compaction (delivered 1, attempts 1); compaction past the bound leaves it queued, not resent. The worker half (#883),
+# a worker sending once on that uncertain result, is a model eval, not a qc demo (the eval slot, 18 runs of minutes each):
+# scripts/octo-feather-qa --suite worker-uncertain-send --runs 3 --baseline origin/main, read by the agent fallback judge in
+# evidence/2026-11-13-gh840-worker-uncertain-send.md (pass rates on both kits).
+[demo."comms#acceptance-queued-completion"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 queued-completion"
+covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-queued", "tests/gate/kit/testkit/herdr.py", "agents/implementer.md", "agents/code-reviewer.md", "evals/worker-uncertain-send", "evidence/2026-11-13-gh840-worker-uncertain-send.md"]
+
+# No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-delegation --runs 3 --baseline
+# origin/main), which needs the eval slot and a real model route: not a qc demo. The agent fallback judge reads its run
+# in evidence/2026-11-13-gh840-supervisor-delegation.md (pass rates on both kits).
+[demo."roles#acceptance-supervisor-delegates-execution"]
+covers = ["agents/supervisor.md", "agents/implementer.md", "evals/supervisor-delegation", "evals/fixtures/lane-shout-qc-red", "evals/fixtures/lane-shout-qc-red-lane", "evals/fixtures/lane-shout-qc-repaired", "evals/fixtures/lane-shout-qc-fixed", "evidence/2026-11-13-gh840-supervisor-delegation.md"]
+
+# Its merge-ask-on-lane-pr case needs octo-feather-qa's head `then` commits and the stand-in's {head:N} (schema.md, Case).
+[demo."roles#acceptance-delegated-pr"]
+covers = ["agents/supervisor.md", "evals/supervisor-delegation", "evals/supervisor-notifications", "evals/fixtures/lane-shout-base", "evals/fixtures/lane-shout-names", "evals/fixtures/lane-shout-qc-fixed", "evals/fixtures/lane-shout-merged", "evals/fixtures/lane-shout-integrated", "scripts/octo-feather-qa", "evidence/2026-11-13-gh840-supervisor-delegation.md"]
+
+# No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-autonomy --runs 3 --baseline
+# origin/main), which needs the eval slot and a real model route: not a qc demo. The agent fallback judge reads its run in
+# evidence/2026-11-13-gh840-supervisor-autonomy.md (pass rates on both kits, director messages, hand-off log lines).
+[demo."comms#acceptance-autonomous-local"]
+covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11-13-gh840-supervisor-autonomy.md"]
+
+# As comms#acceptance-autonomous-local above; the message content is the review case owner-access-blocker-message. The
+# evidence's "How this meets comms #acceptance-real-blocker" maps each Then clause to recorded argv; herdr-say's delivery
+# is proven by the tagged tests in tests/gate/kit/test_herdr_messaging.py.
+[demo."comms#acceptance-real-blocker"]
+covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11-13-gh840-supervisor-autonomy.md", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/herdr_messaging.py"]
+
+# No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-general-worker --runs 3 --baseline
+# b20ee656, runs 20261117T151829Z-60554a and, with the review step, 20261118T183536Z-f01514), which needs the eval slot,
+# a real model route and network for fixture setup: not a qc demo. The agent fallback judge reads
+# evidence/2026-11-17-gh840-supervisor-general-worker.md, section "How this meets roles
+# #acceptance-general-worker-no-implementation" (each Then clause, the review step included, and its recorded argv).
+[demo."roles#acceptance-general-worker-no-implementation"]
+covers = ["agents/supervisor.md", "evals/supervisor-general-worker", "evals/fixtures/lane-shout-general-diff", "evals/fixtures/lane-shout-qc-fixed", "evidence/2026-11-17-gh840-supervisor-general-worker.md"]
+
+# Two halves (evidence/2026-11-13-gh840-supervisor-fresh-worker.md, How this meets the criterion): the supervisor starts
+# the independent work with a new spawn, never a --resume, and a self-contained brief (model eval supervisor-fresh-worker,
+# run 20261117T151829Z-60554a: needs the eval slot and a model route, not a qc demo); and a new spawn has another
+# provider-session identity than the closed one, a --resume reuses it: this demo and its tagged test, the real
+# herdr-spawn and herdr-close against the testkit's Herdr stand-in.
+[demo."roles#acceptance-fresh-independent-worker"]
+command = "python3 tests/gate/kit/herdr_messaging.py fresh_worker_session"
+covers = ["agents/supervisor.md", "evals/supervisor-fresh-worker", "evidence/2026-11-13-gh840-supervisor-fresh-worker.md", ".agents/skills/herdr-comms/assets/herdr-spawn", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/herdr.py"]
 # Proven by its tagged tests (tests/gate/kit/test_herdr_messaging.py) and this demo: herdr-say run as a general worker
 # against the testkit's Herdr stand-in: live parent delivered, peer lane refused (77), parent gone: the director stand-in
 # receives exactly the fixed alert; timeout and stall raise none, an implementer cannot reach the director.

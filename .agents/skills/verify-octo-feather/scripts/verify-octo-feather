@@ -31,7 +31,7 @@ from typing import Any, NoReturn, cast
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "template-edge", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history", "run-slots")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "pilot-pr", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "template-edge", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history", "run-slots", "queued-completion")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -2629,6 +2629,90 @@ def drive_merge_ask_proof(f: Feature) -> None:
     say(f"merge-ask-proof evidence: {f.d}")
 
 
+def drive_pilot_pr(f: Feature) -> None:
+    """A lane's pilot recorded on its draft PR, on a scratch target with a bare origin and GitHub faked (the kit's offline
+    gh, tests/fixtures/tracker-gh): octo-feather-integrate lands the pilot on lane gh12 (J), the lane pushed, `gh pr
+    create --draft`, `just qc` on the pilot's two criteria (a passes, b fails) and its head pushed, `octo-feather-lane
+    verdict` for J; the PR then shows qc's status-only commit after J, a built in that PR, and the verdict naming J."""
+    v = f.s.contract.values
+    if "qc_demo_pass" not in v or "qc_demo_fail" not in v:
+        die("qc.toml [values] needs qc_demo_pass and qc_demo_fail: the pilot-pr drive's scratch demos")
+    sc = RUN_DIR / "scratch" / "pilot-pr"
+    r, lane, pilot, origin = sc / "repo", sc / "lane", sc / "pilot", sc / "origin.git"
+    shutil.rmtree(sc, ignore_errors=True)
+    (r / "docs" / "specs").mkdir(parents=True)
+    (sc / "state").mkdir()
+    ident = {"GIT_AUTHOR_NAME": "verify-octo-feather", "GIT_AUTHOR_EMAIL": "verify@octo-feather.invalid",
+             "GIT_COMMITTER_NAME": "verify-octo-feather", "GIT_COMMITTER_EMAIL": "verify@octo-feather.invalid"}
+
+    def git(at: Path, *args: str) -> str:
+        return subprocess.run(["git", "-C", str(at), "-c", "core.hooksPath=/dev/null", *args], check=True, capture_output=True,
+                              text=True, env={**os.environ, **ident}).stdout.strip()
+
+    git(sc, "init", "-q", "--bare", str(origin))
+    git(r, "init", "-q", "-b", "main")
+    git(r, "remote", "add", "origin", str(origin))
+    git(r, "commit", "-q", "--allow-empty", "-m", "accepted")
+    shutil.copy(f"{f.s.repo}/tests/fixtures/spec-status/good/demo.spec.html", r / "docs" / "specs")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "spec")
+    init = subprocess.run([f.s.kit, "octo-feather-spec-status", "init", str(r / "docs" / "specs" / "demo.spec.html"), git(r, "rev-parse", "--short", "HEAD")],
+                          capture_output=True, text=True, check=False)
+    if init.returncode:
+        die(f"pilot-pr: scratch status file not made: {init.stderr.strip()}")
+    (r / "qc.toml").write_text('format = 2\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n' + "".join(
+        f'[demo."demo#{a}"]\ncommand = {json.dumps(cmd)}\ncovers = ["src"]\n'
+        for a, cmd in (("acceptance-a", v["qc_demo_pass"]), ("acceptance-b", v["qc_demo_fail"]))))
+    (r / "justfile").write_text("check:\n    @echo own-gate ran\n")   # its own single gate
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "target: two demos")
+    git(r, "push", "-q", "origin", "main")
+    git(r, "worktree", "add", "-q", "-b", "gh12", str(lane))
+    git(lane, "push", "-q", "-u", "origin", "gh12")
+    git(r, "worktree", "add", "-q", "-b", "gh12-pilot", str(pilot), "gh12")
+    (pilot / "src").mkdir()
+    (pilot / "src" / "app").write_text("pilot\n")
+    git(pilot, "add", "-A")
+    git(pilot, "commit", "-q", "-m", "feat: pilot")
+    (sc / "body").write_text("Closes #12\n\n## Summary\n\npilot\n\n## Validation\n\njust check\n")
+    (sc / "report").write_text("Findings: none blocking.\nChecks: none\nVerdict: clear\n")
+    f.env = {**ident, "XDG_STATE_HOME": str(sc / "state"), "OCTO_FEATHER_QC_PATH": classify_stub(f, sc),
+             "FAKE_GH_STORE": str(sc / "gh.json"), "GH_REPO": "o/r",
+             "PATH": f"{f.s.repo}/tests/fixtures/tracker-gh:{os.environ.get('PATH', '')}"}
+
+    f.run("integrate", "env", "-C", str(r), "octo-feather-integrate", "12", "gh12-pilot")
+    j = git(lane, "rev-parse", "HEAD")
+    f.obs("integrate", "head", j + "\n")
+    f.check("integrate", lambda c: c.code == 0 and "own-gate ran" in c.out and c.o["head"].strip() != git(r, "rev-parse", "main"))
+    git(lane, "push", "-q")
+    f.pre = ["env", "-C", str(lane)]   # the supervisor stands in the lane worktree
+    f.run("pr-create", "gh", "pr", "create", "--draft", "--base", "main", "--head", "gh12", "--title", "gh12: pilot",
+          "--body-file", str(sc / "body"))
+    f.check("pr-create", lambda c: c.code == 0 and re.fullmatch(r"https://github\.com/o/r/pull/\d+\n", c.out) is not None)
+    pr = (f.d / "pr-create.stdout").read_text().strip().rsplit("/", 1)[-1]
+    f.run("qc", "just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", pr, "acceptance-a", "acceptance-b")
+    h = git(lane, "rev-parse", "HEAD")
+    f.obs("qc", "commit", git(lane, "show", "--format=%H %P%n%s", "--name-only", h) + "\n")
+    f.obs("qc", "status", git(lane, "show", f"{h}:docs/specs/demo.status.json"))
+
+    def recorded(c: Case) -> bool:
+        st = json.loads(c.o["status"])["criteria"]
+        return (c.code == 1 and c.o["commit"].split("\n")[0] == f"{h} {j}" and c.o["commit"].split("\n")[-2] == "docs/specs/demo.status.json"
+                and len(c.o["commit"].strip().split("\n")) == 4
+                and (st["acceptance-a"]["status"], st["acceptance-a"]["pr"], st["acceptance-b"]["status"]) == ("built", int(pr), "planned"))
+    f.check("qc", recorded)
+    git(lane, "push", "-q")
+    f.run("verdict", "octo-feather-lane", "verdict", pr, j, str(sc / "report"))
+    f.check("verdict", lambda c: c.code == 0 and f"(clear, head {j[:12]})" in c.err)
+    f.run("pr-view", "gh", "pr", "view", pr, "--json", "isDraft,headRefOid,comments")
+    f.pre = []
+    f.check("pr-view", lambda c: c.code == 0 and c.j["isDraft"] is True and c.j["headRefOid"] == h and len(c.j["comments"]) == 1
+            and f"\nHead: {j}\nPR head: {h}\nVerdict: clear\n" in c.j["comments"][0]["body"])
+    f.env = {}
+    say(f"pilot-pr: PR #{pr} status commit {h[:12]} (qc: built acceptance-a, judged {j[:12]}); verdict head {j[:12]}, the status commit's parent")
+    say(f"pilot-pr evidence: {f.d}")
+
+
 @dataclass(frozen=True)
 class Shows:
     """What a template repo's runner prints: a test of each kind (the second module's, the CLI's, the e2e one), the
@@ -3112,6 +3196,37 @@ def drive_run_slots(f: Feature) -> None:
     say(f"run-slots evidence: {f.d}")
 
 
+def drive_queued_completion(f: Feature) -> None:
+    """A worker's completion sent while its supervisor compacts, Herdr stood in by the kit's testkit Herdr
+    (tests/gate/kit/testkit/herdr.py, its FAKE_HERDR world): an implementer's `herdr-say --parent` to supervisor
+    w9:p1 compacting for 2 s, Herdr confirming nothing and the pane showing the completion queued; then one
+    compacting past the send's bound. Each prints the delivered and attempt counts. Cases: features/queued-completion.md."""
+    sc = RUN_DIR / "scratch" / "queued-completion"
+    shutil.rmtree(sc, ignore_errors=True)
+    (sc / "bin").mkdir(parents=True)
+    (sc / "bin" / "herdr").symlink_to(Path(f.s.repo) / "tests" / "gate" / "kit" / "testkit" / "herdr.py")
+    say_cmd = str(Path(f.s.repo) / ".agents" / "skills" / "herdr-comms" / "assets" / "herdr-say")
+    done = "DONE commit abc123: the completion"
+    for name, secs, args, want in (("delivered-once", 2, (), 0), ("still-queued", 3600, ("--timeout", "1"), 1)):
+        world = sc / name
+        world.mkdir()
+        sup = {"name": "gh9", "pane_id": "w9:p1", "workspace_id": "w9", "tab_id": "w9:t1", "agent_status": "idle",
+               "compacting_until": datetime.now(UTC).timestamp() + secs}
+        (world / "agents.json").write_text(json.dumps({"w9:p1": sup}))
+        f.env = {"PATH": f"{sc / 'bin'}:{os.environ['PATH']}", "FAKE_HERDR": str(world), "OCTO_FEATHER_ROLE": "implementer",
+                 "OCTO_FEATHER_PARENT": "w9:p1", "HERDR_PANE_ID": "w9:p3", "HERDR_WORKSPACE_ID": "w9"}
+        f.run(name, say_cmd, *args, "--parent", done)
+        got = (world / "prompts").read_text().splitlines() if (world / "prompts").exists() else []
+        sent = [x for x in (world / "log").read_text().splitlines() if x.startswith("agent prompt ")]
+        f.obs(name, "delivered", str(got.count(f"w9:p1\t{done}")))
+        f.obs(name, "attempts", str(len(sent)))
+        say(f"{name}: delivered {len(got)}, attempts {len(sent)}")
+        f.check(name, lambda c, want=want, n=int(want == 0): c.code == want and c.o["delivered"] == str(n)
+                and c.o["attempts"] == "1" and "queued" in c.err and "resent" in c.err)
+    f.env = {}
+    say(f"queued-completion evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
@@ -3135,6 +3250,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "qc-insufficient": drive_qc_insufficient,
     "gate-tiers": drive_gate_tiers,
     "merge-ask-proof": drive_merge_ask_proof,
+    "pilot-pr": drive_pilot_pr,
     "template-tiers": drive_template_tiers,
     "one-execution": drive_one_execution,
     "one-execution-incomplete": drive_one_execution_incomplete,
@@ -3146,6 +3262,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "qa-review": drive_qa_review,
     "qa-history": drive_qa_history,
     "run-slots": drive_run_slots,
+    "queued-completion": drive_queued_completion,
 }
 
 
