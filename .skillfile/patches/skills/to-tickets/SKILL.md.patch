@@ -43,7 +43,7 @@
  
  Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
  
-@@ -89,12 +92,15 @@
+@@ -89,12 +92,19 @@
  
  ## What to build
  
@@ -59,10 +59,14 @@
 +- [ ] demo: `<command>` and what it shows: the behaviour run through a public interface the product offers its users (its CLI, HTTP, UI, MCP or another public protocol) (a program the repo declares, or its runnable script when it has none), never the gate alone (`just check`) or a generic tool (`printf`, `echo`)
 +
 +For one step of a wide refactor, replace the demo item with the line `Expand-contract: expand`, `migrate` or `contract`.
++
++## Seams
++
++Seam: <spec slug>#<anchor>: `<seam>` one line per seam a criterion's tests go at, set before any test (form and check: `octo-feather-lane --help`, seam); a seam set later, in a brief or on rework, is posted as a comment in the same form before its first test
  
  ## Blocked by
  
-@@ -102,4 +108,6 @@
+@@ -102,4 +112,6 @@
  
  </issue-template>
  
