@@ -1,0 +1,11 @@
+# The parity lever's case for tests/install-check-browser.sh, its setup and assertions moved from tests/lib/install-check.sh's bash into typed Python on the testkit's stand-ins (#996; tests/parity/lever.py --help).
+old = "tests/install-check-browser.sh"
+old_at = "ee42108a"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
+needs = ["tests/lib/install-check.sh", "tests/fixtures/install-check"]
+# The same script, as its gate item: its id kept (tests/user-mise-ic*.sh pick it by -k).
+new = "tests/gate/test_gate.py::test_script[tests/install-check-browser.sh]"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): run: just read the justfile to run the recipe the defect patches.
+[ran]
+"justfile" = "run just install-check"

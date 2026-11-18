@@ -44,6 +44,8 @@ FAKES = {
 # way: pi_agent.py (Pi at the agent boundary, an eval case's role run; tests/lib/qa.sh copies it
 # too), and gh.py (above) on a PATH of its own; each file's header says what it answers.
 # provider.py stands in for a model provider, a server its caller starts (its header).
+# tests/fixtures/install-check/pi stands in for Pi at its version and its model proxy, the
+# install-check items' one (install_check.py, its header).
 # Unset in every scenario: a user's config, state and auth, a Herdr pane's session, and a check
 # run's marker (a scenario's commands start outside any check run: scripts/check-gate-free).
 # GH_REPO, gh's repo override, too: the fake gh's request names it (testkit/gh.py).

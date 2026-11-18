@@ -1,0 +1,14 @@
+Seeded defect: install-check takes any pi version Pi reports as the pi-version pin (the pi line: ok only at the pin, else WRONG VERSION naming it).
+diff --git a/justfile b/justfile
+index c7058f09..3f1ff3b9 100644
+--- a/justfile
++++ b/justfile
+@@ -548,7 +548,7 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH') $CALLER
+     pin="$(tr -d '[:space:]' <"$root/pi-version")"
+     if p="$(command -v pi)"; then
+       v="$(pi --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+-      if [[ "$v" == "$pin" ]]; then printf 'pi     version %s ok (pi-version)\n' "$v"
++      if [[ -n "$v" ]]; then printf 'pi     version %s ok (pi-version)\n' "$v"
+       else printf 'pi     WRONG VERSION %s reports %s, want %s (pi-version); npm install -g --ignore-scripts @earendil-works/pi-coding-agent@%s\n' "$p" "${v:-no version}" "$pin" "$pin"; bad=1; fi
+     fi
+     # Native tools (owner ruling #261): mise at mise-version, then each mise.toml tool at its mise.lock version in the
