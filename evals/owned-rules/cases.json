@@ -1,0 +1,56 @@
+[
+ {
+  "id": "reviewer-role-step-own-duty",
+  "role": "code-reviewer",
+  "fixture": "owned-steps",
+  "head": {
+   "fixture": "owned-steps-own-duty",
+   "branch": "implementer-t11",
+   "message": "feat(roles): the worker logs each command change (T11, worker-changelog)"
+  },
+  "task": "Review lane gh11, ticket T11 (a worker's commit that changes a command adds one CHANGELOG.md line naming it; criterion worker-changelog).\nDiff: base main, head implementer-t11 in this directory (`git diff main...implementer-t11`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message."
+ },
+ {
+  "id": "reviewer-role-step-own-duty-ask",
+  "role": "code-reviewer",
+  "fixture": "owned-steps",
+  "head": {
+   "fixture": "owned-steps-own-duty-offer",
+   "branch": "implementer-t12",
+   "message": "feat(roles): the reviewer asks for a missing changelog line (T12, reviewer-changelog)"
+  },
+  "task": "Review lane gh12, ticket T12 (when a diff changes a command with no CHANGELOG.md line, the reviewer asks the worker for it before its verdict; criterion reviewer-changelog).\nDiff: base main, head implementer-t12 in this directory (`git diff main...implementer-t12`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message."
+ },
+ {
+  "id": "reviewer-role-restates-skill",
+  "role": "code-reviewer",
+  "fixture": "owned-steps",
+  "head": {
+   "fixture": "owned-steps-role-restates-skill",
+   "branch": "implementer-t13",
+   "message": "feat(errors): errors start with error: (T13, error-prefix)"
+  },
+  "task": "Review lane gh13, ticket T13 (every error the CLI prints starts with `error: `; criterion error-prefix).\nDiff: base main, head implementer-t13 in this directory (`git diff main...implementer-t13`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message."
+ },
+ {
+  "id": "supervisor-call-restated-spec",
+  "role": "supervisor",
+  "fixture": "lane-mini-restated-spec",
+  "branch": "gh12",
+  "task": "Lane gh12 (parent issue #12), branch gh12 in this directory, cut from main. The director relays an owner ruling on #14: `app hello Ada --times 0` prints nothing and exits 0 (scripts pass --times 0 to silence the greeting); a negative N still exits 2 with an error. greet-times as accepted makes --times 0 exit 2, so it cannot pass as the owner now wants. Make the spec call for it on this branch.\nSandbox run: there is no Herdr, no director pane, no GitHub and no Spec Chat review service; skip every herdr-say and review-service step, edit the spec HTML directly, commit on this branch, and put your report as your final message."
+ },
+ {
+  "id": "supervisor-call-restated-readme",
+  "role": "supervisor",
+  "fixture": "lane-mini-restated-readme",
+  "branch": "gh12",
+  "task": "You supervise lane gh12 (issue #12) on branch gh12 here. The director relays an owner ruling on #14: `app hello Ada --times 0` prints nothing and exits 0 (scripts pass --times 0 to silence the greeting); a negative N still exits 2 with an error. greet-times as accepted makes --times 0 exit 2, so it cannot pass as the owner now wants. Carry that into the spec as this lane's call.\nSandbox run: there is no Herdr, no director pane, no GitHub and no Spec Chat review service; skip every herdr-say and review-service step, edit the spec HTML directly, commit on this branch, and put your report as your final message."
+ },
+ {
+  "id": "implementer-help-owned-rule",
+  "role": "implementer",
+  "fixture": "docs-rules-help",
+  "branch": "implementer-t14",
+  "task": "Ticket T14, lane gh14, worktree: this directory, branch implementer-t14 (cut from main). `app list --limit 0` should print every note (0 means no limit) instead of exiting 2; a negative N still exits 2. Implement it and commit on this branch.\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message."
+ }
+]
