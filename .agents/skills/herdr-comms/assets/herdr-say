@@ -38,8 +38,10 @@
 # `herdr-say --parked TARGET` prints that line, or exits 1 when there is none.
 #
 # Up-chain accident guard (docs/adr/0015, not security): a kit agent may message
-# only up its own chain. `--parent` targets the pane that spawned the caller
-# (OCTO_FEATHER_PARENT). A worker (implementer, code-reviewer, corrector,
+# only up its own chain. `--parent` targets the caller's parent, the pane
+# `octo-feather-handoff parent` names at send time (its docstring); that pane, live
+# or not, then goes the way of any target (parked, resumed, or proven gone) and
+# stands as the parent below. A worker (implementer, code-reviewer, corrector,
 # general-worker) may reach only its parent, never the director unless it is
 # that parent; a supervisor only its parent, the director pane in director.toml,
 # agents in its own lane workspace, or a parked agent whose latest parked line
@@ -65,6 +67,8 @@ while (($#)); do
                bound="$2"; shift 2 ;;
     --parked) (($# == 2)) || { usage; exit 64; }; parked "$2"; exit ;;
     --parent) [[ -n "${OCTO_FEATHER_PARENT:-}" ]] || { echo "herdr-say: no parent recorded for this pane" >&2; exit 64; }
+              resolved="$("$here/../../../../scripts/octo-feather-handoff" parent "$OCTO_FEATHER_PARENT")" &&
+                [[ -n "$resolved" ]] && OCTO_FEATHER_PARENT="$resolved"
               shift; set -- "$OCTO_FEATHER_PARENT" "$@"; break ;;
     --) shift; break ;;
     -*) echo "herdr-say: unknown option $1" >&2; exit 64 ;;
