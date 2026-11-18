@@ -29,7 +29,8 @@ after the queue's commands (queue, hold, release, settle, hand-over) the old com
 the holder and the run holding it, and its revoke and grant succeed. new_reads_old: the old
 command's grants read by the new; a queued lane the old command grants leaves the queue at the
 check; a grant the old command revoked is not brought back; one it made again is a fresh grant,
-no earlier run's end inherited, so nothing passes."""
+no earlier run's end inherited, so nothing passes. regranted: a run's end is recorded against
+the grant it started under, never a later grant of its lane (#977)."""
 
 from __future__ import annotations
 
@@ -608,6 +609,26 @@ def queued_late(s: Scratch) -> None:
     assert "  queue: none" in st, st
 
 
+def regranted(s: Scratch) -> None:
+    """A run started under gh7's grant ends after gh7 is granted again: its end is the old
+    grant's, so gh7's fresh grant (no run under it, inside the bound) keeps the slot and gh8 stays
+    queued (code-reviewer-gh906's sequence, #977)."""
+    world(s)
+    s.env |= {"OCTO_FEATHER_SLOT_GRACE": "1", "OCTO_FEATHER_SLOT_BOUND": "20"}
+    s.run([SLOT, "grant", "gh7", "--kind", "heavy"], env=DIRECTOR)
+    s.run([SLOT, "queue", "gh8", "--kind", "heavy"], env=DIRECTOR)
+    p = holding(s)
+    time.sleep(1.1)  # a new since
+    s.run([SLOT, "grant", "gh7", "--kind", "heavy"], env=DIRECTOR)
+    end(p)
+    time.sleep(1.5)  # past the grace; the release's own check has run
+    s.run([SLOT, "settle", "--kind", "heavy"])
+    st = holder(s)
+    assert "holder: gh7 (granted " in st, st
+    assert "  queue: 1. gh8 (queued " in st, st
+    assert said(s) == [], said(s)
+
+
 def two_sessions(s: Scratch) -> None:
     """Holder gh7 in the default session, gh8 queued from session sb: both notices go to sb."""
     world(s)
@@ -643,5 +664,6 @@ if __name__ == "__main__":
         unused_alone,
         revoked,
         queued_late,
+        regranted,
         two_sessions,
     )
