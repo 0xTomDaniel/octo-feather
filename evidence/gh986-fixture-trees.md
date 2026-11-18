@@ -982,3 +982,40 @@ skill-triggers rev-principles-one-printer fixture f8b3a556a46ca7b575ba499343f73e
 skill-triggers rev-principles-near-retire fixture f8b3a556a46ca7b575ba499343f73e93cefda1343c7a552abd8fbe63c425ffdf
 skill-triggers rev-principles-near-shout fixture f8b3a556a46ca7b575ba499343f73e93cefda1343c7a552abd8fbe63c425ffdf
 ```
+
+## #990: check-evals refuses a fixture file its base supplies
+
+Rule: schema.md, Fixtures (No base duplicate). Owner ruling 2026-11-18 #986.
+
+### Red proof: a real past whole copy
+
+python-app-shout-cli's whole tree from origin/main (ee42108a) laid back over dc11b3cd's evals, its `.eval-fixture.json` (base python-app-shout) kept. The two `src/app/__init__.py` lines are dc11b3cd's own leftovers, deleted in this commit once CI syncs the materialized trees (below).
+
+```
+$ s=/tmp/gh990-red; mkdir $s; git archive dc11b3cd evals evidence | tar -x -C $s
+$ git archive ee42108a evals/fixtures/python-app-shout-cli | tar -x -C $s
+$ scripts/check-evals $s/evals; echo "exit=$?"
+check-evals: fixtures/python-app-pydantic/src/app/__init__.py: field base: the same file base python-app supplies (fixtures/python-app/src/app/__init__.py); delete it: the base supplies it
+check-evals: fixtures/python-app-shout-cli/.gitignore: field base: the same file base python-app-shout supplies (fixtures/python-app/.gitignore); delete it: the base supplies it
+check-evals: fixtures/python-app-shout-cli/AGENTS.md: field base: the same file base python-app-shout supplies (fixtures/python-app/AGENTS.md); delete it: the base supplies it
+check-evals: fixtures/python-app-shout-cli/justfile: field base: the same file base python-app-shout supplies (fixtures/python-app/justfile); delete it: the base supplies it
+check-evals: fixtures/python-app-shout-cli/pyproject.toml: field base: the same file base python-app-shout supplies (fixtures/python-app/pyproject.toml); delete it: the base supplies it
+check-evals: fixtures/python-app-shout-cli/uv.lock: field base: the same file base python-app-shout supplies (fixtures/python-app/uv.lock); delete it: the base supplies it
+check-evals: fixtures/python-app-shout-cli/.github/workflows/check.yml: field base: the same file base python-app-shout supplies (fixtures/python-app/.github/workflows/check.yml); delete it: the base supplies it
+check-evals: fixtures/python-app-shout-cli/src/app/__init__.py: field base: the same file base python-app-shout supplies (fixtures/python-app/src/app/__init__.py); delete it: the base supplies it
+check-evals: fixtures/python-app-shout-cli/src/app/cli.py: field base: the same file base python-app-shout supplies (fixtures/python-app-shout/src/app/cli.py); delete it: the base supplies it
+check-evals: fixtures/python-app-shout-cli/.githooks/pre-commit: field base: the same file base python-app-shout supplies (fixtures/python-app/.githooks/pre-commit); delete it: the base supplies it
+check-evals: fixtures/python-app-tiers/src/app/__init__.py: field base: the same file base py-mini supplies (fixtures/py-mini/src/app/__init__.py); delete it: the base supplies it
+check-evals: 11 problem(s) above; fix the case (check-evals --help lists the shape)
+exit=1
+```
+
+tests/test_cli.py and src/app/core.py, which differ from the base, pass.
+
+### The two empty `__init__.py`: CI syncs the materialized trees
+
+dc11b3cd kept python-app-pydantic's and python-app-tiers' empty `src/app/__init__.py` because CI synced each raw `evals/fixtures/*/uv.lock` dir. CI now syncs each tree `check-evals --export` writes (one materializer, `fixture_tree`); the box and gate sync no raw fixture dir (octo-feather-qa syncs the materialized case repo). With both files deleted:
+
+- `check-evals --trees` on `git archive origin/main evals` vs head: diff empty, 372 lines, sha256 fce30d4c.
+- `check-evals --export /tmp/gh990-export`: 54 trees; CI's loop with `--offline` over the 35 with a `uv.lock`: 35 synced, 0 failed. The raw dirs python-app-pydantic and python-app-tiers: uv sync exit 1 (hatchling build failure), as expected.
+- `scripts/check-evals` on head: `evals: ok (11 suites, 489 cases)`, exit 0.

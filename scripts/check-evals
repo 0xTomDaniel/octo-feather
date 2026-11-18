@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """check-evals [EVALS_DIR]   the shape of every factory eval case (quality #acceptance-qa-cases-checked)
 check-evals --trees [EVALS_DIR]   each case's materialized fixture trees, one line each (form: schema.md, Fixtures)
+check-evals --export DIR [EVALS_DIR]   every fixture dir's materialized tree written to DIR/<name> (schema.md, Fixtures)
 
 Deterministic and free: reads JSON only, never starts an agent or a model. Run by `just check`
 (check-evals) and first by every factory eval run, which refuses a malformed suite.
 
 EVALS_DIR: default the kit's evals/.
 Schema owner: the eval-cases skill, .agents/skills/eval-cases/references/schema.md. Every field this
-refuses, and why, is stated there, by section: Layout (the files), Fixtures (a fixture's base), Suite (suite.json), Case (cases.json,
+refuses, and why, is stated there, by section: Layout (the files), Fixtures (a fixture's base, a file its base supplies), Suite (suite.json), Case (cases.json,
 role-transcript setup branch/head/origin/fake_gh/fake_qa, review, history fixture), Facts (reference/expectations.json: the closed fact
 list, Before targets, Attempt record, Run record, Final JSON, Field lines, Branch paths), Leaks, Coverage, Judgment
 suite (question.json, cases, labels), Calibration, Judgment model and classifiers (judgment-model.json,
@@ -188,6 +189,33 @@ def trees_main(argv: list[str]) -> int:
     return 1 if errs else 0
 
 
+def export_main(argv: list[str]) -> int:
+    """--export DIR [EVALS_DIR] (schema.md, Fixtures): exit 1 on a refused base, 2 on bad usage or a non-empty DIR."""
+    if len(argv) not in (1, 2):
+        print("check-evals: usage: check-evals --export DIR [EVALS_DIR]", file=sys.stderr)
+        return 2
+    out, evals = Path(argv[0]), Path(argv[1]) if len(argv) == 2 else KIT / "evals"
+    if not evals.is_dir():
+        print(f"check-evals: no evals dir {evals}", file=sys.stderr)
+        return 2
+    if out.exists() and not (out.is_dir() and not any(out.iterdir())):
+        print(f"check-evals: --export DIR {out} exists and is not an empty dir", file=sys.stderr)
+        return 2
+    errs: list[str] = []
+    with tempfile.TemporaryDirectory(prefix="check-evals-export-") as s:
+        for p in sorted(p for p in (evals / "fixtures").glob("*") if p.is_dir()):
+            try:
+                tree = fixture_tree(evals, p.name, Path(s))
+            except FixtureError as e:
+                errs.append(str(e))
+                continue
+            (out / p.name).mkdir(parents=True)
+            lay(tree, out / p.name)
+    for e in errs:
+        print(f"check-evals: {e}", file=sys.stderr)
+    return 1 if errs else 0
+
+
 SCRATCH: list[Path] = []   # check-evals' own fixture reads: one scratch dir per process, removed at exit
 
 
@@ -217,12 +245,45 @@ def refusal(evals: Path, name: str) -> str:
 
 
 def fixture_errors(evals: Path) -> list[str]:
-    """Every fixture dir's refused base (schema.md, Fixtures), each message once."""
+    """Every fixture dir's refused base and base duplicate (schema.md, Fixtures), each message once."""
     out: list[str] = []
     for p in sorted(p for p in (evals / "fixtures").glob("*") if p.is_dir()):
         e = refusal(evals, p.name)
         if e and e not in out:
             out.append(e)
+        if not e:
+            out += base_duplicates(evals, p.name)
+    return out
+
+
+def entry(p: Path) -> tuple[str, bytes] | None:
+    """P as a tree holds it (schema.md, Fixtures): a symlink's target, else a file's exec bit and bytes; None for neither."""
+    if p.is_symlink():
+        return "l", os.fsencode(p.readlink())
+    if p.is_file():
+        return ("x" if p.stat().st_mode & 0o100 else "f"), p.read_bytes()
+    return None
+
+
+def base_duplicates(evals: Path, name: str) -> list[str]:
+    """Each file of fixture NAME's overlay the same as its base supplies at that path (rule: schema.md, Fixtures)."""
+    top = evals / "fixtures" / name
+    if not (top / FIXTURE_FILE).exists():
+        return []
+    chain = [base_file(top / FIXTURE_FILE, name)]
+    while (evals / "fixtures" / chain[-1] / FIXTURE_FILE).exists():
+        chain.append(base_file(evals / "fixtures" / chain[-1] / FIXTURE_FILE, chain[-1]))
+    base = fixture_tree(evals, chain[0], scratch())
+    out: list[str] = []
+    for dp, dns, fns in os.walk(top):
+        for n in sorted(fns + [d for d in dns if Path(dp, d).is_symlink()]):
+            rel = Path(dp, n).relative_to(top)
+            if rel.as_posix() == FIXTURE_FILE or any(base.joinpath(*rel.parts[:i]).is_symlink() for i in range(1, len(rel.parts))):
+                continue
+            if entry(Path(dp, n)) is not None and entry(Path(dp, n)) == entry(base / rel):
+                by = next(b for b in chain if entry(evals / "fixtures" / b / rel) is not None)
+                out.append(f"fixtures/{name}/{rel.as_posix()}: field base: the same file base {chain[0]} supplies "
+                           f"(fixtures/{by}/{rel.as_posix()}); delete it: the base supplies it")
     return out
 
 
@@ -827,6 +888,8 @@ def main(argv):
         print(__doc__.strip()); return 0
     if argv[:1] == ["--trees"]:
         return trees_main(cast("list[str]", argv[1:]))
+    if argv[:1] == ["--export"]:
+        return export_main(cast("list[str]", argv[1:]))
     evals = Path(argv[0]) if argv else KIT / "evals"
     if not evals.is_dir():
         print(f"check-evals: no evals dir {evals}", file=sys.stderr); return 2
