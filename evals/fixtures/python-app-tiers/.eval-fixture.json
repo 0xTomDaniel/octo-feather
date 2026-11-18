@@ -1,1 +1,1 @@
-{"base": "py-mini"}
+{"base": "py-mini", "pool": {".github/workflows/check.yml": "check.yml", "mise.toml": "mise.toml", "uv.lock": "uv.lock"}}

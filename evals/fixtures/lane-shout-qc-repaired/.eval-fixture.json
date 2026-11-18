@@ -1,1 +1,1 @@
-{"base": "lane-shout-qc-red-lane"}
+{"base": "lane-shout-qc-red-lane", "pool": {"src/app/cli.py": "cli-shout-repaired.py"}}
