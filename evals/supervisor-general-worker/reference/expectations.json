@@ -54,8 +54,7 @@
         "fact": "ran",
         "program": "octo-feather-integrate",
         "args": [
-          "12",
-          "implementer-gh16"
+          "12"
         ],
         "exit": 0
       },
