@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """octo-feather-qa [--suite NAME]... [--case ID]... [--classifier P/ID]... [--sample N] [--runs N] [--model MODEL] [--evals DIR] [--kit-ref COMMIT] [--baseline COMMIT]   factory evals (`just qa`)
-octo-feather-qa --analyze RUN_DIR   the analysis of a stored run (Analysis, below)
+octo-feather-qa --analyze RUN_DIR [--evidence]   the analysis of a stored run (Analysis, below), or its evidence block (Evidence)
 octo-feather-qa --review RUN_DIR SUITE/CASE [pass|fail NOTE]   show or record a maintainer's verdict (Review, below)
 octo-feather-qa --verdict RUN_ID/SUITE/CASE...   a qc verdict from pinned stored runs (Verdict, below)
 
@@ -116,7 +116,16 @@ model. The flags, per fact case:
   non-discriminating fact   (--baseline) in a case whose pass rate differs between the kits, a fact with the same
                             status in every run on both kits
 octo-feather-qa --analyze RUN_DIR prints the analysis of a stored run again from RUN_DIR/summary.json alone: no case,
-sandbox or model runs; no other option; an unreadable summary.json exits 64.
+sandbox or model runs; no other option but --evidence; an unreadable summary.json exits 64.
+Evidence (ticket #995; owner ruling 2026-11-18 #978: an evidence file for an eval-backed change is generated from the
+stored run, never transcribed by hand): `--analyze RUN_DIR --evidence` prints, from the stored run alone (summary.json,
+and each case run's grading.json, sandbox.json and input.json), nothing run or written, a markdown block for the
+evidence file: the run id, the current and baseline kit shas, cases passed; per fact case its lines as the run printed
+them (case line; with --baseline the baseline's line and the compare table, with --runs N its cost line), its pin
+`octo-feather-qa --verdict RUN_ID/SUITE/CASE` (the argument a qc.toml demo pins, Verdict), and each graded `ran` fact
+of each run on each kit, cited RUN_ID/SUITE/CASE/<run dir>, with its status and every sandbox.json `attempts` run
+matching it (the Run record rule) as program, argv whole as JSON, and exit; then the analysis, and the `Smoke:` and
+`Removed:` lines check-behavior-smoke reads, as stubs to fill. Deterministic: the same run prints the same bytes.
 Review (spec quality#acceptance-qa-review): a role-transcript case with `review` {question} (schema: Case) has no graded
 facts: it runs to its end like any case, its output kept in review.json in its run's dir (question, final_message,
 changed_files: the paths its branch changed, as branch_paths reads them), and its line reads REVIEW (awaiting review:
@@ -1266,11 +1275,17 @@ def finish(out, suite, case, model, secs, verdict, deciding, graded, w, kits):
            "stop": (w or {}).get("stop"), "tool_calls": (w or {}).get("tool_calls"),
            **({k: case[k] for k in ("role", "should_trigger", "split", "review") if k in case}), **kits}
     (out / "result.json").write_text(json.dumps(res, indent=2) + "\n")
-    stop = (f" [stop: {res['stop']}, {res['tool_calls']} tool calls, {secs} s]" if w else f" [{secs} s]") + f" [kit {kits['kit_sha']}]"
     if "run" in kits:   # run k of N (--runs): its line indented, under its case
         print(f"  {kits['config'] + ' ' if kits['config'] else ''}run {kits['run']}/{kits['of']}: ", end="")
-    print(f"{verdict} {suite['suite']}/{case['id']}: {'; '.join(deciding)}{stop}", flush=True)
+    print(result_line(cast("Result", res), watched=bool(cast("object", w))), flush=True)
     return res
+
+
+def result_line(res: "Result", *, watched: bool) -> str:
+    """One run's result line, as printed: with its stop record when the watcher ran (WATCHED)."""
+    secs = res["seconds"]
+    stop = (f" [stop: {res['stop']}, {res['tool_calls']} tool calls, {secs} s]" if watched else f" [{secs} s]") + f" [kit {res['kit_sha']}]"
+    return f"{res['verdict']} {res['suite']}/{res['id']}: {'; '.join(cast('list[str]', res['deciding']))}{stop}"
 
 
 RUN_KEYS = ("verdict", "deciding", "model", "seconds", "stop", "tool_calls")
@@ -1924,8 +1939,9 @@ def analysis_lines(a: Result) -> list[str]:
     return out if len(out) > 1 else [*out, "  no flags"]
 
 
-def reanalyze(run_dir: str) -> int:
-    """--analyze RUN_DIR: the analysis of a stored run, from its summary.json only; no case, sandbox or model runs."""
+def reanalyze(run_dir: str, *, evidence: bool = False) -> int:
+    """--analyze RUN_DIR: the analysis of a stored run, from its summary.json only; no case, sandbox or model runs.
+    With EVIDENCE (--evidence), the run's evidence block instead."""
     p = Path(run_dir) / "summary.json"
     try:
         raw: object = json.loads(p.read_text())
@@ -1934,9 +1950,78 @@ def reanalyze(run_dir: str) -> int:
     if not isinstance(raw, dict):
         die(64, f"--analyze {run_dir}: {raw if isinstance(raw, str) else 'summary.json is not an object'}")
     sm = cast("Result", raw)
+    if evidence:
+        print(evidence_block(Path(run_dir), sm), end="", flush=True)
+        return 0
     print(f"qa: run {sm.get('run_id')} reanalyzed from {p}", flush=True)
     print("\n".join(analysis_lines(analyze(cast("list[Result]", sm.get("cases") or [])))), flush=True)
     return 0
+
+
+def fenced(lines: list[str]) -> list[str]:
+    """LINES as one markdown text block, its fence longer than any backtick run in them."""
+    fence = "`" * max([3, *(len(m) + 1 for ln in lines for m in re.findall("`+", ln))])
+    return [f"{fence}text", *lines, fence]
+
+
+def ran_cited(case_dir: Path, cite: str, runs: list[Result]) -> list[str]:
+    """Each graded `ran` fact of RUNS (stored under CASE_DIR, cited as CITE/<dir>) with every recorded run matching
+    it, its argv whole as JSON (rules: schema, Run record; --help, Evidence)."""
+    out: list[str] = []
+    for r in runs:
+        d = str(r.get("dir", "."))
+        where = cite if d == "." else f"{cite}/{d}"
+        g, sb, inp = (stored(case_dir / d / n) for n in ("grading.json", "sandbox.json", "input.json"))
+        facts = [f for f in cast("list[Result]", (g or {}).get("facts") or []) if f.get("fact") == "ran"]
+        if g is None:
+            out.append(f"{where}: no readable grading.json")
+        att = (sb or {}).get("attempts")
+        record = [cast("Result", x) for x in cast("list[object]", att) if isinstance(x, dict)] if isinstance(att, list) else None
+        head = (inp or {}).get("fixture_head")
+        for f in facts:
+            want = [str(x) for x in cast("list[object]", f.get("args") or [])]
+            name = " ".join(["ran", str(f.get("program")), *want]) + "".join(f" {k} {f[k]}" for k in ("exit", "count") if k in f)
+            out.append(f"{where}: {name}: {f.get('status')}")
+            if record is None:
+                out.append("  no whole attempt record in sandbox.json")
+                continue
+            hits = [x for x in record if x.get("kind") == "run" and x.get("program") == f.get("program")
+                    and isinstance(x.get("argv"), list) and ("exit" not in f or x.get("exit") == f["exit"])
+                    and args_match(want, [str(a) for a in cast("list[object]", x["argv"])], head if isinstance(head, str) else None)]
+            out += [f"  {x['program']} {json.dumps(x['argv'])} exit {x.get('exit')}" for x in hits] or ["  no matching recorded run"]
+    return out
+
+
+def evidence_block(run_dir: Path, sm: Result) -> str:
+    """--analyze RUN_DIR --evidence: the stored run's markdown evidence block (--help, Evidence); the same run, the
+    same bytes."""
+    rid = str(sm.get("run_id") or run_dir.name)
+    b = sm.get("baseline")
+    base = cast("Result", b) if isinstance(b, dict) else None
+    cases = [cast("Result", c) for c in cast("list[object]", sm.get("cases") or []) if isinstance(c, dict)]
+    out = [f"## Eval evidence: run {rid}", "",
+           f"Generated from the stored run alone by `octo-feather-qa --analyze <qa dir>/{rid} --evidence`; never edited by hand.", "",
+           f"- run: {rid}, {sm.get('runs', 1)} run(s) per case",
+           f"- current kit: {sm.get('kit_sha')} (kit ref {sm.get('kit_ref', 'HEAD')})",
+           f"- baseline kit: {base.get('kit_sha')} (--baseline {base.get('kit_ref')})" if base else "- baseline kit: none",
+           f"- cases passed: {sm.get('passed')}/{sm.get('total')}"]
+    for c in cases:
+        name = f"{c.get('suite')}/{c.get('id')}"
+        runs = [cast("Result", r) for r in cast("list[object]", c.get("runs") or [{"dir": "."}]) if isinstance(r, dict)]
+        bruns = [cast("Result", r) for r in cast("list[object]", cast("Result", c.get("baseline") or {}).get("runs") or [])
+                 if isinstance(r, dict)]
+        alone = "baseline" not in c and len(runs) == 1
+        shown = [result_line(c, watched=c.get("stop") is not None or c.get("tool_calls") is not None)] if alone else case_lines(c)
+        ran = ran_cited(run_dir / str(c.get("suite")) / str(c.get("id")), f"{rid}/{name}", [*bruns, *runs])
+        out += ["", f"### {name}", "", *fenced(shown), "", f"Pin: `octo-feather-qa --verdict {rid}/{name}`"]
+        if ran:
+            out += ["", "Each graded `ran` fact and every recorded run matching it (sandbox.json attempts, argv whole as JSON):", "",
+                    *fenced(ran)]
+    out += ["", "### Analysis", "", *fenced(analysis_lines(analyze(cases))), "",
+            "### To fill", "",
+            f"Smoke: <each changed role or skill path> run {rid}: <what the run exercised>",
+            "Removed: <what the change deleted, or the incident that justifies it>"]
+    return "\n".join(out) + "\n"
 
 
 # ---- --verdict: a qc verdict from pinned stored runs (rules: --help, Verdict) -----------------
@@ -2060,9 +2145,9 @@ def main(argv: list[str]):
     if argv[:1] == ["--review"]:
         return review(argv[1:])
     if argv[:1] == ["--analyze"]:
-        if argv[2:] or not argv[1:]:
-            die(64, "--analyze takes one RUN_DIR and no other option")
-        return reanalyze(argv[1])
+        if argv[3:] or not argv[1:] or argv[2:] not in ([], ["--evidence"]):
+            die(64, "--analyze takes one RUN_DIR and no other option but --evidence")
+        return reanalyze(argv[1], evidence=argv[2:] == ["--evidence"])
     gate_free()
     o = parse(argv)
     eval_slot()
