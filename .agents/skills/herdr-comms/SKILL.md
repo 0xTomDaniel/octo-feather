@@ -70,6 +70,17 @@ it set (unset in the caller, unset in the tab). The key comes only from the
 environment that starts the factory: never write it into a file, brief,
 message, lane record or log.
 
+Each agent runs in its own systemd user scope (#1000): before `agent start`,
+the spawn adopts the new pane's shell (`herdr pane process-info`, `shell_pid`)
+into `octo-feather-agent-PANE-N.scope` through systemd's D-Bus
+`StartTransientUnit` (`busctl --user`; `systemd-run` cannot adopt a running
+pid), so Pi and all it starts, detached or not, are that scope's members, and
+`herdr-close` ends them from it. On Linux with no reachable systemd user
+manager the spawn refuses: exit 69, tab closed, busctl's own error and the need
+named (on a server: `loginctl enable-linger $USER`, `XDG_RUNTIME_DIR=/run/user/$(id -u)`).
+macOS has no systemd: agents launch unscoped there, and `herdr-close` sweeps
+nothing of theirs (the stated limit).
+
 It wraps `herdr tab create` and `herdr agent start`, and handles three things
 those leave to the caller:
 
@@ -131,13 +142,20 @@ The teardown step. An id with a colon (`w5:t2`) is a tab, one without (`w5`) is
 a space. A pane id (`w5:p3`) is mapped to its tab through `herdr agent get`
 (as `--park` does) and closed as that tab; a pane with no Herdr agent cannot be
 mapped and fails with exit 65 naming the `TAB|SPACE|PANE` form, nothing closed.
-Closes it, then sends TERM to every process of the caller's session
-whose environ carries `HERDR_TAB_ID=TAB` or `HERDR_WORKSPACE_ID=SPACE`, which
-catches detached children that close alone leaves running. Run it from outside
+Before closing, it finds each closed pane's agent scope from Herdr's own
+handles only (`herdr pane list --workspace`, each pane's `shell_pid` from
+`herdr pane process-info`, that pid's `/proc/PID/cgroup`); after the close it
+stops each one (`systemctl --user stop`: TERM, KILL 10 s on), which ends the
+detached children close alone leaves running, also when the agent's Pi already
+exited. It reads no other process: one elsewhere tagged with the closed tab's
+`HERDR_TAB_ID` is untouched. A pane outside any agent scope (an agent spawned
+before scopes, a hand-started director, macOS) is unowned: closed, nothing
+swept, named in the report. Run it from outside
 what it closes: the spawner closes a tab, the director closes a finished lane's
 own space, or only its supervisor tab when the lane started in a shared space.
-Prints `tab= tab_close_rc= killed=` or `space= space_close_rc= killed=` and
-exits with the close status.
+Prints `tab= tab_close_rc= killed=` or `space= space_close_rc= killed=`
+(`killed=` the scopes' members when stopped), plus `unowned=PANE[,PANE...]`
+when any, and exits with the close status.
 
 ## Park an idle agent
 

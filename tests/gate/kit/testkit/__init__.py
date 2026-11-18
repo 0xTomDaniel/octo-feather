@@ -34,11 +34,14 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[3]
 FIXTURES = ROOT / "tests" / "fixtures"
 # Each stand-in by the command it stands in for: gh (GitHub), herdr (Herdr), pi (Pi, at its
-# classifier boundary: tests/fixtures/classify-stub/pi's header says what it answers).
+# classifier boundary: tests/fixtures/classify-stub/pi's header says what it answers), busctl and
+# systemctl (the systemd user manager: systemd.py's header).
 FAKES = {
     "gh": HERE / "gh.py",
     "herdr": HERE / "herdr.py",
     "pi": FIXTURES / "classify-stub" / "pi",
+    "busctl": HERE / "systemd.py",
+    "systemctl": HERE / "systemd.py",
 }
 # Stand-ins a scenario puts first on PATH itself, where its command reaches the system another
 # way: pi_agent.py (Pi at the agent boundary, an eval case's role run; tests/lib/qa.sh copies it

@@ -22,8 +22,7 @@ post-merge step 4 (owner ruling on issue 206; issues 398, 458): live supervisors
 title and rule files, one prod line each, a rerun telling nothing new; parked and gone lanes
 listed, never sent to; a failed send named, no prod line, exit 1; any other herdr failure stops
 the step; step 5 reached, the kit's own herdr-close run and Herdr's workspace_not_found read as
-already closed. Space ids `zt*`, which no real Herdr gives, so herdr-close's sweep of processes
-tagged with a closed space can reach no box process."""
+already closed. Space ids `zt*`, which no real Herdr gives."""
 
 from __future__ import annotations
 
@@ -391,7 +390,6 @@ def director_parks(s: Scratch, d: Path) -> dict[str, str]:
     worker = tab_process(s, d, got["pane"], wt)
     try:
         park = s.run([str(ASSETS / "herdr-close"), "--park", got["pane"]], env=DIRECTOR)
-        assert worker.wait(timeout=10) is not None
     finally:
         worker.kill()
     dlog = state / "director.handoffs.jsonl"
