@@ -1337,28 +1337,29 @@ def run_runs(qc: object, evals: Path, suite: Result, case: Result, facts: list[R
             done[name].append((d, one(qc, evals, suite, case, facts, model, runid, f"{n}r{k}" + (f"-{name[0]}" if name else ""),
                                       out / d, kit, ref, sha, rep=(k, runs, name))))
     ags = {name: aggregate(done[name], out, runs) for name in done}
-
-    def said(r: Result) -> str:
-        return "; ".join(cast("list[str]", r["deciding"]))
-
-    def line(name: str, res: Result, sha: str | None) -> None:
-        at = f"  {name} " if name == "baseline" else ""
-        print(f"{at}{res['verdict']} {suite['suite']}/{case['id']}: {said(res)} [{res['seconds']} s] [kit {sha}]", flush=True)
-
-    cur = configs[-1]
-    res = ags[cur[0]]
-    if alone and runs > 1:
-        line("", res, cur[3])
-        print(f"  cost {suite['suite']}/{case['id']}: " + "; ".join(f"{lb} {show_spread(res[k], fmt)}" for lb, k, fmt in (("time s", "time", "{:.1f}"), ("tokens", "tokens", "{:.0f}"))), flush=True)
-    elif not alone:
+    res = ags[configs[-1][0]]
+    if not alone:
         base = ags["baseline"]
-        line("", res, cur[3])
-        line("baseline", base, configs[0][3])
         res = {**res, "baseline": {"kit_ref": configs[0][2], "kit_sha": configs[0][3], **{k: base[k] for k in BASE_KEYS}},
                "delta": {k: diff(res, base, k) for k in ("pass_rate", "time", "tokens", "cost_usd")}}
-        print("\n".join(compare(suite, case, base, res, configs)), flush=True)
+    if not alone or runs > 1:
+        print("\n".join(case_lines(res)), flush=True)
     (out / "result.json").write_text(json.dumps(res, indent=2) + "\n")
     return res
+
+
+def case_lines(res: Result) -> list[str]:
+    """A repeated or compared case's lines as the run prints them, from its result RES (--runs, --baseline: --help):
+    its case line, then with a baseline the baseline's line and the compare table, else its cost line."""
+    name = f"{res['suite']}/{res['id']}"
+
+    def line(at: str, r: Result) -> str:
+        return f"{at}{r['verdict']} {name}: {'; '.join(cast('list[str]', r['deciding']))} [{r['seconds']} s] [kit {r['kit_sha']}]"
+
+    b = res.get("baseline")
+    if not isinstance(b, dict):
+        return [line("", res), f"  cost {name}: " + "; ".join(f"{lb} {show_spread(res[k], fmt)}" for lb, k, fmt in (("time s", "time", "{:.1f}"), ("tokens", "tokens", "{:.0f}")))]
+    return [line("", res), line("  baseline ", cast("Result", b)), *compare(res)]
 
 
 BASE_KEYS = ("verdict", "deciding", "seconds", "runs", "runs_passed", "pass_rate", "stddev", "time", "tokens", "cost_usd")
@@ -1412,11 +1413,12 @@ def show_spread(sp: object, fmt: str = "{:.2f}") -> str:
     return f"{fmt.format(sp['mean'])} +/- {fmt.format(sp['stddev'])}"
 
 
-def compare(suite: Result, case: Result, base: Result, cur: Result, configs: list[Config]) -> list[str]:
-    """A case's `compare` table (--baseline: --help)."""
+def compare(cur: Result) -> list[str]:
+    """A case's `compare` table from its result CUR, its baseline and delta (--baseline: --help)."""
     rows = [("pass rate", "pass_rate", "{:.2f}"), ("time s", "time", "{:.1f}"), ("tokens", "tokens", "{:.0f}"), ("cost usd", "cost_usd", "{:.4f}")]
     delta = cast("Result", cur["delta"])
-    out = [f"  compare {suite['suite']}/{case['id']}: baseline kit {str(configs[0][3])[:12]} beside current kit {str(configs[-1][3])[:12]}",
+    base = cast("Result", cur["baseline"])
+    out = [f"  compare {cur['suite']}/{cur['id']}: baseline kit {str(base['kit_sha'])[:12]} beside current kit {str(cur['kit_sha'])[:12]}",
            f"    {'':<10} {'baseline':<20} {'current':<20} difference"]
 
     def shown(res: Result, k: str, fmt: str) -> str:
