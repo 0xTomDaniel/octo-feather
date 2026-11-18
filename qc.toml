@@ -284,12 +284,14 @@ covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11
 [demo."roles#acceptance-general-worker-no-implementation"]
 covers = ["agents/supervisor.md", "evals/supervisor-general-worker", "evals/fixtures/lane-shout-general-diff", "evidence/2026-11-17-gh840-supervisor-general-worker.md"]
 
-# No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-fresh-worker --runs 3 --baseline
-# origin/main), which needs the eval slot and a real model route: not a qc demo. The agent fallback judge reads its run,
-# each case's pass rate on both kits and every recorded herdr-spawn and herdr-say argv, in
-# evidence/2026-11-13-gh840-supervisor-fresh-worker.md.
+# Two halves (evidence/2026-11-13-gh840-supervisor-fresh-worker.md, How this meets the criterion): the supervisor starts
+# the independent work with a new spawn, never a --resume, and a self-contained brief (model eval supervisor-fresh-worker,
+# run 20261117T151829Z-60554a: needs the eval slot and a model route, not a qc demo); and a new spawn has another
+# provider-session identity than the closed one, a --resume reuses it: this demo and its tagged test, the real
+# herdr-spawn and herdr-close against the testkit's Herdr stand-in.
 [demo."roles#acceptance-fresh-independent-worker"]
-covers = ["agents/supervisor.md", "evals/supervisor-fresh-worker", "evidence/2026-11-13-gh840-supervisor-fresh-worker.md"]
+command = "python3 tests/gate/kit/herdr_messaging.py fresh_worker_session"
+covers = ["agents/supervisor.md", "evals/supervisor-fresh-worker", "evidence/2026-11-13-gh840-supervisor-fresh-worker.md", ".agents/skills/herdr-comms/assets/herdr-spawn", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/herdr.py"]
 # Proven by its tagged tests (tests/gate/kit/test_herdr_messaging.py) and this demo: herdr-say run as a general worker
 # against the testkit's Herdr stand-in: live parent delivered, peer lane refused (77), parent gone: the director stand-in
 # receives exactly the fixed alert; timeout and stall raise none, an implementer cannot reach the director.

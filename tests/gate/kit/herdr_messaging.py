@@ -14,6 +14,8 @@ spec #acceptance-task-worker-route): its parent reached, a peer lane refused (77
 never messages the director: its parent proven gone, herdr-say itself sends the director one
 fixed alert, a timeout or a stall none (comms spec #acceptance-parent-gone). director_worker_resume
 drives comms spec #acceptance-director-worker-resume (its docstring names each step).
+fresh_worker_session drives the provider-session half of roles spec
+#acceptance-fresh-independent-worker (its docstring names each step).
 
 post-merge step 4 (owner ruling on issue 206; issues 398, 458): live supervisors of the PR's repo
 (every lane on a kit PR) told once, by the kit's own herdr-say with its bound, with the merge, PR,
@@ -869,6 +871,37 @@ def queued_completion(s: Scratch) -> None:
     assert "not resent" in ran.err.splitlines()[-1], ran.err
 
 
+def fresh_worker_session(s: Scratch) -> None:
+    """roles #acceptance-fresh-independent-worker, its provider-session half, through the real
+    herdr-spawn and herdr-close: supervisor zt1:p0 spawns implementer-gh13 for #13 and closes it
+    (assignment done); its spawn for the independent #14, implementer-gh14, prints another
+    provider_session_id, and Pi is started with that --session-id; a --resume of the closed session
+    (the same unfinished assignment only) reuses it. Space zt1: no real Herdr gives it, so
+    herdr-close's sweep reaches no box process. Each observation printed, for the qc demo."""
+    d = herdr_world(s)
+    s.identity()
+    sup = SUPERVISOR | {"HERDR_PANE_ID": "zt1:p0", "HERDR_WORKSPACE_ID": "zt1"}
+
+    def spawn(name: str, *more: str) -> dict[str, str]:
+        wt = s.root / f"wt-{name}"
+        wt.mkdir(exist_ok=True)
+        argv = [str(ASSETS / "herdr-spawn"), "--workspace", "zt1", "--name", name, "--label", name]
+        out = s.run([*argv, "--role", "implementer", "--cwd", str(wt), *more], env=sup).out
+        got = dict(x.split("=", 1) for x in out.split())
+        starts = [x for x in lines(d / "log") if x.startswith(f"agent start {name} ")]
+        assert f" --session-id {got['provider_session_id']} " in f"{starts[-1]} ", starts
+        show(f"herdr-spawn --name {name} {' '.join(more)}: {out}")
+        return got
+
+    closed = spawn("implementer-gh13")
+    s.run([str(ASSETS / "herdr-close"), closed["tab"]], env=sup)
+    show(f"herdr-close {closed['tab']}: implementer-gh13's assignment closed")
+    fresh = spawn("implementer-gh14")
+    assert fresh["provider_session_id"] != closed["provider_session_id"], (closed, fresh)
+    resumed = spawn("implementer-gh13", "--resume", closed["provider_session_id"])
+    assert resumed["provider_session_id"] == closed["provider_session_id"], (closed, resumed)
+
+
 if __name__ == "__main__":
     main(
         spawn_ready_late,
@@ -883,4 +916,5 @@ if __name__ == "__main__":
         parent_gone,
         director_worker_resume,
         queued_completion,
+        fresh_worker_session,
     )
