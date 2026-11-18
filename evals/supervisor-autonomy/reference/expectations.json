@@ -1,0 +1,83 @@
+{
+  "local-repair-and-ready-work": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 0
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-spawn",
+        "args": [
+          "--name",
+          "implementer-gh15"
+        ]
+      },
+      {
+        "fact": "branch_paths",
+        "touched": [
+          "notes/gh12.handoffs.jsonl"
+        ]
+      }
+    ]
+  },
+  "worker-blocked-local-not-escalated": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 0
+      }
+    ]
+  },
+  "spec-conflict-and-local-repair": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "herdr-spawn",
+        "args": [
+          "--role",
+          "implementer"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 1
+      }
+    ]
+  },
+  "owner-access-blocker-and-ready-work": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 1
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-spawn",
+        "args": [
+          "--name",
+          "implementer-gh15"
+        ]
+      }
+    ]
+  },
+  "owner-access-blocker-message": {
+    "facts": []
+  }
+}
