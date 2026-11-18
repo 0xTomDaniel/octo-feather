@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
-"""Each commit a writer adds to a branch carries the writer's Owner field in its message.
-
-The field, its form and when a writer owes it: .agents/skills/code-review/SKILL.md, Verdict step
-(Report fields; the writer sentence of the Owner paragraphs). Parsed by `octo-feather-lane fields`.
+"""The check docs/adr/0008 names for the writer's Owner field (field, form and who owes it:
+.agents/skills/code-review/SKILL.md, Verdict step). Parsed by `octo-feather-lane fields`.
 
 Correction lane #466 (class duplicated-rule): evidence/2026-11-18-gh466-owned-rules.md. A presence
 check, read-only git only. It forces the declaration; it cannot tell whether the search ran or

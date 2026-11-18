@@ -419,7 +419,7 @@ check-roles:
 check-behavior-smoke:
     @python3 "$root/scripts/check-behavior-smoke"
 
-# Each commit a branch adds since this check carries the writer's Owner field (scripts/check-owner-field --help).
+# The Owner-field check of docs/adr/0008; which commits it reads: scripts/check-owner-field --help.
 check-owner-field:
     @python3 "$root/scripts/check-owner-field"
 
