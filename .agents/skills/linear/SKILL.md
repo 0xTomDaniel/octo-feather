@@ -32,7 +32,7 @@ and names the install path when missing: the release binary on `PATH` as
 | --- | --- | --- |
 | `lane-key ID` | Lane key for an issue as the owner writes it (`ENG-123`, `eng-123`, its URL) | `eng-123` |
 | `key-from-branch BRANCH` | Parent issue of a lane branch or a worker branch named after it | `ENG-123` |
-| `issue-view KEY [--notes]` | Reads one issue | JSON: `key`, `title`, `body`, `state` (`open` or `done`), `url`, `parent` (key or null), `children` (its sub-issues' keys), `blocked_by` (keys); `--notes` adds `notes` (`at`, `edited_at` or null, `url`, `body`; the description first, its `edited_at` the issue's last update, then each comment) |
+| `issue-view KEY [--notes]` | Reads one issue | JSON: `key`, `title`, `body`, `state` (`open` or `done`), `url`, `parent` (key or null), `children` (its sub-issues' keys), `blocked_by` (keys); `--notes` adds `notes` (skills spec `#tracker-script-issue-view`) |
 | `issue-create --title T --body-file F\|- [--parent KEY] [--blocked-by KEY]...` | Files an issue (in the parent's team, else the configured team), optionally a sub-issue of a parent and blocked by others | The new key |
 | `issue-comment KEY [--body-file F\|-]` | Adds a comment (standard input by default) | The comment's url |
 | `issue-done KEY` | Moves the issue to its team's Done (first `completed` state); one already done (completed, canceled or duplicate) stays as it is | Nothing |

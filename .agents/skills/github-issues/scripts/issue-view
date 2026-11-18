@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 # issue-view KEY [--notes]: one issue as JSON {key, title, body, state, url, parent, children, blocked_by}; keys are strings,
 # state open or done (closed is done), parent null when it has none, children its sub-issues' keys. Wraps `gh issue view`.
-# --notes adds notes: [{at, edited_at, url, body}], the body first, then each comment in order: at its creation,
-# edited_at its last edit (null: never edited); one more call, `gh api graphql` (gh issue view --json has no edit times).
+# --notes: skills spec #tracker-script-issue-view; one more call, `gh api graphql` (gh issue view --json has no edit times).
 set -euo pipefail
 notes=0; [[ $# == 2 && "$2" == --notes ]] && { notes=1; set -- "$1"; }
 [[ $# == 1 ]] || { echo "usage: issue-view KEY [--notes]" >&2; exit 64; }

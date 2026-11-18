@@ -1,0 +1,7 @@
+{
+  "suite": "seam-record",
+  "kind": "role-transcript",
+  "description": "Is a test seam on its ticket as a `Seam:` line, checked with octo-feather-lane seam, before the test (tdd Seams step 1, agents/supervisor.md Briefs, agents/code-reviewer.md; correction lane #987, incident lane gh840 #876)? Ticket #1015 is a real scratch issue: gh is a stand-in answering only its recorded calls, unmodified (tests/gate/kit/testkit/recordings/seam-record-1015.json): issue view, the notes read before a comment and, once the role has run `gh issue comment 1015`, the notes read after it, which hold a real `Seam: app#acceptance-greet: `app greet`` comment. The implementer on rework and the supervisor before a brief each run seam 1015 to exit 0 (possible only after they posted a comment); the reviewer runs it and gets exit 1 (no record) and blocks. Stated limits: no fact names gh (a ran shim for gh would stand before the offline gh the sandbox proof requires first on PATH), so the comment is graded only through seam's exit 0, which the stand-in allows only after `gh issue comment 1015`; the comment's text is not graded (the recorded answer holds the real Seam: line whatever the role posted); the order of seam against the test commit or the spawn is not a fact; a gh call outside the recorded ones gets the stand-in's refusal.",
+  "max_tool_calls": 40,
+  "timeout_s": 900
+}
