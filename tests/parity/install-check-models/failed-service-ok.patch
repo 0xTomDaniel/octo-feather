@@ -1,0 +1,14 @@
+Seeded defect: install-check takes an enabled review service as running whatever its state (the review line: active and enabled ok, else NOT RUNNING).
+diff --git a/justfile b/justfile
+index c7058f09..82ac3b88 100644
+--- a/justfile
++++ b/justfile
+@@ -760,7 +760,7 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH') $CALLER
+     except (OSError, subprocess.SubprocessError): out = ""
+     st = dict(line.partition("=")[::2] for line in out.splitlines())
+     active, file = st.get("ActiveState") or "unknown", st.get("UnitFileState") or "not installed"
+-    if (active, file) == ("active", "enabled"): print(f"review ok  {unit} active, enabled (Spec Chat\x27s review service, systemd --user)")
++    if file == "enabled": print(f"review ok  {unit} active, enabled (Spec Chat\x27s review service, systemd --user)")
+     else: print(f"review NOT RUNNING {unit} is {active}, {file} (want active, enabled: the systemd user service box setup installs); {how}"); sys.exit(1)' "$unit" "$how" || bad=1
+     # The model check makes a model call per role model, so it is a setup step of its own (spec remote#host-models).
+     echo "models MANUAL not checked here (no model call); at box setup and after a model key change: just install-check-models"

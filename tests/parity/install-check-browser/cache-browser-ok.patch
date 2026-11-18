@@ -1,0 +1,14 @@
+Seeded defect: install-check takes a browser folder under the cache folder the qc sandbox masks (the browser line: UNREADABLE IN THE QC SANDBOX there).
+diff --git a/justfile b/justfile
+index c7058f09..64a3fb1a 100644
+--- a/justfile
++++ b/justfile
+@@ -741,7 +741,7 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH') $CALLER
+     if [[ -n "$bpin" ]]; then
+       folder="${XDG_DATA_HOME:-$HOME/.local/share}/octo-feather/ms-playwright/$bpin"
+       shell="$(ls -d "$folder"/chromium_headless_shell-*/INSTALLATION_COMPLETE 2>/dev/null | head -1)"
+-      if under_cache "$folder"; then
++      if false; then
+         printf 'browser UNREADABLE IN THE QC SANDBOX %s is under %s, which the sandbox masks; set XDG_DATA_HOME outside it\n' "$folder" "$cache"; bad=1
+       elif [[ -n "$shell" ]]; then printf 'browser ok  %s (Playwright %s; PLAYWRIGHT_BROWSERS_PATH=%s)\n' "${shell%/INSTALLATION_COMPLETE}" "$bpin" "$folder"
+       else printf 'browser MISSING (want Playwright %s headless Chromium shell in %s); install: PLAYWRIGHT_BROWSERS_PATH=%s npx -y playwright@%s install --only-shell chromium\n' "$bpin" "$folder" "$folder" "$bpin"; bad=1; fi
