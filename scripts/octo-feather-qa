@@ -575,14 +575,24 @@ def args_match(want: list[str], got: list[str], head: str | None) -> bool:
 def judge_ran(fact: dict[str, object], record: list[dict[str, object]] | None, *, final: bool) -> tuple[str, str]:
     """ran PROGRAM ARGS over the sandbox's RECORD (rule: schema, Run record)."""
     p, want, head = str(fact["program"]), [str(x) for x in cast("list[object]", fact["args"])], fact.get("_head")
-    name = f"ran {' '.join([p, *want])}"
+    name = f"ran {' '.join([p, *want])}" + (f" exit {fact['exit']}" if "exit" in fact else "")
     if record is None:   # sandbox.json attempts_error, or a record not whole (schema, Attempt record)
         return "fail", f"{name}: the sandbox sent no whole attempt record"
     runs = [(r, [str(x) for x in cast("list[object]", r["argv"])]) for r in record
             if r.get("kind") == "run" and r.get("program") == p and isinstance(r.get("argv"), list)]
     def show_(r: dict[str, object]) -> str:
         return f"{str(r.get('what', ''))[:120]} ({str(r.get('result', ''))[:80]})"
-    hit = next((r for r, a in runs if args_match(want, a, head if isinstance(head, str) else None)), None)
+    hits = [r for r, a in runs if args_match(want, a, head if isinstance(head, str) else None)
+            and ("exit" not in fact or r.get("exit") == fact["exit"])]
+    hit = hits[0] if hits else None
+    if "count" in fact:   # rule: schema, Run record
+        n, name = cast("int", fact["count"]), f"{name} count {fact['count']}"
+        seen = f"{len(hits)} matching runs" + (f": {'; '.join(show_(r) for r in hits)}" if hits else "")
+        if len(hits) > n:
+            return "fail", f"{name}: {seen}"
+        if not final:
+            return "open", f"{name}: {seen} so far"
+        return ("pass" if len(hits) == n else "fail"), f"{name}: {seen} ({len(record)} entries in the record)"
     if hit is not None:
         return "pass", f"{name}: recorded run {show_(hit)}"
     if not final:
@@ -611,6 +621,19 @@ case "$1 $2" in
   "issue view"|"pr view"|"issue list"|"pr list") echo '[]';;
   *) echo "fake gh: $*" >&2;;
 esac
+'''
+# A case's stand_ins (rule: schema, Case). $QA_STAND_LOG: the calls answered so far. @NAME@, @ANSWERS@: the program
+# and the case's list for it.
+STAND_IN = r'''#!/usr/bin/env python3
+import json, os, sys
+log, me = os.environ["QA_STAND_LOG"], ["@NAME@", *sys.argv[1:]]
+seen = [json.loads(l) for l in open(log)] if os.path.exists(log) else []
+for a in @ANSWERS@:
+    if me[1:1 + len(a["args"])] == a["args"] and a.get("argc", len(me) - 1) == len(me) - 1 \
+            and ("after" not in a or any(c[:len(a["after"])] == a["after"] for c in seen)):
+        open(log, "a").write(json.dumps(me) + "\n")
+        sys.stdout.write(a["stdout"]); sys.exit(a["exit"])
+sys.exit(print("stand-in: no answer for " + " ".join(me), file=sys.stderr) or 1)
 '''
 # A case's fake_qa (schema, Case): octo-feather-qa answering in this script's own output form (its --help, header,
 # run, case, compare and summary lines), canned and plausible, with no case, sandbox or model run. @DOC@: this
@@ -754,8 +777,9 @@ def prep(setup):
     Returns (env for the role, origin dir or None, gh log or None)."""
     env, origin, log = dict(os.environ), None, None
     on = cast("dict[str, object]", setup)
-    fakes = bool(on.get("fake_gh") or on.get("fake_qa"))   # fakes behind the run shims (schema, Case)
-    if setup.get("fake_gh") or setup.get("origin"):
+    stands = cast("dict[str, list[dict[str, object]]]", on.get("stand_ins") or {})
+    fakes = bool(on.get("fake_gh") or on.get("fake_qa") or stands)   # fakes behind the run shims (schema, Case)
+    if setup.get("fake_gh") or setup.get("origin") or stands:
         os.makedirs(f"{QA_TMP}/bin", exist_ok=True)
     if setup.get("fake_gh"):
         log = f"{QA_TMP}/gh.log"; open(log, "w").close()
@@ -764,6 +788,14 @@ def prep(setup):
     if on.get("fake_qa"):
         os.makedirs(f"{QA_TMP}/bin", exist_ok=True)
         Path(f"{QA_TMP}/bin/octo-feather-qa").write_text(FAKE_QA.replace("@DOC@", repr(__doc__))); os.chmod(f"{QA_TMP}/bin/octo-feather-qa", 0o755)
+    if stands:   # rule: schema, Case (stand_ins)
+        env["QA_STAND_LOG"] = f"{QA_TMP}/stand-ins.log"
+        here, head = os.getcwd(), subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        for p, answers in stands.items():
+            fill = [dict(a, stdout=re.sub(r"\{head:(\d+)\}", lambda m: head[:int(m.group(1))],
+                                          str(a["stdout"]).replace("{repo}", here).replace("{head}", head))) for a in answers]
+            Path(f"{QA_TMP}/bin/{p}").write_text(STAND_IN.replace("@NAME@", p).replace("@ANSWERS@", repr(fill)))
+            os.chmod(f"{QA_TMP}/bin/{p}", 0o755)
     if fakes:
         ps = env.get("PATH", "").split(":")
         at = 1 if ps[0] == env.get("OCTO_FEATHER_QC_RUN_SHIMS") else 0   # behind the run shims: a ran fake records it
@@ -976,6 +1008,23 @@ def fixture_copy(src, scratch, case=None, evals=None):
         shutil.copytree(src, cast("Path", repo), symlinks=True, dirs_exist_ok=True)
         for a in (["add", "-A"], [*commit, h["message"]]):
             subprocess.run(["git", *a], cwd=repo, env=env, check=True, capture_output=True)
+        then = cast("list[dict[str, str]]", cast("dict[str, object]", case["head"]).get("then") or [])
+        for n in then:   # schema.md, Case, head then
+            subprocess.run(["git", "rm", "-rq", "--", "."], cwd=cast("Path", repo), env=env, check=True, capture_output=True)
+            shutil.copytree(fixture_src(*cast("tuple[Path, object, Path]", (evals, n["fixture"], scratch))), cast("Path", repo),
+                            symlinks=True, dirs_exist_ok=True)
+            for a in (["add", "-A"], [*commit, n["message"]]):
+                subprocess.run(["git", *a], cwd=cast("Path", repo), env=env, check=True, capture_output=True)
+    on = cast("dict[str, object]", case)
+    back = str(cast("dict[str, object]", on["head"])["branch"]) if on.get("head") else "main"
+    for b in cast("list[dict[str, str]]", on.get("branches") or []):   # schema.md, Case, branches
+        steps = [["checkout", "-q", "-b", b["branch"], back], ["rm", "-rq", "--", "."]]
+        for a in steps:
+            subprocess.run(["git", *a], cwd=cast("Path", repo), env=env, check=True, capture_output=True)
+        shutil.copytree(fixture_src(*cast("tuple[Path, object, Path]", (evals, b["fixture"], scratch))), cast("Path", repo),
+                        symlinks=True, dirs_exist_ok=True)
+        for a in (["add", "-A"], [*commit, b["message"]], ["checkout", "-q", back]):
+            subprocess.run(["git", *a], cwd=cast("Path", repo), env=env, check=True, capture_output=True)
     if case.get("branch"):
         subprocess.run(["git", "checkout", "-q", "-b", case["branch"]], cwd=repo, check=True, capture_output=True)
     if (repo / "uv.lock").is_file():
@@ -1074,7 +1123,9 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
         (out / "prompt.md").write_text(task + "\n", encoding="utf-8")
         (out / "input.json").write_text(json.dumps({"suite": suite["suite"], **case, "model": role_model, "fixture_head": head,
                                                     "max_tool_calls": maxc, "timeout_s": tmo, **kits}, indent=2) + "\n")
-        setup = {k: bool(case.get(k)) for k in ("fake_gh", "origin", "fake_qa")}
+        on = cast("dict[str, object]", case)
+        setup: dict[str, object] = {k: bool(on.get(k)) for k in ("fake_gh", "origin", "fake_qa")}
+        setup["stand_ins"] = on.get("stand_ins") or {}
         cmd = [str(SELF), "--watch", json.dumps(facts), str(maxc), str(tmo), json.dumps(setup), "--",
                str(kit / "scripts" / "pi-role"), str(kit / "agents" / f"{case['role']}.md"),
                *(["--model", model] if model else []), "--mode", "json", "--session-dir", "/tmp/qa-session", "-p", task]

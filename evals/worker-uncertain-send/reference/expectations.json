@@ -1,0 +1,41 @@
+{
+  "queued-timeout-sent-once": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "exit": 124,
+        "count": 1
+      }
+    ]
+  },
+  "reviewer-queued-timeout-sent-once": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "exit": 124,
+        "count": 1
+      }
+    ]
+  },
+  "blocked-refusal-sent-again": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "exit": 0,
+        "count": 1
+      }
+    ]
+  }
+}
