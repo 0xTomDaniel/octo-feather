@@ -5,7 +5,17 @@ import sys
 from collections.abc import Callable
 
 import pytest
-from slot import granted, refused, sandboxed, user_mise_gate
+from slot import (
+    follow_up,
+    granted,
+    new_reads_old,
+    old_reads_new,
+    queue_free,
+    queued,
+    refused,
+    sandboxed,
+    user_mise_gate,
+)
 
 Case = Callable[..., None]
 
@@ -27,3 +37,23 @@ def test_sandboxed(case: Case) -> None:
 @pytest.mark.skipif(sys.platform == "darwin", reason="the user-mise fixture needs Linux")
 def test_user_mise_gate(case: Case) -> None:
     case(user_mise_gate)
+
+
+def test_queued(case: Case) -> None:
+    case(queued)
+
+
+def test_follow_up(case: Case) -> None:
+    case(follow_up)
+
+
+def test_queue_free(case: Case) -> None:
+    case(queue_free)
+
+
+def test_old_reads_new(case: Case) -> None:
+    case(old_reads_new)
+
+
+def test_new_reads_old(case: Case) -> None:
+    case(new_reads_old)
