@@ -31,29 +31,26 @@
     "acceptance-autonomous-local": {
       "status": "built",
       "pr": 882,
-      "record": "20261118T031653Z-21b86edb",
-      "commit": "cff59b3d42020e7b95361ba32c28704c6adc82dd",
+      "record": "20261118T042632Z-49ccc94e",
+      "commit": "303403015a702c27de53a355704d1d8fbf22d515",
       "tests": []
     },
     "acceptance-real-blocker": {
-      "status": "built",
-      "pr": 882,
-      "record": "20261118T031858Z-45b7ec07",
-      "commit": "cff59b3d42020e7b95361ba32c28704c6adc82dd",
-      "tests": []
+      "status": "planned",
+      "pr": null
     },
     "acceptance-no-routine-traffic": {
       "status": "built",
       "pr": 882,
-      "record": "20261118T032106Z-7c03d8eb",
-      "commit": "cff59b3d42020e7b95361ba32c28704c6adc82dd",
+      "record": "20261118T043007Z-bc580006",
+      "commit": "303403015a702c27de53a355704d1d8fbf22d515",
       "tests": []
     },
     "acceptance-queued-completion": {
       "status": "built",
       "pr": 882,
-      "record": "20261118T030539Z-172feabf",
-      "commit": "cff59b3d42020e7b95361ba32c28704c6adc82dd",
+      "record": "20261118T041720Z-69fe2260",
+      "commit": "303403015a702c27de53a355704d1d8fbf22d515",
       "tests": [
         "tests/gate/kit/herdr_messaging.py"
       ]

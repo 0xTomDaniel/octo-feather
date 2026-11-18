@@ -45,8 +45,8 @@
     "acceptance-pilot-pr": {
       "status": "built",
       "pr": 882,
-      "record": "20261118T030539Z-5b615974",
-      "commit": "cff59b3d42020e7b95361ba32c28704c6adc82dd",
+      "record": "20261118T041720Z-2b6b3cbd",
+      "commit": "303403015a702c27de53a355704d1d8fbf22d515",
       "tests": [
         "tests/lane-pilot-pr.sh"
       ]
