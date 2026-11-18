@@ -5,7 +5,17 @@ import sys
 from collections.abc import Callable
 
 import pytest
-from slot import follow_up, granted, queue_free, queued, refused, sandboxed, user_mise_gate
+from slot import (
+    follow_up,
+    granted,
+    new_reads_old,
+    old_reads_new,
+    queue_free,
+    queued,
+    refused,
+    sandboxed,
+    user_mise_gate,
+)
 
 Case = Callable[..., None]
 
@@ -39,3 +49,11 @@ def test_follow_up(case: Case) -> None:
 
 def test_queue_free(case: Case) -> None:
     case(queue_free)
+
+
+def test_old_reads_new(case: Case) -> None:
+    case(old_reads_new)
+
+
+def test_new_reads_old(case: Case) -> None:
+    case(new_reads_old)

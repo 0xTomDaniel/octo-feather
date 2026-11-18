@@ -19,10 +19,21 @@ status lists it; nothing passes before a run started under gh7's grant, nor whil
 past the grace; after the run ends and the grace passes gh8 holds it, off the queue, and its
 supervisor and the director were told. follow_up: a follow-up run of gh7 inside the grace keeps
 the slot; it passes after that run ends. queue_free: queued onto a free kind, granted at once and
-told."""
+told.
+
+Compatibility with the reader every unmerged worktree on the box still runs against the one slots
+dir: main's octo-feather-slot at 53dacfca (gh906's base, the last commit before the queue), its
+text from `git show` (CI checks out full history) written as a scratch kit's command (beside it a
+link to octo-feather-state; no gate-budget.toml, so its defaults, the same counts). old_reads_new:
+after the queue's commands (queue, hold, release, settle, hand-over) the old command's status names
+the holder and the run holding it, and its revoke and grant succeed. new_reads_old: the old
+command's grants read by the new; a queued lane the old command grants leaves the queue at the
+check; a grant the old command revoked is not brought back; one it made again is a fresh grant,
+no earlier run's end inherited, so nothing passes."""
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -330,5 +341,89 @@ def queue_free(s: Scratch) -> None:
     assert "  queue: none" in st, st
 
 
+OLD = "53dacfca"
+
+
+def old_slot(s: Scratch) -> str:
+    """Main's octo-feather-slot at OLD, as a scratch kit's command."""
+    scripts = s.root / "oldkit" / "scripts"
+    scripts.mkdir(parents=True)
+    show = ["git", "-C", str(ROOT), "show", f"{OLD}:scripts/octo-feather-slot"]
+    text = subprocess.run(show, capture_output=True, text=True, check=True).stdout
+    (scripts / "octo-feather-slot").write_text(text)
+    (scripts / "octo-feather-slot").chmod(0o755)
+    (scripts / "octo-feather-state").symlink_to(ROOT / "scripts" / "octo-feather-state")
+    return str(scripts / "octo-feather-slot")
+
+
+def old_reads_new(s: Scratch) -> None:
+    world(s)
+    s.env |= {"OCTO_FEATHER_SLOT_GRACE": "1"}
+    old = old_slot(s)
+    s.run([SLOT, "grant", "gh7", "--kind", "heavy"], env=DIRECTOR)
+    s.run([SLOT, "queue", "gh8", "--kind", "heavy"], env=DIRECTOR)
+    p = holding(s)
+    st = s.run([old, "status"]).out
+    assert "holder: gh7 (granted " in st, st
+    assert f"run holding it now: pid {os.getpid()} of lane gh7" in st, st
+    end(p)
+    st = s.run([old, "status"]).out
+    assert "holder: gh7 (granted " in st, st  # the run's end, written where the old never reads
+    passed(s)
+    st = s.run([old, "status"]).out
+    assert "holder: gh8 (granted " in st, st
+    s.run([SLOT, "settle", "--kind", "heavy"])
+    assert "holder: gh8 (granted " in s.run([old, "status"]).out
+    s.run([old, "revoke", "gh8", "--kind", "heavy"], env=DIRECTOR)
+    s.run([old, "grant", "gh7", "--kind", "heavy"], env=DIRECTOR)
+    st = s.run([old, "status"]).out
+    assert "holder: gh7 (granted " in st, st
+    assert "gh8" not in st, st
+
+
+def new_reads_old(s: Scratch) -> None:
+    world(s)
+    s.env |= {"OCTO_FEATHER_SLOT_GRACE": "1"}
+    old = old_slot(s)
+    s.run([old, "grant", "gh7", "--kind", "heavy"], env=DIRECTOR)
+    s.run([SLOT, "queue", "gh8", "--kind", "heavy"], env=DIRECTOR)
+    st = holder(s)
+    assert "holder: gh7 (granted " in st, st
+    assert "  queue: 1. gh8 (queued " in st, st
+    s.run([old, "revoke", "gh7", "--kind", "heavy"], env=DIRECTOR)  # the queued lane, by hand
+    s.run([old, "grant", "gh8", "--kind", "heavy"], env=DIRECTOR)
+    s.run([SLOT, "settle", "--kind", "heavy"])
+    st = holder(s)
+    assert "holder: gh8 (granted " in st, st
+    assert "  queue: none" in st, st
+    s.run([old, "revoke", "gh8", "--kind", "heavy"], env=DIRECTOR)
+    s.run([old, "grant", "gh7", "--kind", "heavy"], env=DIRECTOR)
+    s.run([SLOT, "queue", "gh8", "--kind", "heavy"], env=DIRECTOR)
+    end(holding(s))  # a run ended under gh7's grant
+    s.run([old, "revoke", "gh7", "--kind", "heavy"], env=DIRECTOR)
+    time.sleep(2)  # past the grace; the release's own check has run
+    s.run([SLOT, "settle", "--kind", "heavy"])
+    st = holder(s)
+    assert "holder: none" in st, st  # the revoked grant not brought back, nor passed
+    assert "  queue: 1. gh8 (queued " in st, st
+    time.sleep(1.1)  # a grant made again: a new since
+    s.run([old, "grant", "gh7", "--kind", "heavy"], env=DIRECTOR)
+    s.run([SLOT, "settle", "--kind", "heavy"])
+    st = holder(s)
+    assert "holder: gh7 (granted " in st, st  # a fresh grant: no run seen under it
+    assert "  queue: 1. gh8 (queued " in st, st
+    assert said(s) == [], said(s)
+
+
 if __name__ == "__main__":
-    main(refused, granted, sandboxed, user_mise_gate, queued, follow_up, queue_free)
+    main(
+        refused,
+        granted,
+        sandboxed,
+        user_mise_gate,
+        queued,
+        follow_up,
+        queue_free,
+        old_reads_new,
+        new_reads_old,
+    )

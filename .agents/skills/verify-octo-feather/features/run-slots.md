@@ -55,5 +55,6 @@ The drive makes scratch box state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_
 
 ## Gotchas
 
+- Every worktree on the box runs its own copy of octo-feather-slot against the one slots dir: the queue's state lives in files an older copy never opens (KIND.queue.json, KIND.runs.json), and KIND.json and KIND-I.run.json keep the shape every copy reads (`octo-feather-slot --help`, Files). Never drive this feature against the box's real `XDG_STATE_HOME`.
 - The hand-over is a detached check `hold` starts when its run ends, after the grace: nothing passes at once, and nothing passes for a grant no run ended under (a lane queued after its holder's last run ended waits for that holder's next run, or its grant's expiry).
 - Outside a Herdr agent (no HERDR_PANE_ID or OCTO_FEATHER_ROLE) nothing is refused: the drive sets the implementer's env to be refused. A run nested under a holding run, or in the qc sandbox, is not refused either (`octo-feather-slot --help`).

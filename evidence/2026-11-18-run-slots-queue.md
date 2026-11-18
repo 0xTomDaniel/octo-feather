@@ -4,9 +4,13 @@ Change: `octo-feather-slot queue LANE --kind K` (director only), `status` listin
 
 Smoke: .agents/skills/verify-octo-feather/features/run-slots.md (the recipe the drive below follows; no model run)
 
+## Compatibility with the box's older readers (supervisor finding, director's repair)
+
+A first `just fast` at 23f02837 ran this worktree's octo-feather-slot on the box's live slots dir, and its release wrote an `ended` field into ~/.local/state/octo-feather/slots/heavy.json; main's reader then refused the file (`not a grants file (TypeError: Grant.__init__() got an unexpected keyword argument 'ended')`), so the director could not grant or revoke until repairing it by hand. Since then KIND.json and KIND-I.run.json keep main's shape, and the run ends live in KIND.runs.json, keyed by the grant's lane and since (`octo-feather-slot --help`, Files). tests/gate/kit/slot.py `old_reads_new` and `new_reads_old` run main's command at 53dacfca against the new one's state and the reverse; run against the 961ac30d command, `old_reads_new` fails with that same refusal.
+
 ## The drive
 
-`.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive run-slots` at 00bc2047: PASS, 13 cases (grant-not-director, refused, grant, status, queue-not-director, queue, queue-status, not-before-run, granted, released, handed, refused-queue, queue-free); evidence record 20261118T033023Z-1cb54a. Its `handed` observation, the stand-in `herdr`'s record of the real herdr-say's two prompts:
+`.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive run-slots` at 00bc2047: PASS, 13 cases (record 20261118T033023Z-1cb54a); again on the compatible store (KIND.runs.json), before its commit: PASS, 13 cases, record 20261118T035956Z-2bcb3fd3. The case list: (grant-not-director, refused, grant, status, queue-not-director, queue, queue-status, not-before-run, granted, released, handed, refused-queue, queue-free). The first run's `handed` observation, the stand-in `herdr`'s record of the real herdr-say's two prompts:
 
 ```
 agent prompt w8:p1 octo-feather-slot: the heavy slot is granted to lane gh8 until 2026-11-18T05:30:17Z (lane gh7's run ended, no run within the 2 s grace); run your heavy run now. --wait --until working --until idle --timeout 60000

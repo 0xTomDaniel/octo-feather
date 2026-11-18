@@ -16,9 +16,9 @@
       The director only: LANE's grant of KIND, if any, removed. A run holding it keeps its lock
       until it ends.
   octo-feather-slot status
-      Each kind: its count, every grant (holder lane, since, expiry, granted by, when its last
-      run ended), whether a run holds it now (the run's pid, lane, since, items), and its queue
-      in order (lane, since, queued by).
+      Each kind: its count, every grant (holder lane, since, expiry, granted by), whether a run
+      holds it now (the run's pid, lane, since, items), and its queue in order (lane, since,
+      queued by).
   octo-feather-slot settle --kind heavy|eval [--after S]
       The one-shot queue check (the queue rule below): after S seconds (default 0), hands over
       each grant of KIND due to pass, or does nothing, then exits. `hold` starts it, detached,
@@ -55,14 +55,16 @@ and the director (director.toml's `pane`, both in the Herdr session it was queue
   ended, no run within the GRACE s grace); run your KIND run now.
   octo-feather-slot: KIND slot passed from lane HOLDER to lane HEAD; queue left: LANES|none.
 A lane granted at once by `queue` gets the first line, its reason `queued onto a free slot`.
-A grant hands over only after a run started and ended under it (the grant records when its last
-run ended): a grant never run is never passed. A follow-up run inside the grace keeps the slot:
-while it holds the lock nothing passes, and its own end starts the grace again. The trigger (no
-daemon, no loop): when `hold` releases its lock it records the run's end on the lane's grant and
-starts one detached `settle --kind KIND --after GRACE`, its output to KIND.settle.log, which hands
-over or does nothing, and exits. herdr-say runs without the holder's OCTO_FEATHER_ROLE and
-OCTO_FEATHER_PARENT: the notice is the slot rule's, sent for the director, not the holder agent's
-own message up its chain.
+A grant hands over only after a run started and ended under it (KIND.runs.json records when the
+last run under each grant ended, by the grant's lane and since: a grant made again is a fresh
+grant, with no run seen): a grant never run is never passed. A follow-up run inside the grace
+keeps the slot: while it holds the lock nothing passes, and its own end starts the grace again.
+The trigger (no daemon, no loop): when `hold` releases its lock it records the run's end and starts
+one detached `settle --kind KIND --after GRACE`, its output to KIND.settle.log (the last check's
+only), which hands over or does nothing, and exits. A queued lane that holds a KIND grant by then
+(granted by hand) leaves the queue at the check. herdr-say runs without the holder's
+OCTO_FEATHER_ROLE and OCTO_FEATHER_PARENT: the notice is the slot rule's, sent for the director, not
+the holder agent's own message up its chain.
 The grace: slot_grace_seconds in gate-budget.toml (default 60); OCTO_FEATHER_SLOT_GRACE (whole
 seconds) in the env of the `hold` overrides it, for a scratch drive or test that cannot wait.
 
@@ -75,9 +77,16 @@ Files: box-wide, never per Herdr session, in ${XDG_STATE_HOME:-~/.local/state}/o
 KIND.json (the grants), KIND-I.lock (lock I of the kind's count, an flock(2) the holder keeps for
 the run's life, released by the kernel when it exits or crashes) and KIND-I.run.json (the run that
 took it). Prior art: flock(2) through fcntl, as the testkit's prepared scratch locks; a held lock
-is told from a stale run record by trying it (LOCK_NB). Beside them the queue's: KIND.queue.json
-(the queue, its head first), KIND.files.lock (an flock every read-modify-write of KIND.json and
-KIND.queue.json holds) and KIND.settle.log (the settle checks' output).
+is told from a stale run record by trying it (LOCK_NB). Beside them the queue's, files an
+octo-feather-slot without the queue never opens: KIND.queue.json (the queue, its head first),
+KIND.runs.json (each grant's last run end), KIND.files.lock (an flock every read-modify-write of
+KIND.json, KIND.queue.json and KIND.runs.json by this command holds) and KIND.settle.log (the last
+settle check's output). KIND.json and KIND-I.run.json keep the shape every older
+octo-feather-slot reads and writes ({"grants": [{lane, since, expires, by}]}; {pid, lane, since,
+items}): every worktree on the box runs its own copy against these one files. KIND.json is
+written only to grant or revoke (a hand-over is both); with an empty queue, nothing but `grant`
+and `revoke` writes it. An older copy's grant and revoke take no files lock: what they write is
+read fresh by the next check, a grant they removed never written back.
 """
 
 from __future__ import annotations
@@ -93,7 +102,7 @@ import subprocess
 import sys
 import time
 from contextlib import contextmanager
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import IO, TYPE_CHECKING, cast
 
@@ -241,14 +250,12 @@ class Grant:
     since: str
     expires: str
     by: str
-    ended: str = ""  # when the last run under this grant ended (precise), "" before any
 
     def live(self, t: dt.datetime) -> bool:
         return parse_stamp(self.expires) > t
 
     def show(self) -> str:
-        ran = f", last run ended {self.ended}" if self.ended else ""
-        return f"{self.lane} (granted {self.since} by {self.by}, expires {self.expires}{ran})"
+        return f"{self.lane} (granted {self.since} by {self.by}, expires {self.expires})"
 
 
 def grants(kind: str) -> list[Grant]:
@@ -305,6 +312,28 @@ def write_queue(kind: str, qs: list[Queued]) -> None:
     p = slots_dir() / f"{kind}.queue.json"
     tmp = p.with_suffix(".json.tmp")
     tmp.write_text(json.dumps({"queue": [asdict(q) for q in qs]}, indent=2) + "\n", "utf-8")
+    tmp.replace(p)
+
+
+def run_ends(kind: str) -> dict[tuple[str, str], str]:
+    """When the last run under each grant ended (precise), by the grant's (lane, since): a grant
+    made again is a fresh grant, with no run seen."""
+    p = slots_dir() / f"{kind}.runs.json"
+    try:
+        raw = cast("dict[str, list[dict[str, str]]]", json.loads(p.read_text(encoding="utf-8")))
+        return {(e["lane"], e["since"]): e["ended"] for e in raw["ended"]}
+    except FileNotFoundError:
+        return {}
+    except (ValueError, KeyError, TypeError) as e:
+        msg = f"{p}: not a run-ends file ({type(e).__name__}: {e})"
+        raise RefusedError(USAGE, msg) from e
+
+
+def write_run_ends(kind: str, ends: dict[tuple[str, str], str]) -> None:
+    p = slots_dir() / f"{kind}.runs.json"
+    rows = [{"lane": lane, "since": since, "ended": e} for (lane, since), e in ends.items()]
+    tmp = p.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps({"ended": rows}, indent=2) + "\n", "utf-8")
     tmp.replace(p)
 
 
@@ -466,15 +495,17 @@ def keep(f: IO[str], rec: Path, r: Run, kind: str) -> int:
     sys.stdout.close()
     while sys.stdin.buffer.read(65536):
         pass
-    with locked(kind):  # the run's end, on its lane's grant
-        gs = grants(kind)
-        if any(g.lane == r.lane for g in gs):
-            end = precise(dt.datetime.now(dt.UTC))
-            write_grants(kind, [replace(g, ended=end) if g.lane == r.lane else g for g in gs])
+    with locked(kind):  # the run's end, by its lane's grant; ends of grants now gone dropped
+        live = {(g.lane, g.since) for g in grants(kind)}
+        ends = {k: v for k, v in run_ends(kind).items() if k in live}
+        for key in live:
+            if key[0] == r.lane:
+                ends[key] = precise(dt.datetime.now(dt.UTC))
+        write_run_ends(kind, ends)
     rec.unlink(missing_ok=True)
     f.close()
     check = [sys.executable, str(Path(__file__).resolve()), "settle", "--kind", kind]
-    with (slots_dir() / f"{kind}.settle.log").open("a") as log:  # detached: none of our pipes
+    with (slots_dir() / f"{kind}.settle.log").open("w") as log:  # detached: none of our pipes
         subprocess.Popen(
             [*check, "--after", str(grace())],
             stdin=subprocess.DEVNULL,
@@ -567,15 +598,18 @@ def settle(kind: str, after: float) -> int:
     wait = grace()
     passed: list[tuple[Grant, Queued, Grant]] = []
     with locked(kind):
-        gs, qs = grants(kind), queue_of(kind)
+        gs, queued, ends = grants(kind), queue_of(kind), run_ends(kind)
+        qs = [q for q in queued if q.lane not in {g.lane for g in gs}]  # granted meanwhile: off
+        if qs != queued:
+            write_queue(kind, qs)
         running = {r.lane for r in runs(kind)}
         t = dt.datetime.now(dt.UTC)
         due = [
             g
             for g in gs
-            if g.ended
+            if (g.lane, g.since) in ends
             and g.lane not in running
-            and (t - parse_precise(g.ended)).total_seconds() >= wait
+            and (t - parse_precise(ends[g.lane, g.since])).total_seconds() >= wait
         ]
         for g, q in zip(due, qs, strict=False):
             s = now()
