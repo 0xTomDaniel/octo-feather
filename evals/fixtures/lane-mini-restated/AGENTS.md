@@ -13,9 +13,9 @@ Repo skills: python
 
 ## Layout
 
+- `docs/specs/usage.spec.html` the CLI's usage page.
 - `docs/specs/greet.spec.html` the accepted spec; `docs/specs/greet.status.json` its per-criterion status.
 - `notes/` this lane's notes: `lane.toml` (a copy of the lane record), `handoffs.jsonl`, `tickets.md`.
-- `review/` diffs waiting for code review.
 
 ## Commands
 
