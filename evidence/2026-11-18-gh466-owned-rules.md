@@ -9,7 +9,8 @@ Suite: evals/owned-rules (cases and grading: its suite.json). Base: ee42108a.
 
 - Smoke 20261118T190043Z-b637e2 (1 run, head 93439b81): reviewer-role-step-own-duty FAIL both kits; the head dropped the worker.md restatement and blocked only on a fixture criterion that duplicated AGENTS.md (fixture fixed, 82741171). reviewer-role-restates-skill PASS both.
 - 20261118T191648Z-33762c (3 runs, head 82741171): reviewer-role-step-own-duty base 0/3 (each run: `Owner:` docs/specs/roles.md `restated: agents/worker.md`, `Verdict: blocking`), head 2/3; the failed head run blocked only as `prose-duty` (the step was a mechanical changelog duty) and named the role-duty exception for the duplicated-rule. Case caused it: the train fixture's step is now a judgment duty (ask the supervisor before breaking a command's output). reviewer-role-restates-skill (held-out) base 2/3, head 3/3.
-- 20261118T203026Z-bd8a26 (3 runs, head 97d487f9): unreliable, worktrees removed mid-run (#1011); rerun whole pending.
+- 20261118T203026Z-bd8a26 (3 runs, head 97d487f9): unreliable, worktrees removed mid-run (#1011); rerun whole as 7fc8e4.
+- 20261118T214141Z-7fc8e4 (3 runs, head 60beaa66, no sandbox failure): reviewer-role-step-own-duty base 0/3, head 3/3; reviewer-role-restates-skill (held-out) base 3/3, head 2/3 (failing head run blocks the duplicated rule and writes `Owners: none`, reading the fixture AGENTS.md's owner list as ADR or AGENTS.md only).
 - 20261118T204137Z-027c43 (3 runs, head 97d487f9, no sandbox failure): reviewer-role-step-own-duty base 0/3 (each blocks with `Owner:` docs/specs/roles.md `restated: agents/worker.md`), head 3/3 (`Verdict: clear`).
 - 20261118T204818Z-3087a4 (1 run): reviewer-role-restates-skill base PASS, head FAIL (`Owner:` field without the skill line).
 
