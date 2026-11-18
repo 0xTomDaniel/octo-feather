@@ -9,8 +9,8 @@
 source "$(dirname "$0")/lib/qa.sh"
 e="$t/fb"; F="$e/fixtures"
 mkdir -p "$e/fb/reference" "$F/root/tools" "$F/root/sub" "$F/mid/sub" "$F/over/sub" "$F/headover"
-# root: a whole tree; mid over root, over over mid (a chain); headover over root. flat: over's tree written out whole by
-# hand, the oracle, in its own EVALS_DIR fe (beside root's files it would be refused: schema.md, Fixtures).
+# root: a whole tree; mid over root, over over mid (a chain); headover over root. flat: over's tree written out by hand, the
+# oracle, in its own EVALS_DIR fe (why: schema.md, Fixtures, cross-fixture duplicate).
 echo root > "$F/root/README.md"; echo base > "$F/root/sub/keep.txt"; echo old > "$F/root/sub/swap.txt"
 printf '#!/bin/sh\necho run\n' > "$F/root/tools/run.sh"; chmod +x "$F/root/tools/run.sh"; ln -s README.md "$F/root/link"
 mkdir -p "$F/root/.agents/skills/base-only"

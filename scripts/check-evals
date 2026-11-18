@@ -102,8 +102,7 @@ def fixture_tree(evals: Path, name: str, scratch: Path) -> Path:
 
 
 def manifest(evals: Path, name: str) -> tuple[str | None, dict[str, str]]:
-    """Fixture NAME's FIXTURE_FILE: its base, else None, and its pool {path: pool file} (schema.md, Fixtures); raises
-    FixtureError when it is malformed."""
+    """Fixture NAME's FIXTURE_FILE (form: schema.md, Fixtures) as (base or None, pool); raises FixtureError when malformed."""
     f, at = evals / "fixtures" / name / FIXTURE_FILE, f"fixtures/{name}/{FIXTURE_FILE}"
     try:
         o = cast("object", json.loads(f.read_text(encoding="utf-8")))
@@ -132,7 +131,7 @@ def manifest(evals: Path, name: str) -> tuple[str | None, dict[str, str]]:
 
 
 def put(src: Path, dest: Path, path: str) -> None:
-    """Pool file SRC laid at PATH over DEST (schema.md, Fixtures)."""
+    """SRC copied to DEST/PATH, replacing what is there (schema.md, Fixtures)."""
     to = dest
     for part in path.split("/")[:-1]:
         to = to / part
@@ -159,7 +158,7 @@ def bases(evals: Path, name: str) -> list[str]:
 
 
 def own(top: Path) -> list[str]:
-    """The paths fixture dir TOP holds itself, FIXTURE_FILE aside, in byte order (schema.md, Fixtures)."""
+    """Fixture dir TOP's own paths (schema.md, Fixtures), in byte order."""
     out: list[str] = []
     for dp, dns, fns in os.walk(top):
         out += [Path(dp, n).relative_to(top).as_posix() for n in fns + [d for d in dns if Path(dp, d).is_symlink()]]
@@ -167,7 +166,7 @@ def own(top: Path) -> list[str]:
 
 
 def sources(evals: Path, name: str) -> dict[str, str]:
-    """Each path of fixture NAME's materialized tree and its source (schema.md, Fixtures; --sources); raises FixtureError."""
+    """--sources' lines for fixture NAME as {path: source} (schema.md, Fixtures); raises FixtureError."""
     tree, layers = fixture_tree(evals, name, scratch()), [name, *bases(evals, name)]
     out: dict[str, str] = {}
     for rel in own(tree):
@@ -185,7 +184,7 @@ def sources(evals: Path, name: str) -> dict[str, str]:
 
 
 def sources_main(argv: list[str]) -> int:
-    """--sources FIXTURE [EVALS_DIR] (schema.md, Fixtures): exit 1 on a refused fixture, 2 on bad usage."""
+    """--sources (schema.md, Fixtures); exit 1 on a refused fixture, 2 on bad usage."""
     if len(argv) not in (1, 2):
         print("check-evals: usage: check-evals --sources FIXTURE [EVALS_DIR]", file=sys.stderr)
         return 2
@@ -391,7 +390,7 @@ def base_duplicates(evals: Path, name: str) -> list[str]:
 
 
 def pool_duplicates(evals: Path, name: str) -> list[str]:
-    """Fixture NAME's files a pool file holds, and its pool paths its base supplies (rule: schema.md, Fixtures)."""
+    """Fixture NAME's pool duplicates (rule: schema.md, Fixtures), one message each."""
     top, pool = evals / "fixtures" / name, evals / "fixtures" / POOL
     files = {entry(f): f.name for f in sorted(pool.iterdir()) if f.is_file() and not f.is_symlink()} if pool.is_dir() else {}
     out = [f"fixtures/{name}/{rel}: field pool: the same file as pool file {files[entry(top / rel)]} "
@@ -408,8 +407,7 @@ def pool_duplicates(evals: Path, name: str) -> list[str]:
 
 
 def cross_duplicates(evals: Path) -> list[str]:
-    """Every fixture file another fixture dir holds itself, neither's base chain holding the other (rule: schema.md, Fixtures),
-    one message per holder naming the first other holder."""
+    """Every cross-fixture duplicate (rule: schema.md, Fixtures), one message per holder naming the first other."""
     chains: dict[str, set[str]] = {}
     held: dict[tuple[str, tuple[str, bytes]], list[str]] = {}
     for p in fixture_dirs(evals):

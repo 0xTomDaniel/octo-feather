@@ -49,7 +49,7 @@ run 0 "$C" --sources nest "$t/evals"
 run 0 "$C" --export "$t/pout" "$t/evals"
 [[ -x "$t/pout/whole/hook" && "$(cat "$t/pout/nest/shared.txt")" == pooled && ! -e "$t/pout/.pool" ]] || fail "--export: pool not laid: $(ls -aR "$t/pout")"
 run 2 "$C" --sources; run 1 "$C" --sources nosuch "$t/evals"; grep -qF "no fixture dir $F/nosuch" <<< "$out" || fail "--sources nosuch: $out"
-# A cross-fixture duplicate: sib, mid's sibling over root, holds mid's only.txt.
+# A cross-fixture duplicate (schema.md, Fixtures): sib holds mid's only.txt.
 cp -p "$F/mid/only.txt" "$F/sib/only.txt"
 run 1 "$C" "$t/evals"
 grep -qxF "check-evals: fixtures/mid/only.txt: field pool: the same file fixture sib holds (fixtures/sib/only.txt); move it to fixtures/.pool/ and list it in both (sources: check-evals --sources mid)" <<< "$out" \
@@ -57,7 +57,7 @@ grep -qxF "check-evals: fixtures/mid/only.txt: field pool: the same file fixture
   || fail "cross-fixture duplicate not refused as the rule words it: $out"
 [[ "$(grep -c 'check-evals: fixtures/' <<< "$out")" == 2 ]] || fail "a passing file refused: $out"
 rm "$F/sib/only.txt"
-# A pool duplicate, at any path.
+# A pool duplicate (schema.md, Fixtures).
 mkdir -p "$F/whole/deep"; cp -p "$F/.pool/shared.txt" "$F/whole/deep/x.txt"
 run 1 "$C" "$t/evals"
 grep -qxF "check-evals: fixtures/whole/deep/x.txt: field pool: the same file as pool file shared.txt (fixtures/.pool/shared.txt); delete it and list it in pool (sources: check-evals --sources whole)" <<< "$out" \
