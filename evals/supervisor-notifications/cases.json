@@ -820,5 +820,503 @@
       ]
     },
     "task": "Goal check-in, lane gh12 (target {repo}, lane log notes/gh12.handoffs.jsonl). You await one result: implementer-gh12-3 (pane w2:p4, ticket #13: add widgets list command, branch implementer-gh13, worktree {repo}). No report from it has arrived. Act on this check-in.\nSandbox run: GitHub is offline, and lane state outside this repo is masked (the lane record is absent); this run's lane hand-off log is notes/gh12.handoffs.jsonl in this directory: append to it as to the lane's log."
+  },
+  {
+    "id": "result-file-after-compaction",
+    "role": "supervisor",
+    "fixture": "lane-shout-main",
+    "head": {
+      "fixture": "lane-shout-results",
+      "branch": "gh12",
+      "message": "feat(hello): --shout (#13, #14 integrated)"
+    },
+    "stand_ins": {
+      "herdr-say": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr": [
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p7"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p7 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh14"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target code-reviewer-gh14 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p7"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p7\", \"tab_id\": \"w2:t7\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p7\", \"tab_id\": \"w2:t7\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "pane",
+            "read",
+            "w2:p7"
+          ],
+          "stdout": "$ pi\n> Review of #14 at the lane head done.\n  Verdict: pass, no blocking finding.\n  herdr-say --parent: sent.\n$ \n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p3"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p5"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh13"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p6"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p4"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p7\", \"tab_id\": \"w2:t7\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "tab",
+            "close"
+          ],
+          "stdout": "{\"id\":\"cli:tab:close\",\"result\":{\"type\":\"ok\"}}\n",
+          "exit": 0
+        }
+      ],
+      "herdr-close": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr-spawn": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "name=code-reviewer-gh14 role=code-reviewer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        }
+      ],
+      "octo-feather-handoff": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage: octo-feather-handoff [-h]\n                            {encode,parked,resume-workspace,parent,repoint,report,results,prune-results,spawn,attempt}\n                            ...\n\nEncode a handoff record, or find a parked record in the caller's director and\nlane logs. Kit-only stdlib json suffices; Herdr still owns transport. Encode\nprints one JSON line for redirection, with string fields via --field KEY VALUE\nand arbitrary JSON fields via --json-field KEY JSON. No handoff schema or\npolicy is imposed. parked TARGET LANES prints the latest parked line naming\nTARGET by pane or name, among LANES/*.handoffs.jsonl and the director log\nbeside LANES (director.handoffs.jsonl; comms spec #session-state, #roles-\npark), or exits 1 when none does. A lane line gains `lane` (its log's stem),\nand one without a name is the supervisor: the lane's name. A director line\nnames its own general worker and gains no lane. resume-workspace reads a\nworker's parked line on stdin and prints the workspace it resumes in: its\nrecorded parent's (`herdr agent get PARENT`) while that parent is live, else\nthe caller's HERDR_WORKSPACE_ID (comms spec #roles-park); an empty line when\nneither. spawn [--ticket T] [--caller PANE] reads herdr-spawn's printed line\non stdin (name= role= tab= pane= cwd= contract= provider_session_id=) and\nprints one spawn line for redirection into the lane hand-off log: {at, kind:\nspawn, name, role, pane, cwd, session, ticket: T, else the name's part after\n`<role>-` when it has one}. With --caller PANE (herdr-spawn passes its\ncaller's HERDR_PANE_ID) it prints nothing and appends the line to PANE's own\nlog in the caller's session state (octo-feather-state): the lane hand-off log\nbeside the lane record whose `supervisor` is PANE, else the director log when\ndirector.toml's `pane` is PANE; a PANE owning neither records nothing (exit\n0). parent PANE prints the caller's parent pane, resolved by identity at each\ncall (comms spec #say-parent: the parent survives park, restart and resume):\nthe hand-off log holding a spawn or worker-spawn line whose `session` is the\ncaller's OCTO_FEATHER_SESSION_ID (lane logs first, then the director log)\nnames it through its owner record, the lane record's `supervisor` or\ndirector.toml's `pane`, as that record reads now, so a hand edit is what the\nnext call follows. PANE (the frozen OCTO_FEATHER_PARENT) when no such line or\nno such key. Whether that pane is live is herdr-say's. report reads a worker's\nreport on stdin, for its `herdr-say --parent` (comms spec #notify-done): for a\nworker role (OCTO_FEATHER_ROLE implementer, code-reviewer, corrector or\ngeneral-worker) whose spawn line `parent` finds, it appends the report (a `##\nAT NAME (ROLE)` heading, UTC, then the report whole) to its result file beside\nthat log, `<log stem>.results/<session>.md` (lanes/<lane>.results/ or\ndirector.results/), and prints the one-line notice herdr-say sends instead:\nthe file and the report's first line. Prints nothing (herdr-say sends the\nreport whole) for any other role or with no such line; a write that fails is\nnamed on stderr, exit 1. results lists the caller's outstanding workers, read-\nonly: each spawn or worker-spawn line in the log HERDR_PANE_ID owns (as spawn\n--caller finds it) whose session no later attempt line names, the latest per\nsession; one tab-separated line each: name, pane, state, result. State is\n`live STATUS` while `herdr agent get NAME` finds it (its current pane shown),\n`parked` when not and a parked line in that log names it, else `ended`;\n`unknown (...)` when that lookup fails another way. Result is its result file\nwhen one exists, else `ended, no result file` for an ended worker and `none\nyet` otherwise. Exit 65 when the caller owns no log. prune-results removes the\ndirector's result files (director.results/*.md) older than 7 days whose worker\n(named by the director log's spawn line for that session) Herdr no longer\nfinds; each removal named on stderr. octo-feather-start runs it. A lane's\nresults dir moves with the lane at `octo-feather-lane archive`. repoint NAME\nreads the line herdr-spawn printed for a resumed agent on stdin and writes its\npane= into NAME's record in the caller's session state: lanes/NAME.toml\n`supervisor`, or director.toml `pane` for NAME `director`; only that key's\nline, in place (added first when absent), every other line kept. No record:\nnothing written (exit 0). octo-feather-start --resume runs it. attempt\n--ended-unreported LOG PANE --partial X --recovery Y [--commit C] prints the\nattempt line for a worker that ended without reporting (fields: comms spec\n#handoff-fields, attempt): role, ticket, worker, session and duration_s come\nfrom the latest spawn or worker-spawn line in LOG naming PANE. Refused,\nnothing printed: exit 65 when no such line, or one without a session; exit 75\nwhile `herdr agent get PANE` still finds the agent (close it first, so no\ncompeting writer remains); exit 69 when that lookup fails another way.\n\npositional arguments:\n  {encode,parked,resume-workspace,parent,repoint,report,results,prune-results,spawn,attempt}\n\noptions:\n  -h, --help            show this help message and exit\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "results"
+          ],
+          "stdout": "implementer-gh15\tw2:p4\tlive working\tnone yet\ncode-reviewer-gh14\tw2:p7\tlive idle\t{repo}/notes/gh12.results/7e4a1b63-9c5d-4fae-b3a8-4b1c2f6e7a14.md\n",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ]
+    },
+    "task": "Goal check-in, lane gh12 (parent issue #12, \"app hello --shout\"; spec docs/specs/hello.spec.html, this lane builds acceptance-shout and acceptance-shout-json), lane branch gh12 checked out in this directory (head {head}), cut from main. Tickets: #13 `--shout` upper-cases the greeting and adds `!` (integrated and reviewed, pass), #14 `--shout` with `--json` (integrated in {head}), #15 a `--shout --json` test for a second name.\nYou await two results: implementer-gh15 (pane w2:p4, ticket #15) and code-reviewer-gh14 (pane w2:p7, the review of #14 on {head}).\nYou were just auto-compacted: whatever arrived while the compaction ran is not in your context.\nAct on this check-in: consume whatever results reached you, and take the lane's next step. The lane is not ready for its merge ask yet (#15 is open). Nothing else this turn: no integrate, qc or CI run.\nSandbox run: GitHub is offline, and lane state outside this repo is masked (the lane record is absent); this run's lane hand-off log is notes/gh12.handoffs.jsonl in this directory: append to it as to the lane's log."
+  },
+  {
+    "id": "result-file-after-resume",
+    "role": "supervisor",
+    "fixture": "lane-shout-main",
+    "head": {
+      "fixture": "lane-shout-results",
+      "branch": "gh12",
+      "message": "feat(hello): --shout (#13, #14 integrated)"
+    },
+    "stand_ins": {
+      "herdr-say": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr": [
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p7"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p7 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh14"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target code-reviewer-gh14 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p7"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p7\", \"tab_id\": \"w2:t7\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p7\", \"tab_id\": \"w2:t7\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "pane",
+            "read",
+            "w2:p7"
+          ],
+          "stdout": "$ pi\n> Review of #14 at the lane head done.\n  Verdict: pass, no blocking finding.\n  herdr-say --parent: sent.\n$ \n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p3"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p5"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh13"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p6"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p4"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p7\", \"tab_id\": \"w2:t7\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "tab",
+            "close"
+          ],
+          "stdout": "{\"id\":\"cli:tab:close\",\"result\":{\"type\":\"ok\"}}\n",
+          "exit": 0
+        }
+      ],
+      "herdr-close": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr-spawn": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "name=code-reviewer-gh14 role=code-reviewer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        }
+      ],
+      "octo-feather-handoff": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage: octo-feather-handoff [-h]\n                            {encode,parked,resume-workspace,parent,repoint,report,results,prune-results,spawn,attempt}\n                            ...\n\nEncode a handoff record, or find a parked record in the caller's director and\nlane logs. Kit-only stdlib json suffices; Herdr still owns transport. Encode\nprints one JSON line for redirection, with string fields via --field KEY VALUE\nand arbitrary JSON fields via --json-field KEY JSON. No handoff schema or\npolicy is imposed. parked TARGET LANES prints the latest parked line naming\nTARGET by pane or name, among LANES/*.handoffs.jsonl and the director log\nbeside LANES (director.handoffs.jsonl; comms spec #session-state, #roles-\npark), or exits 1 when none does. A lane line gains `lane` (its log's stem),\nand one without a name is the supervisor: the lane's name. A director line\nnames its own general worker and gains no lane. resume-workspace reads a\nworker's parked line on stdin and prints the workspace it resumes in: its\nrecorded parent's (`herdr agent get PARENT`) while that parent is live, else\nthe caller's HERDR_WORKSPACE_ID (comms spec #roles-park); an empty line when\nneither. spawn [--ticket T] [--caller PANE] reads herdr-spawn's printed line\non stdin (name= role= tab= pane= cwd= contract= provider_session_id=) and\nprints one spawn line for redirection into the lane hand-off log: {at, kind:\nspawn, name, role, pane, cwd, session, ticket: T, else the name's part after\n`<role>-` when it has one}. With --caller PANE (herdr-spawn passes its\ncaller's HERDR_PANE_ID) it prints nothing and appends the line to PANE's own\nlog in the caller's session state (octo-feather-state): the lane hand-off log\nbeside the lane record whose `supervisor` is PANE, else the director log when\ndirector.toml's `pane` is PANE; a PANE owning neither records nothing (exit\n0). parent PANE prints the caller's parent pane, resolved by identity at each\ncall (comms spec #say-parent: the parent survives park, restart and resume):\nthe hand-off log holding a spawn or worker-spawn line whose `session` is the\ncaller's OCTO_FEATHER_SESSION_ID (lane logs first, then the director log)\nnames it through its owner record, the lane record's `supervisor` or\ndirector.toml's `pane`, as that record reads now, so a hand edit is what the\nnext call follows. PANE (the frozen OCTO_FEATHER_PARENT) when no such line or\nno such key. Whether that pane is live is herdr-say's. report reads a worker's\nreport on stdin, for its `herdr-say --parent` (comms spec #notify-done): for a\nworker role (OCTO_FEATHER_ROLE implementer, code-reviewer, corrector or\ngeneral-worker) whose spawn line `parent` finds, it appends the report (a `##\nAT NAME (ROLE)` heading, UTC, then the report whole) to its result file beside\nthat log, `<log stem>.results/<session>.md` (lanes/<lane>.results/ or\ndirector.results/), and prints the one-line notice herdr-say sends instead:\nthe file and the report's first line. Prints nothing (herdr-say sends the\nreport whole) for any other role or with no such line; a write that fails is\nnamed on stderr, exit 1. results lists the caller's outstanding workers, read-\nonly: each spawn or worker-spawn line in the log HERDR_PANE_ID owns (as spawn\n--caller finds it) whose session no later attempt line names, the latest per\nsession; one tab-separated line each: name, pane, state, result. State is\n`live STATUS` while `herdr agent get NAME` finds it (its current pane shown),\n`parked` when not and a parked line in that log names it, else `ended`;\n`unknown (...)` when that lookup fails another way. Result is its result file\nwhen one exists, else `ended, no result file` for an ended worker and `none\nyet` otherwise. Exit 65 when the caller owns no log. prune-results removes the\ndirector's result files (director.results/*.md) older than 7 days whose worker\n(named by the director log's spawn line for that session) Herdr no longer\nfinds; each removal named on stderr. octo-feather-start runs it. A lane's\nresults dir moves with the lane at `octo-feather-lane archive`. repoint NAME\nreads the line herdr-spawn printed for a resumed agent on stdin and writes its\npane= into NAME's record in the caller's session state: lanes/NAME.toml\n`supervisor`, or director.toml `pane` for NAME `director`; only that key's\nline, in place (added first when absent), every other line kept. No record:\nnothing written (exit 0). octo-feather-start --resume runs it. attempt\n--ended-unreported LOG PANE --partial X --recovery Y [--commit C] prints the\nattempt line for a worker that ended without reporting (fields: comms spec\n#handoff-fields, attempt): role, ticket, worker, session and duration_s come\nfrom the latest spawn or worker-spawn line in LOG naming PANE. Refused,\nnothing printed: exit 65 when no such line, or one without a session; exit 75\nwhile `herdr agent get PANE` still finds the agent (close it first, so no\ncompeting writer remains); exit 69 when that lookup fails another way.\n\npositional arguments:\n  {encode,parked,resume-workspace,parent,repoint,report,results,prune-results,spawn,attempt}\n\noptions:\n  -h, --help            show this help message and exit\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "results"
+          ],
+          "stdout": "implementer-gh15\tw2:p4\tlive working\tnone yet\ncode-reviewer-gh14\tw2:p7\tlive idle\t{repo}/notes/gh12.results/7e4a1b63-9c5d-4fae-b3a8-4b1c2f6e7a14.md\n",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ]
+    },
+    "task": "Goal check-in, lane gh12 (parent issue #12, \"app hello --shout\"; spec docs/specs/hello.spec.html, this lane builds acceptance-shout and acceptance-shout-json), lane branch gh12 checked out in this directory (head {head}), cut from main. Tickets: #13 `--shout` upper-cases the greeting and adds `!` (integrated and reviewed, pass), #14 `--shout` with `--json` (integrated in {head}), #15 a `--shout --json` test for a second name.\nYou await two results: implementer-gh15 (pane w2:p4, ticket #15) and code-reviewer-gh14 (pane w2:p7, the review of #14 on {head}).\nYou were resumed on a new pane after a Herdr restart (your old pane is gone): whatever was sent to you meanwhile is not in your context.\nAct on this check-in: consume whatever results reached you, and take the lane's next step. The lane is not ready for its merge ask yet (#15 is open). Nothing else this turn: no integrate, qc or CI run.\nSandbox run: GitHub is offline, and lane state outside this repo is masked (the lane record is absent); this run's lane hand-off log is notes/gh12.handoffs.jsonl in this directory: append to it as to the lane's log."
   }
 ]
