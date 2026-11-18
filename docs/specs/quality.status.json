@@ -189,8 +189,13 @@
       "tests": []
     },
     "acceptance-gate-recipes-first": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1024,
+      "record": "20261118T230040Z-35853761",
+      "commit": "c5e058283077212072f53d9d2fe4cbde7439b9ff",
+      "tests": [
+        "tests/gate/kit/test_gate_recipes_first.py"
+      ]
     },
     "acceptance-one-execution": {
       "status": "built",
