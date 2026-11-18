@@ -1,0 +1,14 @@
+Seeded defect: a declared demo's sandbox gets per-run copies of Pi's auth.json and models.json, though no Pi runs there.
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+index ce0774ba..4cf5bfa2 100755
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -420,7 +420,7 @@ def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: d
+             run, sandbox = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True), False
+         else:
+             run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}-d{n}", {"off": "github: none (a declared demo, no agent judge)"},
+-                                     browser=br, shots=True, pi=False)
++                                     browser=br, shots=True, pi=True)
+             assert isinstance(sandbox, dict)
+             upper = sandbox.pop("upper", [])
+             sandbox["discarded_writes"] = len(upper)   # the demo's writes died with its overlay
