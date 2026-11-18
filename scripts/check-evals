@@ -266,7 +266,7 @@ def entry(p: Path) -> tuple[str, bytes] | None:
 
 
 def base_duplicates(evals: Path, name: str) -> list[str]:
-    """Each file of fixture NAME's overlay the same as its base supplies at that path (rule: schema.md, Fixtures)."""
+    """Fixture NAME's base duplicates (rule: schema.md, Fixtures), one message each."""
     top = evals / "fixtures" / name
     if not (top / FIXTURE_FILE).exists():
         return []
