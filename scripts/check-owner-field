@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+"""Each commit a writer adds to a branch carries the writer's Owner field in its message.
+
+The field, its form and when a writer owes it: .agents/skills/code-review/SKILL.md, Verdict step
+(Report fields; the writer sentence of the Owner paragraphs). Parsed by `octo-feather-lane fields`.
+
+Correction lane #466 (class duplicated-rule): evidence/2026-11-18-gh466-owned-rules.md. A presence
+check, read-only git only. It forces the declaration; it cannot tell whether the search ran or
+whether a restatement remains: that stays with review. Kit-only: the class was counted on the
+kit's own lanes, and a target's gate has no Owner-field parser of its own; carrying it to the
+templates is a later call.
+
+Transition: only non-merge commits in merge-base(BASE, HEAD)..HEAD that descend from the commit
+adding this script (git merge-base --is-ancestor) are read. Older ones, such as an in-flight
+lane's commits from before a main merge brought this check in, pass with one notice line; no
+reviewed history is rewritten.
+
+Base: --base REF, else $OCTO_FEATHER_BASE, else origin/$GITHUB_BASE_REF, else origin/main, else
+main. None: skip with a note locally, fail in CI.
+
+Exit: 0 every read commit carries the field (or none to read); 1 one or more do not, each named
+with the fix. Run by `just check`; tested by tests/gate/kit/test_owner_field.py.
+"""
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+from typing import NoReturn
+
+TAG = "check-owner-field"
+SELF = "scripts/check-owner-field"
+FIELD = ".agents/skills/code-review/SKILL.md, Verdict step"
+LANE = Path(__file__).resolve().parent / "octo-feather-lane"
+
+ap = argparse.ArgumentParser(
+    description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+)
+ap.add_argument("--base")
+ap.add_argument("--head", default="HEAD")
+ap.add_argument("--repo")
+a = ap.parse_args()
+root = str(Path(a.repo or Path(__file__).resolve().parent.parent).resolve())
+ci = bool(os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"))
+
+
+def run(cmd: list[str], stdin: str | None = None) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        cmd,
+        input=stdin,
+        capture_output=True,
+        encoding="utf-8",
+        errors="surrogateescape",
+        check=False,
+    )
+
+
+def git(*args: str) -> str | None:
+    r = run(["git", "-C", root, *args])
+    return r.stdout if r.returncode == 0 else None
+
+
+def no_base(why: str) -> NoReturn:
+    if ci:
+        sys.exit(f"{TAG}: {why}; CI needs the PR base: actions/checkout with fetch-depth: 0")
+    out(f"owner field: skipped, {why} (locally: git fetch origin main, or --base REF)")
+    sys.exit(0)
+
+
+def out(line: str, *, err: bool = False) -> None:
+    (sys.stderr if err else sys.stdout).write(line + "\n")
+
+
+def commit(ref: str) -> str | None:
+    out = git("rev-parse", "--verify", "-q", f"{ref}^{{commit}}")
+    return out.strip() if out else None
+
+
+def missing(sha: str) -> str | None:
+    """Why SHA's message holds no usable Owner field, or None."""
+    p = run([str(LANE), "fields", "-"], stdin=git("log", "-1", "--format=%B", sha) or "")
+    try:
+        o = json.loads(p.stdout)["Owner"]
+    except (ValueError, KeyError):
+        return f"octo-feather-lane fields exited {p.returncode}: {p.stderr.strip()[:200]}"
+    if o["errors"]:
+        return "; ".join(o["errors"])
+    return None if o["none"] or o["lines"] else "no Owner field"
+
+
+def main() -> None:
+    want = str(a.head)
+    head = commit(want) or no_base(f"no commit {want}")
+    cands: list[str]
+    if a.base:
+        cands = [str(a.base)]
+    elif os.environ.get("OCTO_FEATHER_BASE"):
+        cands = [os.environ["OCTO_FEATHER_BASE"]]
+    else:
+        pr = os.environ.get("GITHUB_BASE_REF")
+        cands = list(dict.fromkeys([*([f"origin/{pr}"] if pr else []), "origin/main", "main"]))
+    base: str
+    base = next((c for c in cands if commit(c)), None) or no_base(
+        f"no base ref ({', '.join(cands)})"
+    )
+    mb = (git("merge-base", base, head) or "").strip() or no_base(f"no merge base of {base}")
+    added = (git("log", "--diff-filter=A", "--format=%H", head, "--", SELF) or "").split()
+    if not added:
+        out(f"owner field: ok (no commit on {want} adds {SELF})")
+        return
+    intro = added[-1]
+    bad: list[tuple[str, str]] = []
+    n = old = 0
+    for sha in (git("rev-list", "--no-merges", f"{mb}..{head}") or "").split():
+        if run(["git", "-C", root, "merge-base", "--is-ancestor", intro, sha]).returncode:
+            old += 1
+            continue
+        n += 1
+        why = missing(sha)
+        if why:
+            bad.append((sha, why))
+    if old:
+        out(
+            f"owner field: {old} commit(s) older than the check ({intro[:12]}) not read; "
+            f"the field they owe: {FIELD}"
+        )
+    for sha, why in bad:
+        subj = (git("log", "-1", "--format=%s", sha) or "").strip()
+        out(f"{TAG}: {sha[:12]} {subj}: {why}", err=True)
+    if bad:
+        sys.exit(
+            f"{TAG}: fix: put the Owner field ({FIELD}) in each commit message named above, "
+            "`Owners: none` when there is none: `git commit --amend` for the last commit, "
+            "`git rebase -i --rebase-merges <sha>^` with `reword` for an older one"
+        )
+    out(f"owner field: ok ({n} commit(s) since {intro[:12]} carry it)")
+
+
+main()

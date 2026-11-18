@@ -4,7 +4,7 @@ A small note-keeping CLI, `app`, that stores notes in `notes.json` in the curren
 
 ## Rules
 
-- Each rule is stated once, where it is owned (a criterion in docs/specs/, an ADR in docs/adr/, or this file); every other file points to it.
+- Each rule is stated once, where it is owned (an ADR in docs/adr/, or this file); every other file points to it.
 - Tests run the CLI as a subprocess (`tests/test_app.py`); no tests of internals.
 - `just check` is the gate: it runs the tests. A red gate blocks a commit.
 
