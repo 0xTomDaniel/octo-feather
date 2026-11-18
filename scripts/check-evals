@@ -162,14 +162,19 @@ def tree_lines(evals: Path, suite: Path, scratch: Path, errs: list[str]) -> list
     for c in cast("list[object]", cases) if isinstance(cases, list) else []:
         cd = cast("dict[str, object]", c) if isinstance(c, dict) else {}
         h = cd.get("head")
-        hfx = cast("dict[str, object]", h).get("fixture") if isinstance(h, dict) else None
-        for which, fx in (("fixture", cd.get("fixture")), ("head", hfx)):
+        hd = cast("dict[str, object]", h) if isinstance(h, dict) else {}
+        then, bs = hd.get("then"), cd.get("branches")
+        trees: list[tuple[str, object]] = [("fixture", cd.get("fixture")), ("head", hd.get("fixture"))]
+        for key, ts in (("head.then", then), ("branches", bs)):   # every tree the case repo commits (schema.md, Case)
+            trees += [(f"{key}[{i}]", cast("dict[str, object]", t).get("fixture") if isinstance(t, dict) else None)
+                      for i, t in enumerate(cast("list[object]", ts) if isinstance(ts, list) else [])]
+        for which, fx in trees:
             if not isinstance(fx, (str, dict)):
                 continue
             try:
                 out.append(f"{suite.name} {cd.get('id')} {which} {tree_line(evals, cast('object', fx), scratch)}")
             except FixtureError as e:
-                errs.append(f"{suite.name}/cases.json case {cd.get('id')}: field {'head.' if which == 'head' else ''}fixture: {e}")
+                errs.append(f"{suite.name}/cases.json case {cd.get('id')}: field {'' if which == 'fixture' else which + '.'}fixture: {e}")
     return out
 
 

@@ -3,7 +3,7 @@
 # commands with a stub `pi` and a fake `herdr` first on PATH: no model, no live Herdr (tests/lib/qa.sh).
 # One section of the factory-evals test per gate item (#506): tests/qa.sh and each tests/qa-*.sh.
 # Proves based fixtures (rule: .agents/skills/eval-cases/references/schema.md, Fixtures, #988) in octo-feather-qa's case
-# repo (main and head) and check-evals' fixture checks, --trees against a flat copy, and the refusals.
+# repo (main, head, head.then and branches: #991) and check-evals' fixture checks, --trees against a flat copy, and the refusals.
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`), as tests/qc.sh does.
 # shellcheck source=tests/lib/qa.sh
 source "$(dirname "$0")/lib/qa.sh"
@@ -26,7 +26,11 @@ look = "Look. STUB-STEPS:" + json.dumps([["bash", "git ls-tree -r main; echo ===
 cases = [{"id": "main", "role": "implementer", "fixture": "over", "task": look},
          {"id": "head", "role": "implementer", "fixture": "root", "task": look,
           "head": {"fixture": "headover", "branch": "hb", "message": "head"}},
-         {"id": "flat", "role": "implementer", "fixture": "flat", "task": look}]
+         {"id": "flat", "role": "implementer", "fixture": "flat", "task": look},
+         {"id": "seq", "role": "implementer", "fixture": "root",
+          "task": "Look. STUB-STEPS:" + json.dumps([["bash", "git ls-tree -r main; echo ===; git ls-tree -r HEAD; echo ===; git ls-tree -r bb"]]),
+          "head": {"fixture": "headover", "branch": "hb", "message": "head", "then": [{"fixture": "over", "message": "then"}]},
+          "branches": [{"fixture": "mid", "branch": "bb", "message": "b"}]}]
 json.dump(cases, open(f"{d}/cases.json", "w"))
 json.dump({c["id"]: {"facts": [{"fact": "skill_not_read", "skill": "pull"}]} for c in cases}, open(f"{d}/reference/expectations.json", "w"))
 PY
@@ -34,7 +38,7 @@ cp -r "$e" "$t/fb-good"
 
 # The case repo: main is over's whole tree, as flat's (git's own modes and blob ids, the oracle); head commits headover.
 run 0 "$Q" --evals "$e"
-for c in main head flat; do grep -qE "^PASS fb/$c: " <<< "$out" || fail "no PASS line for $c: $out"; done
+for c in main head flat seq; do grep -qE "^PASS fb/$c: " <<< "$out" || fail "no PASS line for $c: $out"; done
 d="$(ls -dt "$t"/out/*/ | head -1)"
 tr_() { python3 -c 'import json, sys
 for l in open(sys.argv[1]):
@@ -49,9 +53,18 @@ grep -q "^100644 blob $(git hash-object "$F/headover/README.md")	README.md$" <<<
   || fail "head is not headover's tree over root: $h"
 grep -q "	tools/run.sh$" <<< "$(sed '1,/^===$/d' <<< "$h")" || fail "head lost root's files: $h"
 
-# --trees (schema.md, Fixtures): over hashes as flat; the history marker.
+# head.then and branches (schema.md, Case): then commits over's whole tree, as flat's; branch bb holds mid's tree.
+s="$(tr_ seq)"; st="$(sed '1,/^===$/d' <<< "$s")"; bb="$(sed '1,/^===$/d' <<< "$st")"
+[[ "$(sed '/^===$/,$d' <<< "$st")" == "$(sed '1,/^===$/d' <<< "$want" | grep $'\t')" ]] || fail "head.then is not over's whole tree: $s  vs flat: $want"
+grep -q "^100644 blob $(git hash-object "$F/mid/sub/swap.txt")	sub/swap.txt$" <<< "$bb" && grep -q "^100755 blob .*	tools/run.sh$" <<< "$bb" \
+  && grep -q "^120000 blob $(printf sub/keep.txt | git hash-object --stdin)	link$" <<< "$bb" && ! grep -q "sub/new.txt" <<< "$bb" \
+  || fail "branch bb is not mid's tree over root: $s"
+
+# --trees (schema.md, Fixtures): over hashes as flat; the history marker; a line for each head.then and branches tree.
 run 0 "$C" --trees "$e"
 sha() { grep -E "^fb $1 $2 " <<< "$out" | cut -d' ' -f4; }
+[[ -n "$(sha seq 'head\.then\[0\]')" && "$(sha seq 'head\.then\[0\]')" == "$(sha flat fixture)" ]] || fail "--trees: no head.then[0] line as flat: $out"
+[[ -n "$(sha seq 'branches\[0\]')" && "$(sha seq 'branches\[0\]')" != "$(sha seq fixture)" ]] || fail "--trees: no branches[0] line: $out"
 [[ -n "$(sha main fixture)" && "$(sha main fixture)" == "$(sha flat fixture)" ]] || fail "--trees: over not hashed as flat: $out"
 [[ -n "$(sha head head)" && "$(sha head head)" != "$(sha head fixture)" ]] || fail "--trees: no head tree line: $out"
 python3 - "$e/fb" <<'PY'
@@ -81,10 +94,13 @@ rm -rf "$e"; cp -r "$t/fb-good" "$e"
 echo '{"base": "nosuch"}' > "$e/fixtures/mid/.eval-fixture.json"
 run 1 "$C" "$e"; grep -qF "fixtures/mid/.eval-fixture.json: field base: no fixture dir $e/fixtures/nosuch" <<< "$out" || fail "missing base not refused: $out"
 run 1 "$C" --trees "$e"; grep -qF "fb/cases.json case main: field fixture: fixtures/mid/.eval-fixture.json: field base: no fixture dir" <<< "$out" || fail "--trees: missing base: $out"
+for f in "head.then[0]" "branches[0]"; do
+  grep -qF "fb/cases.json case seq: field $f.fixture: fixtures/mid/.eval-fixture.json: field base: no fixture dir" <<< "$out" || fail "--trees: $f's missing base: $out"
+done
 run 2 "$Q" --evals "$e"; grep -qF "fixtures/mid/.eval-fixture.json: field base: no fixture dir" <<< "$out" || fail "qa ran on a missing base: $out"
 echo '{"base": "over"}' > "$e/fixtures/mid/.eval-fixture.json"
 run 1 "$C" "$e"; grep -qF "fixtures/over/.eval-fixture.json: field base: a cycle mid -> over -> mid" <<< "$out" || fail "cycle not refused: $out"
 grep -qF "fixtures/mid/.eval-fixture.json: field base: a cycle over -> mid -> over" <<< "$out" || fail "cycle not refused from over: $out"
 echo '{"base": "root", "x": 1}' > "$e/fixtures/mid/.eval-fixture.json"
 run 1 "$C" "$e"; grep -qF "fixtures/mid/.eval-fixture.json: must be exactly {\"base\": <fixture name>}" <<< "$out" || fail "malformed base file not refused: $out"
-echo "qa-fixture-base: ok (a based fixture chain materialized whole, exec bit and symlink kept, as the case repo's main and head and in check-evals' fixture checks; --trees equal to the flat tree; missing, cyclic and malformed bases refused naming the fixture)"
+echo "qa-fixture-base: ok (a based fixture chain materialized whole, exec bit and symlink kept, as the case repo's main, head, head.then and branches and in check-evals' fixture checks; --trees equal to the flat tree, a line per head.then and branches tree; missing, cyclic and malformed bases refused naming the fixture)"
