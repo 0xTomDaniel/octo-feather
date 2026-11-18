@@ -39,6 +39,196 @@ role-transcripts reviewer-seam-listed-deep-clear head 23dd7dfb45ecd9e77066f84439
 role-transcripts implementer-deepen-first fixture 91f8d9fd8815dc8aec213136222e0966582f54cd4d428f6d15c7c6facb129f6b
 ```
 
+## #989: every remaining fixture collapsed
+
+Built by a scratch script (/tmp/gh986-collapse/, not committed): each fixture's materialized tree on main measured
+(path, kind, bytes); each fixture's base is the fixture whose tree's paths are a subset of its own (no removal) and
+leaves the fewest overlay files; since a base's paths are a subset, the choice per fixture is independent and has no
+cycle. The fixture's own files equal to its base's tree were deleted and `.eval-fixture.json` written; then the
+materialized trees were asserted equal to main's. Two choices by hand over the per-fixture minimum:
+
+- docs-rules-restated on docs-rules and docs-rules-pointers on docs-rules-restated (not the reverse): 8 overlay
+  files instead of 9, and no README.md held by both docs-rules and docs-rules-restated.
+- python-app stays whole: `tests/lib/qa.sh` copies `evals/fixtures/python-app` raw into a scratch evals dir (not a
+  fixture reader through the materializer), so it cannot name a base (see Leftovers).
+
+CI's loop (`uv sync --locked --project <dir>` per `evals/fixtures/*/uv.lock`) builds the dir's own project, so a based
+fixture whose overlay keeps a `uv.lock` (python-app-pydantic, python-app-tiers) keeps its package's
+`src/app/__init__.py` (empty) too: without it hatchling refused the build (measured: `Unable to determine which files
+to ship`). Every remaining `uv.lock` (6) sits beside its `pyproject.toml` and passes that loop offline; every
+materialized tree with a `uv.lock` (35) passes `uv sync --locked --offline`.
+
+Families and chains (`fixture  base  files on main  own files at head`; `-` a whole tree):
+
+```
+docs-rules-comment-restated     docs-rules-skill                10    3
+docs-rules-count                docs-rules                       8    2
+docs-rules-pointers             docs-rules-restated              9    3
+docs-rules-prose-duty           docs-rules                       8    2
+docs-rules-restated             docs-rules                       9    5
+docs-rules-skill-restated       docs-rules-comment-restated     10    1
+docs-rules-skill                docs-rules                       9    1
+docs-rules                      -                                8    8
+kit-mini                        -                               18   18
+lane-mini                       py-mini                         17   12
+lane-reports                    lane-mini                       21    6
+py-mini                         -                                7    7
+py-review-seams                 py-mini                         11    5
+python-app-config-check         python-app                      12    3
+python-app-exact-check          python-app                      12    2
+python-app-no-verify            python-app                      11    2
+python-app-noprint              python-app                      11    1
+python-app-proxy-check          python-app                      12    2
+python-app-pydantic-team        python-app-pydantic             11    3
+python-app-pydantic             python-app                      11    6
+python-app-refactor-folded      python-app-refactor             11    2
+python-app-refactor-review      python-app-refactor             19    9
+python-app-refactor             python-app                      11    4
+python-app-semver-pre           python-app-semver               12    2
+python-app-semver               python-app                      12    3
+python-app-shout-cli            python-app-shout                11    2
+python-app-shout-tagged         python-app-shout-cli            12    3
+python-app-shout                python-app                      11    3
+python-app-skill-evals          python-app-skill                17    6
+python-app-skill                python-app                      13    3
+python-app-spec                 python-app                      12    1
+python-app-test-scan            python-app-shout-cli            12    1
+python-app-tiers                py-mini                         11    8
+python-app-verify-drift         python-app-verify               15    2
+python-app-verify-live          python-app-verify               18    7
+python-app-verify               python-app-no-verify            15    5
+python-app-yaml-names           python-app                      12    3
+python-app-yaml-reader-crew     python-app-yaml-names           12    2
+python-app-yaml-reader-quoted   python-app-yaml-names           12    2
+python-app-yaml-reader          python-app-yaml-names           12    1
+python-app                      -                               11   11
+quote-app-inline                -                               11   11
+quote-app-seams-bad             quote-app                       13    4
+quote-app-seams-ok              quote-app-seams-bad             13    1
+quote-app                       quote-app-inline                12    5
+rules-restated-sites            docs-rules-restated             11    7
+shape-brownfield                shape-mini                      14    3
+shape-mini                      py-mini                         13    7
+slug-tiers                      -                               12   12
+tally-tiers                     -                               13   13
+ts-mini                         -                               12   12
+ts-pnpm-store-shared            ts-pnpm-store                   13    3
+ts-pnpm-store                   -                               12   12
+weather-replay                  python-app                      12    4
+```
+
+Under evals/fixtures: main (origin/main ee42108a) 657 files, 24955 lines; head 311 files, 10501 lines (the #988
+pilot's quote-app 28 files included; #989 alone: 632 files to 311).
+
+### Leftovers: same path and bytes held by two fixture dirs' own files
+
+12 (path, bytes) held twice or more, 23 copies over one (the list below: count, path, size, holders). None is a
+fixture and its own base tree; each needs a base that is no member of the family, or a fixture with two bases:
+
+- python-app vs py-mini (5: .gitignore, src/app/__init__.py, cli.py, core.py, tests/test_cli.py): py-mini's paths are
+  a subset of python-app's, so python-app on py-mini removes them, but `tests/lib/qa.sh:170` copies python-app raw
+  (a tests change: out of this ticket's scope, reported).
+- the python template's files across families (.github/workflows/check.yml in 5, .gitignore in 5, mise.toml in 4,
+  uv.lock 42062B in 3, .githooks/pre-commit and justfile in 2): python-app, quote-app-inline, python-app-tiers,
+  slug-tiers, tally-tiers, weather-replay each lack a path another holds (core.py vs rates.py, .githooks vs
+  mise.toml, src/app vs src/slugger vs src/tally), so a shared base would be a new non-case fixture holding only the
+  template's files.
+- src/app/__init__.py (0B) in python-app-pydantic and python-app-tiers: kept for CI's per-dir sync (above).
+- docs/specs/hello.spec.html in python-app-spec and python-app-shout-tagged: shout-tagged's chain is via shout-cli;
+  basing it on python-app-spec instead duplicates shout-cli's cli.py and core.py (2 for 1).
+- tests/test_cli.py 682B in quote-app-inline and quote-app-seams-bad: the #988 quote-app family, not in scope.
+
+```
+own files: 266 dup (path,bytes) keys: 12 extra copies: 23
+  5 .github/workflows/check.yml [254B] python-app python-app-tiers quote-app-inline slug-tiers tally-tiers
+  5 .gitignore [88B] py-mini python-app quote-app-inline slug-tiers tally-tiers
+  4 mise.toml [193B] python-app-tiers slug-tiers tally-tiers weather-replay
+  4 src/app/__init__.py [0B] py-mini python-app python-app-pydantic python-app-tiers
+  3 uv.lock [42062B] python-app python-app-tiers quote-app-inline
+  2 .githooks/pre-commit [83B] python-app quote-app-inline
+  2 docs/specs/hello.spec.html [746B] python-app-shout-tagged python-app-spec
+  2 justfile [900B] python-app quote-app-inline
+  2 src/app/cli.py [881B] py-mini python-app
+  2 src/app/core.py [308B] py-mini python-app
+  2 tests/test_cli.py [950B] py-mini python-app
+  2 tests/test_cli.py [682B] quote-app-inline quote-app-seams-bad
+```
+
+### Proof: --trees on main's evals and on the head diff empty
+
+```
+mkdir /tmp/gh989-main && git archive origin/main evals | tar -x -C /tmp/gh989-main   # origin/main ee42108a
+scripts/check-evals --trees /tmp/gh989-main/evals > /tmp/gh989-main.trees           # exit 0, 372 lines
+scripts/check-evals --trees > /tmp/gh989-head.trees                                   # exit 0, 372 lines
+diff /tmp/gh989-main.trees /tmp/gh989-head.trees && echo EMPTY                        # EMPTY
+sha256sum /tmp/gh989-*.trees                                                          # both fce30d4c933c06ac...6b33
+scripts/check-evals                                                                   # evals: ok (11 suites, 489 cases), exit 0
+```
+
+Both lists are the Main list and Head list below, byte for byte (the pilot's head list equals them too). Every
+fixture dir's tree, a case's or not, through the same materializer on main's archive and on the head, also diffed
+empty (54 dirs):
+
+```
+docs-rules 72c9a02629c3ac0e5aa37d51d587a16d1df81f726965c9a49f4c2a86fc948ad7
+docs-rules-comment-restated 4a67f75baab2ef5ea72e0b57937eff3923639efa1cb33e3ed914ea5c74ab2a75
+docs-rules-count 9ecd9fd27bf99038e05fc3916a4b8185fc622b9dde2f20a71bd8e0ddd1212a91
+docs-rules-pointers 6884c8ac3f304107430e6d2add72a1e3e2bae399e212e123a1a1eaf4860aa547
+docs-rules-prose-duty 0a7feb3ac3a8360031c55168574800c4275f81c9ec21ef551adbea2bda75511b
+docs-rules-restated 232ef16fcc9009dbabcdeff9f60f41db391ecd105ba4cce60fcba1c5ea03957b
+docs-rules-skill 2416b2f44c0503eb6e9068475a4c813170899ff7c5a1893d2c78db25ea59e199
+docs-rules-skill-restated 4f8fbeda194627c5bab45e040a2285d9a1e735c75c27ce6712042f47c76c22c0
+kit-mini 5bda838e3669ab5e05bc720542119d40286e8c1422a8a94d5ce9c976234b3c42
+lane-mini a530c7a9fdeba454f531adc5e56647f85644213cbc1bfbe242778d1f1e08d64a
+lane-reports 85060cfd3157b5b83397d9140e543d3093446f90d1eacd222b019b32cd3349f8
+py-mini e69b3fe04dc4ded096d4a619e67bd3c2631afa8f97a616fabac923c2de7175d5
+py-review-seams 082e73c5e12adfa8b222a3faf07721b9b78e21361bc5c0920f1a181ee848feab
+python-app 4a3473e74902878cfa6e55d0a388abd34e977c61bab2c7455781441b16d14917
+python-app-config-check e67fee2b9f987a20ccaca236688964b1147d6baae35630c4f8596ee97c7aeb1a
+python-app-exact-check d21c3b72099041ed423ea2e548ce0c665beeb07ca25553ceb648dd8c985248fc
+python-app-no-verify 25b4d7f6676efb12db4b6d0ab40fa038b6c16db6997b2aa4e2356bfd4a04bfc9
+python-app-noprint 4c7bd10e296030efe032e0b7592ec12f29beafdedc059a3925c3f39ce95c05c3
+python-app-proxy-check ed34838b729d1dae714dbbf8cc7ddadbc1f15414ab4f5755a8fce7f4eb0a26b4
+python-app-pydantic 053627210c5d50575fdc8eb3138918b33e8743785b0fb6f941db6de52f5bc18d
+python-app-pydantic-team 3290d892df908d433df9a9b4d4c4be6951aea424fd79df4e2d63465f40fc4b85
+python-app-refactor dbfec0c47da21b853beaf50886c5417978187f46142b36d9aa8e2ec526d4a3b7
+python-app-refactor-folded 89821450529972a5b4640e77b674f9b1f34e53b152032132b1c4f05f3e28048f
+python-app-refactor-review f8b3a556a46ca7b575ba499343f73e93cefda1343c7a552abd8fbe63c425ffdf
+python-app-semver 1c2f107180c2b36137c097f4b2bba41219108163183f14e7074f49d1b5c81455
+python-app-semver-pre cc613b68ec97f5ec77c94a493ae89f4a6c1eeb03acf5c9edec8ba09e19e38721
+python-app-shout b06a7b1961826e5c5af18e7f7c2720077f7b0776a6f54b7cfe99f251a580f051
+python-app-shout-cli cec75972860bf251fdc5c425cf5eac3428aefa37341b29066474ca1d86fd2fec
+python-app-shout-tagged ff0d7e546cfda4db14902a3142404614ccfd2c0bdfecbc8e35d8524856a92cd2
+python-app-skill 95b754bd264695387bf4b9b8f4ef55c9f755e8c90d7faf3d997962957fdf876d
+python-app-skill-evals 529f5a1a5f3878355b4afab170ac5f7027657891f5822c5f4ee8da5ee476b3a6
+python-app-spec e55b7a0db2269bd4e18b955943065a6576690f342025e2e708c045532e656657
+python-app-test-scan b3da95bddba3345dcbefee5e37b6433bf35d0cee52b99e95455611bfe9492cb2
+python-app-tiers d62e648fb7da7209de833069a58585c615e69ba400878838ef585197d6837050
+python-app-verify ecbaf21628b0ffeb71424f1c934f09eac1f78fe81255dcb464bb63635e9568a6
+python-app-verify-drift 98760158690733a058258eabee0cbe8353f5fc8a4fbb95ae6c3c01575310496b
+python-app-verify-live b07834f342cef09f832ab2e64f40e71447f31b2e0af1ad9998956c0919c5ea8c
+python-app-yaml-names db3ddd04f2745c5f0b419a6e1672e86fabcbc7c65c1d377c501378d42a6ec64f
+python-app-yaml-reader cb8c44ed3a5a788d838fcc457f2245a2272807ba411a1b75816b037c4bbdf1f5
+python-app-yaml-reader-crew ca2e1f06f2664353a5d3a8abb86ad91eb04a90cfe145387613ab6109068bc888
+python-app-yaml-reader-quoted 6c942d9599f0b8afef8b9a9e913f82c866d22b9bbcf0d0b93de16c1999513f99
+quote-app 04c2ffbdffd34cc0d2f8e1f515e6c1f5ba1b392403f53fd95166552dab928dc8
+quote-app-inline 91f8d9fd8815dc8aec213136222e0966582f54cd4d428f6d15c7c6facb129f6b
+quote-app-seams-bad ade6af22bc706a06ab8eab689124d3dd026ab0affae07889a0fad1253cbe6482
+quote-app-seams-ok 23dd7dfb45ecd9e77066f844390af37fa245c6745c15f086c027c1a71146beae
+rules-restated-sites 692ca884722f9c0573efdf0109141b2ec632487e091a160e9e42fbde516319df
+shape-brownfield 83ef4203225e185203c82a3024d74bb0c52f9139a50ae995709ceeef9647632b
+shape-mini 507acf1fa91256de9f1241c06ac57e318657d725a217acd5b14f6d6e6c259405
+slug-tiers 8fdd2ad8d67c63138c417e64b98705c04a3573ccd2928188b871a4aa9ec93dbf
+tally-tiers d9422279ba2766846561d1414e61b45847703582a62f4742aa3fd148c5741e9b
+ts-mini 00ad05051d163260491f74d2b50ad6b22a7d64bdd3ead407b1b8d57d7d0cf2c8
+ts-pnpm-store 4e84f7841dbd713ba0a2ed79312ba2e57bc26fcd4ef1cb50ec840c104ad9557b
+ts-pnpm-store-shared befe08107fe9a4c76f8fe9849c08c072c9b624a8af254bb8814beebbc3f7cc66
+weather-replay 1d9dc73deb7a60ad337ed8e9addfafc36bfe9b8dfdec3f3683acec0ea433cabc
+```
+
+Sensitivity: `chmod -x evals/fixtures/python-app/.githooks/pre-commit` changes 83 lines of the head list (every case on
+python-app or a fixture based on it); restored, the list is main's again.
+
 ## Main list (origin/main ee42108a evals)
 
 ```
@@ -416,7 +606,7 @@ skill-triggers rev-principles-near-retire fixture f8b3a556a46ca7b575ba499343f73e
 skill-triggers rev-principles-near-shout fixture f8b3a556a46ca7b575ba499343f73e93cefda1343c7a552abd8fbe63c425ffdf
 ```
 
-## Head list
+## Head list (the #988 head and the #989 head: the same bytes)
 
 ```
 history implementer-ts-toml-at-scale fixture history kit@0f4f1bad2c7caf593a6a2e7c1e18c9f1617238f1
