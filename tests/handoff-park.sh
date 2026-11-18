@@ -15,5 +15,5 @@ export HERDR_SESSION="handoff-park-test-$$" FAKE_HERDR_DIR="$t"
 for _ in {1..50}; do [[ -s "$pidfile" ]] && break; sleep .02; done
 PATH="$t/bin:$PATH" "$kit/.agents/skills/herdr-comms/assets/herdr-close" --park w6:p4 >"$t/out" 2>"$t/err" || { printf 'park failed: '; head -20 "$t/err"; exit 1; }
 python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); assert d["session"]=="original-session" and d["kind"]=="parked" and d["cwd"].endswith("cwd\"quoted"); assert set(d)=={"at","kind","pane","name","label","role","parent","cwd","session"}' "$t/out"
-grep -qx 'tab=w6:t4 tab_close_rc=0 killed=1' "$t/err"
+grep -qx 'tab=w6:t4 tab_close_rc=0 killed=0 unowned=w6:p4' "$t/err"
 echo 'handoff park: ok (JSON only stdout, close report stderr, original session and all fields retained)'
