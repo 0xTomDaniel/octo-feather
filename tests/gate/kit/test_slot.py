@@ -15,6 +15,7 @@ from slot import (
     queued,
     queued_late,
     refused,
+    regranted,
     revoked,
     sandboxed,
     two_sessions,
@@ -78,6 +79,10 @@ def test_revoked(case: Case) -> None:
 
 def test_queued_late(case: Case) -> None:
     case(queued_late)
+
+
+def test_regranted(case: Case) -> None:
+    case(regranted)
 
 
 def test_two_sessions(case: Case) -> None:

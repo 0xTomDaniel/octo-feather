@@ -550,7 +550,8 @@ def hold(kind: str, items: int | None) -> int:
         if kind == "heavy"
         else "this eval run (octo-feather-qa) runs model evals"
     )
-    if lane not in {g.lane for g in grants(kind)}:
+    mine_g = next((g for g in grants(kind) if g.lane == lane), None)  # the grant it runs under
+    if mine_g is None:
         verb = "queue" if len(grants(kind)) >= b[f"{kind}_slots"] else "grant"
         say(
             f"octo-feather-slot: refused, nothing ran: {what}, and lane {lane or 'none'} holds no "
@@ -564,7 +565,7 @@ def hold(kind: str, items: int | None) -> int:
         except BlockingIOError:
             f.close()
             continue
-        return keep(f, rec, Run(os.getppid(), lane or "", stamp(now()), items), kind)
+        return keep(f, rec, Run(os.getppid(), mine_g.lane, stamp(now()), items), kind, mine_g)
     busy = "; ".join(r.show() for r in runs(kind)) or "a run now ending"
     say(
         f"octo-feather-slot: refused, nothing ran: {what}; lane {lane} holds the {kind} grant, but "
@@ -574,20 +575,20 @@ def hold(kind: str, items: int | None) -> int:
     return REFUSED
 
 
-def keep(f: IO[str], rec: Path, r: Run, kind: str) -> int:
-    """Hold F's lock, recorded in REC, until stdin closes (the caller's life)."""
+def keep(f: IO[str], rec: Path, r: Run, kind: str, under: Grant) -> int:
+    """Hold F's lock, recorded in REC, until stdin closes (the caller's life); the run's end then
+    recorded against UNDER, the grant it started under, never a later grant of its lane."""
     rec.write_text(json.dumps(asdict(r)) + "\n", encoding="utf-8")
     say(f"held: the {kind} slot for lane {r.lane}, run {r.show()}")
     signal.signal(signal.SIGINT, signal.SIG_IGN)  # the caller's Ctrl-C ends it by closing the pipe
     sys.stdout.close()
     while sys.stdin.buffer.read(65536):
         pass
-    with locked(kind):  # the run's end, by its lane's grant; ends of grants now gone dropped
+    with locked(kind):  # the run's end, by the grant it started under; ends of grants gone dropped
         live = {(g.lane, g.since) for g in grants(kind)}
         ends = {k: v for k, v in run_ends(kind).items() if k in live}
-        for key in live:
-            if key[0] == r.lane:
-                ends[key] = precise(dt.datetime.now(dt.UTC))
+        if (under.lane, under.since) in live:
+            ends[under.lane, under.since] = precise(dt.datetime.now(dt.UTC))
         write_run_ends(kind, ends)
     rec.unlink(missing_ok=True)
     f.close()
