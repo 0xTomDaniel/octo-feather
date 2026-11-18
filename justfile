@@ -319,6 +319,10 @@ check-tests *args:
     # any pnpm install, even an up-to-date one, rewrites node_modules/.bin under a concurrent pnpm exec (#548, #663).
     err="$(pnpm install --offline --frozen-lockfile 2>&1)" || { printf '%s\n' "$err" >&2
       echo "check-tests: tsc and eslint (pnpm-lock.yaml) are not in the pnpm store; fetch them once, with network: pnpm install --frozen-lockfile --dir $root" >&2; exit 1; }
+    # The store pnpm just used, asked once here, before the items fan out, and set for every item: a pnpm with no store
+    # set finds it by a hard-link probe, a _tmp_<pid>_<hex> file in the project root, so an item's `pnpm store path`
+    # (testkit.pnpm_store) wrote into this checkout and flipped a concurrent drive's kit-status check (#968).
+    npm_config_store_dir="$(pnpm store path)"; export npm_config_store_dir
     # mise's state dir one empty dir per gate run, removed after it, inherited by every item and nested run: each
     # `mise` an item runs in a temp repo records it there (tracked-configs), never in the user's, where the link
     # dangles once the repo goes (#493 AC7). Nothing the gate runs needs the user's trust entries: the kit's and the

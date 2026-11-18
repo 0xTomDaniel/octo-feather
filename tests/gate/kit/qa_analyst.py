@@ -127,34 +127,50 @@ def block(out: str) -> list[str]:
 
 
 def comparison(s: Scratch) -> None:
-    """--baseline, one run each: a non-discriminating case (same) and a cost tradeoff (costly),
-    each on its case in the output and summary.json; --analyze on the stored run dir prints the
-    same analysis from summary.json alone, starting no pi and no sandbox."""
+    """--baseline, one run each of same and costly, then --analyze on the stored run dir: the same
+    analysis from summary.json alone, starting no pi and no sandbox. The live run's times are the
+    box's (wall seconds), so of it only what no load moves holds: costly a token cost tradeoff,
+    same never one in tokens. The flags themselves are judged by --analyze on a copy of that run
+    whose summary.json states each case's time: same non-discriminating, costly a cost tradeoff
+    in time and tokens."""
     qa = Qa(s)
     got, d, out = qa.run("same", "costly", runs=1, baseline=True, want=0)
-    want = [
-        HEAD,
-        "  non-discriminating case an/same: every run on both kits passed",
-        "  cost tradeoff an/costly: pass rate 1.00 on both kits; tokens mean 220.0 to 550.0",
-    ]
-    assert got == want, f"want\n{want}\ngot\n{got}\nin: {out}"
-    a = json.loads((d / "summary.json").read_text())["analysis"]
+    sm = json.loads((d / "summary.json").read_text())
+    a = sm["analysis"]
     assert a["threshold"] == 0.5, a
-    assert a["non_discriminating_cases"] == [{"case": "an/same", "pass_rate": 1.0}], a
-    assert a["non_discriminating_facts"] == [], a
-    assert a["high_variance"] == [], a
-    cost = {"baseline": 220.0, "current": 550.0}
-    assert a["cost_tradeoffs"] == [{"case": "an/costly", "pass_rate": 1.0, "tokens": cost}], a
+    assert a["non_discriminating_facts"] == a["high_variance"] == [], a
+    tokens = {x["case"]: x.get("tokens") for x in a["cost_tradeoffs"]}
+    assert tokens.get("an/costly") == {"baseline": 220.0, "current": 550.0}, a
+    assert tokens.get("an/same") is None, a
     # The rerun: a poison pi first on PATH, which no rerun may start.
     poison = s.root / "poison"
     poison.mkdir()
     (poison / "pi").write_text(f"#!/bin/sh\ntouch {s.root / 'ran'}\nexit 99\n")
     (poison / "pi").chmod(0o755)
     s.env["PATH"] = f"{poison}:{s.env['PATH']}"
-    out = qa.qa("--analyze", str(d), want=0).out
-    assert out.splitlines()[out.splitlines().index(HEAD) :] == want, f"rerun: {out}"
-    assert not (s.root / "ran").exists(), f"the rerun started pi: {out}"
-    assert "qc sandbox" not in out, f"the rerun started a sandbox: {out}"
+    rerun = qa.qa("--analyze", str(d), want=0).out
+    assert rerun.splitlines()[rerun.splitlines().index(HEAD) :] == got, f"rerun: {rerun}\nin: {out}"
+    assert not (s.root / "ran").exists(), f"the rerun started pi: {rerun}"
+    assert "qc sandbox" not in rerun, f"the rerun started a sandbox: {rerun}"
+    # The stated run: each case's time mean on each kit, as summary.json records it.
+    stated = {"an/same": (10.0, 10.0), "an/costly": (10.0, 20.0)}
+    for c in sm["cases"]:
+        b, cur = stated[f"{c['suite']}/{c['id']}"]
+        c["baseline"]["time"] = {"mean": b, "stddev": 0.0}
+        c["time"] = {"mean": cur, "stddev": 0.0}
+    (s.root / "stated").mkdir()
+    (s.root / "stated" / "summary.json").write_text(json.dumps(sm))
+    out = qa.qa("--analyze", str(s.root / "stated"), want=0).out
+    want = [
+        HEAD,
+        "  non-discriminating case an/same: every run on both kits passed",
+        (
+            "  cost tradeoff an/costly: pass rate 1.00 on both kits; time mean 10.0 to 20.0;"
+            " tokens mean 220.0 to 550.0"
+        ),
+    ]
+    assert out.splitlines()[out.splitlines().index(HEAD) :] == want, f"stated: {out}"
+    assert not (s.root / "ran").exists(), f"the stated rerun started pi: {out}"
 
 
 def variance(s: Scratch) -> None:
