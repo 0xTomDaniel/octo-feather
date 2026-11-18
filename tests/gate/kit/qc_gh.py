@@ -404,6 +404,50 @@ def snapshot_misses(s: Scratch) -> None:
     assert len(miss.read_text().splitlines()) == len(calls), "a stored field was logged as a miss"
 
 
+def diff_too_large(s: Scratch) -> None:
+    """The over-limit PR diff rule of docs/adr/0022, PR 4's `pr diff` answering GitHub's real
+    406 too_large; then real `pr diff` failures of other kinds (not found, bad credentials), each
+    replayed verbatim from its recording (testkit/recordings/pr-diff-*.json)."""
+    s.prepare("qc-gh", build)
+    g = s.gh
+    g.put(4, {**g.pr(2), "number": 4, "title": "Huge PR", "headRefOid": "def456"})
+    g.store("api/repos/o/r/issues/4/timeline.json", [])
+    g.store("api/repos/o/r/commits/def456/check-runs.json", {"total_count": 0, "check_runs": []})
+    rec = recorded("pr-diff-too-large")
+    g.store("pr/4.diff.err", rec["err"])
+    sn = s.root / "snap"
+    r = s.run([kit("octo-feather-qc-ghsnap"), "o/r", str(sn)])
+    assert re.search(r"prs 2, .*full views 4.*diff too large on GitHub.*#4", r.out), r.out
+    assert (sn / "diff" / "4.too-large").read_text() == rec["err"]
+    got = sorted(str(p.relative_to(sn)) for p in sn.rglob("*") if p.is_file())
+    for f in ("pr/2.json", "pr/4.json", "diff/2.diff", "issue/1.json", "issue/3.json"):
+        assert f in got, f"{f} not fetched: {got}"
+    assert "api/repos__o__r__commits__def456__check-runs.json" in got, got
+    assert "diff/4.diff" not in got, got
+    miss = s.root / "miss.log"
+    env = {"OCTO_FEATHER_GHSNAP": str(sn), "OCTO_FEATHER_GHSNAP_MISS": str(miss)}
+    o = s.run([str(OFFLINE_GH), "pr", "diff", "4"], want=1, env=env)
+    assert re.search(
+        rf"{REFUSED}.*diff for pr 4 not in snapshot: too large on GitHub: .*HTTP 406", o.err
+    ), o.err
+    assert len(miss.read_text().splitlines()) == 1, miss.read_text()
+    assert s.run([str(OFFLINE_GH), "pr", "diff", "2"], env=env).out == "diff --git a/x b/x"
+    for name in ("pr-diff-not-found", "pr-diff-bad-credentials"):
+        other = recorded(name)
+        assert other["exit"] == 1, other  # the fake gh fails a stored pr/N.diff.err with exit 1
+        g.store("pr/4.diff.err", other["err"])
+        r = s.run([kit("octo-feather-qc-ghsnap"), "o/r", str(s.root / name)], want=1)
+        assert f"gh pr diff 4: {other['err'].splitlines()[0]}" in r.err, f"{name}: {r.err}"
+
+
+def recorded(name: str) -> dict[str, Any]:
+    """The one real gh answer testkit/recordings/NAME.json holds."""
+    (rec,) = json.loads(
+        (Path(__file__).parent / "testkit" / "recordings" / f"{name}.json").read_text()
+    )
+    return rec
+
+
 def kit_on_kit(s: Scratch) -> None:
     """A copy of the kit judging itself (the kit inside the judged worktree), a repo with no GitHub
     remote: the proof passes and says so; no fetch, the offline gh refusing every call, the
@@ -475,5 +519,6 @@ if __name__ == "__main__":
         no_github,
         status_commit_fails,
         snapshot_misses,
+        diff_too_large,
         kit_on_kit,
     )
