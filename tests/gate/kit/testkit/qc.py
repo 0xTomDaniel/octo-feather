@@ -20,9 +20,10 @@ RID = r"[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}"  # an evidence record id (octo-feather-e
 LIMIT_S = "180"
 
 
-def target(s: Scratch, files: Mapping[str, str] = {}) -> Path:
-    """S's repo: the good demo spec (tests/fixtures/spec-status/good) and FILES committed, its
-    status file then initialized at that commit (octo-feather-spec-status init) and committed."""
+def target(s: Scratch, files: Mapping[str, str] = {}, exe: tuple[str, ...] = ()) -> Path:
+    """S's repo: the good demo spec (tests/fixtures/spec-status/good) and FILES committed (those
+    in EXE executable), its status file then initialized at that commit (octo-feather-spec-status
+    init) and committed."""
     r = s.root / "repo"
     (r / "docs" / "specs").mkdir(parents=True)
     s.git(r, "init", "-q", "-b", "main")
@@ -32,6 +33,8 @@ def target(s: Scratch, files: Mapping[str, str] = {}) -> Path:
     for name, text in files.items():
         (r / name).parent.mkdir(parents=True, exist_ok=True)
         (r / name).write_text(text)
+        if name in exe:
+            (r / name).chmod(0o755)
     s.git(r, "add", "-A")
     s.git(r, "commit", "-qm", "accepted")
     short = s.git(r, "rev-parse", "--short", "HEAD")

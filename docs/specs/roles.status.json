@@ -72,12 +72,20 @@
       "pr": 271
     },
     "acceptance-delegated-pr": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 882,
+      "record": "20261118T201807Z-b06030d5",
+      "commit": "f28674d5a21b6594263fbfc0d65a9d9fc646eac9",
+      "tests": []
     },
     "acceptance-fresh-independent-worker": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 882,
+      "record": "20261118T201319Z-9e48fcc8",
+      "commit": "f28674d5a21b6594263fbfc0d65a9d9fc646eac9",
+      "tests": [
+        "tests/gate/kit/herdr_messaging.py"
+      ]
     },
     "acceptance-task-contract-fit": {
       "status": "planned",
@@ -117,12 +125,18 @@
       "pr": null
     },
     "acceptance-general-worker-no-implementation": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 882,
+      "record": "20261118T202118Z-2629b537",
+      "commit": "f28674d5a21b6594263fbfc0d65a9d9fc646eac9",
+      "tests": []
     },
     "acceptance-supervisor-delegates-execution": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 882,
+      "record": "20261118T202247Z-cf1595da",
+      "commit": "f28674d5a21b6594263fbfc0d65a9d9fc646eac9",
+      "tests": []
     },
     "acceptance-director-owned-remedy": {
       "status": "planned",
