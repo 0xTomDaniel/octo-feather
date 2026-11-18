@@ -188,6 +188,10 @@
       "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
       "tests": []
     },
+    "acceptance-gate-recipes-first": {
+      "status": "planned",
+      "pr": null
+    },
     "acceptance-one-execution": {
       "status": "built",
       "pr": 880,
