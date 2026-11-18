@@ -24,6 +24,18 @@ state (octo-feather-state): the lane hand-off log beside the lane record whose `
 PANE, else the director log when director.toml's `pane` is PANE; a PANE owning neither records
 nothing (exit 0).
 
+parent PANE prints the caller's parent pane, resolved by identity at each call (comms spec
+#say-parent: the parent survives park, restart and resume): the hand-off log holding a spawn or
+worker-spawn line whose `session` is the caller's OCTO_FEATHER_SESSION_ID (lane logs first, then the
+director log) names it through its owner record, the lane record's `supervisor` or director.toml's
+`pane`, as that record reads now, so a hand edit is what the next call follows. PANE (the frozen
+OCTO_FEATHER_PARENT) when no such line or no such key. Whether that pane is live is herdr-say's.
+
+repoint NAME reads the line herdr-spawn printed for a resumed agent on stdin and writes its pane=
+into NAME's record in the caller's session state: lanes/NAME.toml `supervisor`, or director.toml
+`pane` for NAME `director`; only that key's line, in place (added first when absent), every other
+line kept. No record: nothing written (exit 0). octo-feather-start --resume runs it.
+
 attempt --ended-unreported LOG PANE --partial X --recovery Y [--commit C] prints the
 attempt line for a worker that ended without reporting (fields: comms spec
 #handoff-fields, attempt): role, ticket, worker, session and duration_s come from
@@ -79,20 +91,70 @@ def toml_key(path: Path, key: str) -> object:
         return None
 
 
+def state_dir() -> Path:
+    """The caller's session state dir (octo-feather-state)."""
+    return Path(
+        subprocess.run(
+            [str(Path(__file__).resolve().parent / "octo-feather-state")],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.strip()
+    )
+
+
 def owned_log(pane: str) -> Path | None:
     """The hand-off log PANE writes in the caller's session state, or None (module docstring)."""
-    state = subprocess.run(
-        [str(Path(__file__).resolve().parent / "octo-feather-state")],
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
+    state = state_dir()
     lanes = sorted((Path(state) / "lanes").glob("*.toml"))
     lane = next((r for r in lanes if toml_key(r, "supervisor") == pane), None)
     if lane is not None:
         return lane.with_suffix(".handoffs.jsonl")
     director = Path(state) / "director.toml"
     return director.with_name(DIRECTOR_LOG) if toml_key(director, "pane") == pane else None
+
+
+def owner_record(log: Path) -> tuple[Path, str]:
+    """The record owning hand-off LOG, and its pane key (module docstring, parent)."""
+    if log.name == DIRECTOR_LOG:
+        return log.with_name("director.toml"), "pane"
+    return log.with_name(log.name.removesuffix(".handoffs.jsonl") + ".toml"), "supervisor"
+
+
+def parent(args: argparse.Namespace) -> int:
+    """Print the caller's parent pane (module docstring)."""
+    pane, session = cast("str", args.pane), os.environ.get("OCTO_FEATHER_SESSION_ID", "")
+    state = state_dir() if session else None
+    if state is not None:
+        logs = [*sorted((state / "lanes").glob("*.handoffs.jsonl")), state / DIRECTOR_LOG]
+        for log in (x for x in logs if x.is_file()):
+            spawns = (r for r in read_log(log)[0] if r.get("kind") in SPAWN_KINDS)
+            if any(r.get("session") == session for r in spawns):
+                pane = str(toml_key(*owner_record(log)) or pane)
+                break
+    sys.stdout.write(pane + "\n")
+    return 0
+
+
+def repoint(args: argparse.Namespace) -> int:
+    """Write a resumed agent's pane into its record, or nothing (module docstring)."""
+    line = spawn_line(sys.stdin.read(), None)
+    if line is None:
+        return refuse("stdin holds no herdr-spawn line with pane= and provider_session_id=", 65)
+    state, name = state_dir(), cast("str", args.name)
+    record, key = (
+        (state / "director.toml", "pane")
+        if name == "director"
+        else (state / "lanes" / f"{name}.toml", "supervisor")
+    )
+    if not record.is_file():
+        return 0
+    new = f"{key} = {json.dumps(line['pane'])}"
+    text, n = re.subn(rf"(?m)^{key}[ \t]*=.*$", lambda _: new, record.read_text(), count=1)
+    tmp = record.with_name(record.name + ".tmp")
+    tmp.write_text(text if n else f"{new}\n{text}")
+    tmp.replace(record)
+    return 0
 
 
 def refuse(why: str, code: int) -> int:
@@ -193,7 +255,13 @@ def resume_workspace(_: argparse.Namespace) -> int:
     return 0
 
 
-LEVERS = {"spawn": record_spawn, "attempt": ended_unreported, "resume-workspace": resume_workspace}
+LEVERS = {
+    "spawn": record_spawn,
+    "attempt": ended_unreported,
+    "resume-workspace": resume_workspace,
+    "parent": parent,
+    "repoint": repoint,
+}
 
 
 def main() -> int:  # noqa: C901 (encode and parked, then the levers' dispatch)
@@ -206,6 +274,8 @@ def main() -> int:  # noqa: C901 (encode and parked, then the levers' dispatch)
     parked.add_argument("target")
     parked.add_argument("lanes", type=Path)
     commands.add_parser("resume-workspace")
+    commands.add_parser("parent").add_argument("pane")
+    commands.add_parser("repoint").add_argument("name")
     spawn = commands.add_parser("spawn")
     spawn.add_argument("--ticket")
     spawn.add_argument("--caller")

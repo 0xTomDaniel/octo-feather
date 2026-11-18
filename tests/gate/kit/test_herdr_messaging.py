@@ -5,9 +5,11 @@ from collections.abc import Callable
 
 import pytest
 from herdr_messaging import (
+    director_moved,
     director_worker_resume,
     fresh_worker_session,
     parent_gone,
+    parent_resumed,
     post_merge_busy,
     queued_completion,
     say_lookup_fails,
@@ -86,3 +88,11 @@ def test_director_worker_resume(case: Case) -> None:
 )
 def test_fresh_worker_session(case: Case) -> None:
     case(fresh_worker_session)
+
+
+def test_parent_resumed(case: Case) -> None:
+    case(parent_resumed)
+
+
+def test_director_moved(case: Case) -> None:
+    case(director_moved)
