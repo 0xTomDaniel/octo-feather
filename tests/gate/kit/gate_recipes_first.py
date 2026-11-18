@@ -9,8 +9,8 @@ its order is the run's. A scratch state dir holds the trend file.
 
 red (fast, check or nested): one em dash committed in the copy makes check-dashes red. `just
 fast`, `just check` and a nested `just check` (GATE_NESTED, as a gate item runs a copy's gate:
-sequential) each exit non-zero, naming check-dashes and showing its output, the file and line it found; no test item
-ran, the slot was never asked, and no trend line says full.
+sequential) each exit non-zero, naming check-dashes and showing its output, the file and line
+it found; no test item ran, the slot was never asked, and no trend line says full.
 green: with the dash gone, `just check` passes: check-probe ran once, then the slot was asked
 once for every item (4), then each test item ran once; one trend line, tier full, its
 steps the four items.
