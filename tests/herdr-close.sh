@@ -53,4 +53,17 @@ close w6
 [[ "$rc" == 0 && "$(cat "$c/out")" == "space=w6 space_close_rc=0 killed=0 unowned=w6:p4" ]] || fail "space: exit $rc, printed '$(cat "$c/out")'"
 grep -qx 'workspace close w6' "$c/argv" || fail "space: no workspace close w6: $(cat "$c/argv")"
 
-echo "herdr-close: ok (pane id closes its tab, prints tab=, its unowned pane named and nothing swept, a tagged process alive; unknown pane id exits non-zero naming TAB|SPACE|PANE, no close; tab and space ids close as before)"
+# 4. A malformed Herdr answer (a pane with no tab_id) fails loud, naming the field: exit 76,
+#    nothing closed, never read as an unowned pane.
+setup malformed
+mkdir -p "$t/broken"
+printf '#!/usr/bin/env bash\nif [[ "$1 $2" == "pane list" ]]; then "%s" "$@" | jq -c "del(.result.panes[].tab_id)"; else exec "%s" "$@"; fi\n' \
+  "$t/sbin/herdr" "$t/sbin/herdr" >"$t/broken/herdr"; chmod +x "$t/broken/herdr"
+rc=0
+env -u HERDR_PANE_ID -u HERDR_TAB_ID -u HERDR_WORKSPACE_ID -u OCTO_FEATHER_PARENT FAKE_HERDR_DIR="$c" PATH="$t/broken:$PATH" \
+  "$kit/.agents/skills/herdr-comms/assets/herdr-close" w6:t4 >"$c/out" 2>"$c/err" || rc=$?
+[[ "$rc" == 76 ]] || fail "malformed: exit $rc, want 76: $(cat "$c/err")"
+grep -qF 'no field tab_id' "$c/err" || fail "malformed: stderr does not name tab_id: $(cat "$c/err")"
+[[ ! -s "$c/out" && ! -s "$c/closed" ]] || fail "malformed: printed '$(cat "$c/out")' or closed '$(cat "$c/closed" 2>/dev/null)'"
+
+echo "herdr-close: ok (malformed Herdr answer exits 76 naming the field, nothing closed; pane id closes its tab, prints tab=, its unowned pane named and nothing swept, a tagged process alive; unknown pane id exits non-zero naming TAB|SPACE|PANE, no close; tab and space ids close as before)"

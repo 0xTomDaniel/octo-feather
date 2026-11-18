@@ -41,6 +41,6 @@ case "$1 $2" in
   "pane send-keys"|"pane send-text") echo "$4" >>"$d/keys" ;;
   "pane process-info") # a stand-in shell: a real process, ending once this dir is gone
     sh -c 'i=0; while [ -d "$1" ] && [ $i -lt 600 ]; do sleep 1; i=$((i+1)); done' sh "$d" >/dev/null 2>&1 </dev/null &
-    printf '{"result":{"process_info":{"pane_id":"w9:p1","shell_pid":%s}}}\n' "$!" ;;
+    printf '{"result":{"process_info":{"pane_id":"w9:p1","shell_pid":%s},"type":"pane_process_info"}}\n' "$!" ;;
   *) echo "fake herdr: unhandled: $*" >&2; exit 2 ;;
 esac

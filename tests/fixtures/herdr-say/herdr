@@ -52,10 +52,11 @@ case "$1 $2" in
   "pane read") printf ' pi 1.3.0\n\n > \n' ;;
   "pane list")
     jq -Rn --arg w "$(opt --workspace "$@")" '{result: {panes: [inputs | split(" ") | select(.[1] | startswith($w + ":"))
-      | {pane_id: .[1], tab_id: .[2], workspace_id: $w}]}}' "$d/agents" ;;
+      | {pane_id: .[1], tab_id: .[2], workspace_id: $w, terminal_id: ("term_" + .[1]), focused: false,
+        agent_status: "idle", revision: 0}], type: "pane_list"}}' "$d/agents" ;;
   "pane process-info")
     p="$(opt --pane "$@")"; pid="$(awk -v p="$p" '$1 == p {print $2; exit}' "$d/shells")"
     [[ -n "$pid" ]] || { sh -c 'i=0; while [ -d "$1" ] && [ $i -lt 600 ]; do sleep 1; i=$((i+1)); done' sh "$d" >/dev/null 2>&1 </dev/null & pid=$!; }
-    printf '{"result":{"process_info":{"pane_id":"%s","shell_pid":%s}}}\n' "$p" "$pid" ;;
+    printf '{"result":{"process_info":{"pane_id":"%s","shell_pid":%s},"type":"pane_process_info"}}\n' "$p" "$pid" ;;
   *) echo "fake herdr: unhandled: $*" >&2; exit 2 ;;
 esac
