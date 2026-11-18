@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 # issue-view KEY: one issue as JSON {key, title, body, state, url, parent, children, blocked_by}; keys are strings,
 # state open or done (a completed or canceled state is done), parent null when it has none, children its
-# sub-issues' keys. Wraps `linear api`. --notes adds notes: [{at, edited_at, url, body}], the description first, then
-# each comment by creation: at its creation, edited_at its last edit (null: never edited). Linear keeps no edit time for
-# a description: its edited_at is the issue's updatedAt when that differs from createdAt, an upper bound (a later
-# state move counts too), so a reader comparing times may refuse a description in time, never pass a late one.
+# sub-issues' keys. Wraps `linear api`. --notes: skills spec #tracker-script-issue-view; a description's edit time is
+# its latest issue history entry with updatedDescription (that entry's updatedAt).
 set -euo pipefail
 notes=0; [[ $# == 2 && "$2" == --notes ]] && { notes=1; set -- "$1"; }
 [[ $# == 1 ]] || { echo "usage: issue-view KEY [--notes]" >&2; exit 64; }
@@ -23,11 +21,15 @@ view="$(jq -e '(.data.issue // empty) | {key: .identifier, title, body: (.descri
   url, parent: (.parent.identifier // null), children: [.children.nodes[].identifier], blocked_by: [.inverseRelations.nodes[] | select(.type == "blocks") | .issue.identifier]}' \
   <<<"$out" 2>/dev/null)" || { echo "issue-view: linear api printed no issue ${1^^}: $out" >&2; exit 1; }
 ((notes)) || { printf '%s\n' "$view"; exit 0; }
-query='query IssueNotes($id: String!) { issue(id: $id) { url createdAt updatedAt description
-  comments(first: 250) { nodes { url createdAt editedAt body } pageInfo { hasNextPage } } } }'
+query='query IssueNotes($id: String!) { issue(id: $id) { url createdAt description
+  comments(first: 250) { nodes { url createdAt editedAt body } pageInfo { hasNextPage } }
+  history(first: 250) { nodes { updatedAt updatedDescription } pageInfo { hasNextPage } } } }'
 out="$(linear api --no-input --variable "id=${1^^}" "$query" 2>&1)" || { echo "issue-view: ${1^^} notes: $out" >&2; exit 1; }
-# A partial comment list would read as the whole: refuse it.
+# A partial comment or history list would read as the whole: refuse it, naming the time it cannot give.
 jq -e '.data.issue.comments.pageInfo.hasNextPage == false' <<<"$out" >/dev/null 2>&1 \
   || { echo "issue-view: ${1^^}: linear api printed no issue or a partial comment list: $(head -c 300 <<<"$out")" >&2; exit 1; }
-jq -c --argjson v "$view" '.data.issue as $i | $v + {notes: ([$i | {at: .createdAt, edited_at: (if .updatedAt == .createdAt then null else .updatedAt end),
-  url, body: (.description // "")}] + [$i.comments.nodes | sort_by(.createdAt)[] | {at: .createdAt, edited_at: .editedAt, url, body}])}' <<<"$out"
+jq -e '.data.issue.history.pageInfo.hasNextPage == false' <<<"$out" >/dev/null 2>&1 \
+  || { echo "issue-view: ${1^^}: more than 250 history entries: the description's last edit time cannot be given" >&2; exit 1; }
+jq -c --argjson v "$view" '.data.issue as $i | $v + {notes: ([$i | {at: .createdAt,
+  edited_at: ([.history.nodes[] | select(.updatedDescription == true) | .updatedAt] | max), url, body: (.description // "")}]
+  + [$i.comments.nodes | sort_by(.createdAt)[] | {at: .createdAt, edited_at: .editedAt, url, body}])}' <<<"$out"
