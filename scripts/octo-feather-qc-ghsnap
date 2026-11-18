@@ -13,7 +13,9 @@ named in meta.json. Repo, branches, labels, origin refs (refs.txt from branches)
 Layout: issue/N.json pr/N.json diff/N.diff api/<path, "/" as "__">.json
 issue-list.json pr-list.json run-list.json repo.json refs.txt meta.json.
 Stdout: one summary line. Exit 0, or 1 when any read failed (no auth, network):
-an api 404 or 410 is recorded as absent, every other failure is fatal.
+an api 404 or 410 is recorded as absent, a PR diff GitHub refuses as over its file
+limit (HTTP 406, PullRequest.diff too_large) as diff/N.too-large (GitHub's answer) and in
+the summary, every other failure is fatal.
 """
 import json, os, re, subprocess, sys, time
 from concurrent.futures import ThreadPoolExecutor
@@ -35,11 +37,25 @@ class Fatal(Exception):
     pass
 
 
+class TooLarge(Fatal):
+    """GitHub refused a PR diff as over its file limit: gh's answer (testkit/recordings/pr-diff-too-large.json)."""
+
+
 def gh(*a):
     p = subprocess.run(["gh", *a], capture_output=True, text=True, stdin=subprocess.DEVNULL)
     if p.returncode:
+        if re.search(r"(?ms)HTTP 406: .*^PullRequest\.diff too_large$", p.stderr):
+            raise TooLarge(p.stderr)
         raise Fatal(f"gh {' '.join(a[:3])}: {(p.stderr or p.stdout).strip()[:300]}")
     return p.stdout
+
+
+def pr_diff(out: Path, n: str, repo: str) -> None:
+    """PR N's diff into OUT/diff/N.diff; refused by GitHub as too large, its answer into N.too-large."""
+    try:
+        (out / "diff" / f"{n}.diff").write_text(gh("pr", "diff", n, "-R", repo))
+    except TooLarge as e:
+        (out / "diff" / f"{n}.too-large").write_text(str(e))
 
 
 def api_name(path):
@@ -93,7 +109,7 @@ def main(repo, out):
                 api(f"{R}/issues/{n}/{s}")
         else:
             save(f"pr/{n}.json", gh("pr", "view", n, "-R", repo, "--json", PF))
-            save(f"diff/{n}.diff", gh("pr", "diff", n, "-R", repo))
+            pr_diff(out, n, f"{repo}")
             if row.get("headRefOid"):
                 api(f"{R}/commits/{row['headRefOid']}/check-runs")
         api(f"{R}/issues/{n}/timeline")
@@ -110,7 +126,8 @@ def main(repo, out):
     (out / "fetched_at").write_text(at + "\n")
     cap = f"; detail capped at {DETAIL_CAP}, list-only: {' '.join(meta['capped'])}" if capped else ""
     print(f"snapshot of {repo} at {at} ({meta['seconds']} s): issues {len(issues)}, prs {len(prs)}, runs {len(runs)}, "
-          f"branches {len(branches)}, full views {len(detail)}{cap}")
+          f"branches {len(branches)}, full views {len(detail)}{cap}"
+          + "".join(f"; diff too large on GitHub (HTTP 406), not fetched: #{p.stem}" for p in sorted((out / "diff").glob("*.too-large"))))
 
 
 if __name__ == "__main__":

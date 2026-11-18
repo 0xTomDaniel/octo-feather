@@ -256,7 +256,7 @@ def main(a):
         o, pos = parse(rest, {"-R": "repo", "--repo": "repo", "--name-only": "names", "--patch": "patch", "--color": "color"}, ("names", "patch"))
         n = num(pos[0]) if pos else None
         try: t = open(f"{SNAP}/diff/{n}.diff").read()
-        except OSError: miss(f"diff for pr {pos[0] if pos else '(current branch)'} not in snapshot")
+        except OSError: miss(f"diff for pr {pos[0] if pos else '(current branch)'} not in snapshot" + (f": too large on GitHub: {open(big).read().strip()}" if os.path.exists(big := f"{SNAP}/diff/{n}.too-large") else ""))
         if o.get("names"): t = "\n".join(sorted({l[6:] for l in t.splitlines() if l.startswith("+++ b/")})) + "\n"
         sys.stdout.write(t); sys.exit(0)
     if c == "pr" and s == "checks":
