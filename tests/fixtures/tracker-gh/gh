@@ -1,18 +1,35 @@
 #!/usr/bin/env python3
-"""gh: an offline fake of the GitHub CLI for the kit's correction-lane tests; never the network.
+"""gh: an offline fake of the GitHub CLI for the kit's correction-lane and pilot-PR tests.
 
-One JSON store, $FAKE_GH_STORE:
-  {"issues": [{"number", "repo", "title", "body", "state" (OPEN|CLOSED), "closedAt", "comments"}]}
-(created when absent). The repo is --repo, else $GH_REPO, else "local/repo". It takes only:
+Never the network. One JSON store, $FAKE_GH_STORE:
+  {"issues": [{"number", "repo", "title", "body", "state" (OPEN|CLOSED), "closedAt", "comments"}],
+   "prs": [{"number", "repo", "title", "body", "isDraft", "headRefName",
+            "baseRefName", "url", "comments"}],
+   "repos": {"OWNER/NAME": {"nameWithOwner", "createdAt", ...}}}
+(created when absent). The repo is --repo, else $GH_REPO, else "local/repo". A PR's head
+is its branch on the current directory's git remote origin, read at each call, so a
+`git push` moves it as on GitHub. It takes only:
   issue list [--repo R] --state all --limit N --search 'WORDS in:title' --json FIELDS
     issues whose title has WORDS
   issue create --title T --body-file F|-
     prints the new issue's url
+  repo view OWNER/NAME --json FIELDS
+    its "repos" entry's FIELDS (null when absent); an unstored one fails as real gh 2.102.0:
+    `GraphQL: Could not resolve to a Repository with the name 'OWNER/NAME'. (repository)`, exit 1
+  pr create --draft --base B --head H --title T --body-file F|-
+    a draft PR numbered after every issue and PR; H must be a branch on origin (pushed);
+    prints its url
+  pr view N --json FIELDS
+    its stored fields and headRefOid
+  api -X POST repos/{owner}/{repo}/issues/N/comments --input F --jq .html_url
+    a comment on PR N, the body F's JSON holds; prints its url
 Anything else is refused, exit 1, naming the call.
 """
 
 import json
 import os
+import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import NoReturn, cast
@@ -46,8 +63,29 @@ def load() -> dict[str, list[Issue]]:
         return cast("dict[str, list[Issue]]", json.load(f))
 
 
+def origin_head(branch: str) -> str:
+    """BRANCH's commit on origin (what GitHub holds after a push), empty when it is not there."""
+    r = subprocess.run(
+        ["git", "ls-remote", "--heads", "origin", f"refs/heads/{branch}"],  # noqa: S607  the git on PATH
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return r.stdout.split("\t", 1)[0] if r.returncode == 0 else ""
+
+
+def pull(n: str) -> Issue:
+    repo = os.environ.get("GH_REPO") or "local/repo"
+    hit = [p for p in prs if str(p["number"]) == n and p["repo"] == repo]
+    if not hit:
+        sys.stderr.write(f"GraphQL: Could not resolve to a PullRequest with the number of {n}.\n")
+        sys.exit(1)
+    return hit[0]
+
+
 db = load()
 issues = db["issues"]
+prs = db.setdefault("prs", [])
 if argv[:2] == ["issue", "list"]:
     o = opts(argv[2:])
     if set(o) - {"--repo", "--state", "--limit", "--search", "--json"} or o.get("--state") != "all":
@@ -80,5 +118,59 @@ elif argv[:2] == ["issue", "create"]:
     with STORE.open("w") as out:
         json.dump(db, out, indent=1)
     sys.stdout.write(f"https://github.com/{repo}/issues/{n}\n")
+elif argv[:2] == ["repo", "view"] and len(argv) == 5 and argv[3] == "--json":
+    repos = cast("dict[str, dict[str, object]]", cast("dict[str, object]", db).get("repos") or {})
+    if argv[2] not in repos:
+        sys.stderr.write(
+            f"GraphQL: Could not resolve to a Repository with the name '{argv[2]}'. (repository)\n"
+        )
+        sys.exit(1)
+    sys.stdout.write(json.dumps({f: repos[argv[2]].get(f) for f in argv[4].split(",")}) + "\n")
+elif argv[:3] == ["pr", "create", "--draft"]:
+    o = opts(argv[3:])
+    if set(o) != {"--base", "--head", "--title", "--body-file"}:
+        refuse("unsupported flags")
+    if not origin_head(o["--head"]):
+        refuse(f"head branch {o['--head']} is not on origin: push it first")
+    f = o["--body-file"]
+    repo = os.environ.get("GH_REPO") or "local/repo"
+    n = max((cast("int", i["number"]) for i in [*issues, *prs]), default=900) + 1
+    url = f"https://github.com/{repo}/pull/{n}"
+    prs.append(
+        {
+            "number": n,
+            "repo": repo,
+            "title": o["--title"],
+            "body": sys.stdin.read() if f == "-" else Path(f).read_text(),
+            "isDraft": True,
+            "headRefName": o["--head"],
+            "baseRefName": o["--base"],
+            "url": url,
+            "comments": [],
+        }
+    )
+    with STORE.open("w") as out:
+        json.dump(db, out, indent=1)
+    sys.stdout.write(url + "\n")
+elif argv[:2] == ["pr", "view"] and len(argv) == 5 and argv[3] == "--json":
+    p = pull(argv[2])
+    view = {**p, "headRefOid": origin_head(cast("str", p["headRefName"]))}
+    fields = argv[4].split(",")
+    if set(fields) - set(view) or "repo" in fields:
+        refuse("unsupported fields")
+    sys.stdout.write(json.dumps({f: view[f] for f in fields}) + "\n")
+elif argv[:3] == ["api", "-X", "POST"] and argv[4:5] + argv[6:] == ["--input", "--jq", ".html_url"]:
+    m = re.fullmatch(r"repos/\{owner\}/\{repo\}/issues/(\d+)/comments", argv[3])
+    if not m:
+        refuse("unsupported path")
+    p = pull(m.group(1))
+    comments = cast("list[dict[str, object]]", p["comments"])
+    cid = 1001 + sum(len(cast("list[object]", q["comments"])) for q in prs)
+    url = f"{p['url']}#issuecomment-{cid}"
+    body = json.loads(Path(argv[5]).read_text())["body"]
+    comments.append({"author": {"login": "supervisor"}, "body": body, "url": url})
+    with STORE.open("w") as out:
+        json.dump(db, out, indent=1)
+    sys.stdout.write(url + "\n")
 else:
     refuse("unsupported call")

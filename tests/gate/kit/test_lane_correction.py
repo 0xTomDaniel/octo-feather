@@ -14,11 +14,22 @@ from lane_correction import (
     other_lane,
     recurrence,
     reflection_missed,
+    refusal,
+    route_owner,
     routed,
     two_targets,
 )
 
 Case = Callable[..., None]
+
+
+@pytest.mark.criterion("comms#acceptance-reflect-files-route-owner")
+def test_lane_correction_route_owner(case: Case) -> None:
+    case(route_owner)
+
+
+def test_lane_correction_refusal(case: Case) -> None:
+    case(refusal)
 
 
 @pytest.mark.criterion("comms#acceptance-reflect-recurrence-comments")
