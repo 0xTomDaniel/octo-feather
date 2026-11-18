@@ -7,12 +7,22 @@
       `director`), for H hours (default 2). A kind holds at most its count of grants (below); a
       full kind refuses, naming its holder and the revoke. A lane granted again gets a fresh
       expiry. Expired grants are gone.
+  octo-feather-slot queue LANE --kind heavy|eval
+      The director only (else exit 77): lane LANE (checked as `grant` checks it) appended to
+      KIND's queue, once (a lane already queued or holding a KIND grant is told so, nothing
+      changed). Onto a kind with a free slot it is granted at once (the `grant` default hours)
+      and told. Else it waits; the slot passes to it as the queue rule below says.
   octo-feather-slot revoke LANE --kind heavy|eval
       The director only: LANE's grant of KIND, if any, removed. A run holding it keeps its lock
       until it ends.
   octo-feather-slot status
-      Each kind: its count, every grant (holder lane, since, expiry, granted by), and whether a
-      run holds it now (the run's pid, lane, since, items).
+      Each kind: its count, every grant (holder lane, since, expiry, granted by, when its last
+      run ended), whether a run holds it now (the run's pid, lane, since, items), and its queue
+      in order (lane, since, queued by).
+  octo-feather-slot settle --kind heavy|eval [--after S]
+      The one-shot queue check (the queue rule below): after S seconds (default 0), hands over
+      each grant of KIND due to pass, or does nothing, then exits. `hold` starts it, detached,
+      when its run ends; harmless by hand.
   octo-feather-slot hold --kind heavy|eval [--items N]
       Run by the heavy run's own process (the gate's pytest plugin, tests/gate/heavy_slot.py;
       octo-feather-qa for eval; tests/lib/user-mise.sh for `just check-user-mise` in its
@@ -32,7 +42,29 @@ the owner's shell are free, and so are a gate item's processes (the gate clears 
 tests/gate/test_gate.py) and anything in the qc or qa sandbox (scripts/octo-feather-qc-sandbox,
 step 6, unsets them). A run under a process that holds its kind's slot (qc's capture inside a
 granted integrate) is nested: it takes no second slot. Else the run's lane must hold a grant of
-its kind, and one of the kind's locks must be free.
+its kind, and one of the kind's locks must be free. A lane refused for want of a grant is told to
+ask the director for `queue` when every slot of the kind is granted, `grant` when one is free.
+
+The queue (owner ruling 2026-11-14 #906, #976). The director queues lanes for a kind; when a
+holder's run ends (a `hold` of that lane under its grant released its lock) and no run of that
+lane takes the kind's slot again within the grace, the holder's grant passes to the queue's head:
+the holder's grant is removed, the head granted for the `grant` default hours and taken off the
+queue, and through `herdr-say --timeout 60` the head's supervisor (its lane record's `supervisor`)
+and the director (director.toml's `pane`, both in the Herdr session it was queued from) are told:
+  octo-feather-slot: the KIND slot is granted to lane HEAD until EXPIRES (lane HOLDER's run
+  ended, no run within the GRACE s grace); run your KIND run now.
+  octo-feather-slot: KIND slot passed from lane HOLDER to lane HEAD; queue left: LANES|none.
+A lane granted at once by `queue` gets the first line, its reason `queued onto a free slot`.
+A grant hands over only after a run started and ended under it (the grant records when its last
+run ended): a grant never run is never passed. A follow-up run inside the grace keeps the slot:
+while it holds the lock nothing passes, and its own end starts the grace again. The trigger (no
+daemon, no loop): when `hold` releases its lock it records the run's end on the lane's grant and
+starts one detached `settle --kind KIND --after GRACE`, its output to KIND.settle.log, which hands
+over or does nothing, and exits. herdr-say runs without the holder's OCTO_FEATHER_ROLE and
+OCTO_FEATHER_PARENT: the notice is the slot rule's, sent for the director, not the holder agent's
+own message up its chain.
+The grace: slot_grace_seconds in gate-budget.toml (default 60); OCTO_FEATHER_SLOT_GRACE (whole
+seconds) in the env of the `hold` overrides it, for a scratch drive or test that cannot wait.
 
 The caller's lane: the lane record whose `supervisor` is HERDR_PANE_ID, else OCTO_FEATHER_PARENT,
 else the one whose supervisor pane is in the caller's Herdr space (HERDR_WORKSPACE_ID, or
@@ -43,7 +75,9 @@ Files: box-wide, never per Herdr session, in ${XDG_STATE_HOME:-~/.local/state}/o
 KIND.json (the grants), KIND-I.lock (lock I of the kind's count, an flock(2) the holder keeps for
 the run's life, released by the kernel when it exits or crashes) and KIND-I.run.json (the run that
 took it). Prior art: flock(2) through fcntl, as the testkit's prepared scratch locks; a held lock
-is told from a stale run record by trying it (LOCK_NB).
+is told from a stale run record by trying it (LOCK_NB). Beside them the queue's: KIND.queue.json
+(the queue, its head first), KIND.files.lock (an flock every read-modify-write of KIND.json and
+KIND.queue.json holds) and KIND.settle.log (the settle checks' output).
 """
 
 from __future__ import annotations

@@ -11,3 +11,5 @@ test_cpu_seconds = 10
 heavy_items = 30
 heavy_slots = 1
 eval_slots = 1
+# slot_grace_seconds: the slot queue's grace (#976), what it means: octo-feather-slot --help.
+slot_grace_seconds = 60
