@@ -9,7 +9,8 @@
 source "$(dirname "$0")/lib/qa.sh"
 e="$t/fb"; F="$e/fixtures"
 mkdir -p "$e/fb/reference" "$F/root/tools" "$F/root/sub" "$F/mid/sub" "$F/over/sub" "$F/headover"
-# root: a whole tree; mid over root, over over mid (a chain); headover over root. flat: over's tree written out whole.
+# root: a whole tree; mid over root, over over mid (a chain); headover over root. flat: over's tree written out by hand, the
+# oracle, in its own EVALS_DIR fe (why: schema.md, Fixtures, cross-fixture duplicate).
 echo root > "$F/root/README.md"; echo base > "$F/root/sub/keep.txt"; echo old > "$F/root/sub/swap.txt"
 printf '#!/bin/sh\necho run\n' > "$F/root/tools/run.sh"; chmod +x "$F/root/tools/run.sh"; ln -s README.md "$F/root/link"
 mkdir -p "$F/root/.agents/skills/base-only"
@@ -17,11 +18,12 @@ printf -- '---\nname: base-only\ndescription: a base fixture skill\n---\n\nDo it
 echo '{"base": "root"}' > "$F/mid/.eval-fixture.json"; echo mid > "$F/mid/sub/swap.txt"; ln -s sub/keep.txt "$F/mid/link"
 echo '{"base": "mid"}' > "$F/over/.eval-fixture.json"; echo over > "$F/over/sub/new.txt"
 echo '{"base": "root"}' > "$F/headover/.eval-fixture.json"; echo head > "$F/headover/README.md"
-cp -a "$F/root" "$F/flat"; rm "$F/flat/link"; cp -a "$F/mid/sub" "$F/mid/link" "$F/over/sub" "$F/flat/"
-echo '{"suite": "fb", "kind": "role-transcript", "description": "stub based fixtures", "max_tool_calls": 10, "timeout_s": 120}' > "$e/fb/suite.json"
-python3 - "$e/fb" <<'PY'
+fe="$t/fe"; mkdir -p "$fe/fb/reference" "$fe/fixtures"
+cp -a "$F/root" "$fe/fixtures/flat"; rm "$fe/fixtures/flat/link"; cp -a "$F/mid/sub" "$F/mid/link" "$F/over/sub" "$fe/fixtures/flat/"
+echo '{"suite": "fb", "kind": "role-transcript", "description": "stub based fixtures", "max_tool_calls": 10, "timeout_s": 120}' > "$e/fb/suite.json"; cp "$e/fb/suite.json" "$fe/fb/"
+python3 - "$e/fb" "$fe/fb" <<'PY'
 import json, sys
-d = sys.argv[1]
+d, fd = sys.argv[1], sys.argv[2]
 look = "Look. STUB-STEPS:" + json.dumps([["bash", "git ls-tree -r main; echo ===; git ls-tree -r HEAD; ls -a"]])
 cases = [{"id": "main", "role": "implementer", "fixture": "over", "task": look},
          {"id": "head", "role": "implementer", "fixture": "root", "task": look,
@@ -31,21 +33,24 @@ cases = [{"id": "main", "role": "implementer", "fixture": "over", "task": look},
           "task": "Look. STUB-STEPS:" + json.dumps([["bash", "git ls-tree -r main; echo ===; git ls-tree -r HEAD; echo ===; git ls-tree -r bb"]]),
           "head": {"fixture": "headover", "branch": "hb", "message": "head", "then": [{"fixture": "over", "message": "then"}]},
           "branches": [{"fixture": "mid", "branch": "bb", "message": "b"}]}]
-json.dump(cases, open(f"{d}/cases.json", "w"))
-json.dump({c["id"]: {"facts": [{"fact": "skill_not_read", "skill": "pull"}]} for c in cases}, open(f"{d}/reference/expectations.json", "w"))
+for at, cs in ((d, [c for c in cases if c["id"] != "flat"]), (fd, [c for c in cases if c["id"] == "flat"])):
+    json.dump(cs, open(f"{at}/cases.json", "w"))
+    json.dump({c["id"]: {"facts": [{"fact": "skill_not_read", "skill": "pull"}]} for c in cs}, open(f"{at}/reference/expectations.json", "w"))
 PY
 cp -r "$e" "$t/fb-good"
 
 # The case repo: main is over's whole tree, as flat's (git's own modes and blob ids, the oracle); head commits headover.
+run 0 "$Q" --evals "$fe"; grep -qE "^PASS fb/flat: " <<< "$out" || fail "no PASS line for flat: $out"
+df="$(ls -dt "$t"/out/*/ | head -1)"
 run 0 "$Q" --evals "$e"
-for c in main head flat seq; do grep -qE "^PASS fb/$c: " <<< "$out" || fail "no PASS line for $c: $out"; done
+for c in main head seq; do grep -qE "^PASS fb/$c: " <<< "$out" || fail "no PASS line for $c: $out"; done
 d="$(ls -dt "$t"/out/*/ | head -1)"
 tr_() { python3 -c 'import json, sys
 for l in open(sys.argv[1]):
     e = json.loads(l)
     if e.get("type") == "tool_execution_end":
         print(e["result"]["content"][0]["text"])' "$d/fb/$1/transcript.jsonl"; }
-m="$(tr_ main)"; h="$(tr_ head)"; want="$(tr_ flat)"
+m="$(tr_ main)"; h="$(tr_ head)"; want="$(d="$df" tr_ flat)"
 [[ "$(sed '/^===$/q' <<< "$m")" == "$(sed '/^===$/q' <<< "$want")" ]] || fail "main is not over's whole tree: $m  vs flat: $want"
 grep -q "^100755 blob .*	tools/run.sh$" <<< "$m" && grep -q "^120000 blob .*	link$" <<< "$m" || fail "exec bit or symlink lost: $m"
 grep -q "eval-fixture" <<< "$m$h" && fail "the base file reached the case repo: $m $h"
@@ -60,18 +65,19 @@ grep -q "^100644 blob $(git hash-object "$F/mid/sub/swap.txt")	sub/swap.txt$" <<
   && grep -q "^120000 blob $(printf sub/keep.txt | git hash-object --stdin)	link$" <<< "$bb" && ! grep -q "sub/new.txt" <<< "$bb" \
   || fail "branch bb is not mid's tree over root: $s"
 
-# --trees (schema.md, Fixtures): over hashes as flat; the history marker; a line for each head.then and branches tree.
+# --trees (its form: schema.md, Fixtures).
+run 0 "$C" --trees "$fe"; flat="$(grep -E "^fb flat fixture " <<< "$out" | cut -d' ' -f4)"
 run 0 "$C" --trees "$e"
 sha() { grep -E "^fb $1 $2 " <<< "$out" | cut -d' ' -f4; }
-[[ -n "$(sha seq 'head\.then\[0\]')" && "$(sha seq 'head\.then\[0\]')" == "$(sha flat fixture)" ]] || fail "--trees: no head.then[0] line as flat: $out"
+[[ -n "$(sha seq 'head\.then\[0\]')" && "$(sha seq 'head\.then\[0\]')" == "$flat" ]] || fail "--trees: no head.then[0] line as flat: $out"
 [[ -n "$(sha seq 'branches\[0\]')" && "$(sha seq 'branches\[0\]')" != "$(sha seq fixture)" ]] || fail "--trees: no branches[0] line: $out"
-[[ -n "$(sha main fixture)" && "$(sha main fixture)" == "$(sha flat fixture)" ]] || fail "--trees: over not hashed as flat: $out"
+[[ -n "$(sha main fixture)" && "$(sha main fixture)" == "$flat" ]] || fail "--trees: over not hashed as flat: $out"
 [[ -n "$(sha head head)" && "$(sha head head)" != "$(sha head fixture)" ]] || fail "--trees: no head tree line: $out"
-python3 - "$e/fb" <<'PY'
+python3 - "$fe/fb" <<'PY'
 import json, sys
-p = f"{sys.argv[1]}/cases.json"; c = json.load(open(p)); c[2]["fixture"] = {"repo": "kit", "commit": "a" * 40}; json.dump(c, open(p, "w"))
+p = f"{sys.argv[1]}/cases.json"; c = json.load(open(p)); c[0]["fixture"] = {"repo": "kit", "commit": "a" * 40}; json.dump(c, open(p, "w"))
 PY
-run 0 "$C" --trees "$e"; grep -qx "fb flat fixture history kit@$(printf 'a%.0s' {1..40})" <<< "$out" || fail "--trees: history not marked: $out"
+run 0 "$C" --trees "$fe"; grep -qx "fb flat fixture history kit@$(printf 'a%.0s' {1..40})" <<< "$out" || fail "--trees: history not marked: $out"
 rm -rf "$e"; cp -r "$t/fb-good" "$e"
 
 # check-evals reads the materialized tree: a skill, test_write's pyproject and uv.lock only in root, graded on over.
