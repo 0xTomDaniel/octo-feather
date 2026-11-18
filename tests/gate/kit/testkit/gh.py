@@ -12,8 +12,8 @@ unresolved repository; `gh api [--paginate --slurp] PATH`, a
 GET, prints api/PATH.json (one page; slurped, a list of it; {owner}/{repo} in PATH is o/r, as gh
 fills it from this dir's repo), a path not stored is GitHub's 404;
 a stored api/PATH.err (PATH filled the same way) fails any call on PATH (a GET or a write)
-as gh does: its text on stderr, exit 1. `gh api -X POST repos/o/r/issues/N/comments` appends a
-comment, `-X PATCH
+as gh does: its text on stderr, exit 1; a stored pr/N.diff.err so fails `pr diff N`.
+`gh api -X POST repos/o/r/issues/N/comments` appends a comment, `-X PATCH
 repos/o/r/issues/comments/ID` replaces one's body (any PR's); each prints the comment URL
 (`--jq .html_url`). `gh api repos/o/r/commits?...` prints $FAKE_GH/commits.json (the default
 branch's commits), `gh api repos/o/r/contents/F -H Accept: application/vnd.github.raw`
@@ -236,6 +236,8 @@ def repo_view(a: list[str]) -> None:
 
 def diff(a: list[str]) -> None:
     p = STORE / "pr" / f"{a[2]}.diff"
+    if (e := p.with_suffix(".diff.err")).is_file():
+        die(e.read_text().rstrip("\n"))
     if not p.is_file():
         die(f"GraphQL: Could not resolve to a PullRequest with the number of {a[2]}.")
     sys.stdout.write(p.read_text())

@@ -1,0 +1,11 @@
+# The parity lever's case for tests/skills-loaded.sh, fixed in place onto the testkit provider and the real herdr-say over the testkit's Herdr (#973; tests/parity/lever.py --help).
+old = "tests/skills-loaded.sh"
+old_at = "53dacfca"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none.
+needs = []
+# The same script, as its gate item: `just test` collects no .sh path.
+new = "tests/gate/test_gate.py::test_script[tests/skills-loaded.sh]"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): open: Pi loads the extension (the old test's copy of extensions/), a module no process runs as a program.
+[ran]
+"extensions/skills-loaded.ts" = "open extensions/skills-loaded.ts"

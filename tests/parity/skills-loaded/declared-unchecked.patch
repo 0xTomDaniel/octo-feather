@@ -1,0 +1,13 @@
+Seeded defect: a skill the target declares on its Repo skills: line is never checked: a broken one no longer refuses the launch (skills#acceptance-launch-refuses-unloaded).
+diff --git a/extensions/skills-loaded.ts b/extensions/skills-loaded.ts
+index f1c7b8d..f14cbd6 100644
+--- a/extensions/skills-loaded.ts
++++ b/extensions/skills-loaded.ts
+@@ -77,7 +77,6 @@ export default function (pi: Pi) {
+       }
+     };
+     for (const dir of req.listed ?? []) check(dir, session.has(real(dir)));
+-    for (const dir of req.declared ?? []) check(dir, byLoader.has(real(dir)));
+     if (req.report) writeFileSync(req.report, JSON.stringify(problems));
+     if (!problems.length) return;
+     const lines = problems.map((p) => p.loaded ? `octo-feather: skill ${p.skill} (${p.path}): ${p.reason}`
