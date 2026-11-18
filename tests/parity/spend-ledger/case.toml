@@ -1,0 +1,15 @@
+# The parity lever's case for tests/spend-ledger.sh, fixed in place onto the testkit provider (#975; tests/parity/lever.py --help).
+old = "tests/spend-ledger.sh"
+old_at = "7efa40cb"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
+needs = [
+    "tests/lib/spend-ledger.sh",
+    "tests/fixtures/spend-ledger/nested-tool.ts",
+    "tests/spend-out",
+]
+# The same script, as its gate item: `just test` collects no .sh path.
+new = "tests/gate/test_gate.py::test_script[tests/spend-ledger.sh]"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): open: Pi loads the extension, a module no process runs as a program.
+[ran]
+"extensions/spend-ledger.ts" = "open extensions/spend-ledger.ts"
