@@ -44,6 +44,8 @@ Rationale:
 
 Validation:
 - <command or "not run (reason)">
+
+<Owner: lines, or Owners: none (form and when: the code-review skill, Verdict step)>
 ```
 
 Add no co-author trailer unless the owner requests one.
