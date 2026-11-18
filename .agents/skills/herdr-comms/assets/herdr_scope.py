@@ -210,15 +210,17 @@ def process_info(pane: str) -> ProcessInfo:
     for i, v in enumerate(cast("list[object]", fg)):
         at = f"{where}: result.process_info.foreground_processes[{i}]"
         p = record(v, at, FG_FIELDS, FG_REQUIRED)
-        argv = p.get("argv") or []
-        if not isinstance(argv, list) or not all(isinstance(x, str) for x in argv):  # pyright: ignore[reportUnknownVariableType]
+        raw: object = p.get("argv") or []
+        items = cast("list[object]", raw) if isinstance(raw, list) else None
+        if items is None or not all(isinstance(x, str) for x in items):
             msg = f"{at}.argv: not a list of strings"
             raise BadAnswerError(msg)
+        argv = cast("list[str]", items)
         cwd = p.get("cwd") or ""
         if not isinstance(cwd, str):
             msg = f"{at}.cwd: not a string"
             raise BadAnswerError(msg)
-        procs.append(Process(pid_of(p["pid"], f"{at}.pid"), tuple(cast("list[str]", argv)), cwd))
+        procs.append(Process(pid_of(p["pid"], f"{at}.pid"), tuple(argv), cwd))
     return ProcessInfo(pid, tuple(procs))
 
 
