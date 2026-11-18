@@ -6,7 +6,17 @@ The one owner of every eval and bench schema and policy: `scripts/check-evals` r
 
 ## Layout
 
-EVALS_DIR (default: the kit's `evals/`) holds one dir per suite, `fixtures/` (one dir per fixture, copied and git-initialized per run), and, when needed, `judgment-model.json` and `classifiers.json` (Judgment model and classifiers). A suite dir holds `suite.json`, `cases.json` and `reference/expectations.json` (never shown to the agent); a judgment suite also `question.json`. Each one missing or not JSON is refused.
+EVALS_DIR (default: the kit's `evals/`) holds one dir per suite, `fixtures/` (one dir per fixture, its tree materialized (Fixtures), copied and git-initialized per run), and, when needed, `judgment-model.json` and `classifiers.json` (Judgment model and classifiers). A suite dir holds `suite.json`, `cases.json` and `reference/expectations.json` (never shown to the agent); a judgment suite also `question.json`. Each one missing or not JSON is refused.
+
+## Fixtures
+
+A fixture dir `EVALS_DIR/fixtures/<name>` is a whole tree, or names a base fixture and holds only what differs from it (its overlay). Every reader of a fixture's files reads its materialized tree, built by one function (`fixture_tree` in `scripts/check-evals`; `octo-feather-qa` loads it): the case repo's main and `head` trees, and every `check-evals` check on a fixture's files (Facts' skill lookup, Before targets' `test_write`, Coverage's `.octo-feather.toml`).
+
+- The base: a file `.eval-fixture.json` at the fixture dir's top, exactly `{"base": B}`, B a fixture name (as Case's `fixture`) other than its own. The fixture is named by its dir, never per case. Without the file the dir is the whole tree.
+- Materialized tree: B's materialized tree, then the overlay laid over it: each overlay path replaces B's at that path (a file, its bytes and exec bit; a symlink, its target), a dir merges into B's dir. There is no removal: a family whose members lack each other's files bases on the member with fewest (measured on quote-app, evidence/gh986-fixture-trees.md). `.eval-fixture.json` is never part of the tree.
+- Chains: B may name its own base, to any depth. A base that is no fixture dir, a cycle, or a malformed `.eval-fixture.json` is refused naming the fixture whose file it is (`fixtures/<name>/.eval-fixture.json: field base: ...`), by `check-evals` for every fixture dir and by `octo-feather-qa` for the case it fails.
+- A fixture's `uv.lock` comes from its tree: an overlay without one gets its base's (CI syncs each dir's own `uv.lock`, so a based fixture's lock is its base's).
+- `check-evals --trees [EVALS_DIR]` prints the materialized trees, one line per case and tree: `<suite> <case id> fixture|head <sha256>`, the sha256 over each path of the tree in byte order: the path, then `x` (an executable file), `f` (another file) or `l` (a symlink), then its bytes (a symlink: its target), each length-prefixed. A history fixture prints `history <repo>@<commit>` in the hash's place, not exported. A collapse onto a base is proved by the list before and after diffing empty.
 
 ## Suite
 
@@ -28,7 +38,7 @@ A skill-trigger or role-transcript case, an object:
 
 - `id`: matches `[a-z0-9][a-z0-9-]*`, unique in the suite, and has an expectations entry; an expectations id with no case is refused too.
 - `role`: a string matching `[a-z0-9-]+` with a kit `agents/<role>.md`.
-- `fixture`: a string matching `[A-Za-z0-9._-]+` with a dir `EVALS_DIR/fixtures/<fixture>`; or a history fixture, a real repository at the commit an incident happened on: `{"repo", "commit"}`, exactly those keys, `repo` `kit` (the kit's own repository) or the name of a local git clone at `~/src/<repo>`, `commit` a full 40 character sha that repository holds (checked where it is a git checkout of its own; a copy of the kit's files without its `.git` has no history to check it against). Its whole tree at that commit, exported by `git archive` before the sandbox starts, is the case repo's main, as a fixture dir's is.
+- `fixture`: a string matching `[A-Za-z0-9._-]+` with a dir `EVALS_DIR/fixtures/<fixture>`, its tree materialized (Fixtures); or a history fixture, a real repository at the commit an incident happened on: `{"repo", "commit"}`, exactly those keys, `repo` `kit` (the kit's own repository) or the name of a local git clone at `~/src/<repo>`, `commit` a full 40 character sha that repository holds (checked where it is a git checkout of its own; a copy of the kit's files without its `.git` has no history to check it against). Its whole tree at that commit, exported by `git archive` before the sandbox starts, is the case repo's main, as a fixture dir's is.
 - `task`: a non-blank string, what the agent sees; `{repo}` and `{head}` in it become the copy's path and HEAD sha. It must not leak its grade (Leaks).
 - skill-trigger only: `should_trigger` (true or false) and `split` (`train` or `held-out`). A true case needs a `skill_read` or `skill_read_before` fact, a false one a `skill_not_read` fact.
 - role-transcript only, optional, the repo setup:
