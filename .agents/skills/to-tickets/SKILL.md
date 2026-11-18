@@ -65,8 +65,6 @@ Publish the approved tickets. **How** depends on the tracker; the tickets are th
 
 After publishing sub-issues of a parent, run `octo-feather-lane tickets <parent key>`; it must exit 0.
 
-**A seam set later.** When a QC or review result needs a test at a seam the ticket's `Seam:` lines lack, before any brief names it: post `Seam: <spec slug>#<anchor>: `<seam>`` on the ticket with the tracker skill's `issue-comment`, then run `octo-feather-lane seam <ticket> <spec slug>#<anchor> <seam>`; brief the seam only once it exits 0. Failure example: lane gh840's QC-rework brief set the `herdr-spawn` CLI seam for #876 at 03:22Z, the test followed at 03:24Z, and the seam reached the ticket only after the final review blocked it (#987).
-
 Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
 
 Do NOT close or modify any parent issue.
@@ -106,7 +104,7 @@ For one step of a wide refactor, replace the demo item with the line `Expand-con
 
 ## Seams
 
-Seam: <spec slug>#<anchor>: `<seam>` one line per seam a criterion's tests go at, set before any test (form and check: `octo-feather-lane --help`, seam); a seam set later: step 5, A seam set later
+Seam: <spec slug>#<anchor>: `<seam>` one line per seam a criterion's tests go at, set before any test (form and check: `octo-feather-lane --help`, seam); a seam set later: agents/supervisor.md, Briefs
 
 ## Blocked by
 

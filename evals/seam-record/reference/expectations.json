@@ -15,10 +15,6 @@
   "supervisor-brief-new-seam": {
     "facts": [
       {
-        "fact": "skill_read",
-        "skill": "to-tickets"
-      },
-      {
         "fact": "ran",
         "program": "octo-feather-lane",
         "args": [
