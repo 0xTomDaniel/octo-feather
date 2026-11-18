@@ -49,7 +49,7 @@ The reproof: `scripts/octo-feather-qa --suite supervisor-delegation --runs 3 --b
 
 Stated limits:
 
-- The `ran herdr-say --parent` fact of implementer-repairs-qc-failure and owner-need-reaches-director names no exit, so a refused call (exit 64) alone would satisfy it. No run here relied on that; every matching run above exited 0. Grading changes are outside this rework's scope (the stand-ins only).
+- Since the commit after 96d8b37e, the `ran herdr-say --parent` facts of implementer-repairs-qc-failure and owner-need-reaches-director require `exit: 0`, so a refused call (exit 64) no longer satisfies them. c47635's records already satisfy the stricter facts (every recorded herdr-say exited 0), so there was no rerun.
 - Gaps in the `herdr` stand-in, not `herdr-say`, are unchanged: `herdr agent get w2:p7` and `herdr workspace list` have no answer in qc-failure-brief-review. The History's runs had `herdr workspace list` and `herdr --help`.
 
 <details><summary>qa summary, run 20261118T031350Z-c47635 (whole but the per-run `qc sandbox:` lines)</summary>
