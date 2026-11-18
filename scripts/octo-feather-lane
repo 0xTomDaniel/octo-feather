@@ -52,10 +52,9 @@ refuses reflection/archive, never completion. --due's existing not-due cases sti
 
 After its reflection, `reflect NAME`, `reflect --director` (when it ran) and `archive` (after both, before any file
 moves) file the correction lanes due (spec comms #reflection-correction; the rule: issue-lifecycle #lanes-correction)
-through the tracker skill's `issue-create`, each in the tracker of the repository owning its route (which, and what
-it quotes: spec comms #reflection-correction): the kit's (github-issues), or a lane's target's for its `target:` route
-(the current directory's tracker skill, the lane record's `repository`), refused naming the record when that has no
-repository or gh shows it renamed or created after the record's `started_at`; each issue's title carries the marker of
+through the tracker skill's `issue-create`, each in the tracker spec comms #reflection-correction names (a target's
+through the current directory's tracker skill, GH_REPO its lane record's `repository`, refused naming the record that
+spec section says is unfit); each issue's title carries the marker of
 scripts/octo-feather-reflect `MARK`, by which `gh issue list` finds the ones already filed. Prints
 `correction lane: filed <key> in <tracker> for <class> (...)` or `correction lane: commented <url> on <key> ...` and
 the comment per write (which write: spec comms #reflection-correction), else `correction lanes: none filed or commented`;
@@ -695,9 +694,9 @@ GITHUB_ISSUES = "github-issues"   # the kit's own tracker skill, and the one tra
 def file_corrections(lanes: Path) -> list[str]:
     """Spec comms #reflection-correction, through the tracker skill's issue-create or issue-comment, for every correction
     lane due (scripts/octo-feather-reflect `corrections`, `owned`, `merge`, `still_due`, `recurrence`), whichever
-    reflection ran, in the tracker of the repository owning its route: the kit's (github-issues), or a lane's target's
-    (the current directory's tracker skill, GH_REPO the lane record's repository) for its `target:` route, each such
-    record checked first (target_repo). Prints each key or comment; Refuse when the tracker cannot be read or written."""
+    reflection ran, in each tracker `owned` names: the kit's through github-issues, a target's through the current
+    directory's tracker skill with GH_REPO, each target record checked first (target_repo). Prints each key or comment;
+    Refuse when the tracker cannot be read or written."""
     r = reflect_module()
     dlog = lanes.parent / DIRECTOR_LOG
     try:
@@ -764,30 +763,50 @@ def lane_record(lanes: Path, lane: str) -> tuple[Path, dict[str, object]] | None
         raise Refuse(f"correction lanes: cannot read lane record {rec} ({e}): fix it, then rerun") from e
 
 
+@dataclasses.dataclass(frozen=True)
+class RepoView:
+    """`gh repo view R --json nameWithOwner,createdAt`, validated once at this edge (repo_view)."""
+    name: str                  # nameWithOwner: the repository's current name
+    created: dtm.datetime      # createdAt, UTC
+
+
+def repo_view(repo: str, fix: str) -> RepoView:
+    """REPO's RepoView. A hand-written check, not a schema library: kit scripts stay standard-library-only (quality spec
+    #edge-validation-kit). Exactly the two fields asked, each typed; Refuse naming the field it rejects."""
+    out = gh(["repo", "view", repo, "--json", "nameWithOwner,createdAt"], fix)
+    try:
+        got: object = json.loads(out)
+    except ValueError as e:
+        raise Refuse(f"gh repo view {repo} printed no JSON ({e}): check the gh on PATH, then rerun") from e
+    d = cast("dict[str, object]", got) if isinstance(got, dict) else None
+    bad = ("not an object" if d is None
+           else f"fields {sorted(d)}, want exactly createdAt, nameWithOwner" if set(d) != {"nameWithOwner", "createdAt"}
+           else "nameWithOwner is not a non-empty string" if not isinstance(d["nameWithOwner"], str) or not d["nameWithOwner"]
+           else f"createdAt {d['createdAt']!r} is not a UTC time" if utc(d["createdAt"]) is None else None)
+    if d is None or bad:
+        raise Refuse(f"gh repo view {repo} printed {bad}: check `gh repo view {repo} --json nameWithOwner,createdAt`,"
+                     " update gh, then rerun")
+    return RepoView(str(d["nameWithOwner"]), cast("dtm.datetime", utc(d["createdAt"])))   # utc names its return type as a string
+
+
 def target_repo(rec: tuple[Path, dict[str, object]] | None, lane: str, cls: str) -> None:
-    """Refuse, naming the record to fix, a `target:` route of lane LANE (class CLS) whose record REC names no repository,
-    or one gh names otherwise now (renamed) or created after the record's started_at (re-created): spec comms
-    #reflection-correction."""
+    """Refuse a `target:` route of lane LANE (class CLS) whose record REC is not fit to file in (which:
+    spec comms #reflection-correction), naming the record to fix."""
     path = rec[0] if rec else f"{lane}.toml (no lane record)"
     repo, started = (rec[1].get("repository"), rec[1].get("started_at")) if rec else (None, None)
     why = f"correction lanes: lane {lane}'s reflection routed class {cls} to its own repository (`target:`), but its record {path}"
     fix = "; nothing filed: fix the record, then rerun"
     if not isinstance(repo, str) or not repo:
         raise Refuse(f"{why} names no repository{fix}")
-    out = gh(["repo", "view", repo, "--json", "nameWithOwner,createdAt"], f"check the repository of {path}, then rerun")
-    try:
-        got = json.loads(out)
-        now, made = got["nameWithOwner"], got["createdAt"]
-    except (ValueError, KeyError, TypeError) as e:
-        raise Refuse(f"gh repo view {repo} printed no nameWithOwner and createdAt ({e}): check the gh on PATH") from e
-    if not isinstance(now, str) or now.lower() != repo.lower():
-        raise Refuse(f"{why} names repository {repo}, which is now {now}{fix}")
+    view = repo_view(repo, f"check the repository of {path}, then rerun")
+    if view.name.lower() != repo.lower():
+        raise Refuse(f"{why} names repository {repo}, which is now {view.name}{fix}")
     began = cast("dtm.datetime | None", utc(started))   # utc names its return type as a string
     if began is None:
         raise Refuse(f"{why} has no started_at, so {repo} may have been re-created since{fix}")
-    born = cast("dtm.datetime | None", utc(made))
-    if born is None or born > began:
-        raise Refuse(f"{why} names repository {repo}, created {made}, after the lane started ({started}){fix}")
+    if view.created > began:
+        raise Refuse(f"{why} names repository {repo}, created {view.created:%Y-%m-%dT%H:%M:%SZ}, after the lane started"
+                     f" ({started}){fix}")
 
 
 def correction_issues(repo: str | None, full: bool = False) -> list[dict[str, object]]:
