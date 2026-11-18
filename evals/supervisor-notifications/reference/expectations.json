@@ -1,0 +1,57 @@
+{
+  "routine-results-no-director": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 0
+      }
+    ]
+  },
+  "merge-ready-only-merge-ask": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 1
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent",
+          "## Merge ask\n\nPR #12 (app hello --shout), head {head}, pinned for the merge.\n- Criteria built: acceptance-shout, acceptance-shout-json (docs/specs/hello.status.json)\n- just qc on {head}: pass (evidence/2026-11-13-gh12-qc.md)\n- Code review on {head}: pass (PR #12 comment)\n- CI on {head}: green\n- Spec calls: none"
+        ]
+      }
+    ]
+  },
+  "owner-blocker-reaches-director": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ]
+      }
+    ]
+  },
+  "gh785-ended-worker-replay": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 0
+      }
+    ]
+  }
+}
