@@ -1,0 +1,71 @@
+#!/usr/bin/env python3
+"""octo-feather-queued PANE TARGET SECONDS EXIT MESSAGE: herdr-say's queued-during-compaction
+step, run only by herdr-say.
+
+herdr-say runs it when Herdr left a send to PANE (TARGET as the caller named it) unconfirmed:
+stalled or timed out, EXIT the code herdr-say would exit with (1 or 124). It reads PANE natively
+(`herdr agent read PANE --source visible`). When the pane shows Pi compacting (`Auto-compacting...`,
+`Compacting context...`) and MESSAGE queued (Pi's `Steering: TEXT` or `Follow-up: TEXT` line,
+matched on the first 24 characters of MESSAGE's first line), the message is queued, not consumed,
+and never resent (comms spec #delivery-recovery): it reads the pane once a second for at most
+SECONDS more, and exits 0 once Pi took it (the queued line gone), else EXIT, saying it is queued,
+not resent. A pane that does not show it queued during compaction: exit 3, nothing said, and
+herdr-say goes on with its own report.
+
+Its own script, not part of octo-feather-parent-gone: that one alerts the director about a gone
+parent; this one only observes a live target's pane. Stdlib only (kit script, AGENTS.md).
+"""
+
+import re
+import subprocess
+import sys
+import time
+
+NOT_QUEUED = 3
+ARGC = 6  # the command, PANE, TARGET, SECONDS, EXIT, MESSAGE
+HEAD = 24  # Pi truncates a queued line to the pane's width: match the message's start only
+COMPACTING = re.compile(r"compacting\.\.\.", re.IGNORECASE)
+
+
+def say(line: str) -> None:
+    sys.stderr.write(f"herdr-say: {line}\n")
+
+
+def pane(target: str) -> str | None:
+    """What TARGET's pane shows now, None when Herdr cannot read it."""
+    read = ["herdr", "agent", "read", target, "--source", "visible"]
+    p = subprocess.run(read, capture_output=True, text=True, check=False)
+    return p.stdout if p.returncode == 0 else None
+
+
+def queued(shown: str | None, head: str) -> bool:
+    """SHOWN holds the message queued; an unread pane proves nothing taken, so counts as queued."""
+    return shown is None or any(x in shown for x in (f"Steering: {head}", f"Follow-up: {head}"))
+
+
+def main() -> int:
+    if len(sys.argv) != ARGC or not sys.argv[3].lstrip("-").isdigit() or not sys.argv[4].isdigit():
+        sys.stderr.write("usage: octo-feather-queued PANE TARGET SECONDS EXIT MESSAGE\n")
+        return 64
+    at, target, message = sys.argv[1], sys.argv[2], sys.argv[5]
+    seconds, code = int(sys.argv[3]), int(sys.argv[4])
+    head = message.split("\n", 1)[0][:HEAD]
+    shown = pane(at)
+    if shown is None or not (COMPACTING.search(shown) and queued(shown, head)):
+        return NOT_QUEUED
+    end = time.monotonic() + max(seconds, 0)
+    while queued(shown, head) and time.monotonic() < end:
+        time.sleep(1)
+        shown = pane(at)
+    if not queued(shown, head):
+        say(f"{target} took the message queued during its compaction; delivered once, not resent")
+        return 0
+    say(
+        f"{target} still holds the message queued (compacting) at the bound: queued, not consumed; "
+        "not resent, do not resend (comms spec #delivery-recovery)"
+    )
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main())
