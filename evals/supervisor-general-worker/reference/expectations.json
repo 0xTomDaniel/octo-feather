@@ -48,6 +48,38 @@
       }
     ]
   },
+  "reviewed-implementer-result-integrated": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "octo-feather-integrate",
+        "args": [
+          "12",
+          "implementer-gh16"
+        ],
+        "exit": 0
+      },
+      {
+        "fact": "ran",
+        "program": "octo-feather-integrate",
+        "args": [
+          "12",
+          "general-worker-gh16"
+        ],
+        "count": 0
+      },
+      {
+        "fact": "branch_paths",
+        "touched": [
+          "src/app/cli.py",
+          "tests/test_cli.py"
+        ],
+        "untouched": [
+          "tests/test_shout_plain.py"
+        ]
+      }
+    ]
+  },
   "cleanup-result-consumed": {
     "facts": [
       {
