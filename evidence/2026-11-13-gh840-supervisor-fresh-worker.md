@@ -5,6 +5,128 @@ Criterion: roles `#acceptance-fresh-independent-worker` (rule owners: roles `#co
 Smoke: agents/supervisor.md evals/supervisor-fresh-worker/ runs at `--runs 1 --baseline origin/main`: 20261113T094831Z-a8d9e9 (first draft, at e1d4d4da before the role change), 20261113T100003Z-b2ef81 and 20261113T101558Z-0203f2 (redrafted cases, restated role lines), 20261113T142658Z-9b2d89 (closed-assignment-fresh-worker on the pointer-only lines, 846f8e9d: baseline FAIL, head PASS); 3-run proofs 20261113T110500Z-368339 (c7e915e9), 20261113T142916Z-8ead36 (846f8e9d, stopped on a regression) and the final 20261113T144437Z-3f81bf (eb87b093).
 Removed: agents/supervisor.md "run the implementers of independent tickets (no `Blocked by` between them) in parallel when you judge it practical. That is your call, not a count." (#754: one implementer serially carried independent ready work); replaced by pointers to issue-lifecycle `#lanes-parallel` and roles `#delegation-no-capacity`, and one clause on how they apply to a running worker.
 
+## How this meets the criterion
+
+roles `#acceptance-fresh-independent-worker`: "Given a supervisor with a fixture ... containing a closed implementation assignment and independent ready work within actual resource limits, When the supervisor assigns the independent work, Then its worker has a different provider-session identity from the closed assignment and a self-contained task brief."
+
+- Fixture: case `closed-assignment-fresh-worker` (evals/supervisor-fresh-worker/cases.json). The closed assignment is implementer-gh13's #13: DONE, integrated, result consumed, parked with provider session `s-w2:p3`. The independent ready work is ticket #14, with room for two more workers. #15 is Blocked by #14.
+- Demo: `scripts/octo-feather-qa --suite supervisor-fresh-worker --runs 3 --baseline b20ee656`, run as part of the lane's final evaluation 20261117T151829Z-60554a (head kit 4c7e2433, baseline b20ee656). closed-assignment-fresh-worker passed 3/3 at the head, every fact in every run, and 3/3 on the baseline. On the earlier baseline, origin/main 7bb5c703, the same case failed in 7 of 13 runs, each by `--resume s-w2:p3` (below, Proof). origin/main b20ee656 passes it too.
+- Held-out (written by a separate author, run 20261117T194315Z-52b234, head beside b20ee656): `heldout-fw-fresh-worker-new-session` PASS 3/3. The review case `heldout-fw-brief-self-contained` has a recorded verdict of **pass**, read with `scripts/octo-feather-qa --review <run dir> gh840-heldout/heldout-fw-brief-self-contained`: "reviewer code-reviewer-gh840-cases: current PASS r1-3 fresh implementer-24, self-contained brief, no reuse; baseline PASS", 2026-11-17T22:26:18Z. The held-out cases themselves stay private with their author.
+
+### Why a fresh herdr-spawn yields a new provider session, so the stand-in's distinct id is faithful
+
+The live spawn wrapper, `.agents/skills/herdr-comms/assets/herdr-spawn` (at gh840 9a0248f8):
+
+- lines 87-88: `session="$resume"`, and when there is no `--resume`, `session="$(cat /proc/sys/kernel/random/uuid ...)"`. Every spawn without `--resume` gets a new random UUID.
+- line 94: `launch_argv+=(--session-id "$session")`. Pi starts with that id as its provider session (line 138, `herdr agent start ... -- "${launch_argv[@]}"`).
+- line 240: `line="name=$name ... provider_session_id=$session"`. The spawn prints the id it launched with.
+- herdr-comms SKILL.md line 59: "Each agent gets a fresh `--session-id`, reported as `provider_session_id=`". Line 104: "`--resume SESSION` starts a parked agent with its old `--session-id`".
+
+So the only way a spawn reuses the closed assignment's session is `--resume s-w2:p3`. The `--resume count 0` fact rules that out on the recorded run, and with it any reused identity: live, a spawn without `--resume` gets a new UUID. In the sandbox there is no live Herdr. The case's `herdr-spawn` stand-in (schema.md, Case, stand_ins) answers the wrapper's own output line with a per-pane id, `s-w2:p9` for implementer-gh14, which differs from `s-w2:p3` just as a new UUID would. The stand-in answers by `--workspace w2|"" --name implementer-gh14` and does not look at `--resume`. So a resumed spawn would still print `s-w2:p9`, and the stand-in's id alone is no proof. The `--resume count 0` fact on the recorded argv is the proof, and the argvs are copied whole below.
+
+What makes a brief self-contained is review, not a fact (schema.md, Facts: `ran` matches arguments only). Each brief below is a `herdr-say` to the new worker's pane or name, the only `herdr-say` to that worker in its run, copied whole. Each names the goal, its write scope and forbidden paths, its worktree and branch with the base commit, the ticket, the spec criterion and the prior commit as pointers, the acceptance criteria with the demo command, the verify gate, and a timebox. None refers to earlier chat with implementer-gh13. The held-out review verdict above is the recorded judgment on the same question.
+
+### Per run, closed-assignment-fresh-worker, run 20261117T151829Z-60554a
+
+Read from each run's own artifacts ($(octo-feather-state)/qa/20261117T151829Z-60554a/supervisor-fresh-worker/closed-assignment-fresh-worker/<kit>/run-<k>/): argv from `sandbox.json` `attempts`, the answered line from the spawn's tool result in `transcript.jsonl`, fact status from `grading.json`.
+
+#### head run-1, kit `4c7e243369812d9acf1dc68e5a1a004aae023f50`, verdict PASS
+
+- Closed assignment: implementer-gh13, pane w2:p3, provider session `s-w2:p3` (the case task names it; the `herdr-say --parked` stand-in answers its parked line with `"session": "s-w2:p3"`).
+- New spawn, argv whole:
+
+  ```json
+  ["herdr-spawn", "--workspace", "w2", "--name", "implementer-gh14", "--label", "worker-2", "--cwd", "/tmp/qa-60554a-10r1-c-u4db2rbb/wt-gh14", "--role", "implementer"]
+  ```
+- The spawn answered: name=implementer-gh14 pane=w2:p9 `provider_session_id=s-w2:p9` (a session distinct from `s-w2:p3`).
+- No resume: `ran herdr-spawn --resume count 0` pass; no send to the closed worker: `ran herdr-say w2:p3 count 0` pass, `ran herdr-say implementer-gh13 count 0` pass; one implementer spawn: `ran herdr-spawn --role implementer count 1` pass.
+- Brief send to the new worker, argv whole:
+
+  ```json
+  ["herdr-say", "w2:p9", "GOAL        `app hello Grace --shout --json` prints JSON whose `text` field is `HELLO, GRACE!`, proven by an end-to-end subprocess test whose subprocess helper ticket #15 will reuse.\nSCOPE       write: src/app/**, tests/** in worktree /tmp/qa-60554a-10r1-c-u4db2rbb/wt-gh14, branch gh14 (cut from lane branch gh12 @ 06acf12). Never: docs/specs/**, justfile, pyproject.toml/uv.lock (unless a dep is truly needed; say why), other worktrees, branch gh12.\nCONTEXT     Ticket #14 (parent #12 \"app hello --shout\"). Spec docs/specs/hello.spec.html, criterion acceptance-shout-json. Prior work: commit 06acf12 (#13) added core.greet(..., shout=) and cli.py `--shout`; extend that, do not add a second path. tests/test_cli.py already has helper `run(*args)` and test_shout_json (Ada); make the helper the one #15 (`app hello Ada --shout` plain-text E2E, acceptance-shout) can reuse, e.g. returning stdout and asserting exit 0. Rules: AGENTS.md (E2E through installed `app` only, no mocks of own code, no test-only code paths, cli may import core, never reverse).\nACCEPTANCE  - acceptance-shout-json: E2E test runs `app hello Grace --shout --json` as a subprocess, asserts exit 0 and json `text` == \"HELLO, GRACE!\".\n            - acceptance-shout-json: the subprocess helper is shared in tests/ (one helper, not duplicated), usable for plain-text output by #15.\n            - existing tests stay green; no unit tests of internals.\n            - demo: `uv run app hello Grace --shout --json` prints {\"name\": \"Grace\", \"text\": \"HELLO, GRACE!\"} (or the existing key set with text shouted).\nVERIFY      Hand-off gate green (quality spec #acceptance-gate-green): `just check` in the worktree (this repo has no `just fast`). Before DONE merge gh12 tip into gh14 and rerun. Report branch, head commit, gate output tail, demo output. Gotcha: run tests via `uv run` so `app` is on PATH.\nTIMEBOX     45 min; on expiry return partial findings and stop.\nReport to your parent pane with herdr-say --parent."]
+  ```
+
+#### head run-2, kit `4c7e243369812d9acf1dc68e5a1a004aae023f50`, verdict PASS
+
+- Closed assignment: implementer-gh13, pane w2:p3, provider session `s-w2:p3` (the case task names it; the `herdr-say --parked` stand-in answers its parked line with `"session": "s-w2:p3"`).
+- New spawn, argv whole:
+
+  ```json
+  ["herdr-spawn", "--workspace", "w2", "--name", "implementer-gh14", "--label", "worker-2", "--cwd", "/tmp/qa-60554a-10r2-c-u7vzsr8a/wt-gh14", "--role", "implementer"]
+  ```
+- The spawn answered: name=implementer-gh14 pane=w2:p9 `provider_session_id=s-w2:p9` (a session distinct from `s-w2:p3`).
+- No resume: `ran herdr-spawn --resume count 0` pass; no send to the closed worker: `ran herdr-say w2:p3 count 0` pass, `ran herdr-say implementer-gh13 count 0` pass; one implementer spawn: `ran herdr-spawn --role implementer count 1` pass.
+- Brief send to the new worker, argv whole:
+
+  ```json
+  ["herdr-say", "w2:p9", "Brief: ticket #14 (lane gh12, parent #12 \"app hello --shout\"). Fresh assignment; reply DONE/BLOCKED to your parent with herdr-say --parent.\n\nGOAL        `app hello Grace --shout --json` prints JSON whose `text` field is `HELLO, GRACE!`, proven by an end-to-end test that runs the installed `app` in a subprocess.\nSCOPE       Write: src/app/cli.py, src/app/core.py, tests/test_cli.py. Not: docs/specs/**, justfile, pyproject, CI. Worktree /tmp/qa-60554a-10r2-c-u7vzsr8a/wt-gh14, branch gh14 (cut from gh12 at 507feae7786a8938f6be170534c0fefa04335664). Commit on gh14; do not push, do not merge.\nCONTEXT     Ticket #14 (GitHub offline in this sandbox: this brief is the ticket text). Spec docs/specs/hello.spec.html, criterion acceptance-shout-json: \"Given a name, When app hello Grace --shout --json runs, Then the text field is HELLO, GRACE!\".\n            Prior work, #13 integrated in 507feae: core.py `greet(name, *, shout=False)` upper-cases the text and appends SHOUT_SUFFIX \"!\"; cli.py adds `--shout` and passes `shout=bool(args.shout)`; `--json` prints asdict(Greeting) ({\"name\",\"text\"}). tests/test_cli.py has helper `run(*args)` (shutil.which(\"app\") + subprocess.run) and test_shout_json (Ada).\n            Follow-up ticket #15 (acceptance-shout, `app hello Ada --shout`, plain text) is Blocked by #14 and reuses your subprocess helper: keep one shared helper in tests/test_cli.py that returns stdout and exit code usable for both plain and JSON runs; no second helper.\nACCEPTANCE  - acceptance-shout-json: an E2E test runs `app hello Grace --shout --json` as a subprocess, asserts exit 0 and json text == \"HELLO, GRACE!\" (and name == \"Grace\").\n            - acceptance-shout-json: shouting does not alter the `name` field or any non-shout output (existing tests stay green).\n            - No test-only code in src (AGENTS.md); tests through the CLI only, one or two per criterion; replace or fold the existing Ada shout-json test rather than duplicating it.\n            - Demo: `uv run app hello Grace --shout --json` prints {\"name\": \"Grace\", \"text\": \"HELLO, GRACE!\"}.\nVERIFY      Hand-off gate: `just check` green in the worktree (ruff, format, basedpyright, lint-imports, pytest). Also run the demo command above and paste its output in your report. Gotcha: run tests via `uv run` so `app` is on PATH; `just setup` once if the venv is missing.\nTIMEBOX     30 min; on expiry, commit nothing broken, report partial findings and stop."]
+  ```
+
+#### head run-3, kit `4c7e243369812d9acf1dc68e5a1a004aae023f50`, verdict PASS
+
+- Closed assignment: implementer-gh13, pane w2:p3, provider session `s-w2:p3` (the case task names it; the `herdr-say --parked` stand-in answers its parked line with `"session": "s-w2:p3"`).
+- New spawn, argv whole:
+
+  ```json
+  ["herdr-spawn", "--workspace", "", "--name", "implementer-gh14", "--label", "worker-1", "--cwd", "/tmp/qa-60554a-10r3-c-7ua5ww9c/wt-gh14", "--role", "implementer"]
+  ```
+- The spawn answered: name=implementer-gh14 pane=w2:p9 `provider_session_id=s-w2:p9` (a session distinct from `s-w2:p3`).
+- No resume: `ran herdr-spawn --resume count 0` pass; no send to the closed worker: `ran herdr-say w2:p3 count 0` pass, `ran herdr-say implementer-gh13 count 0` pass; one implementer spawn: `ran herdr-spawn --role implementer count 1` pass.
+- Brief send to the new worker, argv whole:
+
+  ```json
+  ["herdr-say", "w2:p9", "Brief, ticket #14 (lane gh12, parent #12 \"app hello --shout\").\nGOAL        `app hello Grace --shout --json` prints JSON whose `text` field is `HELLO, GRACE!`, proven by an end-to-end subprocess test whose subprocess helper ticket #15 will reuse.\nSCOPE       write: src/app/cli.py, src/app/core.py, tests/test_cli.py only. Not: docs/specs/*, justfile, pyproject.toml, uv.lock, .github/, .githooks/. Worktree /tmp/qa-60554a-10r3-c-7ua5ww9c/wt-gh14, branch gh14, cut from integration branch gh12 at 3b1325d.\nCONTEXT     ticket #14 (tracker; GitHub offline in this sandbox: if unreadable, this brief is the ticket). Spec docs/specs/hello.spec.html, criterion acceptance-shout-json (\"Given a name, When app hello Grace --shout --json runs, Then the text field is HELLO, GRACE!\"). Prior commit 3b1325d (#13: core.greet(..., shout=) and cli --shout; tests/test_cli.py already has a `run()` subprocess helper). #15 (Blocked by #14) adds the `app hello Ada --shout` E2E test reusing your helper: keep it shared and plain, do not write #15's test. If the behaviour already holds at 3b1325d, the ticket is the test; do not add code that is not needed.\nACCEPTANCE  - E2E test runs the installed `app` in a subprocess with `hello Grace --shout --json` and asserts `text == \"HELLO, GRACE!\"` (acceptance-shout-json)\n            - the JSON output stays the Greeting shape {name, text}, `name` unshouted (acceptance-shout-json)\n            - one subprocess helper in tests/test_cli.py serves every E2E test (enables #15)\n            - demo: `uv run app hello Grace --shout --json` prints {\"name\": \"Grace\", \"text\": \"HELLO, GRACE!\"}\nVERIFY      hand-off gate green (quality spec #acceptance-gate-green): `just check` in the worktree; merge gh12 tip in before reporting; run the demo command above and paste its output. No unit tests, no mocks of our code, no test-only branches in production code (AGENTS.md).\nTIMEBOX     30 min; on expiry return partial findings and stop.\nReport DONE to me (herdr-say --parent) with the commit on gh14."]
+  ```
+
+#### baseline (origin/main) run-1, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict PASS
+
+- Closed assignment: implementer-gh13, pane w2:p3, provider session `s-w2:p3` (the case task names it; the `herdr-say --parked` stand-in answers its parked line with `"session": "s-w2:p3"`).
+- New spawn, argv whole:
+
+  ```json
+  ["herdr-spawn", "--workspace", "w2", "--name", "implementer-gh14", "--label", "worker-1", "--cwd", "/tmp/qa-60554a-10r1-b-tgdnhzb_/wt-gh14", "--role", "implementer"]
+  ```
+- The spawn answered: name=implementer-gh14 pane=w2:p9 `provider_session_id=s-w2:p9` (a session distinct from `s-w2:p3`).
+- No resume: `ran herdr-spawn --resume count 0` pass; no send to the closed worker: `ran herdr-say w2:p3 count 0` pass, `ran herdr-say implementer-gh13 count 0` pass; one implementer spawn: `ran herdr-spawn --role implementer count 1` pass.
+- Brief send to the new worker, argv whole:
+
+  ```json
+  ["herdr-say", "implementer-gh14", "GOAL        `app hello Grace --shout --json` prints JSON whose `text` field is `HELLO, GRACE!`, proven by an end-to-end subprocess test (ticket #14, parent #12).\nSCOPE       Write: src/app/cli.py, src/app/core.py, tests/test_cli.py only. Not: docs/specs/**, justfile, pyproject.toml, other tests. Worktree /tmp/qa-60554a-10r1-b-tgdnhzb_/wt-gh14, branch gh14, cut from lane branch gh12 @ 44f95243cb8535f62ca5e7397b3fa4fc98346ce2 (confirm base; reset onto gh12 if not).\nCONTEXT     Ticket #14 (GitHub offline in sandbox; this brief is the ticket). Spec docs/specs/hello.spec.html#acceptance-shout-json. Prior commit 44f9524 (#13): core.greet(..., shout=) and cli --shout. Current state: tests/test_cli.py already has the subprocess helper `run(*args)` and `test_shout_json` (uses Ada, asserts text). #15 (acceptance-shout, `app hello Ada --shout`) is Blocked by #14 and will reuse `run`: keep it the one shared subprocess helper, do not fork it.\nACCEPTANCE  acceptance-shout-json: an E2E test runs the installed `app hello Grace --shout --json` in a subprocess via `run` and asserts `text == \"HELLO, GRACE!\"` (replace/rename the Ada-based test_shout_json rather than adding a near-duplicate; 1-2 tests for this criterion).\n            acceptance-shout-json: `name` field stays the cleaned input (`Grace`); no test-only code in src.\n            Demo: `uv run app hello Grace --shout --json` prints {\"name\": \"Grace\", \"text\": \"HELLO, GRACE!\"}\nVERIFY      Hand-off gate green (quality spec #acceptance-gate-green): `just check`. Merge gh12 tip into gh14 before reporting. Gotcha: tests need `uv run` so `app` is on PATH. If the behaviour already holds, the ticket is the test; do not churn src.\nTIMEBOX     30 min; on expiry report partial findings and stop.\nReport DONE/partial to the supervisor with branch gh14 head commit."]
+  ```
+
+#### baseline (origin/main) run-2, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict PASS
+
+- Closed assignment: implementer-gh13, pane w2:p3, provider session `s-w2:p3` (the case task names it; the `herdr-say --parked` stand-in answers its parked line with `"session": "s-w2:p3"`).
+- New spawn, argv whole:
+
+  ```json
+  ["herdr-spawn", "--workspace", "w2", "--name", "implementer-gh14", "--label", "worker-1", "--cwd", "/tmp/qa-60554a-10r2-b-wtahbauw/wt-gh14", "--role", "implementer"]
+  ```
+- The spawn answered: name=implementer-gh14 pane=w2:p9 `provider_session_id=s-w2:p9` (a session distinct from `s-w2:p3`).
+- No resume: `ran herdr-spawn --resume count 0` pass; no send to the closed worker: `ran herdr-say w2:p3 count 0` pass, `ran herdr-say implementer-gh13 count 0` pass; one implementer spawn: `ran herdr-spawn --role implementer count 1` pass.
+- Brief send to the new worker, argv whole:
+
+  ```json
+  ["herdr-say", "w2:p9", "GOAL        Ticket #14 (parent #12): `app hello Grace --shout --json` prints JSON whose `text` field is `HELLO, GRACE!`, proven by an end-to-end subprocess test, committed on branch gh14.\nSCOPE       Write: src/app/cli.py, src/app/core.py (only if needed), tests/test_cli.py. Not: docs/specs/**, *.status.json, justfile, pyproject.toml, uv.lock, .github/**. Worktree /tmp/qa-60554a-10r2-b-wtahbauw/wt-gh14, branch gh14, based on lane gh12 @ 62f5a28.\nCONTEXT     Spec docs/specs/hello.spec.html, criterion acceptance-shout-json (\"When app hello Grace --shout --json runs, Then the text field is HELLO, GRACE!\"). Prior commit 62f5a28 (#13): core.greet(..., shout=) and cli `--shout`; tests/test_cli.py has subprocess helper `run()` and test_shout_json (Ada). Code may already satisfy the behaviour: then the work is the Grace e2e test, kept as the reusable subprocess path #15 (acceptance-shout, `app hello Ada --shout`) will reuse. Keep the suite small: one or two tests per criterion; fold or replace the Ada shout-json test rather than duplicating it.\nACCEPTANCE  acceptance-shout-json: e2e test runs installed `app hello Grace --shout --json` in a subprocess and asserts json[\"text\"] == \"HELLO, GRACE!\".\n            acceptance-shout-json: no test-only flags/branches in production code; app.core never imports app.cli.\n            demo: `uv run app hello Grace --shout --json` prints {\"name\": \"Grace\", \"text\": \"HELLO, GRACE!\"}\nVERIFY      Hand-off gate (quality spec #acceptance-gate-green): `just fast` green, then `just check` green, after merging gh12 tip into gh14. Report branch, head commit, gate output tail. Gotcha: run tests via `uv run` so `app` is on PATH.\nTIMEBOX     30 min; on expiry report partial findings and stop.\nReply route: herdr-say --parent with DONE or BLOCKED."]
+  ```
+
+#### baseline (origin/main) run-3, kit `b20ee656e6fa17ed19f4a617b9962ffb5fc0770f`, verdict PASS
+
+- Closed assignment: implementer-gh13, pane w2:p3, provider session `s-w2:p3` (the case task names it; the `herdr-say --parked` stand-in answers its parked line with `"session": "s-w2:p3"`).
+- New spawn, argv whole:
+
+  ```json
+  ["herdr-spawn", "--workspace", "", "--name", "implementer-gh14", "--label", "worker-1", "--cwd", "/tmp/qa-60554a-10r3-b-qybdpn5r/wt-gh14", "--role", "implementer"]
+  ```
+- The spawn answered: name=implementer-gh14 pane=w2:p9 `provider_session_id=s-w2:p9` (a session distinct from `s-w2:p3`).
+- No resume: `ran herdr-spawn --resume count 0` pass; no send to the closed worker: `ran herdr-say w2:p3 count 0` pass, `ran herdr-say implementer-gh13 count 0` pass; one implementer spawn: `ran herdr-spawn --role implementer count 1` pass.
+- Brief send to the new worker, argv whole:
+
+  ```json
+  ["herdr-say", "w2:p9", "Ticket #14 brief (lane gh12, parent #12).\nGOAL        `app hello Grace --shout --json` prints JSON whose `text` field is `HELLO, GRACE!`, pinned by an end-to-end test that runs the installed `app` as a subprocess through a reusable subprocess helper (#15 reuses it).\nSCOPE       write: src/app/cli.py, src/app/core.py (only if needed), tests/test_cli.py. Not: docs/specs/**, justfile, pyproject.toml, uv.lock, .githooks, any status file. Worktree /tmp/qa-60554a-10r3-b-qybdpn5r/wt-gh14, branch gh14, based on gh12 90c4d743bb471bcd7b29b12d51fc0b586d0fb753 (confirm; reset onto gh12 tip if not).\nCONTEXT     ticket #14 (GitHub offline in this sandbox; this brief is the ticket); spec docs/specs/hello.spec.html#acceptance-shout-json; prior commit 90c4d74 (#13: core.greet(..., shout=), cli --shout, tests/test_cli.py `run` helper and test_shout_json on Ada). #15 (Blocked by #14) adds the `app hello Ada --shout` plain-text e2e test on your helper: keep the helper usable for plain-text output too. AGENTS.md rules: e2e via installed `app` subprocess only, no mocks of own code, no test-only code paths.\nACCEPTANCE  acceptance-shout-json: an e2e test runs `app hello Grace --shout --json` in a subprocess and asserts json `text` == \"HELLO, GRACE!\" (and `name` == \"Grace\").\n            acceptance-shout-json: the subprocess helper returns stdout for any args, JSON or plain, so #15 can call it unchanged.\n            no regression: existing acceptance-greet and #13 tests still pass; keep suite small (fold/replace the Ada --shout --json test if it duplicates).\n            demo: `uv run app hello Grace --shout --json` prints {\"name\": \"Grace\", \"text\": \"HELLO, GRACE!\"}\nVERIFY      hand-off gate green (quality spec #acceptance-gate-green): `just check` in the worktree; plus `uv run app hello Grace --shout --json`. Merge gh12 tip into gh14 before reporting. Gotcha: run `just setup` first if the venv is missing.\nTIMEBOX     30 min; on expiry return partial findings and stop.\nReport DONE/BLOCKED to me (herdr-say --parent) with branch, head commit, gate result."]
+  ```
+
+
 ## Final evaluation (lane gh840, run 20261117T151829Z-60554a at 4c7e2433)
 
 The lane's one final evaluation of its train suites, at the integrated head 4c7e2433 (gh840 2d105669 plus the stand-in fix 4c7e2433, `evals/*/cases.json` only) beside baseline b20ee656e6fa17ed19f4a617b9962ffb5fc0770f (origin/main when the final evaluation started; the same baseline as the superseded run below):
