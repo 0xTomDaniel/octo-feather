@@ -26,7 +26,7 @@
  
  ### 4. Quiz the user
  
-@@ -57,10 +56,14 @@
+@@ -57,10 +56,16 @@
  
  ### 5. Publish the tickets to the configured tracker
  
@@ -40,10 +40,12 @@
 +- **A real issue tracker (the tracker skill)** → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers: the tracker skill's `issue-create`, with `--blocked-by` for each blocking ticket and `--parent` the lane's parent ticket, so each ticket is its sub-issue. No label: tracker writes are a ticket filed, commented on and moved to done; the tickets are agent-grabbable by construction.
 +
 +After publishing sub-issues of a parent, run `octo-feather-lane tickets <parent key>`; it must exit 0.
++
++**A seam set later.** When a QC or review result needs a test at a seam the ticket's `Seam:` lines lack, before any brief names it: post `Seam: <spec slug>#<anchor>: `<seam>`` on the ticket with the tracker skill's `issue-comment`, then run `octo-feather-lane seam <ticket> <spec slug>#<anchor> <seam>`; brief the seam only once it exits 0. Failure example: lane gh840's QC-rework brief set the `herdr-spawn` CLI seam for #876 at 03:22Z, the test followed at 03:24Z, and the seam reached the ticket only after the final review blocked it (#987).
  
  Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
  
-@@ -89,12 +92,19 @@
+@@ -89,12 +94,19 @@
  
  ## What to build
  
@@ -62,11 +64,11 @@
 +
 +## Seams
 +
-+Seam: <spec slug>#<anchor>: `<seam>` one line per seam a criterion's tests go at, set before any test (form and check: `octo-feather-lane --help`, seam); a seam set later, in a brief or on rework, is posted as a comment in the same form before its first test
++Seam: <spec slug>#<anchor>: `<seam>` one line per seam a criterion's tests go at, set before any test (form and check: `octo-feather-lane --help`, seam); a seam set later: step 5, A seam set later
  
  ## Blocked by
  
-@@ -102,4 +112,6 @@
+@@ -102,4 +114,6 @@
  
  </issue-template>
  

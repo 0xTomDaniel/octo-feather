@@ -2895,7 +2895,7 @@ def cmd_seam(args: list[str]) -> int:
         sha, at = p.stdout.split()
         before = (sha[:8], iso_time(at, f"{rev}'s author time"))
     out = tracker("issue-view", key, "--notes")
-    notes: list[tuple[str, str | None, str, str]] = []   # (written, last changed or None, url, body), the body first
+    notes: list[tuple[str, str | None, str, str]] = []   # shape: skills spec #tracker-script-issue-view
     try:
         d = cast("object", json.loads(out))
         raw = cast("dict[str, object]", d).get("notes") if isinstance(d, dict) else None
@@ -2903,15 +2903,14 @@ def cmd_seam(args: list[str]) -> int:
             n = cast("dict[str, object]", item) if isinstance(item, dict) else {}
             at, edited, url, body = n.get("at"), n.get("edited_at"), n.get("url"), n.get("body")
             if not (isinstance(at, str) and isinstance(url, str) and isinstance(body, str) and (edited is None or isinstance(edited, str))):
-                raise ValueError(f"a note without at, url and body strings, edited_at a string or null: {n!r:.200}")
+                raise ValueError(f"a note off skills spec #tracker-script-issue-view: {n!r:.200}")
             notes.append((at, edited, url, body))
         if not notes:
             raise ValueError("no notes list, or an empty one")
         name = str(cast("dict[str, object]", d).get("key") or key)
     except ValueError as e:
-        raise Unchecked(f"issue-view {key} --notes printed no readable notes ({e}): the tracker skill's issue-view --notes "
-                        "must print notes [{at, edited_at, url, body}] with each text's times, the body first; a tracker "
-                        "that cannot give them is no seam record, then rerun") from e
+        raise Unchecked(f"issue-view {key} --notes printed no readable notes ({e}): fix the tracker skill's issue-view "
+                        "to skills spec #tracker-script-issue-view, then rerun") from e
 
     def fail(cls: str, problem: str, fix: str) -> int:
         print(f"{name}: class: {cls}: {problem}; fix: {fix}")

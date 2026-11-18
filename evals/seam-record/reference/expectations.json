@@ -15,6 +15,10 @@
   "supervisor-brief-new-seam": {
     "facts": [
       {
+        "fact": "skill_read",
+        "skill": "to-tickets"
+      },
+      {
         "fact": "ran",
         "program": "octo-feather-lane",
         "args": [
@@ -22,14 +26,6 @@
           "1015"
         ],
         "exit": 0
-      },
-      {
-        "fact": "ran",
-        "program": "herdr-spawn",
-        "args": [
-          "--role",
-          "implementer"
-        ]
       }
     ]
   },
