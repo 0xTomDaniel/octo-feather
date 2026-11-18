@@ -146,13 +146,14 @@ the cases. Each RUN_ID/SUITE/CASE is the case in the stored run <qa dir>/RUN_ID/
 verdict is read from what the run stored, never judged again: each current-kit run (result.json `runs`, each `dir`
 holding the run's input.json, grading.json and result.json) passed when its result.json verdict is PASS, and the
 case is PASS when every run passed, else FAIL; a review case takes the latest maintainer verdict recorded for that
-run id (Review: REVIEWS/SUITE/CASE.jsonl), pass PASS, fail FAIL. Freshness (the rule: spec quality#qc-fallback): the
-run is stale when git diff K HEAD, K the run's kit sha (its kit_sha), names a file, whole files only, under
-agents/<role>.md (the role the run recorded), the kit paths the role's launch read (scripts/pi-role --help):
-scripts/pi-role, .agents/skills/, extensions/, web-mcp.json; the suite's case files evals/SUITE/cases.json and
-evals/SUITE/reference/expectations.json; and evals/fixtures/<name>/ for each fixture dir the case names at any depth
-(every string value of a `fixture` key in the case; a history fixture {repo, commit} is pinned by its commit). So
-any edit to the suite's case files, another case's included, needs that suite's pinned runs rerun. The grader (this
+run id (Review: REVIEWS/SUITE/CASE.jsonl), pass PASS, fail FAIL. Freshness (the rule and its file list: spec quality#qc-fallback): the run
+is stale when, between K (the run's kit_sha) and HEAD, git diff names one of those files, or the case's own entry (by
+id) in evals/SUITE/cases.json or reference/expectations.json differs, each named. The skills and extensions a role
+launches with are asked of the launcher at HEAD, `scripts/pi-role --json agents/<role>.md` (its --skill and
+--extension args), run from an empty dir, so a skill a case's fixture selects is compared as a fixture file; a path
+outside the repo (an external skill) is not compared, and a launcher that lists no launch is insufficient evidence,
+naming it. Fixture trees: evals/fixtures/<name>/ for each fixture dir the case names at any depth (every string value
+of a `fixture` key; a history fixture {repo, commit} is pinned by its commit). The grader (this
 script) is not in the set: a grading change shows as an expectations change or a rerun. Prints one line per
 argument: the verdict (PASS, FAIL, or INSUFFICIENT when not fresh or not readable), SUITE/CASE, the stored verdict,
 the run id, kit sha, runs passed/total, and its freshness against HEAD, each stale file named. Insufficient
@@ -2075,8 +2076,8 @@ def evidence_block(run_dir: Path, sm: Result) -> str:
 INSUFFICIENT = 77   # schemas/qc.v2.schema.json demo command: the demo did not run to its end
 # The keys run_case adds to the case it records in input.json: the run's, not the case's.
 RUN_INPUT_KEYS = ("suite", "model", "fixture_head", "max_tool_calls", "timeout_s", "kit_ref", "kit_sha", "run", "of", "config")
-# What a role's launch reads from the kit beside agents/<role>.md (scripts/pi-role --help).
-LAUNCH_PATHS = ("scripts/pi-role", ".agents/skills/", "extensions/", "web-mcp.json")
+# What a role's launch reads beside agents/<role>.md and what pi-role --json lists (scripts/pi-role --help).
+LAUNCH_PATHS = ("scripts/pi-role", "web-mcp.json")
 PIN = re.compile(r"[^-/][^/]*/[^/]+/[^/]+")   # RUN_ID/SUITE/CASE, never an option
 
 
@@ -2095,6 +2096,43 @@ def stored(p: Path) -> "Result | None":
     except (OSError, ValueError):
         return None
     return cast("Result", raw) if isinstance(raw, dict) else None
+
+
+def launched(top: str, role: str) -> tuple[list[str], str | None]:
+    """The repo paths ROLE launches with, asked of the launcher at HEAD (`scripts/pi-role --json`, from an empty dir so
+    no target selects a skill): each --skill folder (a trailing /) and --extension file inside TOP; a path outside it
+    (an external skill) is not compared. (paths, None), or ([], why the launcher gave no list)."""
+    with tempfile.TemporaryDirectory(prefix="qa-verdict-") as cwd:
+        p = subprocess.run([str(Path(top) / "scripts" / "pi-role"), "--json", str(Path(top) / "agents" / f"{role}.md")],
+                           capture_output=True, text=True, cwd=cwd, check=False)
+    raw = safe_json(p.stdout) if p.returncode == 0 else None
+    args = cast("Result", raw).get("args") if isinstance(raw, dict) else None
+    if not isinstance(args, list):
+        return [], f"scripts/pi-role --json agents/{role}.md listed no launch (exit {p.returncode}: {p.stderr.strip()[-200:]})"
+    a = [str(x) for x in cast("list[object]", args)]
+    real = os.path.realpath(top)
+    out: list[str] = []
+    for flag, val in zip(a, a[1:]):
+        if flag in ("--skill", "--extension"):
+            rel = os.path.relpath(os.path.realpath(val), real)
+            if not rel.startswith(".."):
+                out.append(rel + ("/" if flag == "--skill" else ""))
+    return sorted(set(out)), None
+
+
+def entry_change(top: str, sha: str, head: str, rel: str, cid: str) -> str | None:
+    """How case CID's own entry in REL (cases.json: a list by id; expectations.json: an object by id) differs between
+    the run's kit SHA and HEAD, None when equal."""
+    def entry(rev: str) -> object:
+        p = subprocess.run(["git", "-C", top, "show", f"{rev}:{rel}"], capture_output=True, text=True, check=False)
+        x = safe_json(p.stdout) if p.returncode == 0 else None
+        if isinstance(x, list):
+            return next((c for c in cast("list[Result]", x) if isinstance(cast("object", c), dict) and c.get("id") == cid), None)
+        return cast("Result", x).get(cid) if isinstance(x, dict) else None
+    was, now = entry(sha), entry(head)
+    if was == now:
+        return None
+    return f"{rel} case {cid} " + ("added" if was is None else "deleted" if now is None else "changed")
 
 
 def pinned(root: Path, top: str, head: str, arg: str) -> tuple[str, str, list[str]]:
@@ -2130,14 +2168,18 @@ def pinned(root: Path, top: str, head: str, arg: str) -> tuple[str, str, list[st
         verdict, count = ("PASS" if got and ok == len(runs) else "FAIL"), f"runs {ok}/{len(runs)} passed"
     stale: list[str] = []
     if not missing:
-        role = {str(i.get("role")) for i, _, _ in got}
+        role = sorted({str(i.get("role")) for i, _, _ in got})
         fx = sorted({n for i, _, _ in got for n in fixture_names({k: v for k, v in i.items() if k not in RUN_INPUT_KEYS})})
-        paths = [*(f"agents/{r}.md" for r in sorted(role)), *LAUNCH_PATHS, f"evals/{suite}/cases.json",
-                 f"evals/{suite}/reference/expectations.json", *(f"evals/fixtures/{n}/" for n in fx)]
+        asked = [launched(top, r) for r in role]
+        missing += [why for _, why in asked if why]
+        paths = [*(f"agents/{r}.md" for r in role), *LAUNCH_PATHS, *sorted({p for ps, _ in asked for p in ps}),
+                 *(f"evals/fixtures/{n}/" for n in fx)]
         diff = subprocess.run(["git", "-C", top, "diff", "--no-renames", "--name-status", sha, head, "--", *paths],
                               capture_output=True, text=True)
         how = {"A": "added", "D": "deleted"}
         stale += [f"{p} {how.get(k[:1], 'changed')}" for k, _, p in (ln.partition("\t") for ln in diff.stdout.splitlines()) if p]
+        stale += [c for rel in (f"evals/{suite}/cases.json", f"evals/{suite}/reference/expectations.json")
+                  if (c := entry_change(top, sha, head, rel, cid))]
     fresh = (f"missing: {'; '.join(missing)}" if missing else
              f"stale at HEAD {head[:12]}: {'; '.join(stale)}" if stale else f"fresh at HEAD {head[:12]}")
     word = "INSUFFICIENT" if missing or stale else verdict

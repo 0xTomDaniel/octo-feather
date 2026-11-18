@@ -13,6 +13,7 @@ import json
 import re
 from typing import TYPE_CHECKING
 
+from qc_eval_verdict import PI_ROLE
 from testkit import Scratch, kit, main
 from testkit.qc import target
 
@@ -28,7 +29,7 @@ MERGE = {"fact": "ran", "program": "git", "args": ["merge", "{head}"]}
 MSG = "done: ```x```\nnext: gh13"
 FILES = {
     "agents/worker.md": "the worker role\n",
-    "scripts/pi-role": "the launcher\n",
+    "scripts/pi-role": PI_ROLE,
     "evals/s1/cases.json": json.dumps([CASE]),
     "evals/s1/reference/expectations.json": json.dumps({"c1": {"facts": [SAY, MERGE]}}),
     "evals/fixtures/fx/a.txt": "fixture\n",
@@ -142,7 +143,7 @@ def evidence(s: Scratch, d: Path) -> str:
 def block(s: Scratch) -> None:
     """The block of a stored --baseline run: its content, the same bytes twice, and a pin
     `--verdict` reads as that run and case."""
-    r = target(s, FILES)
+    r = target(s, FILES, exe=("scripts/pi-role",))
     sha = s.git(r, "rev-parse", "HEAD~1")
     base = "b" * 40
     d = stored_run(s.root / "qa", sha, base)

@@ -33,11 +33,20 @@ command = "true"
 command = "{kit("octo-feather-qa")} --verdict {PIN}"
 covers = ["agents"]
 """
+# The launcher at the target's boundary: answers `--json agents/<role>.md` with the role's launch,
+# skill s and extension e.ts in the repo and one external skill outside it (scripts/pi-role --help).
+PI_ROLE = """#!/bin/sh
+top=$(cd "$(dirname "$0")/.." && pwd -P)
+printf '{"args": ["--extension", "%s/extensions/e.ts", "--skill", "%s/.agents/skills/s",\
+ "--skill", "/opt/external/x"]}\\n' "$top" "$top"
+"""
 FILES = {
     "qc.toml": QC_TOML,
     "agents/worker.md": "the worker role\n",
-    "scripts/pi-role": "the launcher\n",
+    "scripts/pi-role": PI_ROLE,
     ".agents/skills/s/SKILL.md": "the skill\n",
+    ".agents/skills/other/SKILL.md": "a skill the role does not launch\n",
+    "extensions/e.ts": "the extension\n",
     "evals/s1/cases.json": json.dumps([CASE]),
     "evals/s1/reference/expectations.json": json.dumps({"c1": {"facts": FACTS}}),
     "evals/fixtures/fx/a.txt": "fixture\n",
@@ -99,7 +108,7 @@ def store(
 
 def world(s: Scratch) -> tuple[Path, str]:
     """The target and its stored run at its first commit; (repo, that head with status planned)."""
-    r = target(s, FILES)
+    r = target(s, FILES, exe=("scripts/pi-role",))
     store(s, s.git(r, "rev-parse", "HEAD~1"))
     s.env["OCTO_FEATHER_QA_DIR"] = str(s.root / "qa")
     s.env |= tool_homes()
@@ -120,18 +129,39 @@ def judged(s: Scratch, r: Path, want: int) -> dict[str, object]:
     return res
 
 
+SIBLING = (
+    ("evals/s1/cases.json", json.dumps([CASE, dict(CASE, id="c2")])),
+    (
+        "evals/s1/reference/expectations.json",
+        json.dumps({"c1": {"facts": FACTS}, "c2": {"facts": FACTS}}),
+    ),
+)
+
+
+def change(s: Scratch, r: Path, base: str, files: tuple[tuple[str, str], ...]) -> None:
+    """R reset to BASE, then FILES written and committed."""
+    s.git(r, "reset", "-q", "--hard", base)
+    for path, text in files:
+        (r / path).write_text(text)
+    s.git(r, "commit", "-qam", f"change {' '.join(p for p, _ in files)}")
+
+
 def same_verdict(s: Scratch) -> None:
-    """The demo run twice at one head and at a second head leaving the run's files unchanged:
-    the same pass, decision source the demo's checks, read from the stored runs."""
+    """The demo run twice at one head and at heads differing only in files the run does not read
+    (README.md, a skill the role does not launch, a sibling case added): the same pass, decision
+    source the demo's checks, read from the stored runs."""
     r, h1 = world(s)
-    first = judged(s, r, 0)
+    seen = [judged(s, r, 0)]
     s.git(r, "reset", "-q", "--hard", h1)
-    again = judged(s, r, 0)
-    s.git(r, "reset", "-q", "--hard", h1)
-    (r / "README.md").write_text("target, changed\n")
-    s.git(r, "commit", "-qam", "readme")
-    other = judged(s, r, 0)
-    for res in (first, again, other):
+    seen.append(judged(s, r, 0))
+    for files in (
+        (("README.md", "target, changed\n"),),
+        ((".agents/skills/other/SKILL.md", "changed\n"),),
+        SIBLING,
+    ):
+        change(s, r, h1, files)
+        seen.append(judged(s, r, 0))
+    for res in seen:
         assert (res["verdict"], res["decision"], res["evidence"]) == (
             "pass",
             "demo checks",
@@ -144,16 +174,11 @@ def same_verdict(s: Scratch) -> None:
 
 
 def insufficient(s: Scratch) -> None:
-    """A head changing the run's role file, one adding a sibling case to the suite's cases.json,
-    and a pinned run gone: insufficient evidence naming the file, then the run."""
+    """A head changing the run's role file, one changing a skill the role launches, and a pinned
+    run gone: insufficient evidence naming the file, then the run."""
     r, h1 = world(s)
-    for path, text in (
-        ("agents/worker.md", "the worker role, changed\n"),
-        ("evals/s1/cases.json", json.dumps([CASE, dict(CASE, id="c2")])),
-    ):
-        s.git(r, "reset", "-q", "--hard", h1)
-        (r / path).write_text(text)
-        s.git(r, "commit", "-qam", f"change {path}")
+    for path in ("agents/worker.md", ".agents/skills/s/SKILL.md"):
+        change(s, r, h1, ((path, "changed\n"),))
         res = judged(s, r, 2)
         assert res["verdict"] == "insufficient evidence", res
         assert f"{path} changed" in str(res["why"]), res
@@ -174,9 +199,10 @@ def verdict(s: Scratch, r: Path, *pins: str, want: int) -> str:
 
 
 def cli_rules(s: Scratch) -> None:
-    """--verdict alone, in the judged repo: fresh PASS 0; a stored FAIL 1; each stale whole file,
-    another case's edit included, 77 naming it; an unknown kit sha and a review case with no
-    recorded verdict 77; usage 64."""
+    """--verdict alone, in the judged repo: fresh PASS 0; a stored FAIL 1; each file the run reads
+    changed (a fixture, a launched skill and extension, the case's own entry in cases.json and in
+    expectations.json) 77 naming it; fresh 0 at heads changing only an unlaunched skill or adding a
+    sibling case; an unknown kit sha and a review case with no recorded verdict 77; usage 64."""
     r, h1 = world(s)
     sha = s.git(r, "rev-parse", "HEAD~1")
     out = verdict(s, r, PIN, want=0)
@@ -186,21 +212,28 @@ def cli_rules(s: Scratch) -> None:
     out = verdict(s, r, PIN, "20260101T000000Z-fa1fa1/s1/c1", want=1)
     assert "FAIL s1/c1: stored FAIL, run 20260101T000000Z-fa1fa1, kit" in out, out
     assert "runs 1/2 passed" in out, out
-    for path, text in (
-        ("evals/fixtures/fx/a.txt", "fixture, changed\n"),
-        (".agents/skills/s/SKILL.md", "the skill, changed\n"),
-        ("evals/s1/cases.json", json.dumps([CASE, dict(CASE, id="c2")])),
+    exps = "evals/s1/reference/expectations.json"
+    for files, named in (
+        ((("evals/fixtures/fx/a.txt", "fixture, changed\n"),), "evals/fixtures/fx/a.txt changed"),
         (
-            "evals/s1/reference/expectations.json",
-            json.dumps({"c1": {"facts": FACTS}, "c2": {"facts": FACTS}}),
+            ((".agents/skills/s/SKILL.md", "the skill, changed\n"),),
+            ".agents/skills/s/SKILL.md changed",
         ),
+        ((("extensions/e.ts", "changed\n"),), "extensions/e.ts changed"),
+        (
+            (("evals/s1/cases.json", json.dumps([dict(CASE, task="Other.")])),),
+            "evals/s1/cases.json case c1 changed",
+        ),
+        (((exps, json.dumps({"c1": {"facts": [*FACTS, *FACTS]}})),), f"{exps} case c1 changed"),
     ):
-        s.git(r, "reset", "-q", "--hard", h1)
-        (r / path).write_text(text)
-        s.git(r, "commit", "-qam", f"change {path}")
+        change(s, r, h1, files)
         out = verdict(s, r, PIN, want=77)
         assert f"INSUFFICIENT s1/c1: stored PASS, run {RUN}" in out, out
-        assert f"{path} changed" in out.splitlines()[-1], out
+        assert named in out.splitlines()[-1], out
+    for files in (((".agents/skills/other/SKILL.md", "changed\n"),), SIBLING):
+        change(s, r, h1, files)
+        out = verdict(s, r, PIN, want=0)
+        assert want in out, out
     s.git(r, "reset", "-q", "--hard", h1)
     store(s, "0" * 40, run="20260101T000000Z-0bad00")
     out = verdict(s, r, "20260101T000000Z-0bad00/s1/c1", want=77)

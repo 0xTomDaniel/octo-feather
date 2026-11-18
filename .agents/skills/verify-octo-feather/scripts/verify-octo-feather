@@ -1499,6 +1499,14 @@ def drive_qc_insufficient(f: Feature) -> None:
     say(f"qc-insufficient evidence: {f.d}")
 
 
+# A scratch target's launcher: answers `pi-role --json agents/<role>.md` with one launched skill (s) and extension
+# (e.ts) in the repo, as octo-feather-qa --verdict asks it (--help, Verdict).
+STAND_IN_PI_ROLE = """#!/bin/sh
+top=$(cd "$(dirname "$0")/.." && pwd -P)
+printf '{"args": ["--extension", "%s/extensions/e.ts", "--skill", "%s/.agents/skills/s"]}\\n' "$top" "$top"
+"""
+
+
 def drive_qc_eval_verdict(f: Feature) -> None:
     """`just qc` on a scratch target whose declared demo is `octo-feather-qa --verdict` over a scratch stored eval run
     pinned at the target's first commit: pass at one head and at a second head leaving the run's files unchanged,
@@ -1517,13 +1525,14 @@ def drive_qc_eval_verdict(f: Feature) -> None:
     case = {"id": "c1", "role": "worker", "fixture": "fx", "task": "Do it."}
     facts = [{"fact": "skill_read", "skill": "s"}]
     run, pin = "20260101T000000Z-abc123", "20260101T000000Z-abc123/s1/c1"
-    for rel, text in (("agents/worker.md", "the worker role\n"), ("scripts/pi-role", "the launcher\n"), (".agents/skills/s/SKILL.md", "the skill\n"),
+    for rel, text in (("agents/worker.md", "the worker role\n"), ("scripts/pi-role", STAND_IN_PI_ROLE), (".agents/skills/s/SKILL.md", "the skill\n"),
                       ("evals/s1/cases.json", json.dumps([case])), ("evals/s1/reference/expectations.json", json.dumps({"c1": {"facts": facts}})),
                       ("evals/fixtures/fx/a.txt", "fixture\n"), ("README.md", "target\n"),
                       ("qc.toml", ('format = 2\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n[demo."demo#acceptance-a"]\n'
                                    f'command = "{f.s.repo}/scripts/octo-feather-qa --verdict {pin}"\ncovers = ["agents"]\n'))):
         (r / rel).parent.mkdir(parents=True, exist_ok=True)
         (r / rel).write_text(text)
+    (r / "scripts" / "pi-role").chmod(0o755)
     shutil.copy(f"{f.s.repo}/tests/fixtures/spec-status/good/demo.spec.html", r / "docs" / "specs")
     git("add", "-A")
     git("commit", "-q", "-m", "accepted")
@@ -1590,10 +1599,11 @@ def drive_qa_evidence(f: Feature) -> None:
         git("config", k, val)
     case = {"id": "c1", "role": "worker", "fixture": "fx", "task": "Report."}
     say_ = {"fact": "ran", "program": "herdr-say", "args": ["--parent"]}
-    for rel, text in (("agents/worker.md", "the worker role\n"), ("scripts/pi-role", "the launcher\n"), ("evals/s1/cases.json", json.dumps([case])),
+    for rel, text in (("agents/worker.md", "the worker role\n"), ("scripts/pi-role", STAND_IN_PI_ROLE), ("evals/s1/cases.json", json.dumps([case])),
                       ("evals/s1/reference/expectations.json", json.dumps({"c1": {"facts": [say_]}})), ("evals/fixtures/fx/a.txt", "fixture\n")):
         (r / rel).parent.mkdir(parents=True, exist_ok=True)
         (r / rel).write_text(text)
+    (r / "scripts" / "pi-role").chmod(0o755)
     git("add", "-A")
     git("commit", "-q", "-m", "accepted")
     kit, base = git("rev-parse", "HEAD"), "b" * 40
