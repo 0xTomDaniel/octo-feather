@@ -1,0 +1,23 @@
+diff --git a/src/app/cli.py b/src/app/cli.py
+--- a/src/app/cli.py
++++ b/src/app/cli.py
+@@ -13,6 +13,7 @@ def main(argv: list[str] | None = None) -> int:
+     hello = commands.add_parser("hello", help="greet someone")
+     hello.add_argument("name")
+     hello.add_argument("--json", action="store_true", help="print JSON")
++    hello.add_argument("--shout", action="store_true", help="upper-case the greeting")
+     args = parser.parse_args(argv)
+ 
+     try:
+@@ -23,7 +24,10 @@ def main(argv: list[str] | None = None) -> int:
+         else:
+             sys.stderr.write(f"error: {err}\n")
+         return 2
+-    sys.stdout.write((json.dumps(asdict(greeting)) if args.json else greeting.text) + "\n")
++    out = asdict(greeting)
++    if args.shout:
++        out["text"] = out["text"].upper()
++    sys.stdout.write((json.dumps(out) if args.json else out["text"]) + "\n")
+     return 0
+ 
+ 
