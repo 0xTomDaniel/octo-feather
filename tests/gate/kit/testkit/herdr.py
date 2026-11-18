@@ -31,9 +31,10 @@ $HOME/.pi/agent/extensions); with no agent dir it fails, as Herdr does, and so w
 found, the agent on stdout; else agent_not_found on stderr, exit 1; a file `get-down` makes it
 fail plain (`herdr: server not reachable`, exit 1), for the targets it lists, one a line, or for
 every target when it is empty; a file `get-delay` holding S makes it answer no sooner than S
-seconds after the call (a slow Herdr). `agent wait T --until S... --timeout MS`
-returns once T reads a state S, else `timeout`: at once when T has booted, as its state then never
-changes. `agent prompt T TEXT --wait [--until S...]
+seconds after the call (a slow Herdr); a file `get-answer`, a JSON object, makes a target it maps
+answer that text on stdout, exit 0 (a Herdr answer of a shape the kit must not trust).
+`agent wait T --until S... --timeout MS` returns once T reads a state S, else `timeout`: at once
+when T has booted, as its state then never changes. `agent prompt T TEXT --wait [--until S...]
 [--timeout MS]`: blocked is `agent_blocked`, nothing sent; an agent not yet taking input gets
 TEXT typed, unsent (a line in `typed`), `agent_prompt_stalled`; any other gets it submitted (a line
 "PANE<TAB>TEXT" in `prompts`): an idle one turns working, then idle, so the wait matches; a
@@ -43,6 +44,8 @@ An agent holding `compacting_until` (an epoch time) is a Pi compacting until the
 is queued, not submitted (a line in `queued`), Herdr seeing no turn start (`agent_prompt_stalled`),
 and `agent read` shows Pi's compaction line and each queued text as Pi does (`Steering: TEXT`);
 once that time passed, the next call has Pi take each queued text (a line in `prompts`).
+A file `prompt-watch` holding a path makes each `agent prompt` note, a line in `watched`, `yes` or
+`no`: whether that path existed when the prompt was asked (what a sender wrote before it).
 `pane read` shows a ready Pi prompt; `pane send-keys|send-text` log only. `agent list` prints every
 agent in Herdr's envelope ({"id", "result": {"agents"}}), as `agent get` shows one. A file `down`
 fails every call as a herdr with no server does (`error: could not connect to herdr server`,
@@ -224,6 +227,10 @@ class World:
         if down.exists() and a[2] in (down.read_text().split() or [a[2]]):
             sys.stderr.write("herdr: server not reachable\n")
             return 1
+        odd = self.dir / "get-answer"
+        if odd.exists() and a[2] in (answers := json.loads(odd.read_text())):
+            sys.stdout.write(answers[a[2]] + "\n")
+            return 0
         delay = self.dir / "get-delay"
         if delay.exists():
             time.sleep(float(delay.read_text()))
@@ -249,6 +256,9 @@ class World:
         return say({"agent_status": self.status(g)})
 
     def agent_prompt(self, a: list[str]) -> int:
+        watch = self.dir / "prompt-watch"
+        if watch.exists():
+            self.note("watched", "yes" if Path(watch.read_text().strip()).exists() else "no")
         g = self.find(a[2])
         if g is None:
             return fail("agent_not_found")

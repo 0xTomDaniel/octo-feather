@@ -9,10 +9,12 @@ from herdr_messaging import (
     director_prune,
     director_worker_resume,
     fresh_worker_session,
+    herdr_malformed,
     parent_gone,
     parent_resumed,
     post_merge_busy,
     queued_completion,
+    repoint_record,
     result_compacting,
     result_resumed,
     results_listing,
@@ -116,3 +118,11 @@ def test_results_listing(case: Case) -> None:
 
 def test_director_prune(case: Case) -> None:
     case(director_prune)
+
+
+def test_repoint_record(case: Case) -> None:
+    case(repoint_record)
+
+
+def test_herdr_malformed(case: Case) -> None:
+    case(herdr_malformed)

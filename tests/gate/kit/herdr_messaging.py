@@ -35,6 +35,7 @@ import sys
 import time
 from pathlib import Path
 
+import tomllib
 from testkit import HERE, ROOT, Scratch, kit, main
 
 ASSETS = ROOT / ".agents" / "skills" / "herdr-comms" / "assets"
@@ -492,7 +493,7 @@ def supervised(s: Scratch) -> tuple[Path, dict[str, str], dict[str, str]]:
 def parent_resumed(s: Scratch) -> None:
     """comms say-parent, the parent surviving restart and park (owner ruling 2026-11-18 #901):
     lane gh7's supervisor gone with no park (a Herdr restart), resumed by `octo-feather-start
-    --name gh7 --resume S` on a new pane: the lane record's `supervisor` names it, every other line
+    --name gh7 --resume S` on a new pane: the lane record's `supervisor` names it, every other key
     unchanged, and its implementer's `herdr-say --parent RESULT` (OCTO_FEATHER_PARENT still the old
     pane) lands there as the notice naming its result file, exit 0, the director receiving
     nothing; the director then edits the record
@@ -506,8 +507,9 @@ def parent_resumed(s: Scratch) -> None:
     show(f"supervisor gh7 {sup['pane']} gone without a park (Herdr restart)")
     new = start(s, "--name", "gh7", "--resume", sup["provider_session_id"])["pane"]
     assert new != sup["pane"], new
-    assert record.read_text() == before.replace(sup["pane"], new), record.read_text()
-    show(f"octo-feather-start --resume: {record.name} supervisor = {new}, other lines unchanged")
+    want = tomllib.loads(before) | {"supervisor": new}
+    assert tomllib.loads(record.read_text()) == want, record.read_text()
+    show(f"octo-feather-start --resume: {record.name} supervisor = {new}, other keys unchanged")
     ran = s.run([SAY, "--parent", RESULT], env=worker)
     assert worker["OCTO_FEATHER_PARENT"] == sup["pane"], worker
     assert to(d, new) == [noted(s, worker)], lines(d / "prompts")
@@ -576,7 +578,7 @@ def director_moved(s: Scratch) -> None:
     drop(d, "w0:p1")
     new = start(s, "--director", "--resume", "D1")["pane"]
     toml = (state / "director.toml").read_text()
-    assert toml == f'# the director\npane = "{new}"\n', toml
+    assert toml == f'pane = "{new}"\n', toml
     ran = s.run([SAY, "--parent", RESULT], env=worker)
     assert worker["OCTO_FEATHER_PARENT"] == "w0:p1", worker
     assert to(d, new) == [noted(s, worker, "director", "general-worker-a1")], lines(d / "prompts")
@@ -615,15 +617,21 @@ def noted(s: Scratch, worker: dict[str, str], owner: str = "lanes/gh7", name: st
 def result_compacting(s: Scratch) -> None:
     """comms result file (owner ruling 2026-11-18 #954): lane gh7's implementer reports with
     `herdr-say --parent REPORT` while its supervisor compacts for 4 s: the result file
-    lanes/gh7.results/<its session>.md holds REPORT before any prompt, with a heading naming it;
+    lanes/gh7.results/<its session>.md holds REPORT before any prompt (there when the prompt is
+    asked), with a heading naming it;
     the supervisor receives one notice naming the file and REPORT's first line, one prompt sent,
     no resend (#882's queued path kept), exit 0. Each observation printed, for the qc demo."""
     d, sup, worker = supervised(s)
     agents = json.loads((d / "agents.json").read_text())
     agents[sup["pane"]]["compacting_until"] = time.time() + 4
     (d / "agents.json").write_text(json.dumps(agents))
+    path = results_dir(s) / f"{worker['OCTO_FEATHER_SESSION_ID']}.md"
+    (d / "prompt-watch").write_text(str(path))
     ran = s.run([SAY, "--parent", REPORT], env=worker)
     f = reported(s, worker)
+    assert lines(d / "watched") == ["yes"], (
+        f"result file there at the prompt: {lines(d / 'watched')}"
+    )
     heading = r"^## \S+Z implementer-gh7 \(implementer\)$"
     assert re.search(heading, f.read_text(), re.MULTILINE), f.read_text()
     sent = [x for x in lines(d / "log") if x.startswith("agent prompt ")]
@@ -731,6 +739,88 @@ def director_prune(s: Scratch) -> None:
     left = sorted(p.name for p in results_dir(s, "director").iterdir())
     assert left == sorted([files["a2"].name, files["a3"].name]), left
     show(f"director start: removed {files['a1'].name} (8 days, worker gone); kept {left}")
+
+
+SPAWNED = (
+    "name=gh7 role=supervisor tab=w3:t4 pane=w3:p4 cwd=/x contract=pi-role provider_session_id=S\n"
+)
+RECORDS = {
+    "indented": '# lane gh7\n  supervisor = "w1:p1"\nissue = 7\ngoal = "g # not a comment"\n',
+    "odd": 'goal=\'g\'   # hand edit\n"supervisor"="w1:p1"\nissue=7\n',
+    "absent": 'issue = 7\ngoal = "g"\n',
+}
+
+
+def repoint_record(s: Scratch) -> None:
+    """`octo-feather-handoff repoint gh7` (what octo-feather-start --resume runs) over lane
+    records a hand edit shaped: an indented `supervisor` key with a comment, a quoted key and
+    single-quoted strings with no spaces, and no `supervisor` key at all: each record parses
+    after, every key equal but `supervisor`, now the new pane w3:p4 (comments are not kept); one
+    holding a table or an array is refused, exit 65 naming the key, the record byte for byte
+    unchanged; the director's record the same through `repoint director`."""
+    lanes = state_dir(s) / "lanes"
+    lanes.mkdir(parents=True)
+    handoff, record = kit("octo-feather-handoff"), lanes / "gh7.toml"
+    for case, text in RECORDS.items():
+        record.write_text(text)
+        s.run([handoff, "repoint", "gh7"], stdin=SPAWNED)
+        got = tomllib.loads(record.read_text())
+        want = {k: v for k, v in tomllib.loads(text).items() if k != "supervisor"}
+        assert got == {"supervisor": "w3:p4", **want}, (case, record.read_text())
+        show(f"repoint {case}: {record.read_text()!r}")
+    for bad, key in (('supervisor = "w1:p1"\n[extra]\nx = 1\n', "extra"), ("ids = [1]\n", "ids")):
+        record.write_text(bad)
+        ran = s.run([handoff, "repoint", "gh7"], want=65, stdin=SPAWNED)
+        assert key in ran.err, ran.err
+        assert record.read_text() == bad, record.read_text()
+        show(f"repoint refused: {ran.err.strip()}")
+    director = state_dir(s) / "director.toml"
+    director.write_text('    pane = "w0:p1"\nname = "d"\n')
+    s.run([handoff, "repoint", "director"], stdin=SPAWNED)
+    assert tomllib.loads(director.read_text()) == {"pane": "w3:p4", "name": "d"}, (
+        director.read_text()
+    )
+
+
+ODD_ANSWERS = ('{"result": {"agent": null}}', '{"result": {"agent": {}}}', "not json", "{}")
+
+
+def herdr_malformed(s: Scratch) -> None:
+    """`herdr agent get` answering exit 0 with a shape that is no agent (agent null, an agent with
+    no pane or status, not JSON, no result): `octo-feather-handoff results` shows that worker
+    `unknown (...)` with `none yet`, never `ended` nor `live None`; a director result file 8 days
+    old whose worker gets such an answer is kept by the start's prune. Only Herdr's explicit
+    agent_not_found is absence."""
+    d, sup, impl = supervised(s)
+    for raw in ODD_ANSWERS:
+        (d / "get-answer").write_text(json.dumps({"implementer-gh7": raw}))
+        out = s.run([kit("octo-feather-handoff"), "results"], env=tab_env(d, sup["pane"])).out
+        name, pane, state, result = out.splitlines()[0].split("\t")
+        assert (name, pane, result) == ("implementer-gh7", impl["HERDR_PANE_ID"], "none yet"), out
+        assert state.startswith("unknown ("), out
+        show(f"agent get answered {raw}: {out.strip()}")
+    files = results_dir(s, "director")
+    files.mkdir()
+    old = files / "S-old.md"
+    old.write_text("## report\n")
+    then = time.time() - 8 * 86400
+    os.utime(old, (then, then))
+    spawn = {
+        "at": "2026-11-01T00:00:00Z",
+        "kind": "spawn",
+        "name": "general-worker-a9",
+        "session": "S-old",
+    }
+    with (state_dir(s) / "director.handoffs.jsonl").open("a") as f:
+        f.write(json.dumps(spawn) + "\n")
+    for raw in ODD_ANSWERS:
+        (d / "get-answer").write_text(json.dumps({"general-worker-a9": raw}))
+        s.run([kit("octo-feather-handoff"), "prune-results"])
+        assert old.is_file(), f"pruned on {raw}"
+    (d / "get-answer").unlink()
+    s.run([kit("octo-feather-handoff"), "prune-results"])
+    assert not old.is_file(), "an agent_not_found worker's old file was kept"
+    show("prune: kept on every odd answer, removed on agent_not_found")
 
 
 def merged_repo(s: Scratch) -> tuple[Path, str]:
@@ -1206,4 +1296,6 @@ if __name__ == "__main__":
         result_resumed,
         results_listing,
         director_prune,
+        repoint_record,
+        herdr_malformed,
     )

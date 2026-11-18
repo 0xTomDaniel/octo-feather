@@ -121,7 +121,8 @@ def refusals(s: Scratch) -> None:
     """Each refusal non-zero, naming why, every entry under the state dir unchanged: a missing
     record (a stray log of that name stays), an archived record already there, an archived log
     already there, a bad name; non-regular sources before any move: a symlinked record (review of
-    a80d7b6), a symlinked log, a directory record, a directory log."""
+    a80d7b6), a symlinked log, a directory record, a directory log; a results dir whose
+    archive target exists, a results path that is no directory."""
     st = State(s)
     top = st.top
     st.seed(top, "gh0")  # gh0 archived before
@@ -135,6 +136,14 @@ def refusals(s: Scratch) -> None:
     st.seed(top, "gh5")
     (top / "archive" / "gh5.handoffs.jsonl").write_text("old\n")
     st.refuse(f"archive target exists: {top}/archive/gh5.handoffs.jsonl", "gh5")
+    st.seed(top, "gh11")
+    (top / "gh11.results").mkdir()
+    (top / "gh11.results" / "S1.md").write_text("## report\n")
+    (top / "archive" / "gh11.results").mkdir()
+    st.refuse(f"archive target exists: {top}/archive/gh11.results", "gh11")
+    st.seed(top, "gh12")
+    (top / "gh12.results").write_text("not a dir\n")
+    st.refuse(f"not a directory: {top}/gh12.results", "gh12")
     st.refuse("usage", "../gh1")
     (top / "seed.toml").write_text("issue = 0\n")
     (top / "gh7.toml").symlink_to("seed.toml")

@@ -48,7 +48,8 @@ Pi always gets --approve: project-local files are trusted for that one run, so
 Pi's "Trust project folder?" dialog never opens and ~/.pi/agent/trust.json is
 never written (issue #3).
 Pi always gets --extension for the kit's extensions/resume-on-error.ts
-(docs/adr/0023) and extensions/spend-ledger.ts (spec spend#writer-agent), and
+(docs/adr/0023), extensions/results-on-wake.ts (comms spec #roles-goal; its header)
+and extensions/spend-ledger.ts (spec spend#writer-agent), and
 --octo-feather-role <the role file's name> for the latter's purpose.
 Pi always gets --extension for the kit's extensions/skills-loaded.ts with
 --octo-feather-skills-loaded: every --skill folder and each other `Repo skills:`
@@ -87,7 +88,7 @@ TRACKERS = {"github": "github-issues", "linear": "linear"}
 DEFAULT_TRACKER = "github"
 TRACKER_SLOT = "{tracker}"
 # The kit's Pi extensions every role loads, in the kit's extensions/ (issues #152, #187).
-EXTENSIONS = ("resume-on-error.ts", "spend-ledger.ts")
+EXTENSIONS = ("resume-on-error.ts", "results-on-wake.ts", "spend-ledger.ts")
 # A role's `web` tool: the kit's one web server list, loaded by the web extension (spec roles#launch-web).
 WEB = "web"
 WEB_LIST = "web-mcp.json"
