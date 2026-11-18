@@ -43,21 +43,30 @@ An agent holding `compacting_until` (an epoch time) is a Pi compacting until the
 is queued, not submitted (a line in `queued`), Herdr seeing no turn start (`agent_prompt_stalled`),
 and `agent read` shows Pi's compaction line and each queued text as Pi does (`Steering: TEXT`);
 once that time passed, the next call has Pi take each queued text (a line in `prompts`).
+`pane list --workspace W` lists W's panes ({pane_id, tab_id, workspace_id, agent_status}), as
+Herdr 0.9.5 does; `pane process-info --pane P` gives P's `shell_pid`: the agent's `shell_pid` a
+scenario wrote (a real process standing in for the pane's shell), else a stand-in shell it starts
+(a real process, ending once this world's dir is gone) and records; `tab close` and `workspace
+close` send each closed pane's shell SIGHUP, as Herdr's close does.
 `pane read` shows a ready Pi prompt; `pane send-keys|send-text` log only. `agent list` prints every
 agent in Herdr's envelope ({"id", "result": {"agents"}}), as `agent get` shows one. A file `down`
 fails every call as a herdr with no server does (`error: could not connect to herdr server`,
 exit 1). Anything else exits 2.
 """
 
+import contextlib
 import json
 import os
 import shutil
+import signal
+import subprocess
 import sys
 import time
 from pathlib import Path
 
 IDLE_FALLBACK = 0.3  # s: Herdr 0.9.5 reads a booting Pi idle after about 5 s; scaled down
-HIDDEN = ("ready_at", "started_at", "reports", "label", "env")  # the world's own, never shown
+# the world's own, never shown
+HIDDEN = ("ready_at", "started_at", "reports", "label", "env", "shell_pid")
 INTEGRATION = "// installed by herdr\n// HERDR_INTEGRATION_ID=pi\n"  # the file Herdr writes
 
 
@@ -169,10 +178,49 @@ class World:
             return fail("tab_not_found")
         return say({"tab": {"tab_id": a[2], "label": g.get("label", "")}})
 
-    def tab_close(self, a: list[str]) -> int:
-        self.agents = {p: g for p, g in self.agents.items() if g["tab_id"] != a[2]}
+    def close(self, key: str, target: str) -> None:
+        """The panes whose KEY is TARGET dropped, each one's shell sent SIGHUP."""
+        for g in self.agents.values():
+            pid = g.get("shell_pid")
+            if g[key] == target and isinstance(pid, int):
+                with contextlib.suppress(ProcessLookupError):
+                    os.kill(pid, signal.SIGHUP)
+        self.agents = {p: g for p, g in self.agents.items() if g[key] != target}
         self.save()
+
+    def tab_close(self, a: list[str]) -> int:
+        self.close("tab_id", a[2])
         return 0
+
+    def pane_list(self, a: list[str]) -> int:
+        w = opts(a, "--workspace")
+        panes = [
+            {k: g[k] for k in ("pane_id", "tab_id", "workspace_id")}
+            | {"agent_status": self.status(g)}
+            for g in self.agents.values()
+            if not w or g["workspace_id"] == w[0]
+        ]
+        return say({"panes": panes, "type": "pane_list"})
+
+    def process_info(self, a: list[str]) -> int:
+        p = opts(a, "--pane")
+        g = self.agents.get(p[0]) if p else None
+        if g is None:
+            return fail("pane_not_found")
+        if not isinstance(g.get("shell_pid"), int):
+            loop = 'i=0; while [ -d "$0" ] && [ $i -lt 600 ]; do sleep 1; i=$((i+1)); done'
+            shell = subprocess.Popen(
+                ["sh", "-c", loop, str(self.dir)],  # noqa: S607
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            g["shell_pid"] = shell.pid
+            self.save()
+        no_fg: list[object] = []
+        info = {"pane_id": p[0], "shell_pid": g["shell_pid"], "foreground_processes": no_fg}
+        return say({"process_info": info, "type": "pane_process_info"})
 
     def workspace(self, a: list[str]) -> int:
         """`workspace get|close W`."""
@@ -183,8 +231,7 @@ class World:
         if a[1] == "get":
             info = {"workspace_id": w, "tab_count": len(tabs)}
             return say({"type": "workspace_info", "workspace": info})
-        self.agents = {p: g for p, g in self.agents.items() if g["workspace_id"] != w}
-        self.save()
+        self.close("workspace_id", w)
         return 0
 
     def agent_start(self, a: list[str]) -> int:
@@ -292,6 +339,8 @@ class World:
             ("tab", "create"): self.tab_create,
             ("tab", "close"): self.tab_close,
             ("tab", "get"): self.tab_get,
+            ("pane", "list"): self.pane_list,
+            ("pane", "process-info"): self.process_info,
             ("workspace", "close"): self.workspace,
             ("workspace", "get"): self.workspace,
             ("workspace", "create"): self.workspace_create,
