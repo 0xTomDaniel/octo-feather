@@ -7,9 +7,119 @@
     "stand_ins": {
       "herdr-say": [
         {
-          "args": [],
+          "args": [
+            "--help"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "-h"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--parked"
+          ],
+          "argc": 2,
+          "stdout": "",
+          "exit": 1
+        },
+        {
+          "args": [
+            "--parent"
+          ],
+          "argc": 2,
           "stdout": "",
           "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "argc": 2,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 64
         }
       ],
       "herdr-close": [
@@ -106,9 +216,119 @@
     "stand_ins": {
       "herdr-say": [
         {
-          "args": [],
+          "args": [
+            "--help"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "-h"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--parked"
+          ],
+          "argc": 2,
+          "stdout": "",
+          "exit": 1
+        },
+        {
+          "args": [
+            "--parent"
+          ],
+          "argc": 2,
           "stdout": "",
           "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "argc": 2,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 64
         }
       ],
       "herdr-close": [
@@ -215,9 +435,119 @@
     "stand_ins": {
       "herdr-say": [
         {
-          "args": [],
+          "args": [
+            "--help"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "-h"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--parked"
+          ],
+          "argc": 2,
+          "stdout": "",
+          "exit": 1
+        },
+        {
+          "args": [
+            "--parent"
+          ],
+          "argc": 2,
           "stdout": "",
           "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "argc": 2,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 64
         }
       ],
       "herdr-close": [
@@ -302,9 +632,119 @@
     "stand_ins": {
       "herdr-say": [
         {
-          "args": [],
+          "args": [
+            "--help"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "-h"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--parked"
+          ],
+          "argc": 2,
+          "stdout": "",
+          "exit": 1
+        },
+        {
+          "args": [
+            "--parent"
+          ],
+          "argc": 2,
           "stdout": "",
           "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "argc": 2,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 64
         }
       ],
       "herdr-close": [
@@ -419,9 +859,119 @@
     "stand_ins": {
       "herdr-say": [
         {
-          "args": [],
+          "args": [
+            "--help"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "-h"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--parked"
+          ],
+          "argc": 2,
+          "stdout": "",
+          "exit": 1
+        },
+        {
+          "args": [
+            "--parent"
+          ],
+          "argc": 2,
           "stdout": "",
           "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "argc": 2,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 64
         }
       ],
       "herdr-close": [
@@ -457,9 +1007,119 @@
     "stand_ins": {
       "herdr-say": [
         {
-          "args": [],
+          "args": [
+            "--help"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "-h"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--parked"
+          ],
+          "argc": 2,
+          "stdout": "",
+          "exit": 1
+        },
+        {
+          "args": [
+            "--parent"
+          ],
+          "argc": 2,
           "stdout": "",
           "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "argc": 2,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 64
         }
       ]
     },
@@ -484,9 +1144,119 @@
     "stand_ins": {
       "herdr-say": [
         {
-          "args": [],
+          "args": [
+            "--help"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "-h"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--parked"
+          ],
+          "argc": 2,
+          "stdout": "",
+          "exit": 1
+        },
+        {
+          "args": [
+            "--parent"
+          ],
+          "argc": 2,
           "stdout": "",
           "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "argc": 2,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 64
         }
       ],
       "herdr": [
@@ -607,9 +1377,119 @@
     "stand_ins": {
       "herdr-say": [
         {
-          "args": [],
+          "args": [
+            "--help"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "-h"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--parked"
+          ],
+          "argc": 2,
+          "stdout": "",
+          "exit": 1
+        },
+        {
+          "args": [
+            "--parent"
+          ],
+          "argc": 2,
           "stdout": "",
           "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 6,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 8,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "argc": 2,
+          "stdout": "",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 64
         }
       ],
       "herdr-close": [

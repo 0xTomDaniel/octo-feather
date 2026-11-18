@@ -74,7 +74,8 @@
         "program": "herdr-say",
         "args": [
           "--parent"
-        ]
+        ],
+        "exit": 0
       }
     ]
   },
@@ -99,7 +100,8 @@
         "program": "herdr-say",
         "args": [
           "--parent"
-        ]
+        ],
+        "exit": 0
       }
     ]
   },
