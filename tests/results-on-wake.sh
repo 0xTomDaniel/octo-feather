@@ -10,6 +10,8 @@
 #   once      the next run: no second listing
 #   compact   after a compaction (RPC compact), the first run's request holds the listing again
 #   no log    the same launch at a pane owning no lane record (HERDR_PANE_ID w9:p9): no listing
+#   implementer  an implementer launch at that supervisor pane: its role file loads no results-on-wake.ts
+#             (spec roles#fm-extensions; only the director and the supervisor do), so no listing
 #   none      the caller's log holds no outstanding worker: no listing
 # Pi starts from an empty environment (env -i), its own HOME and agent dir; no call leaves the test. Never skips:
 # without pi at the pin it fails naming the install command. Run by `just check`.
@@ -87,13 +89,13 @@ for line in open(log):
     print(f"{msgs[at]}:{len(after)}:{sum('/lanes/gh7.results/S7.md' in x for x in after)}")
 EOF
 
-# run PANE STEPS: the supervisor at PANE through the driver; sets out (one line per model request).
+# run PANE STEPS: the supervisor (ROLE, when set) at PANE through the driver; sets out (one line per model request).
 run() {
   : > "$t/log"
   out="$(cd "$t/repo" && env -i PATH="$t/bin:$PATH" HOME="$t/home" TMPDIR="$t" XDG_CACHE_HOME="$t/cache" XDG_STATE_HOME="$t/state" \
     PI_CODING_AGENT_DIR="$t/agent" PI_OFFLINE=1 PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0 FAKE_HERDR="$t/herdr" \
-    OCTO_FEATHER_ROLE=supervisor HERDR_PANE_ID="$1" HERDR_WORKSPACE_ID=w1 \
-    python3 "$t/rpc.py" "$2" "$t/log" "$kit/scripts/pi-role" "$kit/agents/supervisor.md" --model fake/fake --no-session --mode rpc)" \
+    OCTO_FEATHER_ROLE="${ROLE:-supervisor}" HERDR_PANE_ID="$1" HERDR_WORKSPACE_ID=w1 \
+    python3 "$t/rpc.py" "$2" "$t/log" "$kit/scripts/pi-role" "$kit/agents/${ROLE:-supervisor}.md" --model fake/fake --no-session --mode rpc)" \
     || fail "$1 $2: the driver failed: $out"
 }
 
@@ -106,6 +108,10 @@ echo "case compact: after a compaction the first run's request holds the listing
 run w9:p9 "go,compact,after"
 [[ "$out" == $'go:0:0\nafter:0:0' ]] || fail "no log: want no listing at a pane owning no record, got: $out"
 echo "case no log: a pane owning no lane record nor director.toml gets no listing"
+
+ROLE=implementer run w1:p1 "go,compact,after"
+[[ "$out" == $'go:0:0\nafter:0:0' ]] || fail "implementer: want no listing for a role not loading the extension, got: $out"
+echo "case implementer: an implementer launch at the same pane loads no results-on-wake.ts: no listing"
 
 echo '{"at": "2026-11-18T00:02:00Z", "kind": "attempt", "worker": "implementer-gh7", "session": "S7", "result": "done"}' >> "$lanes/gh7.handoffs.jsonl"
 run w1:p1 "go"

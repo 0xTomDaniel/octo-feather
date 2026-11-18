@@ -42,14 +42,16 @@ Frontmatter (one `key: value` per line, lists comma-separated):
                working directory's checkout, then its main checkout (a lane
                worktree lacks the gitignored install links). Never in home.
                A missing one is skipped with a warning
+  extensions   optional: --extension for each, a file name in the kit's
+               extensions/, on top of the ones every role gets (below; spec
+               roles#fm-extensions); one with no such file refuses the launch
 scripts/check-roles rejects any other key. Pi always gets --no-skills, so a
 global skill folder never leaks into a role: only listed skills load.
 Pi always gets --approve: project-local files are trusted for that one run, so
 Pi's "Trust project folder?" dialog never opens and ~/.pi/agent/trust.json is
 never written (issue #3).
 Pi always gets --extension for the kit's extensions/resume-on-error.ts
-(docs/adr/0023), extensions/results-on-wake.ts (comms spec #roles-goal; its header)
-and extensions/spend-ledger.ts (spec spend#writer-agent), and
+(docs/adr/0023) and extensions/spend-ledger.ts (spec spend#writer-agent), and
 --octo-feather-role <the role file's name> for the latter's purpose.
 Pi always gets --extension for the kit's extensions/skills-loaded.ts with
 --octo-feather-skills-loaded: every --skill folder and each other `Repo skills:`
@@ -78,8 +80,8 @@ the identity's env like any role when one is set.
 import hashlib, json, os, re, shutil, subprocess, sys, tomllib
 from typing import Any, cast
 
-KEYS = {"name", "description", "model", "thinking", "tools", "skills", "externalSkills"}
-LIST_KEYS = {"tools", "skills", "externalSkills"}
+KEYS = {"name", "description", "model", "thinking", "tools", "skills", "externalSkills", "extensions"}
+LIST_KEYS = {"tools", "skills", "externalSkills", "extensions"}
 # A headless run's route to panes: herdr-say --parent and Herdr's own pane ids (#77).
 HEADLESS_UNSET = ("OCTO_FEATHER_PARENT", "HERDR_PANE_ID", "HERDR_TAB_ID", "HERDR_WORKSPACE_ID")
 # A target's `tracker` value and the kit skill that implements it (spec skills#tracker); the kit
@@ -88,7 +90,7 @@ TRACKERS = {"github": "github-issues", "linear": "linear"}
 DEFAULT_TRACKER = "github"
 TRACKER_SLOT = "{tracker}"
 # The kit's Pi extensions every role loads, in the kit's extensions/ (issues #152, #187).
-EXTENSIONS = ("resume-on-error.ts", "results-on-wake.ts", "spend-ledger.ts")
+EXTENSIONS = ("resume-on-error.ts", "spend-ledger.ts")
 # A role's `web` tool: the kit's one web server list, loaded by the web extension (spec roles#launch-web).
 WEB = "web"
 WEB_LIST = "web-mcp.json"
@@ -105,6 +107,18 @@ IDENTITY_ENV = {"GIT_AUTHOR_NAME": "name", "GIT_AUTHOR_EMAIL": "email",
 READ_ONLY = ("code-reviewer", "qc-judge")
 # Roles whose contract never commits though they have edit and write (spec roles#general-purpose-workers).
 NO_COMMIT = ("general-worker",)
+
+
+def role_extensions(kit: str, path: str, names: list[str]) -> list[str]:
+    """--extension for each of role file PATH's own extensions (spec roles#fm-extensions), or refuse naming one
+    that is no file in the kit's extensions/."""
+    args: list[str] = []
+    for e in names:
+        f = os.path.join(kit, "extensions", e)
+        if os.path.basename(e) != e or not os.path.isfile(f):
+            sys.exit(f"pi-role: {path}: extension {e!r} is no file in {os.path.join(kit, 'extensions')}")
+        args += ["--extension", f]
+    return args
 
 
 def onboarding_file() -> str:
@@ -299,6 +313,7 @@ def launch(path: str, *, to_file: bool = False):
     roots = skill_roots(path)
     for e in EXTENSIONS:
         args += ["--extension", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(path))), "extensions", e)]
+    args += role_extensions(kit, path, fm.get("extensions", []))
     if web:
         args += ["--extension", os.path.join(kit, "extensions", WEB_EXTENSION),
                  "--octo-feather-web-servers", os.path.join(kit, WEB_LIST)]
