@@ -14,6 +14,8 @@ spec #acceptance-task-worker-route): its parent reached, a peer lane refused (77
 never messages the director: its parent proven gone, herdr-say itself sends the director one
 fixed alert, a timeout or a stall none (comms spec #acceptance-parent-gone). director_worker_resume
 drives comms spec #acceptance-director-worker-resume (its docstring names each step).
+fresh_worker_session drives the provider-session half of roles spec
+#acceptance-fresh-independent-worker (its docstring names each step).
 
 post-merge step 4 (owner ruling on issue 206; issues 398, 458): live supervisors of the PR's repo
 (every lane on a kit PR) told once, by the kit's own herdr-say with its bound, with the merge, PR,
@@ -824,6 +826,82 @@ def tell_supervisors(s: Scratch) -> None:
     told_gone(t)
 
 
+COMPLETION = "DONE commit abc123: the completion"
+WORKER = {
+    "OCTO_FEATHER_ROLE": "implementer",
+    "OCTO_FEATHER_PARENT": "w1:p1",
+    "HERDR_PANE_ID": "w1:p2",
+    "HERDR_WORKSPACE_ID": "w1",
+}
+
+
+def queued_completion(s: Scratch) -> None:
+    """comms #acceptance-queued-completion: an implementer's `herdr-say --parent COMPLETION`
+    while its supervisor w1:p1 compacts for 2 s, Herdr confirming nothing (agent_prompt_stalled)
+    and the supervisor's pane showing COMPLETION queued: herdr-say exits 0 only after compaction
+    ended, the supervisor received COMPLETION once, one prompt was sent. Compaction outlasting
+    the bound: no resend, a non-zero exit naming it queued, nothing received yet, no alert to the
+    director w0:p1. Each observation printed, for the verify drive."""
+    say = str(ASSETS / "herdr-say")
+    compacting = agent("w1:p1", "gh7", "idle") | {"compacting_until": time.time() + 2}
+    d = herdr_world(s, {"w1:p1": compacting, "w0:p1": agent("w0:p1", "director", "idle")})
+    t0 = time.monotonic()
+    ran = s.run([say, "--parent", COMPLETION], env=WORKER)
+    took = time.monotonic() - t0
+    got = [x for x in lines(d / "prompts") if x.startswith("w1:p1\t")]
+    sent = [x for x in lines(d / "log") if x.startswith("agent prompt ")]
+    sys.stdout.write(f"herdr-say exit 0 after {took:.1f}s: {ran.err}\n")
+    sys.stdout.write(f"delivered {len(got)}, attempts {len(sent)}\n")
+    assert got == [f"w1:p1\t{COMPLETION}"], lines(d / "prompts")
+    assert len(sent) == 1, sent
+    assert took >= 2, f"exit 0 before compaction ended, after {took:.1f}s"
+    assert "queued" in ran.err, ran.err
+
+    (s.root / "long").mkdir()
+    s2 = Scratch(s.root / "long")
+    long = agent("w1:p1", "gh7", "idle") | {"compacting_until": time.time() + 3600}
+    d = herdr_world(s2, {"w1:p1": long, "w0:p1": agent("w0:p1", "director", "idle")})
+    ran = s2.run([say, "--timeout", "1", "--parent", COMPLETION], want=1, env=WORKER)
+    sent = [x for x in lines(d / "log") if x.startswith("agent prompt ")]
+    sys.stdout.write(f"still compacting at the bound: exit 1: {ran.err.splitlines()[-1]}\n")
+    sys.stdout.write(f"delivered {len(lines(d / 'prompts'))}, attempts {len(sent)}\n")
+    assert lines(d / "prompts") == [], lines(d / "prompts")
+    assert len(sent) == 1, sent
+    assert "queued" in ran.err.splitlines()[-1], ran.err
+    assert "not resent" in ran.err.splitlines()[-1], ran.err
+
+
+def fresh_worker_session(s: Scratch) -> None:
+    """roles #acceptance-fresh-independent-worker, its provider-session half, through the real
+    herdr-spawn and herdr-close: supervisor zt1:p0 spawns implementer-gh13 for #13 and closes it
+    (assignment done); its spawn for the independent #14, implementer-gh14, prints another
+    provider_session_id, and Pi is started with that --session-id; a --resume of the closed session
+    (the same unfinished assignment only) reuses it. Space zt1: no real Herdr gives it, so
+    herdr-close's sweep reaches no box process. Each observation printed, for the qc demo."""
+    d = herdr_world(s)
+    s.identity()
+    sup = SUPERVISOR | {"HERDR_PANE_ID": "zt1:p0", "HERDR_WORKSPACE_ID": "zt1"}
+
+    def spawn(name: str, *more: str) -> dict[str, str]:
+        wt = s.root / f"wt-{name}"
+        wt.mkdir(exist_ok=True)
+        argv = [str(ASSETS / "herdr-spawn"), "--workspace", "zt1", "--name", name, "--label", name]
+        out = s.run([*argv, "--role", "implementer", "--cwd", str(wt), *more], env=sup).out
+        got = dict(x.split("=", 1) for x in out.split())
+        starts = [x for x in lines(d / "log") if x.startswith(f"agent start {name} ")]
+        assert f" --session-id {got['provider_session_id']} " in f"{starts[-1]} ", starts
+        show(f"herdr-spawn --name {name} {' '.join(more)}: {out}")
+        return got
+
+    closed = spawn("implementer-gh13")
+    s.run([str(ASSETS / "herdr-close"), closed["tab"]], env=sup)
+    show(f"herdr-close {closed['tab']}: implementer-gh13's assignment closed")
+    fresh = spawn("implementer-gh14")
+    assert fresh["provider_session_id"] != closed["provider_session_id"], (closed, fresh)
+    resumed = spawn("implementer-gh13", "--resume", closed["provider_session_id"])
+    assert resumed["provider_session_id"] == closed["provider_session_id"], (closed, resumed)
+
+
 if __name__ == "__main__":
     main(
         spawn_ready_late,
@@ -837,4 +915,6 @@ if __name__ == "__main__":
         worker_route,
         parent_gone,
         director_worker_resume,
+        queued_completion,
+        fresh_worker_session,
     )
