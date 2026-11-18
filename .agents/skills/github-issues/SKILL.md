@@ -20,7 +20,7 @@ A key is the issue number, `82`.
 | --- | --- | --- |
 | `lane-key ID` | Lane key for an issue as the owner writes it (`82`, `#82`, its URL) | `gh82` |
 | `key-from-branch BRANCH` | Parent issue of a lane branch or a worker branch named after it | `82` |
-| `issue-view KEY` | Reads one issue | JSON: `key`, `title`, `body`, `state` (`open` or `done`), `url`, `parent` (key or null), `children` (its sub-issues' keys), `blocked_by` (keys) |
+| `issue-view KEY [--notes]` | Reads one issue | JSON: `key`, `title`, `body`, `state` (`open` or `done`), `url`, `parent` (key or null), `children` (its sub-issues' keys), `blocked_by` (keys); `--notes` adds `notes` (`at`, `edited_at` or null, `url`, `body`; the body first, then each comment) |
 | `issue-create --title T --body-file F\|- [--parent KEY] [--blocked-by KEY]...` | Files an issue, optionally a sub-issue of a parent and blocked by others | The new key |
 | `issue-comment KEY [--body-file F\|-]` | Adds a comment (standard input by default) | The comment's url |
 | `issue-done KEY` | Closes the issue; one already closed stays closed | Nothing |
