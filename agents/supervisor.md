@@ -80,7 +80,7 @@ VERIFY      the hand-off gate (quality spec `#acceptance-gate-green`) plus exact
 TIMEBOX     rough cap; on expiry, return partial findings and stop
 ```
 
-A brief names a test seam only as a `Seam:` line already on its ticket, `octo-feather-lane seam <ticket> <spec>#<anchor> <seam>` exiting 0; a seam the ticket lacks, on QC or review rework too, you post on the ticket first (`to-tickets`, its Seams). Failure example: lane gh840's QC-rework brief set the `herdr-spawn` CLI seam for #876 at 03:22Z, the test followed at 03:24Z, and the seam reached the ticket only after the final review blocked it (#987).
+A brief names a test seam only once its ticket holds it as a `Seam:` line: a seam set later goes through `to-tickets`, step 5, A seam set later. Whether a QC or review result needs a new seam at all is yours to judge.
 
 On a refactoring lane, the playbook's pin (its step 1) and equivalence proof (its step 6) are the implementer's work: name them in the brief's ACCEPTANCE and VERIFY (what is pinned, the command proving old and new outputs equal); never write that test or script yourself (Never: implement).
 
