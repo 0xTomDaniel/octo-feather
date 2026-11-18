@@ -755,3 +755,11 @@ reviewed-implementer-result-integrated only (the other cases' record shapes as i
   ["12", "implementer-gh16"]
   ```
 
+
+Commits after this proof head 74e40c9d are evidence and qc.toml metadata only (no case, role or script): `git diff --stat 74e40c9d..2bd77321` (the commit adding this paragraph changes only this file):
+
+```
+ .../2026-11-17-gh840-supervisor-general-worker.md  | 230 ++++++++++++++++++++-
+ qc.toml                                            |   9 +-
+ 2 files changed, 231 insertions(+), 8 deletions(-)
+```
