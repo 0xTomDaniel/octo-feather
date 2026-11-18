@@ -56,16 +56,25 @@
       ]
     },
     "acceptance-parent-resumed": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1021,
+      "record": "20261118T230730Z-f946c31c",
+      "commit": "66050f99f0c95306d356382a17d49697802c7df0",
+      "tests": []
     },
     "acceptance-result-file": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1021,
+      "record": "20261118T230736Z-697e6fe4",
+      "commit": "66050f99f0c95306d356382a17d49697802c7df0",
+      "tests": []
     },
     "acceptance-result-missing": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1021,
+      "record": "20261118T230739Z-2d2aec8a",
+      "commit": "66050f99f0c95306d356382a17d49697802c7df0",
+      "tests": []
     },
     "acceptance-director-worker-resume": {
       "status": "built",
