@@ -31,8 +31,8 @@
     "acceptance-autonomous-local": {
       "status": "built",
       "pr": 882,
-      "record": "20261118T042632Z-49ccc94e",
-      "commit": "303403015a702c27de53a355704d1d8fbf22d515",
+      "record": "20261118T202458Z-b91d0670",
+      "commit": "f28674d5a21b6594263fbfc0d65a9d9fc646eac9",
       "tests": []
     },
     "acceptance-real-blocker": {
@@ -42,15 +42,15 @@
     "acceptance-no-routine-traffic": {
       "status": "built",
       "pr": 882,
-      "record": "20261118T043007Z-bc580006",
-      "commit": "303403015a702c27de53a355704d1d8fbf22d515",
+      "record": "20261118T203120Z-8f62fafe",
+      "commit": "f28674d5a21b6594263fbfc0d65a9d9fc646eac9",
       "tests": []
     },
     "acceptance-queued-completion": {
       "status": "built",
       "pr": 882,
-      "record": "20261118T041720Z-69fe2260",
-      "commit": "303403015a702c27de53a355704d1d8fbf22d515",
+      "record": "20261118T201319Z-27a68670",
+      "commit": "f28674d5a21b6594263fbfc0d65a9d9fc646eac9",
       "tests": [
         "tests/gate/kit/herdr_messaging.py"
       ]
