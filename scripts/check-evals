@@ -469,7 +469,7 @@ def check_setup(at, c, evals, errs):
 
 
 def seen_tree(c: dict[str, object]) -> object:
-    """The fixture the agent sees (schema.md, Case): head's last then entry's, else head's, else the case's."""
+    """The fixture the agent sees (rule: schema.md, Case)."""
     h = c.get("head")
     if not isinstance(h, dict):
         return c.get("fixture")

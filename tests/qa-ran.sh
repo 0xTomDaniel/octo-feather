@@ -67,7 +67,7 @@ python3 - "$t/rf/rf" <<'PY'
 import json, sys
 d = sys.argv[1]
 step = [["bash", "herdr-say --parent 'hi there' < /dev/null; echo rc=$?; herdr-say --parent < /dev/null; echo rc=$?; herdr-say other x < /dev/null; echo rc=$?; "
-                 "herdr agent get p1; echo rc=$?; herdr-close p1; herdr agent get p1; echo rc=$?; echo REPO=$PWD; herdr pane read p1; echo HEAD=$(git rev-parse HEAD)"]]
+                 "herdr agent get p1; echo rc=$?; herdr-close p1; herdr agent get p1; echo rc=$?; echo REPO=$PWD; herdr pane read p1; echo HEAD=$(git rev-parse HEAD); echo SHORT=$(git rev-parse --short=12 HEAD)"]]
 stands = {"herdr-say": [{"args": ["--parent"], "argc": 2, "stdout": "delivered\n", "exit": 0},
                         {"args": ["--parent"], "stdout": "usage: herdr-say\n", "exit": 64}],
           "herdr": [{"args": ["agent", "get", "p1"], "stdout": "gone\n", "exit": 1, "after": ["herdr-close", "p1"]},
@@ -92,8 +92,9 @@ grep -qx 'delivered' <<< "$so" && grep -qx 'rc=0' <<< "$so" && grep -qx 'usage: 
 repo="$(sed -n 's/^REPO=//p' <<< "$so")"
 [[ -n "$repo" ]] && grep -qx "up in $repo" <<< "$so" && grep -qx 'gone' <<< "$so" \
   || fail "stand_ins: want {repo} filled, then the after-close answer: $so"
-head="$(sed -n 's/^HEAD=//p' <<< "$so")"   # {head:N}: the first N hex digits of the setup HEAD (schema.md, Case, stand_ins)
-[[ ${#head} == 40 ]] && grep -qx "at ${head:0:12} of $head" <<< "$so" || fail "stand_ins: want {head:12} and {head} filled: $so"
+head="$(sed -n 's/^HEAD=//p' <<< "$so")"   # {head:N}: schema.md, Case, stand_ins
+short="$(sed -n 's/^SHORT=//p' <<< "$so")"   # git's own --short=12 of that HEAD, the oracle
+[[ ${#head} == 40 && ${#short} == 12 ]] && grep -qx "at $short of $head" <<< "$so" || fail "stand_ins: want {head:12} and {head} filled: $so"
 # fake_qa (schema.md, Case): the role's own octo-feather-qa call recorded by the ran shim and answered in the real
 # tool's output form, with no case run; a poison octo-feather-qa further down PATH (where the kit's real one would be
 # found) never runs. The case repo holds an eval suite (fixture fxe: fx plus evals/s1, case c1).
