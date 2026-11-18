@@ -1,8 +1,0 @@
-supervisor = "w2:p1"
-repository = "example/app"
-issue = 12
-goal = "Greet shout and times"
-started_at = "2026-10-20T09:00:00Z"
-waiting_on = ""
-pr = 31
-last_handoff_at = "2026-10-22T16:40:00Z"

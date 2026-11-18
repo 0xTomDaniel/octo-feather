@@ -41,47 +41,5 @@
     ]
    }
   ]
- },
- "supervisor-call-restated-spec": {
-  "facts": [
-   {
-    "fact": "branch_paths",
-    "touched": [
-     "docs/specs/greet.spec.html",
-     "docs/specs/usage.spec.html"
-    ]
-   }
-  ]
- },
- "supervisor-call-restated-readme": {
-  "facts": [
-   {
-    "fact": "branch_paths",
-    "touched": [
-     "docs/specs/greet.spec.html",
-     "README.md"
-    ]
-   }
-  ]
- },
- "implementer-help-owned-rule": {
-  "facts": [
-   {
-    "fact": "branch_paths",
-    "touched": [
-     "src/app.py",
-     "README.md"
-    ]
-   },
-   {
-    "fact": "field_lines",
-    "field": "Owner",
-    "includes": [
-     {
-      "path": "src/app.py"
-     }
-    ]
-   }
-  ]
  }
 }
