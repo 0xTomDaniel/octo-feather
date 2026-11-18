@@ -87,23 +87,29 @@ import datetime as dt
 import fcntl
 import json
 import os
+import shutil
 import signal
 import subprocess
 import sys
-from dataclasses import asdict, dataclass
+import time
+from contextlib import contextmanager
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import IO, TYPE_CHECKING, cast
 
 import tomllib
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator, Iterator
 
 KIT = Path(__file__).resolve().parent.parent
 BUDGET = KIT / "gate-budget.toml"
 KINDS = ("heavy", "eval")
-LEAST = {"heavy_items": 0, "heavy_slots": 1, "eval_slots": 1}
-DEFAULTS = {"heavy_items": 30, "heavy_slots": 1, "eval_slots": 1}
+LEAST = {"heavy_items": 0, "heavy_slots": 1, "eval_slots": 1, "slot_grace_seconds": 0}
+DEFAULTS = {"heavy_items": 30, "heavy_slots": 1, "eval_slots": 1, "slot_grace_seconds": 60}
+GRANT_HOURS = 2.0
+GRACE_ENV = "OCTO_FEATHER_SLOT_GRACE"
+AGENT_VARS = ("OCTO_FEATHER_ROLE", "OCTO_FEATHER_PARENT")
 REFUSED, NOT_DIRECTOR, USAGE = 75, 77, 64
 WHAT = {
     "heavy": "gate runs over heavy_items items, fast-map, timing",
@@ -134,8 +140,18 @@ def parse_stamp(s: str) -> dt.datetime:
     return dt.datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.UTC)
 
 
+def precise(t: dt.datetime) -> str:
+    """T to the microsecond: a run's end, which the grace is measured from."""
+    return t.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
+
+
+def parse_precise(s: str) -> dt.datetime:
+    return dt.datetime.strptime(s, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=dt.UTC)
+
+
 def budget() -> dict[str, int]:
-    """heavy_items, heavy_slots, eval_slots: the kit's gate-budget.toml, a default when absent."""
+    """heavy_items, heavy_slots, eval_slots, slot_grace_seconds: the kit's gate-budget.toml, a
+    default when absent."""
     try:
         got = tomllib.loads(BUDGET.read_text(encoding="utf-8"))
     except FileNotFoundError:
@@ -150,11 +166,34 @@ def budget() -> dict[str, int]:
     return out
 
 
-def slots_dir() -> Path:
+def grace() -> int:
+    """The queue's grace in seconds: OCTO_FEATHER_SLOT_GRACE, else slot_grace_seconds."""
+    v = os.environ.get(GRACE_ENV)
+    if v is None:
+        return budget()["slot_grace_seconds"]
+    if not v.isdigit():
+        raise RefusedError(USAGE, f"{GRACE_ENV} {v!r} is not a whole number of seconds >= 0")
+    return int(v)
+
+
+def slots_home() -> Path:
     base = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
-    d = Path(base) / "octo-feather" / "slots"
+    return Path(base) / "octo-feather" / "slots"
+
+
+def slots_dir() -> Path:
+    d = slots_home()
     d.mkdir(parents=True, exist_ok=True)
     return d
+
+
+@contextmanager
+def locked(kind: str) -> Generator[None]:
+    """KIND's files lock (KIND.files.lock), held for one read-modify-write of its grants and
+    queue."""
+    with (slots_dir() / f"{kind}.files.lock").open("a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        yield
 
 
 def lanes_dir() -> Path:
@@ -202,12 +241,14 @@ class Grant:
     since: str
     expires: str
     by: str
+    ended: str = ""  # when the last run under this grant ended (precise), "" before any
 
     def live(self, t: dt.datetime) -> bool:
         return parse_stamp(self.expires) > t
 
     def show(self) -> str:
-        return f"{self.lane} (granted {self.since} by {self.by}, expires {self.expires})"
+        ran = f", last run ended {self.ended}" if self.ended else ""
+        return f"{self.lane} (granted {self.since} by {self.by}, expires {self.expires}{ran})"
 
 
 def grants(kind: str) -> list[Grant]:
@@ -234,6 +275,78 @@ def write_grants(kind: str, gs: list[Grant]) -> None:
 
 def holders(kind: str) -> str:
     return "; ".join(g.show() for g in grants(kind)) or "none"
+
+
+@dataclass(frozen=True)
+class Queued:
+    lane: str
+    since: str
+    by: str
+    lanes: str  # the lanes dir it was queued from: its supervisor's and the director's session
+
+    def show(self) -> str:
+        return f"{self.lane} (queued {self.since} by {self.by})"
+
+
+def queue_of(kind: str) -> list[Queued]:
+    """KIND's queue, its head first."""
+    p = slots_dir() / f"{kind}.queue.json"
+    try:
+        raw = cast("dict[str, list[dict[str, str]]]", json.loads(p.read_text(encoding="utf-8")))
+        return [Queued(**q) for q in raw["queue"]]
+    except FileNotFoundError:
+        return []
+    except (ValueError, KeyError, TypeError) as e:
+        msg = f"{p}: not a queue file ({type(e).__name__}: {e})"
+        raise RefusedError(USAGE, msg) from e
+
+
+def write_queue(kind: str, qs: list[Queued]) -> None:
+    p = slots_dir() / f"{kind}.queue.json"
+    tmp = p.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps({"queue": [asdict(q) for q in qs]}, indent=2) + "\n", "utf-8")
+    tmp.replace(p)
+
+
+def tell(pane: str, msg: str) -> None:
+    """MSG to PANE through herdr-say, as the slot rule's notice (--help): without the caller's
+    agent role and parent."""
+    env = {k: v for k, v in os.environ.items() if k not in AGENT_VARS}
+    exe = shutil.which("herdr-say")
+    if exe is None:
+        say(f"not told {pane}: no herdr-say on PATH")
+        return
+    try:
+        p = subprocess.run(
+            [exe, "--timeout", "60", pane, msg],
+            env=env,
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as e:
+        say(f"not told {pane}: herdr-say: {e}")
+        return
+    if p.returncode == 0:
+        say(f"told {pane}")
+    else:
+        say(f"not told {pane}: herdr-say exit {p.returncode}: {(p.stderr or p.stdout).strip()}")
+
+
+def told(g: Grant, kind: str, why: str) -> str:
+    return (
+        f"octo-feather-slot: the {kind} slot is granted to lane {g.lane} until {g.expires} "
+        f"({why}); run your {kind} run now."
+    )
+
+
+def record_pane(path: Path, key: str) -> str | None:
+    try:
+        v = tomllib.loads(path.read_text(encoding="utf-8")).get(key)
+    except (OSError, ValueError):
+        return None
+    return v if isinstance(v, str) and v else None
 
 
 @dataclass(frozen=True)
@@ -290,11 +403,11 @@ def ancestors() -> Iterator[int]:
             return
 
 
-def ask(lane: str | None, kind: str) -> str:
+def ask(lane: str | None, kind: str, verb: str = "grant") -> str:
     if lane:
-        return f"ask the director: octo-feather-slot grant {lane} --kind {kind}"
+        return f"ask the director: octo-feather-slot {verb} {lane} --kind {kind}"
     return (
-        f"ask the director: octo-feather-slot grant <lane> --kind {kind} (no lane resolved for "
+        f"ask the director: octo-feather-slot {verb} <lane> --kind {kind} (no lane resolved for "
         "this agent: no lane record names its pane, parent or space)"
     )
 
@@ -322,9 +435,10 @@ def hold(kind: str, items: int | None) -> int:
         else "this eval run (octo-feather-qa) runs model evals"
     )
     if lane not in {g.lane for g in grants(kind)}:
+        verb = "queue" if len(grants(kind)) >= b[f"{kind}_slots"] else "grant"
         say(
             f"octo-feather-slot: refused, nothing ran: {what}, and lane {lane or 'none'} holds no "
-            f"{kind} grant; current holder: {holders(kind)}; {ask(lane, kind)}"
+            f"{kind} grant; current holder: {holders(kind)}; {ask(lane, kind, verb)}"
         )
         return REFUSED
     for lk, rec in lock_paths(kind):
@@ -352,8 +466,22 @@ def keep(f: IO[str], rec: Path, r: Run, kind: str) -> int:
     sys.stdout.close()
     while sys.stdin.buffer.read(65536):
         pass
+    with locked(kind):  # the run's end, on its lane's grant
+        gs = grants(kind)
+        if any(g.lane == r.lane for g in gs):
+            end = precise(dt.datetime.now(dt.UTC))
+            write_grants(kind, [replace(g, ended=end) if g.lane == r.lane else g for g in gs])
     rec.unlink(missing_ok=True)
     f.close()
+    check = [sys.executable, str(Path(__file__).resolve()), "settle", "--kind", kind]
+    with (slots_dir() / f"{kind}.settle.log").open("a") as log:  # detached: none of our pipes
+        subprocess.Popen(
+            [*check, "--after", str(grace())],
+            stdin=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
+            start_new_session=True,
+        )
     return 0
 
 
@@ -401,6 +529,78 @@ def revoke(lane: str, kind: str) -> int:
     return 0
 
 
+def queue(lane: str, kind: str) -> int:
+    director_only("queue")
+    known = set(supervisors())
+    if lane != "director" and lane not in known:
+        have = " ".join(sorted(known)) or "none"
+        msg = f"octo-feather-slot: no lane {lane} in {lanes_dir()} (have: {have})"
+        raise RefusedError(USAGE, msg)
+    with locked(kind):
+        gs, qs = grants(kind), queue_of(kind)
+        if any(g.lane == lane for g in gs):
+            say(f"{lane} holds a {kind} grant already; nothing changed")
+            return 0
+        at = next((i for i, q in enumerate(qs, 1) if q.lane == lane), 0)
+        if at:
+            say(f"{lane} is already queued for the {kind} slot, position {at}; nothing changed")
+            return 0
+        if len(gs) >= budget()[f"{kind}_slots"]:
+            by = os.environ.get("HERDR_PANE_ID") or "director"
+            write_queue(kind, [*qs, Queued(lane, stamp(now()), by, str(lanes_dir()))])
+            say(f"queued: lane {lane} for the {kind} slot, position {len(qs) + 1}")
+            return 0
+        grant(lane, kind, GRANT_HOURS)
+        g = next(g for g in grants(kind) if g.lane == lane)
+    pane = record_pane(lanes_dir() / f"{lane}.toml", "supervisor")
+    if pane:
+        tell(pane, told(g, kind, "queued onto a free slot"))
+    return 0
+
+
+def settle(kind: str, after: float) -> int:
+    """The queue check (--help, the queue): each grant of KIND whose run ended a grace ago, no run
+    of its lane holding the slot now, passes to the queue's head; the head and director told."""
+    time.sleep(after)
+    if not slots_home().is_dir():  # its box state gone (a scratch removed): nothing to check
+        return 0
+    wait = grace()
+    passed: list[tuple[Grant, Queued, Grant]] = []
+    with locked(kind):
+        gs, qs = grants(kind), queue_of(kind)
+        running = {r.lane for r in runs(kind)}
+        t = dt.datetime.now(dt.UTC)
+        due = [
+            g
+            for g in gs
+            if g.ended
+            and g.lane not in running
+            and (t - parse_precise(g.ended)).total_seconds() >= wait
+        ]
+        for g, q in zip(due, qs, strict=False):
+            s = now()
+            new = Grant(q.lane, stamp(s), stamp(s + dt.timedelta(hours=GRANT_HOURS)), "queue")
+            gs = [*[x for x in gs if x.lane not in (g.lane, q.lane)], new]
+            passed.append((g, q, new))
+        if passed:
+            write_grants(kind, gs)
+            write_queue(kind, qs[len(passed) :])
+    left = " ".join(q.lane for q in qs[len(passed) :]) or "none"
+    if not passed:
+        say(f"{stamp(now())} settle {kind}: nothing passes (queue: {left})")
+    for g, q, new in passed:
+        say(f"{stamp(now())} settle {kind}: passed from lane {g.lane} to lane {q.lane}")
+        pane = record_pane(Path(q.lanes) / f"{q.lane}.toml", "supervisor")
+        why = f"lane {g.lane}'s run ended, no run within the {wait} s grace"
+        if pane:
+            tell(pane, told(new, kind, why))
+        director = record_pane(Path(q.lanes).parent / "director.toml", "pane")
+        if director:
+            moved = f"{kind} slot passed from lane {g.lane} to lane {q.lane}; queue left: {left}."
+            tell(director, f"octo-feather-slot: {moved}")
+    return 0
+
+
 def status() -> int:
     b = budget()
     for kind in KINDS:
@@ -409,7 +609,21 @@ def status() -> int:
         say(f"  holder: {holders(kind)}")
         rs = runs(kind)
         say(f"  run holding it now: {'; '.join(r.show() for r in rs) if rs else 'none'}")
+        qs = "; ".join(f"{i}. {q.show()}" for i, q in enumerate(queue_of(kind), 1))
+        say(f"  queue: {qs or 'none'}")
     return 0
+
+
+def change(cmd: str, a: argparse.Namespace, kind: str) -> int:
+    """grant and revoke under KIND's files lock; queue and settle, which take it themselves."""
+    if cmd == "queue":
+        return queue(cast("str", a.lane), kind)
+    if cmd == "settle":
+        return settle(kind, cast("float", a.after))
+    with locked(kind):
+        if cmd == "grant":
+            return grant(cast("str", a.lane), kind, cast("float", a.hours))
+        return revoke(cast("str", a.lane), kind)
 
 
 def main(argv: list[str]) -> int:
@@ -418,23 +632,24 @@ def main(argv: list[str]) -> int:
         return 0
     p = argparse.ArgumentParser(prog="octo-feather-slot", add_help=False)
     sub = p.add_subparsers(dest="cmd", required=True)
-    for name in ("grant", "revoke"):
+    for name in ("grant", "revoke", "queue"):
         s = sub.add_parser(name)
         s.add_argument("lane")
         s.add_argument("--kind", choices=KINDS, required=True)
         if name == "grant":
             s.add_argument("--hours", type=float, default=2.0)
     sub.add_parser("status")
+    st = sub.add_parser("settle")
+    st.add_argument("--kind", choices=KINDS, required=True)
+    st.add_argument("--after", type=float, default=0.0)
     h = sub.add_parser("hold")
     h.add_argument("--kind", choices=KINDS, required=True)
     h.add_argument("--items", type=int)
     a = p.parse_args(argv)
     cmd, kind = cast("str", a.cmd), cast("str", getattr(a, "kind", ""))
     try:
-        if cmd == "grant":
-            return grant(cast("str", a.lane), kind, cast("float", a.hours))
-        if cmd == "revoke":
-            return revoke(cast("str", a.lane), kind)
+        if cmd in ("grant", "revoke", "queue", "settle"):
+            return change(cmd, a, kind)
         if cmd == "status":
             return status()
         return hold(kind, cast("int | None", a.items))

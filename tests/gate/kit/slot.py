@@ -10,7 +10,16 @@ does a run outside a Herdr agent; a non-director's grant is refused. granted: wi
 the run holds the slot (status names its run) while a nested 31-item run under it is not
 refused, a second concurrent one is, and qa needs its own eval grant, then runs beside it.
 sandboxed: a 31-item run inside the qc sandbox (a `just qc` demo, as qa runs its cases there)
-from that same ungranted agent runs."""
+from that same ungranted agent runs.
+
+The queue (owner ruling 2026-11-14 #906, #976), herdr-say a stand-in first on PATH recording each
+message (testkit/argv_recorder.sh), the grace shortened through OCTO_FEATHER_SLOT_GRACE:
+queued: queue is the director's and checks its lane; gh8 queued once onto gh7's full heavy slot,
+status lists it; nothing passes before a run started under gh7's grant, nor while its run holds
+past the grace; after the run ends and the grace passes gh8 holds it, off the queue, and its
+supervisor and the director were told. follow_up: a follow-up run of gh7 inside the grace keeps
+the slot; it passes after that run ends. queue_free: queued onto a free kind, granted at once and
+told."""
 
 from __future__ import annotations
 
@@ -20,7 +29,7 @@ import sys
 import time
 from pathlib import Path
 
-from testkit import ROOT, Scratch, kit, main, pnpm_store, tool_homes
+from testkit import HERE, ROOT, Scratch, kit, main, pnpm_store, tool_homes
 from testkit.qc import qc, target
 
 SLOT = kit("octo-feather-slot")
@@ -79,8 +88,11 @@ def world(s: Scratch) -> None:
     lanes.mkdir(parents=True)
     for lane, sup in LANES.items():
         (lanes / f"{lane}.toml").write_text(f'supervisor = "{sup}"\n')
+    (lanes.parent / "director.toml").write_text('pane = "w1:p1"\n')
+    (s.bin / "herdr-say").symlink_to(HERE / "argv_recorder.sh")
     s.env = {k: v for k, v in s.env.items() if k not in PANE}
     s.env |= {"XDG_STATE_HOME": str(s.root / "state"), "PYTHONPATH": str(ROOT)}
+    s.env |= {"ARGV_LOG": str(s.root / "said"), "OCTO_FEATHER_SLOT_GRACE": "0"}
 
 
 def run_gate(s: Scratch, d: Path, *, want: int, env: dict[str, str], workers: int = 2) -> str:
@@ -100,7 +112,7 @@ def refused(s: Scratch) -> None:
         for want in (
             "refused, nothing ran: this heavy run selects 31 items, over heavy_items 30",
             "lane gh7 holds no heavy grant; current holder: gh8 (granted ",
-            "ask the director: octo-feather-slot grant gh7 --kind heavy",
+            "ask the director: octo-feather-slot queue gh7 --kind heavy",
         ):
             assert want in out, out
         assert "passed" not in out, out
@@ -203,5 +215,120 @@ def sandboxed(s: Scratch) -> None:
     assert "PASS acceptance-a" in ran.out, ran.out
 
 
+GRACE = 2
+TOLD = (
+    "octo-feather-slot: the heavy slot is granted to lane gh8 until {until} (lane gh7's run "
+    f"ended, no run within the {GRACE} s grace); run your heavy run now."
+)
+PASSED = "octo-feather-slot: heavy slot passed from lane gh7 to lane gh8; queue left: none."
+
+
+def said(s: Scratch) -> list[list[str]]:
+    """Each herdr-say call's arguments, in order (testkit/argv_recorder.sh's records)."""
+    log = s.root / "said"
+    recs = log.read_text().split("\0\n") if log.exists() else []
+    return [r.split("\0")[2:] for r in recs if r]
+
+
+def holding(s: Scratch) -> subprocess.Popen[str]:
+    """A 31-item heavy run of gh7's implementer, held by `hold` until its stdin closes."""
+    cmd = [SLOT, "hold", "--kind", "heavy", "--items", "31"]
+    env = {**s.env, **AGENT}
+    p = subprocess.Popen(cmd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+    assert p.stdout is not None
+    line = p.stdout.readline()
+    assert line.startswith("held: the heavy slot for lane gh7"), line
+    return p
+
+
+def end(p: subprocess.Popen[str]) -> None:
+    assert p.stdin is not None
+    p.stdin.close()
+    assert p.wait(timeout=WAIT_S) == 0
+
+
+def holder(s: Scratch, kind: str = "heavy") -> str:
+    """KIND's holder line and queue line of `octo-feather-slot status`."""
+    lines = s.run([SLOT, "status"]).out.splitlines()
+    at = next(i for i, ln in enumerate(lines) if ln.startswith(f"{kind} ("))
+    return "\n".join(ln for ln in lines[at + 1 : at + 4] if "holder:" in ln or "queue:" in ln)
+
+
+def passed(s: Scratch) -> str:
+    """The heavy holder and queue once gh8 holds it (within WAIT_S)."""
+    stop = time.time() + WAIT_S
+    while "holder: gh8 (granted " not in (st := holder(s)):
+        assert time.time() < stop, f"the slot never passed to gh8: {st}"
+        time.sleep(0.2)
+    return st
+
+
+def queued(s: Scratch) -> None:
+    world(s)
+    s.env |= {"OCTO_FEATHER_SLOT_GRACE": str(GRACE)}
+    no = s.run([SLOT, "queue", "gh8", "--kind", "heavy"], want=77, env=AGENT)
+    assert "queue is the director's" in no.err, no.err
+    gone = s.run([SLOT, "queue", "gh9", "--kind", "heavy"], want=64, env=DIRECTOR)
+    assert "no lane gh9 in " in gone.err, gone.err
+    s.run([SLOT, "grant", "gh7", "--kind", "heavy"], env=DIRECTOR)
+    q = s.run([SLOT, "queue", "gh8", "--kind", "heavy"], env=DIRECTOR).out
+    assert q == "queued: lane gh8 for the heavy slot, position 1", q
+    again = s.run([SLOT, "queue", "gh8", "--kind", "heavy"], env=DIRECTOR).out
+    assert again == "gh8 is already queued for the heavy slot, position 1; nothing changed", again
+    st = holder(s)
+    assert "holder: gh7 (granted " in st, st
+    assert "  queue: 1. gh8 (queued " in st, st
+    assert " by w1:p1)" in st, st
+    s.run([SLOT, "settle", "--kind", "heavy"])  # no run yet under gh7's grant: nothing passes
+    p = holding(s)
+    time.sleep(GRACE + 1)
+    s.run([SLOT, "settle", "--kind", "heavy"])  # its run holds the lock past the grace
+    assert "holder: gh7 (granted " in holder(s), holder(s)
+    assert said(s) == [], said(s)
+    end(p)
+    st = passed(s)
+    assert "  queue: none" in st, st
+    until = st.split(", expires ", 1)[1].split(")", 1)[0]
+    want = [
+        ["--timeout", "60", "w8:p1", TOLD.format(until=until)],
+        ["--timeout", "60", "w1:p1", PASSED],
+    ]
+    stop = time.time() + WAIT_S
+    while len(said(s)) < len(want) and time.time() < stop:
+        time.sleep(0.2)
+    assert said(s) == want, said(s)
+
+
+def follow_up(s: Scratch) -> None:
+    world(s)
+    s.env |= {"OCTO_FEATHER_SLOT_GRACE": str(GRACE)}
+    s.run([SLOT, "grant", "gh7", "--kind", "heavy"], env=DIRECTOR)
+    s.run([SLOT, "queue", "gh8", "--kind", "heavy"], env=DIRECTOR)
+    end(holding(s))
+    p = holding(s)  # the follow-up run, inside the grace
+    time.sleep(GRACE + 1.5)  # the first run's check has run
+    st = holder(s)
+    assert "holder: gh7 (granted " in st, st
+    assert "1. gh8 (queued " in st, st
+    assert said(s) == [], said(s)
+    end(p)
+    passed(s)
+
+
+def queue_free(s: Scratch) -> None:
+    world(s)
+    got = s.run([SLOT, "queue", "gh8", "--kind", "eval"], env=DIRECTOR).out
+    assert got.startswith("granted: eval slot to lane gh8 (granted "), got
+    until = got.split(", expires ", 1)[1].split(")", 1)[0]
+    told = (
+        f"octo-feather-slot: the eval slot is granted to lane gh8 until {until} (queued onto a "
+        "free slot); run your eval run now."
+    )
+    assert said(s) == [["--timeout", "60", "w8:p1", told]], said(s)
+    st = holder(s, "eval")
+    assert "holder: gh8 (granted " in st, st
+    assert "  queue: none" in st, st
+
+
 if __name__ == "__main__":
-    main(refused, granted, sandboxed, user_mise_gate)
+    main(refused, granted, sandboxed, user_mise_gate, queued, follow_up, queue_free)
