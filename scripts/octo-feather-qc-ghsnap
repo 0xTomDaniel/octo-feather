@@ -13,9 +13,8 @@ named in meta.json. Repo, branches, labels, origin refs (refs.txt from branches)
 Layout: issue/N.json pr/N.json diff/N.diff api/<path, "/" as "__">.json
 issue-list.json pr-list.json run-list.json repo.json refs.txt meta.json.
 Stdout: one summary line. Exit 0, or 1 when any read failed (no auth, network):
-an api 404 or 410 is recorded as absent, a PR diff GitHub refuses as over its file
-limit (HTTP 406, PullRequest.diff too_large) as diff/N.too-large (GitHub's answer) and in
-the summary, every other failure is fatal.
+an api 404 or 410 is recorded as absent, an over-limit PR diff as diff/N.too-large
+(docs/adr/0022), every other failure is fatal.
 """
 import json, os, re, subprocess, sys, time
 from concurrent.futures import ThreadPoolExecutor
@@ -38,7 +37,7 @@ class Fatal(Exception):
 
 
 class TooLarge(Fatal):
-    """GitHub refused a PR diff as over its file limit: gh's answer (testkit/recordings/pr-diff-too-large.json)."""
+    """gh's over-limit PR diff answer (docs/adr/0022; testkit/recordings/pr-diff-too-large.json)."""
 
 
 def gh(*a):
@@ -51,7 +50,7 @@ def gh(*a):
 
 
 def pr_diff(out: Path, n: str, repo: str) -> None:
-    """PR N's diff into OUT/diff/N.diff; refused by GitHub as too large, its answer into N.too-large."""
+    """PR N's diff into OUT/diff/N.diff, or GitHub's TooLarge answer into N.too-large."""
     try:
         (out / "diff" / f"{n}.diff").write_text(gh("pr", "diff", n, "-R", repo))
     except TooLarge as e:

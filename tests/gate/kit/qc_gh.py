@@ -405,18 +405,15 @@ def snapshot_misses(s: Scratch) -> None:
 
 
 def diff_too_large(s: Scratch) -> None:
-    """A PR whose diff GitHub refuses as over its file limit (its real answer, recorded:
-    testkit/recordings/pr-diff-too-large.json) never aborts the snapshot: its answer recorded
-    beside its diff, named in the summary, every other item fetched; the offline gh refuses
-    `pr diff` for it, saying so, logged. Any other `pr diff` failure, a 406 that is not
-    too_large included, still aborts."""
+    """The over-limit PR diff rule of docs/adr/0022, PR 4's `pr diff` answering GitHub's real
+    406 too_large; then real `pr diff` failures of other kinds (not found, bad credentials), each
+    replayed verbatim from its recording (testkit/recordings/pr-diff-*.json)."""
     s.prepare("qc-gh", build)
     g = s.gh
     g.put(4, {**g.pr(2), "number": 4, "title": "Huge PR", "headRefOid": "def456"})
     g.store("api/repos/o/r/issues/4/timeline.json", [])
     g.store("api/repos/o/r/commits/def456/check-runs.json", {"total_count": 0, "check_runs": []})
-    tape = Path(__file__).parent / "testkit" / "recordings" / "pr-diff-too-large.json"
-    (rec,) = json.loads(tape.read_text())
+    rec = recorded("pr-diff-too-large")
     g.store("pr/4.diff.err", rec["err"])
     sn = s.root / "snap"
     r = s.run([kit("octo-feather-qc-ghsnap"), "o/r", str(sn)])
@@ -435,10 +432,20 @@ def diff_too_large(s: Scratch) -> None:
     ), o.err
     assert len(miss.read_text().splitlines()) == 1, miss.read_text()
     assert s.run([str(OFFLINE_GH), "pr", "diff", "2"], env=env).out == "diff --git a/x b/x"
-    for n, err in enumerate((rec["err"].replace("too_large", "invalid"), "HTTP 502: Bad Gateway")):
-        g.store("pr/4.diff.err", err)
-        r = s.run([kit("octo-feather-qc-ghsnap"), "o/r", str(s.root / f"snap{n}")], want=1)
-        assert f"gh pr diff 4: {err.splitlines()[0]}" in r.err, r.err
+    for name in ("pr-diff-not-found", "pr-diff-bad-credentials"):
+        other = recorded(name)
+        assert other["exit"] == 1, other  # the fake gh fails a stored pr/N.diff.err with exit 1
+        g.store("pr/4.diff.err", other["err"])
+        r = s.run([kit("octo-feather-qc-ghsnap"), "o/r", str(s.root / name)], want=1)
+        assert f"gh pr diff 4: {other['err'].splitlines()[0]}" in r.err, f"{name}: {r.err}"
+
+
+def recorded(name: str) -> dict[str, Any]:
+    """The one real gh answer testkit/recordings/NAME.json holds."""
+    (rec,) = json.loads(
+        (Path(__file__).parent / "testkit" / "recordings" / f"{name}.json").read_text()
+    )
+    return rec
 
 
 def kit_on_kit(s: Scratch) -> None:
