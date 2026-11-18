@@ -1,0 +1,18 @@
+{
+  "spec": "hello.spec.html",
+  "accepted_commit": "0000000000000000000000000000000000000000",
+  "criteria": {
+    "acceptance-greet": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-shout": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-shout-json": {
+      "status": "planned",
+      "pr": null
+    }
+  }
+}

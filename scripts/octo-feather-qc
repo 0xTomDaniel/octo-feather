@@ -266,8 +266,10 @@ def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bo
     ro = [p for p in os.environ.get("OCTO_FEATHER_QC_RO_BINDS", "").split(":") if p] + ([gh["dir"]] if "dir" in gh else []) + ([browser] if browser else [])
     pre = [p for p in os.environ.get("OCTO_FEATHER_QC_PATH", "").split(":") if p]
     worktree = git("rev-parse", "--show-toplevel")
-    # Paths under /tmp the run needs back after /tmp turns private (tests run repos from mktemp).
-    want = [worktree, KIT, state, top, Path.home(), *ro, *pre, *os.environ.get("PATH", "").split(":")]
+    # Paths under /tmp the run needs back after /tmp turns private (tests run repos from mktemp); a linked worktree's
+    # git common dir too, which its .git file points into.
+    common = git("rev-parse", "--path-format=absolute", "--git-common-dir")
+    want = [worktree, common, KIT, state, top, Path.home(), *ro, *pre, *os.environ.get("PATH", "").split(":")]
     keep = sorted({str(Path(p).resolve()) for p in want if p and Path(p).exists()})
     keep = [p for p in keep if p.startswith("/tmp/")]
     qa_dir = str(Path(os.environ.get("OCTO_FEATHER_QA_DIR") or state / "qa").resolve()) if qa else ""
