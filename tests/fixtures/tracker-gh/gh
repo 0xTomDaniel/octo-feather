@@ -2,12 +2,16 @@
 """gh: an offline fake of the GitHub CLI for the kit's correction-lane tests; never the network.
 
 One JSON store, $FAKE_GH_STORE:
-  {"issues": [{"number", "repo", "title", "body", "state" (OPEN|CLOSED), "closedAt", "comments"}]}
+  {"issues": [{"number", "repo", "title", "body", "state" (OPEN|CLOSED), "closedAt", "comments"}],
+   "repos": {"OWNER/NAME": {"nameWithOwner", "createdAt", ...}}}
 (created when absent). The repo is --repo, else $GH_REPO, else "local/repo". It takes only:
   issue list [--repo R] --state all --limit N --search 'WORDS in:title' --json FIELDS
     issues whose title has WORDS
   issue create --title T --body-file F|-
     prints the new issue's url
+  repo view OWNER/NAME --json FIELDS
+    its "repos" entry's FIELDS (null when absent); an unstored one fails as real gh 2.102.0:
+    `GraphQL: Could not resolve to a Repository with the name 'OWNER/NAME'. (repository)`, exit 1
 Anything else is refused, exit 1, naming the call.
 """
 
@@ -80,5 +84,13 @@ elif argv[:2] == ["issue", "create"]:
     with STORE.open("w") as out:
         json.dump(db, out, indent=1)
     sys.stdout.write(f"https://github.com/{repo}/issues/{n}\n")
+elif argv[:2] == ["repo", "view"] and len(argv) == 5 and argv[3] == "--json":
+    repos = cast("dict[str, dict[str, object]]", cast("dict[str, object]", db).get("repos") or {})
+    if argv[2] not in repos:
+        sys.stderr.write(
+            f"GraphQL: Could not resolve to a Repository with the name '{argv[2]}'. (repository)\n"
+        )
+        sys.exit(1)
+    sys.stdout.write(json.dumps({f: repos[argv[2]].get(f) for f in argv[4].split(",")}) + "\n")
 else:
     refuse("unsupported call")

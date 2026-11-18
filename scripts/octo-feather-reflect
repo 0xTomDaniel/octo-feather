@@ -862,13 +862,13 @@ KIT_REPO = "0xTomDaniel/octo-feather"  # the kit's tracker: every route but a la
 @dataclass(frozen=True)
 class Due:
     """One correction lane the rule makes due, before the tracker is asked: its class, the findings
-    it quotes as (log, line), the reflections' routes as (log, route) and the latest finding's
-    `at`; as one tracker files it (`owned`), FOREIGN the logs of another repository than that
-    tracker's, quoted by lane, date and class only and their routes not named."""
+    it quotes as (log, line), the reflection findings giving its routes as (log, line) and the
+    latest finding's `at`; as one tracker files it (`owned`), FOREIGN the logs of another
+    repository than that tracker's, quoted by lane, date and class only, routes not named."""
 
     cls: str
     findings: list[tuple[str, LogLine]]
-    routes: list[tuple[str, str]]
+    routes: list[tuple[str, LogLine]]
     latest: str
     foreign: frozenset[str] = frozenset()
 
@@ -877,7 +877,7 @@ class Due:
         return f"{MARK.format(self.cls)} {what}: {self.cls}"
 
     def route(self) -> str:
-        named = dict.fromkeys(r for log, r in self.routes if log not in self.foreign)
+        named = dict.fromkeys(str(d["route"]) for log, d in self.routes if log not in self.foreign)
         if not named and self.routes:
             return "given only by lanes of another repository"
         return "; ".join(named) or "none given by a reflection"
@@ -930,14 +930,14 @@ def corrections(logs: dict[str, list[LogLine]], director: list[LogLine]) -> list
     class names the routes its reflection findings gave; reflection-missed findings are a due per
     log, its own lane's or the director's."""
     by: dict[tuple[str, str], list[tuple[str, LogLine]]] = {}
-    routed: dict[str, list[tuple[str, str]]] = {}
+    routed: dict[str, list[tuple[str, LogLine]]] = {}
     for log, lines in [*logs.items(), (DIRECTOR, director)]:
         for d in lines:
             cls = d.get("class")
             if d.get("kind") != "finding" or not isinstance(cls, str) or cls.startswith(GATE):
                 continue
             if d.get("route"):
-                routed.setdefault(cls, []).append((log, str(d["route"])))
+                routed.setdefault(cls, []).append((log, d))
             if cls == MISSED or counts(log, d):  # reflection-missed: due at once
                 by.setdefault((cls, log if cls == MISSED else ""), []).append((log, d))
     out: list[Due] = []
@@ -946,11 +946,11 @@ def corrections(logs: dict[str, list[LogLine]], director: list[LogLine]) -> list
             continue
         latest = max(str(d.get("at") or "") for _, d in found)
         routes = (
-            [(log, str(d["route"])) for log, d in found if d.get("route")]
+            [(log, d) for log, d in found if d.get("route")]
             if cls == MISSED
             else routed.get(cls, [])
         )
-        out.append(Due(cls, found, list(dict.fromkeys(routes)), latest))
+        out.append(Due(cls, found, routes, latest))
     return out
 
 
@@ -958,9 +958,11 @@ def owned(due: Due, repos: dict[str, str | None]) -> list[tuple[str | None, Due,
     """The trackers DUE files in (comms #reflection-correction), each (its repository, the Due as
     that tracker files it, the lane logs whose TARGET routes name it), REPOS each lane log's
     record's repository (None: it names none). The kit's (KIT_REPO): for a route not marked
-    TARGET or the director's, no route, or reflection-missed; it quotes every finding, those of
-    another repository's lanes minimal (FOREIGN). Each repository of a lane log routing TARGET
-    (None for a record naming none): only that repository's lanes' findings and TARGET routes."""
+    TARGET, the director's or a kit lane's (its own repository the kit), no route, or
+    reflection-missed; it quotes every finding, those of another repository's lanes minimal
+    (FOREIGN). Each repository of a lane log routing TARGET
+    (None for a record naming none): only that repository's lanes' findings and TARGET routes,
+    the reflection findings giving those routes quoted too, so it never quotes none."""
 
     def repo(log: str) -> str | None:
         r = KIT_REPO if log == DIRECTOR else repos.get(log)
@@ -969,8 +971,8 @@ def owned(due: Due, repos: dict[str, str | None]) -> list[tuple[str | None, Due,
     logs = {log for log, _ in [*due.findings, *due.routes]}
     targets: dict[str | None, list[str]] = {}
     kit = due.cls == MISSED or not due.routes
-    for log, r in due.routes:
-        if due.cls != MISSED and log != DIRECTOR and r.startswith(TARGET):
+    for log, d in due.routes:
+        if due.cls != MISSED and repo(log) != KIT_REPO and str(d["route"]).startswith(TARGET):
             targets.setdefault(repo(log), []).append(log)
         else:
             kit = True
@@ -979,12 +981,13 @@ def owned(due: Due, repos: dict[str, str | None]) -> list[tuple[str | None, Due,
         foreign = frozenset(log for log in logs if repo(log) != KIT_REPO)
         out.append((KIT_REPO, Due(due.cls, due.findings, due.routes, due.latest, foreign), []))
     for t, by in targets.items():
-        if kit and t == KIT_REPO:
-            continue  # the kit's Due above quotes its lanes' findings already
+        routes = [
+            (log, d) for log, d in due.routes if log in by and str(d["route"]).startswith(TARGET)
+        ]
         found = [(log, d) for log, d in due.findings if repo(log) == t]
-        routes = [(log, r) for log, r in due.routes if log in by]
-        latest = max((str(d.get("at") or "") for _, d in found), default=due.latest)
-        out.append((t, Due(due.cls, found, list(dict.fromkeys(routes)), latest), by))
+        found = sorted([*found, *routes], key=lambda f: str(f[1].get("at") or ""))
+        latest = max(str(d.get("at") or "") for _, d in found)
+        out.append((t, Due(due.cls, found, routes, latest), by))
     return out
 
 
@@ -1000,7 +1003,7 @@ def merge(dues: list[Due]) -> list[Due]:
         else Due(
             cls,
             sorted((f for d in ds for f in d.findings), key=lambda f: str(f[1].get("at") or "")),
-            list(dict.fromkeys(x for d in ds for x in d.routes)),
+            [x for d in ds for x in d.routes],
             max(d.latest for d in ds),
             frozenset(o for d in ds for o in d.foreign),
         )

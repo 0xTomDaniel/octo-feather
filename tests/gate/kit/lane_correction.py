@@ -507,10 +507,12 @@ def route_owner(s: Scratch) -> None:
     """#acceptance-reflect-files-route-owner, the #850 regression: blocking findings of kit-skill
     in kit lane gh1 and private target lane x1 (x1's reflection routing it, untagged, in its own
     words), the director routing it to a kit skill; of target-only in x1, x2 and kit lane gh1,
-    x2's lane reflection routing it `target:`. Archiving x2 files kit-skill only in the kit's
-    tracker, quoting x1's finding by lane, date and class alone and naming only the director's
-    route; target-only only in PRIV's, quoting only x1's and x2's; nothing in the current
-    directory's tracker. The demo: the two `filed` lines."""
+    x2's lane reflection routing it `target:`; of own-only in kit lanes gh0 and gh1 alone, x2's
+    reflection routing it `target:` too. Archiving x2 files kit-skill only in the kit's tracker,
+    quoting x1's finding by lane, date and class alone and naming only the director's route;
+    target-only only in PRIV's, quoting only x1's, x2's and x2's routing reflection finding;
+    own-only only in PRIV's, quoting x2's routing reflection finding (never zero findings);
+    nothing in the current directory's tracker. The demo: the `filed` lines."""
     top = reflector(s)
     created(s, PRIV, "2026-10-01T00:00:00Z")
     private = "PRIVATE exo internals"
@@ -521,9 +523,11 @@ def route_owner(s: Scratch) -> None:
         "gh1",
         cr(at[0], "kit-skill", "gh1 kit finding"),
         cr(at[0], "target-only", "gh1 kit finding of target-only"),
+        cr(at[0], "own-only", "gh1 kit finding of own-only"),
         repo=KIT,
         archived=True,
     )
+    lane(top, "gh0", cr(at[0], "own-only", "gh0 kit finding of own-only"), repo=KIT, archived=True)
     target_lane(
         top,
         "x1",
@@ -534,15 +538,22 @@ def route_owner(s: Scratch) -> None:
     )
     target_lane(top, "x2", cr(at[2], "target-only", "x2 target-only finding"))
     reply(s, "lane", "class: target-only | question: undetected-rule | "
-          "route: target: src/exo/rules.py | summary: x2 found its own rule unchecked")  # fmt: skip
+          "route: target: src/exo/rules.py | summary: x2 found its own rule unchecked",
+          "class: own-only | question: undetected-rule | "
+          "route: target: src/exo/own.py | summary: x2 own-only reflection")  # fmt: skip
     route = ".agents/skills/tdd/SKILL.md Seams"
     reply(s, "director", f"class: kit-skill | question: writer-route | route: {route} | "
           "summary: 2 code-review findings in gh1, x1")  # fmt: skip
     out = run(s, "archive", "x2").splitlines()
     assert filed("1", KIT, "kit-skill", two(route)) in out, out
-    assert any(x.startswith(filed("1", PRIV, "target-only", "(2 findings; ")) for x in out), out
-    assert (issues(s, KIT), issues(s, PRIV), issues(s)) == ([1], [1], []), out
-    kit_issue, priv_issue = issue(s, 1, KIT), issue(s, 1, PRIV)
+    for cls, rest in (
+        ("target-only", "(3 findings; route: target: src/exo/rules.py)"),
+        ("own-only", "(1 finding; route: target: src/exo/own.py)"),
+    ):
+        assert any(x.endswith(f" in github-issues {PRIV} for {cls} {rest}") for x in out), out
+    assert (issues(s, KIT), issues(s, PRIV), issues(s)) == ([1], [1, 2], []), out
+    titled = {str(issue(s, n, PRIV)["title"]).split()[1].rstrip("]"): n for n in (1, 2)}
+    kit_issue, priv_issue = issue(s, 1, KIT), issue(s, titled["target-only"], PRIV)
     assert "kit-skill" in str(kit_issue["title"]), kit_issue
     body = str(kit_issue["body"])
     assert f"Route: {route}\n" in body, body
@@ -556,8 +567,14 @@ def route_owner(s: Scratch) -> None:
         "Route: target: src/exo/rules.py\n",
         "x1 target-only finding",
         "x2 target-only finding",
+        "reflection (undetected-rule), route target: src/exo/rules.py: x2 found its own rule",
     ):
         assert want in body, (want, body)
+    assert "gh1" not in body, body
+    body = str(issue(s, titled["own-only"], PRIV)["body"])
+    assert "Findings (1):\n- x2 " in body, body
+    assert "route target: src/exo/own.py: x2 own-only reflection" in body, body
+    assert "gh0" not in body, body
     assert "gh1" not in body, body
 
 
