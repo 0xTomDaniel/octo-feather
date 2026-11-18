@@ -1,0 +1,14 @@
+[
+ {
+  "request": "pr diff 669 -R 0xTomDaniel/octo-feather",
+  "out": "",
+  "err": "could not find pull request diff: HTTP 406: Sorry, the diff exceeded the maximum number of files (300). Consider using 'List pull requests files' API or locally cloning the repository instead. (https://api.github.com/repos/0xTomDaniel/octo-feather/pulls/669)\nPullRequest.diff too_large\n",
+  "exit": 1,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather",
+   "command": "gh pr diff 669 -R 0xTomDaniel/octo-feather",
+   "date": "2026-11-18"
+  }
+ }
+]

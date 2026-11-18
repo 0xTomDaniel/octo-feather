@@ -404,6 +404,43 @@ def snapshot_misses(s: Scratch) -> None:
     assert len(miss.read_text().splitlines()) == len(calls), "a stored field was logged as a miss"
 
 
+def diff_too_large(s: Scratch) -> None:
+    """A PR whose diff GitHub refuses as over its file limit (its real answer, recorded:
+    testkit/recordings/pr-diff-too-large.json) never aborts the snapshot: its answer recorded
+    beside its diff, named in the summary, every other item fetched; the offline gh refuses
+    `pr diff` for it, saying so, logged. Any other `pr diff` failure, a 406 that is not
+    too_large included, still aborts."""
+    s.prepare("qc-gh", build)
+    g = s.gh
+    g.put(4, {**g.pr(2), "number": 4, "title": "Huge PR", "headRefOid": "def456"})
+    g.store("api/repos/o/r/issues/4/timeline.json", [])
+    g.store("api/repos/o/r/commits/def456/check-runs.json", {"total_count": 0, "check_runs": []})
+    tape = Path(__file__).parent / "testkit" / "recordings" / "pr-diff-too-large.json"
+    (rec,) = json.loads(tape.read_text())
+    g.store("pr/4.diff.err", rec["err"])
+    sn = s.root / "snap"
+    r = s.run([kit("octo-feather-qc-ghsnap"), "o/r", str(sn)])
+    assert re.search(r"prs 2, .*full views 4.*diff too large on GitHub.*#4", r.out), r.out
+    assert (sn / "diff" / "4.too-large").read_text() == rec["err"]
+    got = sorted(str(p.relative_to(sn)) for p in sn.rglob("*") if p.is_file())
+    for f in ("pr/2.json", "pr/4.json", "diff/2.diff", "issue/1.json", "issue/3.json"):
+        assert f in got, f"{f} not fetched: {got}"
+    assert "api/repos__o__r__commits__def456__check-runs.json" in got, got
+    assert "diff/4.diff" not in got, got
+    miss = s.root / "miss.log"
+    env = {"OCTO_FEATHER_GHSNAP": str(sn), "OCTO_FEATHER_GHSNAP_MISS": str(miss)}
+    o = s.run([str(OFFLINE_GH), "pr", "diff", "4"], want=1, env=env)
+    assert re.search(
+        rf"{REFUSED}.*diff for pr 4 not in snapshot: too large on GitHub: .*HTTP 406", o.err
+    ), o.err
+    assert len(miss.read_text().splitlines()) == 1, miss.read_text()
+    assert s.run([str(OFFLINE_GH), "pr", "diff", "2"], env=env).out == "diff --git a/x b/x"
+    for n, err in enumerate((rec["err"].replace("too_large", "invalid"), "HTTP 502: Bad Gateway")):
+        g.store("pr/4.diff.err", err)
+        r = s.run([kit("octo-feather-qc-ghsnap"), "o/r", str(s.root / f"snap{n}")], want=1)
+        assert f"gh pr diff 4: {err.splitlines()[0]}" in r.err, r.err
+
+
 def kit_on_kit(s: Scratch) -> None:
     """A copy of the kit judging itself (the kit inside the judged worktree), a repo with no GitHub
     remote: the proof passes and says so; no fetch, the offline gh refusing every call, the
@@ -475,5 +512,6 @@ if __name__ == "__main__":
         no_github,
         status_commit_fails,
         snapshot_misses,
+        diff_too_large,
         kit_on_kit,
     )
