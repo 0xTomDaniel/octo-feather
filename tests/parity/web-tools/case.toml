@@ -1,0 +1,13 @@
+# The parity lever's case for tests/web-tools.sh, fixed in place onto the testkit provider (#974; tests/parity/lever.py --help).
+old = "tests/web-tools.sh"
+old_at = "7efa40cb"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): the tab case's fake herdr.
+needs = ["tests/fixtures/herdr-spawn"]
+# The same script, as its gate item: `just test` collects no .sh path.
+new = "tests/gate/test_gate.py::test_script[tests/web-tools.sh]"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit script run by
+# the kit venv's python: coverage.py measures it; open: the Pi extension, a module Pi loads, never run as a program.
+[ran]
+"scripts/pi-role" = "coverage"
+"extensions/web-servers.ts" = "open extensions/web-servers.ts"

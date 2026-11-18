@@ -1,0 +1,14 @@
+Seeded defect: the web extension registers only the first server of the web list, so a server added to it reaches no role (spec roles#acceptance-web-list-once).
+diff --git a/extensions/web-servers.ts b/extensions/web-servers.ts
+index 2b0dd74..08d3b78 100644
+--- a/extensions/web-servers.ts
++++ b/extensions/web-servers.ts
+@@ -25,7 +25,7 @@ export default function (pi: Pi) {
+     const path = pi.getFlag(FLAG);
+     if (typeof path !== "string" || !path) return;
+     const servers = (JSON.parse(readFileSync(path, "utf8")) as WebList).mcpServers ?? {};
+-    for (const [name, config] of Object.entries(servers)) {
++    for (const [name, config] of Object.entries(servers).slice(0, 1)) {
+       pi.registerMcpServer(name, { exposure: "direct", ...config });
+     }
+   });

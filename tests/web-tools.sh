@@ -2,8 +2,8 @@
 # Integration test for a role's `web` tool (issue #262; spec roles#launch-web, roles#roles-web,
 # roles#fm-tools): real Pi, at the kit's pin (pi-version), launched headless through a copy of the
 # kit's scripts/pi-role whose web-mcp.json names a stub stdio MCP server instead of the hosted ones
-# (no network), against a fake OpenAI-compatible provider on 127.0.0.1. The provider logs each
-# request and answers the first with one codemode call listing ALL_TOOLS, so the test reads both
+# (no network), against the testkit's model provider (tests/gate/kit/testkit/provider.py) on 127.0.0.1. The
+# provider logs each request and answers the first with one codemode call listing ALL_TOOLS, so the test reads both
 # the tools declared to the model and the tools a codemode script reaches. The user Pi config and
 # the target repo's .pi/mcp.json each name another stub server. Cases:
 #   roles      roles#acceptance-web-roles, roles#acceptance-web-no-other-mcp,
@@ -16,7 +16,7 @@
 #   tab        roles#acceptance-codemode-every-role in a tab: herdr-spawn --role (fake herdr) hands the tab the
 #              role's pi-role launch, and Pi started on that argv has the same tools as the roles case
 #   check      check-roles accepts `web` and still rejects an unknown tool
-# The stub server and the fake provider are hand-written test doubles (stdlib, offline). Never
+# The stub server and the testkit provider are hand-written test doubles (stdlib, offline). Never
 # skips: without pi at the pin it fails naming the install command. Run by `just check`.
 # criterion: roles#acceptance-codemode-every-role
 set -euo pipefail
@@ -55,33 +55,6 @@ for line in sys.stdin:
         send({"jsonrpc": "2.0", "id": i, "error": {"code": -32601, "message": "method not found"}})
 EOF
 
-# The fake provider: logs each request body; a request with no tool result gets one codemode call
-# running argv[3], the next an answer.
-cat > "$t/fake.py" <<'EOF'
-import http.server, json, os, sys
-port_file, log, script = sys.argv[1], sys.argv[2], sys.argv[3]
-class H(http.server.BaseHTTPRequestHandler):
-    def log_message(self, *a): pass
-    def do_POST(self):
-        body = json.loads(self.rfile.read(int(self.headers.get("content-length", 0))))
-        with open(log, "a") as f: f.write(json.dumps(body) + "\n")
-        self.send_response(200); self.send_header("content-type", "text/event-stream"); self.end_headers()
-        base = {"id": "x", "object": "chat.completion.chunk", "created": 0, "model": "fake"}
-        if any(m.get("role") == "tool" for m in body["messages"]):
-            deltas = [({"role": "assistant", "content": "fake-done"}, None), ({}, "stop")]
-        else:
-            call = {"index": 0, "id": "call_1", "type": "function", "function": {"name": "codemode", "arguments": json.dumps({"code": script})}}
-            deltas = [({"role": "assistant", "tool_calls": [call]}, None), ({}, "tool_calls")]
-        for d, fin in deltas:
-            c = {**base, "choices": [{"index": 0, "delta": d, "finish_reason": fin}]}
-            if fin: c["usage"] = {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
-            self.wfile.write(b"data: " + json.dumps(c).encode() + b"\n\n")
-        self.wfile.write(b"data: [DONE]\n\n")
-s = http.server.HTTPServer(("127.0.0.1", 0), H)
-open(port_file + ".tmp", "w").write(str(s.server_address[1])); os.replace(port_file + ".tmp", port_file)
-s.serve_forever()
-EOF
-
 # Reads the provider log: "<declared tools>|<codemode tools>", each sorted, space-separated.
 cat > "$t/seen.py" <<'EOF'
 import json, re, sys
@@ -102,7 +75,8 @@ echo "{\"mcpServers\":{$(stub useronly)}}" > "$t/agent/mcp.json"
 echo "{\"mcpServers\":{$(stub projonly)}}" > "$t/repo/.pi/mcp.json"
 git -c init.defaultBranch=main init -q "$t/repo"
 
-python3 "$t/fake.py" "$t/port" "$t/log" 'return "TOOLS:" + ALL_TOOLS.map(t => t.name).join(" ")' & srv=$!
+python3 "$kit/tests/gate/kit/testkit/provider.py" --log "$t/log" --code 'return "TOOLS:" + ALL_TOOLS.map(t => t.name).join(" ")' \
+  > "$t/port" & srv=$!
 for _ in $(seq 50); do [[ -s "$t/port" ]] && break; sleep 0.1; done
 [[ -s "$t/port" ]] || fail "fake provider did not start"
 printf '{"providers":{"fake":{"baseUrl":"http://127.0.0.1:%s/v1","api":"openai-completions","apiKey":"x","models":[{"id":"fake"}]}}}\n' \
