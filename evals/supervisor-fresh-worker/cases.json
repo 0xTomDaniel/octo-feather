@@ -1,0 +1,1862 @@
+[
+  {
+    "id": "closed-assignment-fresh-worker",
+    "role": "supervisor",
+    "fixture": "lane-shout-main",
+    "head": {
+      "fixture": "lane-shout-wip",
+      "branch": "gh12",
+      "message": "feat(hello): --shout (#13 integrated)"
+    },
+    "task": "Goal check-in, lane gh12 (parent issue #12, \"app hello --shout\"; spec docs/specs/hello.spec.html, this lane builds acceptance-shout and acceptance-shout-json), lane branch gh12 checked out in this directory (head {head}), cut from main. The pilot is done: ticket #13 (`--shout` upper-cases the greeting and adds `!`) is integrated in {head}, draft PR #20 is open, `just qc` on acceptance-shout and the code review both passed on {head}, and your brief template is fixed. Remaining tickets: #14 `--shout` with `--json` puts the shouted text in the `text` field, an end-to-end test running `app hello Grace --shout --json` as a subprocess (acceptance-shout-json), #15 an end-to-end test running `app hello Ada --shout` as a subprocess (acceptance-shout); #15 is Blocked by #14 (it reuses #14's subprocess helper).\nSince your last check-in:\n- implementer-gh13 (pane w2:p3, provider session s-w2:p3) reported DONE: ticket #13, `just fast` green; you integrated it on gh12 with `just integrate`, head {head}, and consumed its result. You parked it (`herdr-close --park w2:p3`); its parked line names session s-w2:p3, whose conversation holds the whole #13 work: core.py's `greet(..., shout=)` and cli.py's `--shout` flag, which #14 extends.\nResources: `free -m` at this check-in leaves room for two more Pi workers beside the open panes. Starting an implementer needs no heavy or eval slot. Worker worktrees go beside this one, `{repo}/../wt-gh<ticket>`.\nAct on this check-in: take the lane's next step on the remaining tickets. Nothing else this turn: no integrate, qc or CI run.\nSandbox run: GitHub is offline, and the lane record and log under octo-feather-state are absent.",
+    "stand_ins": {
+      "herdr-say": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--parked"
+          ],
+          "stdout": "{\"at\": \"2026-11-13T09:20:11Z\", \"kind\": \"parked\", \"pane\": \"w2:p3\", \"name\": \"implementer-gh13\", \"role\": \"implementer\", \"cwd\": \"{repo}/../wt-gh13\", \"session\": \"s-w2:p3\"}\n",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr": [
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p3"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p3 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t3"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p3"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p3 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p3"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p3"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p3 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh13 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t3"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh13 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p3"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh13 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1
+        },
+        {
+          "args": [
+            "pane",
+            "read",
+            "w2:p3"
+          ],
+          "stdout": "$ pi\n> DONE #13: `--shout` upper-cases the greeting and adds `!`; test_shout_json added. Commit on branch implementer-gh13, `just fast` green, gh12 tip merged in.\n  Sent to supervisor (herdr-say --parent, exit 0).\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p9 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p9"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p9 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t9"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh14 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p9"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh14 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t9"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p10 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p10"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p10 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t10"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh15 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p10"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh15 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t10"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "tab",
+            "close"
+          ],
+          "stdout": "{\"id\":\"cli:tab:close\",\"result\":{\"type\":\"ok\"}}\n",
+          "exit": 0
+        }
+      ],
+      "herdr-close": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage: herdr-close TAB|SPACE|PANE | --park PANE\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:t3"
+          ],
+          "stdout": "tab=w2:t3 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:p3"
+          ],
+          "stdout": "tab=w2:t3 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:t9"
+          ],
+          "stdout": "tab=w2:t9 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:p9"
+          ],
+          "stdout": "tab=w2:t9 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:t10"
+          ],
+          "stdout": "tab=w2:t10 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:p10"
+          ],
+          "stdout": "tab=w2:t10 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "tab_close_rc=0 killed=0\n",
+          "exit": 0
+        }
+      ],
+      "herdr-spawn": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo}/../wt-gh14 contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo}/../wt-gh14 contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo}/../wt-gh15 contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo}/../wt-gh15 contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "name=implementer role=implementer tab=w2:t11 pane=w2:p11 cwd={repo} contract=ok provider_session_id=s-w2:p11\n",
+          "exit": 0
+        }
+      ]
+    }
+  },
+  {
+    "id": "serial-assignment-split",
+    "role": "supervisor",
+    "fixture": "lane-shout-main",
+    "head": {
+      "fixture": "lane-shout-wip",
+      "branch": "gh12",
+      "message": "feat(hello): --shout (#13 integrated)"
+    },
+    "task": "Goal check-in, lane gh12 (parent issue #12, \"app hello --shout\"; spec docs/specs/hello.spec.html, this lane builds acceptance-shout and acceptance-shout-json), lane branch gh12 checked out in this directory (head {head}), cut from main. The pilot is done: ticket #13 (`--shout` upper-cases the greeting and adds `!`) is integrated in {head}, draft PR #20 is open, `just qc` on acceptance-shout and the code review both passed on {head}, and your brief template is fixed. Remaining tickets: #14 `--shout` with `--json` puts the shouted text in the `text` field, an end-to-end test running `app hello Grace --shout --json` as a subprocess (acceptance-shout-json), #15 an end-to-end test running `app hello Ada --shout` as a subprocess (acceptance-shout); neither is Blocked by the other.\nSince your last check-in:\n- implementer-gh13 (pane w2:p3) reported DONE on #13 and you integrated it, head {head}. At the pilot fan-out you briefed it #14 and #15 together as one assignment, in that order; it now reports progress: \"#14: writing the --json shout test; #15 after #14\". #15 is untouched, nobody else holds it.\nResources: `free -m` at this check-in leaves room for two more Pi workers beside the open panes. Starting an implementer needs no heavy or eval slot. Worker worktrees go beside this one, `{repo}/../wt-gh<ticket>`.\nAct on this check-in: take the lane's next step on the remaining tickets. Nothing else this turn: no integrate, qc or CI run.\nSandbox run: GitHub is offline, and the lane record and log under octo-feather-state are absent.",
+    "stand_ins": {
+      "herdr-say": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--parked"
+          ],
+          "stdout": "{\"at\": \"2026-11-13T09:20:11Z\", \"kind\": \"parked\", \"pane\": \"w2:p3\", \"name\": \"implementer-gh13\", \"role\": \"implementer\", \"cwd\": \"{repo}/../wt-gh13\", \"session\": \"s-w2:p3\"}\n",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr": [
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p3"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p3 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t3"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p3"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p3 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p3"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p3"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh13 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t3"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh13 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p3"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "pane",
+            "read",
+            "w2:p3"
+          ],
+          "stdout": "$ pi\n> DONE #13: `--shout` upper-cases the greeting and adds `!`; test_shout_json added. Commit on branch implementer-gh13, `just fast` green, gh12 tip merged in.\n  Sent to supervisor (herdr-say --parent, exit 0).\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p9 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p9"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p9 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t9"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh14 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p9"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh14 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t9"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p10 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p10"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p10 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t10"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh15 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p10"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh15 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t10"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "tab",
+            "close"
+          ],
+          "stdout": "{\"id\":\"cli:tab:close\",\"result\":{\"type\":\"ok\"}}\n",
+          "exit": 0
+        }
+      ],
+      "herdr-close": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage: herdr-close TAB|SPACE|PANE | --park PANE\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:t3"
+          ],
+          "stdout": "tab=w2:t3 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:p3"
+          ],
+          "stdout": "tab=w2:t3 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:t9"
+          ],
+          "stdout": "tab=w2:t9 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:p9"
+          ],
+          "stdout": "tab=w2:t9 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:t10"
+          ],
+          "stdout": "tab=w2:t10 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:p10"
+          ],
+          "stdout": "tab=w2:t10 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "tab_close_rc=0 killed=0\n",
+          "exit": 0
+        }
+      ],
+      "herdr-spawn": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo}/../wt-gh14 contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo}/../wt-gh14 contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo}/../wt-gh15 contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo}/../wt-gh15 contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "name=implementer role=implementer tab=w2:t11 pane=w2:p11 cwd={repo} contract=ok provider_session_id=s-w2:p11\n",
+          "exit": 0
+        }
+      ]
+    }
+  },
+  {
+    "id": "independent-ready-split",
+    "role": "supervisor",
+    "fixture": "lane-shout-main",
+    "head": {
+      "fixture": "lane-shout-wip",
+      "branch": "gh12",
+      "message": "feat(hello): --shout (#13 integrated)"
+    },
+    "task": "Goal check-in, lane gh12 (parent issue #12, \"app hello --shout\"; spec docs/specs/hello.spec.html, this lane builds acceptance-shout and acceptance-shout-json), lane branch gh12 checked out in this directory (head {head}), cut from main. The pilot is done: ticket #13 (`--shout` upper-cases the greeting and adds `!`) is integrated in {head}, draft PR #20 is open, `just qc` on acceptance-shout and the code review both passed on {head}, and your brief template is fixed. Remaining tickets: #14 `--shout` with `--json` puts the shouted text in the `text` field, an end-to-end test running `app hello Grace --shout --json` as a subprocess (acceptance-shout-json), #15 an end-to-end test running `app hello Ada --shout` as a subprocess (acceptance-shout); neither is Blocked by the other.\nSince your last check-in:\n- implementer-gh13 (pane w2:p3, provider session s-w2:p3) reported DONE: ticket #13, `just fast` green; you integrated it on gh12 with `just integrate`, head {head}, and consumed its result. Its pane is idle, its conversation holding the whole #13 work.\nResources: `free -m` at this check-in leaves room for two more Pi workers beside the open panes. Starting an implementer needs no heavy or eval slot. Worker worktrees go beside this one, `{repo}/../wt-gh<ticket>`.\nAct on this check-in: take the lane's next step on the remaining tickets. Nothing else this turn: no integrate, qc or CI run.\nSandbox run: GitHub is offline, and the lane record and log under octo-feather-state are absent.",
+    "stand_ins": {
+      "herdr-say": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--parked"
+          ],
+          "stdout": "{\"at\": \"2026-11-13T09:20:11Z\", \"kind\": \"parked\", \"pane\": \"w2:p3\", \"name\": \"implementer-gh13\", \"role\": \"implementer\", \"cwd\": \"{repo}/../wt-gh13\", \"session\": \"s-w2:p3\"}\n",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr": [
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p3"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p3 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t3"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p3"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p3 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p3"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p3"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh13 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t3"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh13 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p3"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "pane",
+            "read",
+            "w2:p3"
+          ],
+          "stdout": "$ pi\n> DONE #13: `--shout` upper-cases the greeting and adds `!`; test_shout_json added. Commit on branch implementer-gh13, `just fast` green, gh12 tip merged in.\n  Sent to supervisor (herdr-say --parent, exit 0).\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p9 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p9"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p9 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t9"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh14 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p9"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh14 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t9"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p10 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p10"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p10 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t10"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh15 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p10"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh15 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t10"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "tab",
+            "close"
+          ],
+          "stdout": "{\"id\":\"cli:tab:close\",\"result\":{\"type\":\"ok\"}}\n",
+          "exit": 0
+        }
+      ],
+      "herdr-close": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage: herdr-close TAB|SPACE|PANE | --park PANE\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:t3"
+          ],
+          "stdout": "tab=w2:t3 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:p3"
+          ],
+          "stdout": "tab=w2:t3 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:t9"
+          ],
+          "stdout": "tab=w2:t9 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:p9"
+          ],
+          "stdout": "tab=w2:t9 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:t10"
+          ],
+          "stdout": "tab=w2:t10 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:p10"
+          ],
+          "stdout": "tab=w2:t10 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "tab_close_rc=0 killed=0\n",
+          "exit": 0
+        }
+      ],
+      "herdr-spawn": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo}/../wt-gh14 contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo}/../wt-gh14 contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo}/../wt-gh15 contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo}/../wt-gh15 contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "name=implementer role=implementer tab=w2:t11 pane=w2:p11 cwd={repo} contract=ok provider_session_id=s-w2:p11\n",
+          "exit": 0
+        }
+      ]
+    }
+  },
+  {
+    "id": "one-worker-limit",
+    "role": "supervisor",
+    "fixture": "lane-shout-main",
+    "head": {
+      "fixture": "lane-shout-wip",
+      "branch": "gh12",
+      "message": "feat(hello): --shout (#13 integrated)"
+    },
+    "task": "Goal check-in, lane gh12 (parent issue #12, \"app hello --shout\"; spec docs/specs/hello.spec.html, this lane builds acceptance-shout and acceptance-shout-json), lane branch gh12 checked out in this directory (head {head}), cut from main. The pilot is done: ticket #13 (`--shout` upper-cases the greeting and adds `!`) is integrated in {head}, draft PR #20 is open, `just qc` on acceptance-shout and the code review both passed on {head}, and your brief template is fixed. Remaining tickets: #14 `--shout` with `--json` puts the shouted text in the `text` field, an end-to-end test running `app hello Grace --shout --json` as a subprocess (acceptance-shout-json), #15 an end-to-end test running `app hello Ada --shout` as a subprocess (acceptance-shout); neither is Blocked by the other.\nSince your last check-in:\n- implementer-gh13 (pane w2:p3, provider session s-w2:p3) reported DONE: ticket #13, `just fast` green; you integrated it on gh12 with `just integrate`, head {head}, and consumed its result. Its pane is idle, its conversation holding the whole #13 work.\nResources: `free -m` at this check-in leaves room for one more Pi worker in all, the memory implementer-gh13 frees once closed included: one implementer now, not two; a second waits until that one ends. Starting an implementer needs no heavy or eval slot. Worker worktrees go beside this one, `{repo}/../wt-gh<ticket>`.\nAct on this check-in: take the lane's next step on the remaining tickets. Nothing else this turn: no integrate, qc or CI run.\nSandbox run: GitHub is offline, and the lane record and log under octo-feather-state are absent.",
+    "stand_ins": {
+      "herdr-say": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--parked"
+          ],
+          "stdout": "{\"at\": \"2026-11-13T09:20:11Z\", \"kind\": \"parked\", \"pane\": \"w2:p3\", \"name\": \"implementer-gh13\", \"role\": \"implementer\", \"cwd\": \"{repo}/../wt-gh13\", \"session\": \"s-w2:p3\"}\n",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr": [
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p3"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p3 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t3"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p3"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p3 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p3"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p3"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh13 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t3"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh13 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p3"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "pane",
+            "read",
+            "w2:p3"
+          ],
+          "stdout": "$ pi\n> DONE #13: `--shout` upper-cases the greeting and adds `!`; test_shout_json added. Commit on branch implementer-gh13, `just fast` green, gh12 tip merged in.\n  Sent to supervisor (herdr-say --parent, exit 0).\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p9 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p9"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p9 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t9"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh14 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p9"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh14 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t9"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p10 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p10"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p10 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t10"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh15 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:p10"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh15 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close",
+            "w2:t10"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "tab",
+            "close"
+          ],
+          "stdout": "{\"id\":\"cli:tab:close\",\"result\":{\"type\":\"ok\"}}\n",
+          "exit": 0
+        }
+      ],
+      "herdr-close": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage: herdr-close TAB|SPACE|PANE | --park PANE\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:t3"
+          ],
+          "stdout": "tab=w2:t3 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:p3"
+          ],
+          "stdout": "tab=w2:t3 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:t9"
+          ],
+          "stdout": "tab=w2:t9 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:p9"
+          ],
+          "stdout": "tab=w2:t9 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:t10"
+          ],
+          "stdout": "tab=w2:t10 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "w2:p10"
+          ],
+          "stdout": "tab=w2:t10 tab_close_rc=0 killed=0\n",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "tab_close_rc=0 killed=0\n",
+          "exit": 0
+        }
+      ],
+      "herdr-spawn": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "usage:\n  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \\\n    [--operating-model FILE] [--resume SESSION] [--parent PANE] [-- pi]\n\nSpawn bare, then send the brief with herdr-say. The runtime is always pi.\n--resume SESSION continues a parked Pi session (its --session-id).\n\nPrints: name= role= tab= pane= cwd= contract= provider_session_id=\nA caller owning a hand-off log (a lane's supervisor, the director) gets the spawn line\nappended there: octo-feather-handoff spawn --caller.\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo}/../wt-gh14 contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo}/../wt-gh14 contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "w2",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo}/../wt-gh15 contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo}/../wt-gh15 contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [],
+          "stdout": "name=implementer role=implementer tab=w2:t11 pane=w2:p11 cwd={repo} contract=ok provider_session_id=s-w2:p11\n",
+          "exit": 0
+        }
+      ]
+    }
+  }
+]

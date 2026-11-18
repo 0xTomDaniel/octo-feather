@@ -25,13 +25,13 @@ FACTS = {"skill_read": {"skill"}, "skill_not_read": {"skill"}, "skill_read_befor
          "field_lines": {"field"}, "branch_paths": set(), "tool_called": {"tools"}, "ran": {"program", "args"},
          "tool_called_before": {"tools", "before"}}
 PROGRAM = re.compile(r"[A-Za-z0-9_+-][A-Za-z0-9._+-]*")   # a ran fact's program: a command name (schema.md, Facts)
-OPTIONAL = {"field_lines": {"none", "includes", "every"}, "branch_paths": {"untouched", "touched"}}
+OPTIONAL = {"field_lines": {"none", "includes", "every"}, "branch_paths": {"untouched", "touched"}, "ran": {"count", "exit"}}
 FIELD_KEYS = {"Check": {"path", "rule", "owner", "reads", "class"}, "Owner": {"path", "rule", "restated"}}   # schema.md, Field lines
 FIELD_NAME = re.compile(r"[A-Z][A-Za-z-]*(?: [A-Za-z-]+)*")
 PATH = re.compile(r"(?!/)(?!.*(?:^|/)\.\.(?:/|$))\S+")
 BEFORE = {"test_write", "edit", "git_commit", "git_push", "gh_call", "kit_contract_edit", "final_message"}
 NEEDS = {"git_push": "origin", "gh_call": "fake_gh"}   # schema.md, Before targets
-SETUP = {"branch", "head", "origin", "fake_gh", "fake_qa"}   # schema.md, Case
+SETUP = {"branch", "head", "branches", "origin", "fake_gh", "fake_qa", "stand_ins"}   # schema.md, Case
 BRANCH = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
 ATTEMPTS = {"herdr", "lane_state", "credential", "repo", "network"}
 KINDS = {"skill-trigger", "role-transcript", "judgment"}
@@ -168,7 +168,7 @@ def check_suite(d, evals, errs):
             if isinstance(c.get("id"), str):
                 errs.append(f"{at}: field id: no expectations in reference/expectations.json")
             continue
-        tree = c["head"].get("fixture") if isinstance(c.get("head"), dict) else c.get("fixture")   # the tree the agent sees
+        tree = seen_tree(cast("dict[str, object]", c))   # the tree the agent sees
         check_exp(f"{name}/reference/expectations.json case {cid}", exp, errs,
                   evals / "fixtures" / tree if isinstance(tree, str) and re.fullmatch(r"[A-Za-z0-9._-]+", tree) else None,
                   review="review" in c and "review" in extra)
@@ -179,7 +179,7 @@ def check_suite(d, evals, errs):
             if k and c.get(k) is not True:
                 errs.append(f"{name}/reference/expectations.json case {cid} fact #{n + 1}: field before: {f['before']} "
                             f"needs the case's {k}: true (nothing else can reach it)")
-            fx = c["head"].get("fixture") if isinstance(c.get("head"), dict) else c.get("fixture")
+            fx = seen_tree(cast("dict[str, object]", c))
             if isinstance(f, dict) and f.get("before") == "test_write" and isinstance(fx, str) and not declares_tests(evals, fx):
                 errs.append(f"{name}/reference/expectations.json case {cid} fact #{n + 1}: field before: test_write needs fixture "
                             f"{fx} to declare its tests (pyproject.toml [tool.pytest.ini_options] testpaths, and uv.lock); it declares none")
@@ -416,6 +416,31 @@ def check_judgment(d, cases, exps, errs):
     return len(cases)
 
 
+def check_stand_ins(at: str, c: dict[str, object], errs: list[str]) -> None:
+    """A case's stand_ins (rule: schema.md, Case)."""
+    st = c["stand_ins"]
+    if not (isinstance(st, dict) and st):
+        errs.append(f"{at}: field stand_ins: must be a non-empty object of program to answers"); return
+    for p, answers in cast("dict[object, object]", st).items():
+        f = f"{at}: field stand_ins.{p}"
+        if not (isinstance(p, str) and PROGRAM.fullmatch(p)) or p in ("pi", "git"):
+            errs.append(f"{f}: must be a command name ({PROGRAM.pattern}), not pi or git")
+        if (p, c.get("fake_gh")) == ("gh", True) or (p, c.get("fake_qa")) == ("octo-feather-qa", True):
+            errs.append(f"{f}: the case's fake stands in for it already")
+        def ok(a: object) -> bool:
+            if not (isinstance(a, dict) and {"args", "stdout", "exit"} <= set(cast("dict[str, object]", a)) <= {"args", "stdout", "exit", "after", "argc"}):
+                return False
+            d = cast("dict[str, object]", a)
+            g, e, w = d["args"], d["exit"], d.get("after", ["x"])
+            strs = [isinstance(v, list) and all(isinstance(x, str) for x in cast("list[object]", v)) for v in (g, w)]
+            n = d.get("argc", 0)
+            return all(strs) and bool(w) and isinstance(d["stdout"], str) and type(e) is int and 0 <= e <= 255 and type(n) is int and n >= 0
+        if not (isinstance(answers, list) and answers and all(ok(a) for a in cast("list[object]", answers))):
+            errs.append(f"{f}: must be a non-empty list of {{\"args\": [string...], \"stdout\": string, \"exit\": 0 to 255, optional \"after\": [string...], optional \"argc\": integer >= 0}}")
+        elif any(not 7 <= int(n) <= 40 for a in cast("list[dict[str, str]]", answers) for n in re.findall(r"\{head:(\d+)\}", a["stdout"])):
+            errs.append(f"{f}: {{head:N}} in a stdout must have N from 7 to 40 (schema.md, Case, stand_ins)")
+
+
 def check_setup(at, c, evals, errs):
     """A role-transcript case's repo setup fields (rule: schema.md, Case)."""
     ref = lambda v: isinstance(v, str) and BRANCH.fullmatch(v) and ".." not in v and not v.endswith(("/", ".lock"))
@@ -426,25 +451,69 @@ def check_setup(at, c, evals, errs):
     for k in ("origin", "fake_gh", "fake_qa"):
         if k in c and c[k] is not True:
             errs.append(f"{at}: field {k}: must be true (leave it out for false)")
-    if "head" not in c:
-        return
-    h = c["head"]
+    if "stand_ins" in c:
+        check_stand_ins(cast("str", at), cast("dict[str, object]", c), cast("list[str]", errs))
+    cd = cast("dict[str, object]", c)
+    bs: object = cd.get("branches", [])
+    if "branches" in cd and not (isinstance(bs, list) and bs):
+        errs.append(f"{at}: field branches: must be a non-empty list of {{\"fixture\", \"branch\", \"message\"}}"); bs = []
+    def name(t: object) -> object:
+        return cast("dict[str, object]", t).get("branch") if isinstance(t, dict) else None
+    taken: list[object] = ["main", cd.get("branch"), name(cd.get("head"))]
+    trees: list[tuple[str, object, list[object]]] = [("head", cd["head"], taken[:2])] if "head" in cd else []
+    for i, b in enumerate(cast("list[object]", bs)):
+        trees.append((f"branches[{i}]", b, list(taken)))
+        taken.append(name(b))
+    for f, t, used in trees:
+        check_tree(cast("str", at), f, t, used, cast("Path", evals), cast("list[str]", errs))
+
+
+def seen_tree(c: dict[str, object]) -> object:
+    """The fixture the agent sees (rule: schema.md, Case)."""
+    h = c.get("head")
     if not isinstance(h, dict):
-        errs.append(f"{at}: field head: must be an object {{\"fixture\", \"branch\", \"message\"}}"); return
+        return c.get("fixture")
+    hd = cast("dict[str, object]", h); then = hd.get("then")
+    last = cast("list[object]", then)[-1] if isinstance(then, list) and then else None
+    return cast("dict[str, object]", last).get("fixture") if isinstance(last, dict) else hd.get("fixture")
+
+
+def check_tree(at: str, f: str, t: object, used: list[object], evals: Path, errs: list[str]) -> None:
+    """A fixture tree committed on a new branch, a case's head or one of its branches (rule: schema.md, Case)."""
+    if not isinstance(t, dict):
+        errs.append(f"{at}: field {f}: must be an object {{\"fixture\", \"branch\", \"message\"}}"); return
+    h = cast("dict[str, object]", t)
+    def ref(v: object) -> bool:
+        return isinstance(v, str) and bool(BRANCH.fullmatch(v)) and ".." not in v and not v.endswith(("/", ".lock"))
     for k in sorted({"fixture", "branch", "message"} - set(h)):
-        errs.append(f"{at}: field head.{k}: missing")
-    for k in sorted(set(h) - {"fixture", "branch", "message"}):
-        errs.append(f"{at}: field head.{k}: unknown field")
-    hist = "fixture" in h and isinstance(cast("object", h["fixture"]), dict)
+        errs.append(f"{at}: field {f}.{k}: missing")
+    for k in sorted(set(h) - {"fixture", "branch", "message"} - ({"then"} if f == "head" else set())):
+        errs.append(f"{at}: field {f}.{k}: unknown field")
+    then = h.get("then", [])
+    if "then" in h and not (isinstance(then, list) and then):
+        errs.append(f"{at}: field head.then: must be a non-empty list of {{\"fixture\", \"message\"}}"); then = []
+    for i, n in enumerate(cast("list[object]", then)):
+        g = f"head.then[{i}]"
+        if not (isinstance(n, dict) and set(cast("dict[str, object]", n)) == {"fixture", "message"}):
+            errs.append(f"{at}: field {g}: must be an object {{\"fixture\", \"message\"}}"); continue
+        d = cast("dict[str, object]", n); nf, nm = d["fixture"], d["message"]
+        if not (isinstance(nf, str) and re.fullmatch(r"[A-Za-z0-9._-]+", nf) and (evals / "fixtures" / nf).is_dir()):
+            errs.append(f"{at}: field {g}.fixture: no fixture dir {evals / 'fixtures' / str(nf)}")
+        if not (isinstance(nm, str) and nm.strip()):
+            errs.append(f"{at}: field {g}.message: must be a non-empty string")
+    fx = h.get("fixture")
+    hist = isinstance(fx, dict)
     if hist:
-        check_history(cast("str", at), cast("object", h["fixture"]), cast("list[str]", errs), "head.fixture")
-    if "fixture" in h and not (isinstance(h["fixture"], str) and re.fullmatch(r"[A-Za-z0-9._-]+", h["fixture"])
-                               and (evals / "fixtures" / h["fixture"]).is_dir()) and not hist:
-        errs.append(f"{at}: field head.fixture: no fixture dir {evals / 'fixtures' / str(h['fixture'])}")
-    if "branch" in h and (not ref(h["branch"]) or h["branch"] in ("main", c.get("branch"))):
-        errs.append(f"{at}: field head.branch: must be a new branch name (not main, not the case's branch), got {h['branch']!r}")
-    if "message" in h and not (isinstance(h["message"], str) and h["message"].strip()):
-        errs.append(f"{at}: field head.message: must be a non-empty string")
+        check_history(at, h["fixture"], errs, f"{f}.fixture")
+    if "fixture" in h and not (isinstance(fx, str) and re.fullmatch(r"[A-Za-z0-9._-]+", fx)
+                               and (evals / "fixtures" / fx).is_dir()) and not hist:
+        errs.append(f"{at}: field {f}.fixture: no fixture dir {evals / 'fixtures' / str(fx)}")
+    if "branch" in h and (not ref(h["branch"]) or h["branch"] in used):
+        errs.append(f"{at}: field {f}.branch: must be a new branch name (not main, not the case's branch, nor head's or"
+                    f" an earlier branches entry's), got {h['branch']!r}")
+    m = h.get("message")
+    if "message" in h and not (isinstance(m, str) and m.strip()):
+        errs.append(f"{at}: field {f}.message: must be a non-empty string")
 
 
 def pi_role():
@@ -566,6 +635,10 @@ def check_exp(at, exp, errs, fixture=None, *, review: bool = False):
             cast("list[str]", errs).append(f"{fa}: field program: must be a command name ({PROGRAM.pattern}), got {f['program']!r}")
         if t == "ran" and "args" in f and not (isinstance(f["args"], list) and all(isinstance(x, str) for x in cast("list[object]", f["args"]))):
             cast("list[str]", errs).append(f"{fa}: field args: must be a list of strings")
+        if t == "ran" and "count" in f and not (type(n := cast("object", f["count"])) is int and n >= 0):
+            cast("list[str]", errs).append(f"{fa}: field count: must be an integer >= 0, got {n!r}")
+        if t == "ran" and "exit" in f and not (type(x := cast("object", f["exit"])) is int and 0 <= x <= 255):
+            cast("list[str]", errs).append(f"{fa}: field exit: must be an integer 0 to 255, got {x!r}")
         if t == "branch_paths":
             if not set(f) & OPTIONAL[t]:
                 errs.append(f"{fa}: field untouched: missing (give untouched, touched or both)")

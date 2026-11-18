@@ -6,8 +6,10 @@ from collections.abc import Callable
 import pytest
 from herdr_messaging import (
     director_worker_resume,
+    fresh_worker_session,
     parent_gone,
     post_merge_busy,
+    queued_completion,
     say_lookup_fails,
     say_resumes_parked,
     say_stalled,
@@ -54,6 +56,13 @@ def test_post_merge_tell_supervisors(case: Case) -> None:
 
 
 @pytest.mark.criterion(
+    "comms#acceptance-queued-completion", source="tests/gate/kit/herdr_messaging.py"
+)
+def test_queued_completion(case: Case) -> None:
+    case(queued_completion)
+
+
+@pytest.mark.criterion(
     "roles#acceptance-task-worker-route", source="tests/gate/kit/herdr_messaging.py"
 )
 def test_worker_route(case: Case) -> None:
@@ -70,3 +79,10 @@ def test_parent_gone(case: Case) -> None:
 )
 def test_director_worker_resume(case: Case) -> None:
     case(director_worker_resume)
+
+
+@pytest.mark.criterion(
+    "roles#acceptance-fresh-independent-worker", source="tests/gate/kit/herdr_messaging.py"
+)
+def test_fresh_worker_session(case: Case) -> None:
+    case(fresh_worker_session)
