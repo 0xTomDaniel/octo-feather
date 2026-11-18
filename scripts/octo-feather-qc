@@ -46,9 +46,8 @@ writable path: the worktree is an overlay whose upper dir lives on the run's
 tmpfs, so every write (credential copies included) dies with the run; a write
 to a tracked file or an untracked non-ignored file is reported and fails it.
 Pi's auth.json and models.json: each sandbox a Pi runs in (a judge, the advisory) gets per-run copies, discarded with the
-run and never written back; a declared demo's sandbox (no Pi runs there) gets neither. A declared demo's sandbox sees the
-qa runs dir read-only (docs/adr/0022, sandbox paragraph), so an eval-backed demo (octo-feather-qa --help, Verdict)
-reads its pinned stored runs. If the box auth.json
+run and never written back; a declared demo's sandbox (no Pi runs there) gets neither. The qa runs dir bind of a
+declared demo's sandbox: docs/adr/0022, sandbox paragraph. If the box auth.json
 holds OAuth credentials and a sandbox with copies starts, a warning says a token refresh during the run is discarded.
 GitHub evidence: when origin is a GitHub repo, octo-feather-qc-ghsnap fetches a
 fresh snapshot with this shell's gh auth into per-run scratch before every run;
@@ -249,8 +248,7 @@ def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bo
     test (default this kit; what the sandbox shows of it: docs/adr/0022, sandbox paragraph); browser: the box's
     Playwright browsers folder, bound read-only (a browser demo); shots: a $QC_SCREENSHOTS dir whose files come back as
     the record's "shots" ([name, base64] pairs); pi False: no Pi runs (a declared demo), so no copy of Pi's auth.json or
-    models.json at all; qa: the qa runs dir ($OCTO_FEATHER_QA_DIR or $(octo-feather-state)/qa) bound read-only (a
-    declared demo: docs/adr/0022, sandbox paragraph)."""
+    models.json at all; qa: the qa runs dir bound read-only (which dir and when: docs/adr/0022, sandbox paragraph)."""
     unshare = shutil.which("unshare")
     if not unshare and sys.platform == "darwin":
         die(69, "just qc: not on macOS (the judge's sandbox needs Linux unshare and /proc); run it on a Linux box, or say `just qc` not run (macOS) in the merge ask")

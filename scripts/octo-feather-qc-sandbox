@@ -42,7 +42,7 @@ Setup (this process, outside the judge's namespaces):
         auth.json and models.json per-run copies there, bound over the real files (never written back; none with
         QC_PI=none, a run with no Pi such as a declared demo); the caller's archived lanes and director log bound
         at a scratch state dir (none with QC_HISTORY=none: a factory eval sees no lane history), the qa runs dir QC_QA
-     at its qa/ (a declared demo: an eval-backed one reads its pinned stored runs; none without QC_QA), and the box
+     at its qa/ (why and when: docs/adr/0022, sandbox paragraph; none without QC_QA), and the box
         onboarding file (the commit identity a role launch applies) at its top
   S. srt's policy (one settings file on the private /tmp): denyRead /tmp (the judge's own empty /tmp), the Herdr and
      gh config dirs, ~/.ssh, git credential files, live lanes/, sessions/, director.toml and director log, every
