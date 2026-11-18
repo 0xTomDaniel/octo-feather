@@ -341,6 +341,11 @@ class Box:
         """KEYS of acceptance-a's agent fallback run in the newest report."""
         return self.report("fallback", "acceptance-a", *keys)
 
+    def started(self) -> bool:
+        """Whether acceptance-a's judge started, by the newest report (it holds its stdout)."""
+        fb = self.report("fallback", "acceptance-a")
+        return isinstance(fb, dict) and "stdout" in fb
+
     def judge(self) -> str:
         """The judge's stdout in the newest report."""
         return str(self.jr("stdout"))
@@ -376,6 +381,23 @@ class Box:
     def left(self, rx: str) -> list[str]:
         """Each process whose whole cmdline matches RX (pgrep -fx)."""
         return [c for c in procs().values() if re.fullmatch(rx, c)]
+
+    def servers_left(self) -> list[int]:
+        """Each Herdr stand-in server (testkit herdr.py's `sleep 600`) this item's runs started
+        still alive: its environ holds this run's FAKE_QC_TOK, as every process the sandbox
+        starts inherits it, so a concurrent item's server never counts."""
+        mark = f"FAKE_QC_TOK={self.tok}".encode()
+        got: list[int] = []
+        for pid, c in procs().items():
+            if c != "sleep 600":
+                continue
+            try:
+                env = Path(f"/proc/{pid}/environ").read_bytes().split(b"\0")
+            except OSError:
+                continue
+            if mark in env:
+                got.append(pid)
+        return got
 
 
 def secret_files(d: Path) -> list[Path]:

@@ -639,7 +639,280 @@ def creds(s: Scratch) -> None:
     )
 
 
+def refused(b: Box) -> None:
+    """tests/qc.sh's refusals: a same-family judge, a dirty tree, an unusable report and a judge
+    that writes; reports never overwrite; the pre-run proof printed."""
+    b.run(
+        64,
+        "mixed",
+        STATUS,
+        "5",
+        "acceptance-a",
+        "acceptance-b",
+        env={"OCTO_FEATHER_QC_MODEL": "anthropic/claude-opus-5-5"},
+    )  # implementer's family
+    (b.repo / "dirty").write_text("x\n")
+    b.run(65, "mixed", STATUS, *A)  # dirty worktree
+    (b.repo / "dirty").unlink()
+    before = b.git("rev-parse", "HEAD")
+    b.run(3, "garbage", STATUS, "5", "acceptance-a", "acceptance-b")  # no json report
+    b.run(3, "writes", STATUS, *A)  # judge wrote a non-ignored file
+    if not ("new judge-was-here" in b.out and "scratch/fine" not in b.out):
+        fail(f"non-ignored write not listed alone: {b.out}")
+    b.run(3, "tracked", STATUS, *A)  # judge changed and deleted tracked files
+    if "changed .gitignore; deleted docs/specs/demo.spec.html" not in b.out:
+        fail(f"tracked writes not listed: {b.out}")
+    b.run(3, "opaque", STATUS, *A)  # judge replaced a tracked dir (opaque upper dir)
+    w = (
+        "deleted docs/specs/demo.spec.html; deleted docs/specs/demo.status.json; "
+        "new docs/specs/other.html"
+    )
+    if w not in b.out:
+        fail(f"opaque dir writes not listed: {b.out}")
+    if b.git("rev-parse", "HEAD") != before or b.git("status", "--porcelain", "--ignored"):
+        fail("refused run changed the real worktree")
+    if len(list((b.t / "reports").glob(f"{before}-*.json"))) != 4:
+        fail("four runs at one head must leave four reports")
+    proved(b)
+    unusable(b, before)
+
+
+def proved(b: Box) -> None:
+    """The pre-run proof printed: Herdr unreachable, the worktree an overlay, no persistent
+    writable path, no vendored-skill cache on the box and none bound."""
+    if "qc sandbox: ok   live Herdr unreachable" not in b.out:
+        fail(f"no pre-run proof printed: {b.out}")
+    ov = f"qc sandbox: ok   worktree {b.repo} is an overlay"
+    if not (ov in b.out and "qc sandbox: ok   writable persistent paths: none" in b.out):
+        fail(f"no overlay / persistent-writable proof: {b.out}")
+    if "qc sandbox: ok   vendored-skill cache: none on the box, nothing bound" not in b.out:
+        fail(f"absent cache: want no bind, no failure: {b.out}")
+
+
+def unusable(b: Box, before: str) -> None:
+    """An unusable report (a duplicate id, another head) leaves the status file as it was."""
+    # issue-lifecycle#acceptance-qc-interim, #acceptance-one-head (#121 D19 D20).
+    b.run(3, "dup", STATUS, "5", "acceptance-a", "acceptance-b")  # acceptance-a judged twice
+    if "judged more than once: acceptance-a" not in b.out:
+        fail(f"duplicate id not named: {b.out}")
+    b.run(3, "head", STATUS, *A)  # report for another head
+    if f"report head '{'0' * 40}' is not the judged head {before}" not in b.out:
+        fail(f"wrong head not named: {b.out}")
+    if b.git("rev-parse", "HEAD") != before or b.git("status", "--porcelain"):
+        fail("unusable report changed the status file")
+
+
+def nested(b: Box) -> None:
+    """A qc sandbox nested in the judge's (outer /proc submounts covered by its own /proc) passes
+    its proof."""
+    b.run(0, "nested", STATUS, *A)
+    j = b.judge()
+    if has("ESCAPE|MISSING", j):
+        fail(f"nested qc: {j}")
+    if "NESTED exit 3" not in j:
+        fail(f"nested qc: want the inner judge to run (exit 3, unusable report): {j}")
+
+
+def recipe_args(b: Box) -> None:
+    """The qc recipes pass arguments as data, never as shell source."""
+    for jf in (
+        ROOT / "justfile",
+        ROOT / "templates/python/justfile",
+        ROOT / "templates/typescript/justfile",
+    ):
+        rc, o = b.bounded(
+            [
+                "just",
+                "--justfile",
+                str(jf),
+                "--working-directory",
+                str(b.repo),
+                "qc",
+                STATUS,
+                "5",
+                "acceptance-a$(touch pwned)",
+                "x;touch pwned2",
+            ]
+        )
+        b.hung(rc, f"{jf} qc", o)
+        made = [p for p in (b.repo / "pwned", b.repo / "pwned2", ROOT / "pwned") if p.exists()]
+        if rc == 0 or made:
+            fail(f"{jf} qc ran its arguments as shell (exit {rc}): {o}")
+        if "not in docs/specs/demo.status.json: acceptance-a$(touch pwned) x;touch pwned2" not in o:
+            fail(f"{jf} qc mangled its arguments: {o}")
+
+
+def escapes(s: Scratch) -> None:
+    """tests/qc-escapes.sh."""
+    with Box(s) as b:
+        # A failed proof check aborts before the judge: here raw herdr still reaches a live
+        # session (the testkit herdr's FAKE_HERDR_LEAK).
+        b.run(66, "escape", STATUS, *A, env={"FAKE_HERDR_LEAK": "1"})
+        if "FAIL live Herdr unreachable" not in b.out:
+            fail(f"leaking Herdr not caught by the proof: {b.out}")
+        if b.started():
+            fail("judge started after a failed proof")
+        # The rule remote#acceptance-linear-key-qc: a Linear key re-entering the judge's env (here a
+        # BASH_ENV that exports it again after the scrub) fails the proof, so the judge never
+        # starts; the plain run below proves it absent.
+        leak = s.bin / "leak.env"
+        leak.write_text("export LINEAR_API_KEY=SECRET-linear-leak\n")
+        b.run(66, "escape", STATUS, *A, env={"BASH_ENV": str(leak)})
+        if "FAIL no tracker credential: LINEAR_API_KEY set 1 times" not in b.out:
+            fail(f"leaking Linear key not caught by the proof: {b.out}")
+        if b.started():
+            fail("judge started with a Linear key in its env")
+        # A mask over another repo that cannot be set up (here a path to bind back on it is
+        # missing) aborts before the judge.
+        miss = f"{b.home}/src/sib/missing"
+        b.run(66, "escape", STATUS, *A, env={"OCTO_FEATHER_QC_RO_BINDS": miss})
+        if f"qc sandbox: FAIL bind back {miss} on the mask over {b.home}/src/sib" not in b.out:
+            fail(f"a failed repo mask not named: {b.out}")
+        if b.started():
+            fail("judge started after a failed repo mask")
+        every_escape(b)
+    say(
+        "qc-escapes: ok (proof abort, sandbox escapes, other repos masked (listing recorded and "
+        "refused; a failed mask aborts), cleanup count, live state untouched; offline, runs "
+        "bounded)"
+    )
+
+
+def every_escape(b: Box) -> None:
+    """Every escape fails; leftovers killed, agents counted, credential copies gone, live
+    records untouched."""
+    b.run(0, "escape", STATUS, *A)
+    j = b.judge()
+    if has("ESCAPE|MISSING|LINEAR KEY", j):
+        fail(f"sandbox escape: {j}")
+    o, h = b.out, str(b.home)
+    if "qc sandbox: ok   no tracker credential: LINEAR_API_KEY set 0 times" not in o:
+        fail(f"no Linear key proof: {o}")
+    if (
+        "qc sandbox: ok   parent route unset: 0 of OCTO_FEATHER_PARENT/SESSION_ID/ROLE/SPEND_SPACE,"
+        not in o
+    ):
+        fail(f"no route proof naming the spend space: {o}")
+    rx = (
+        rf"qc sandbox: ok   other repos hidden: 1 git repos under {re.escape(h)} .*: src/sib; "
+        rf"visible: kit under test {re.escape(str(ROOT))}, worktree {re.escape(str(b.repo))}$"
+    )
+    if not has(rx, o):
+        fail(f"no other-repos proof naming the mask and what stays visible: {o}")
+    att = cast("list[dict[str, object]]", b.jr("sandbox", "attempts"))
+    want = {"kind": "repo", "attempt": True, "refused": True, "what": f"open {h}/src/sib"}
+    if not any(want.items() <= a.items() for a in att):
+        fail(f"the listing of another repo not recorded and refused: {b.jr('sandbox')}")
+    cleaned(b)
+
+
+def cleaned(b: Box) -> None:
+    """Leftovers killed and counted, agents counted, nothing survives: no process, no HOME or
+    /tmp write, no live record, no sandbox Herdr session in the real config dir."""
+    o = b.out
+    if "cleanup: agents started 1 (headless pi 1, Herdr panes 0)" not in o:
+        fail(f"no agent count: {o}")
+    if b.jr("sandbox", "left_after_kill") != 0 or b.jr("worktree_writes") != []:
+        fail(f"cleanup record: {b.jr('sandbox')}")
+    killed = repr(b.jr("sandbox", "killed"))
+    for p in ("sleep 3012", "sleep 302921"):
+        if p not in killed:
+            fail(f"leftover '{p}' not killed and counted: {b.jr('sandbox')}")
+    if b.left(rf"sleep (3012|302921){b.tok}") or b.servers_left():
+        fail("sandbox processes survived the run")
+    if (b.home / "qc-saved").exists():
+        fail("judge wrote into HOME")
+    if list(Path("/tmp").glob("qc-escape-*")):  # noqa: S108 (the judge's /tmp writes, seen from here)
+        fail("judge's /tmp writes survived")
+    lv = b.live
+    hist = (lv / "lanes/archive/gh1.toml").read_text() == "ARCHIVED\n"
+    one = len((lv / "director.handoffs.jsonl").read_text().splitlines()) == 1
+    if (lv / "lanes/escaped").exists() or not hist or not one:
+        fail("judge wrote live state")
+    if (b.home / ".config/herdr/sessions").exists():
+        fail("sandbox Herdr session left in the real config dir")
+
+
+def live_session(b: Box) -> None:
+    """A real Herdr server, session qclive, a workspace QCLIVE in it (QC_TEST_HERDR=real)."""
+    live = subprocess.Popen(
+        [b.real, "--session", "qclive", "server"],
+        env=b.s.env,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+        start_new_session=True,
+    )
+    b.pids["qclive"] = live.pid
+    for _ in range(50):
+        ls = [b.real, "--session", "qclive", "workspace", "list"]
+        if subprocess.run(ls, env=b.s.env, capture_output=True, check=False).returncode == 0:
+            break
+        time.sleep(0.2)
+    mk = [b.real, "--session", "qclive", "workspace", "create", "--label", "QCLIVE"]
+    mk += ["--cwd", str(b.t), "--no-focus"]
+    if subprocess.run(mk, env=b.s.env, capture_output=True, check=False).returncode:
+        fail("real herdr: live test session did not start")
+
+
+def pane(b: Box) -> None:
+    """A pane the judge spawns through the sandbox herdr runs in the judge's PID namespace (the
+    sandbox server started inside it), sees no live Herdr socket and no creds, and dies with the
+    run: the testkit herdr; the box's real herdr only with QC_TEST_HERDR=real, under a real "live"
+    Herdr session in the throwaway HOME."""
+    path = None
+    if b.mode == "real":  # a real "live" Herdr session under the throwaway HOME
+        path = b.base
+        live_session(b)
+    b.run(0, "pane", STATUS, *A, env={"PATH": path} if path else None)
+    j, m = b.judge(), b.mode
+    if has("ESCAPE|MISSING", j):
+        fail(f"sandbox pane escape ({m} herdr): {j}")
+    if "PANE done" not in j:
+        fail(f"pane never ran ({m} herdr): {j}")
+
+    def ns(who: str) -> str:
+        return next((x.split(" ")[2] for x in j.splitlines() if x.startswith(f"{who} pidns ")), "")
+
+    if not (ns("judge") == ns("pane") != str(Path("/proc/self/ns/pid").readlink())):
+        fail(f"pane not in the judge's PID namespace ({m} herdr): {j}")
+    if b.jr("sandbox", "herdr_panes") != 1:
+        fail(f"pane not counted ({m} herdr): {b.jr('sandbox')}")
+    time.sleep(0.3)
+    if b.left(f"sleep 303031{b.tok}"):
+        fail(f"judge's pane survived the run ({m} herdr)")
+    if b.mode == "real":
+        live_kept(b)
+    if (b.repo / "scratch").exists():
+        fail("pane run's scratch survived")
+
+
+def live_kept(b: Box) -> None:
+    """The live Herdr session unhurt, the only one left in the config dir."""
+    ls = [b.real, "--session", "qclive", "workspace", "list"]
+    if subprocess.run(ls, env=b.s.env, capture_output=True, check=False).returncode:
+        fail("the run hurt the live Herdr session")
+    left = sorted(p.name for p in (b.home / ".config/herdr/sessions").iterdir())
+    if left != ["qclive"]:
+        fail(f"sandbox session left: {left}")
+
+
+def qc(s: Scratch) -> None:
+    """tests/qc.sh."""
+    with Box(s) as b:
+        refused(b)
+        nested(b)
+        pane(b)
+        recipe_args(b)
+        m = b.mode
+    say(
+        "qc: ok (same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique "
+        f"reports, nested sandbox, judge pane in the sandbox ({m} herdr), recipe args as data; "
+        "offline, runs bounded)"
+    )
+
+
 if __name__ == "__main__":
     if sys.argv[1:2] != ["creds"]:
         offline()
-    main(copies, judge, uv_cache, mise, oauth, vendored, creds)
+    main(qc, copies, judge, uv_cache, mise, oauth, vendored, escapes, creds)
