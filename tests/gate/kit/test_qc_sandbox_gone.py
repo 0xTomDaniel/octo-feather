@@ -12,15 +12,18 @@ pytestmark = pytest.mark.skipif(sys.platform == "darwin", reason="the qc sandbox
 
 
 @pytest.mark.e2e  # real srt and namespaces (quality spec #test-kinds)
+@pytest.mark.criterion("quality#acceptance-qc-sandbox-maintained")
 def test_repo_gone(case: Case) -> None:
     case(repo_gone)
 
 
 @pytest.mark.e2e  # real srt and namespaces (quality spec #test-kinds)
+@pytest.mark.criterion("quality#acceptance-qc-sandbox-maintained")
 def test_worktrees_gone(case: Case) -> None:
     case(worktrees_gone)
 
 
 @pytest.mark.e2e  # real srt and namespaces (quality spec #test-kinds)
+@pytest.mark.criterion("quality#acceptance-qc-sandbox-maintained")
 def test_repo_recreated(case: Case) -> None:
     case(repo_recreated)
