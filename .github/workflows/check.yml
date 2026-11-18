@@ -81,7 +81,25 @@ jobs:
       # The gate calls no network service (docs/specs/quality.spec.html#boundary-gate), so the one
       # network step runs first, on its own: the pinned skillfile binary (sha256-checked) and each
       # Skillfile pin commit (fetch-only entries included) from github.com, every call time-bounded. The gate then reads them offline.
-      - run: just vendored-fetch
+      # Cached (owner ruling, issue #261): the directory it fills (scripts/check-vendored, Cache), keyed by its pins:
+      # Skillfile, Skillfile.lock and scripts/check-vendored (the skillfile VERSION and SHA256). The fetch skips each pin
+      # already cached and authentic and re-hashes every object, so a hit fetches nothing and a stale restore is safe.
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (no moving tag)
+        with:
+          path: ~/.cache/octo-feather/skillfile
+          key: vendored-${{ runner.os }}-${{ hashFiles('Skillfile', 'Skillfile.lock', 'scripts/check-vendored') }}
+          restore-keys: vendored-${{ runner.os }}-
+      # On a miss, authenticated with the workflow's own token (anonymous fetches hit GitHub's 429s, #971): git's
+      # http.<url>.extraheader, the header actions/checkout persists (basic, x-access-token:<token>), here only in this
+      # step's git environment (GIT_CONFIG_COUNT), masked, never in a file: the fetch's fresh bare repo never reads
+      # checkout's.
+      - env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          auth=$(printf 'x-access-token:%s' "$GITHUB_TOKEN" | base64 -w0)
+          echo "::add-mask::$auth"
+          GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=http.https://github.com/.extraheader \
+            GIT_CONFIG_VALUE_0="AUTHORIZATION: basic $auth" just vendored-fetch
       # Pi at the pin in pi-version (docs/adr/0023 Consequences): the second network step, on mise's node (above Pi's
       # engines floor, >= 22.19). npm, not Pi's installer, because only npm takes a version; its transitive
       # dependencies are not pinned (Pi's README).
