@@ -55,6 +55,18 @@
         "tests/gate/kit/herdr_messaging.py"
       ]
     },
+    "acceptance-parent-resumed": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-result-file": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-result-missing": {
+      "status": "planned",
+      "pr": null
+    },
     "acceptance-director-worker-resume": {
       "status": "built",
       "pr": 833,
