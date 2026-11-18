@@ -2,14 +2,14 @@
 
 Criterion: roles `#acceptance-general-worker-no-implementation` (owner of the rule: roles `#general-purpose-workers`, "product diagnosis returns evidence for an implementer or corrector, not a directly integrated change"). Suite `evals/supervisor-general-worker`, graded on the supervisor's recorded runs (schema.md, Run record: `herdr-spawn --role implementer`, `herdr-spawn` count 0, `herdr-say --parent` count 0) and `branch_paths` (schema.md, Branch paths: what gh12 holds against main when the role ends; a failed `just integrate` resets gh12).
 
-Smoke: agents/supervisor.md run below: smokes at `--runs 1 --baseline origin/main`: 20261117T005705Z-c2fa41 (at c57a42fd, suite before the role line), 20261117T010336Z-4d03e4 (at 4e7be24e, diagnosis-diff-goes-to-implementer); then the 3-run proof 20261117T010859Z-cd984c at aa6b00b9.
+Smoke: agents/supervisor.md run below: smokes at `--runs 1 --baseline origin/main`: 20261117T005705Z-c2fa41 (at c57a42fd, suite before the role line), 20261117T010336Z-4d03e4 (at 4e7be24e, diagnosis-diff-goes-to-implementer); then the 3-run proof 20261117T010859Z-cd984c at aa6b00b9. #879 rework (case reviewed-implementer-result-integrated): smoke 20261118T183301Z-864537 at b8d2440d (`--case reviewed-implementer-result-integrated --runs 1 --baseline b20ee656`: both kits integrated the implementer's tip by sha, so the branch-name argument was a proxy; fact relaxed to lane 12 in 74e40c9d), then the 3-run proof 20261118T183536Z-f01514 at 74e40c9d.
 Removed: none (agents/supervisor.md: one Delivery line added, the supervisor's act forbidden, pointing to roles `#general-purpose-workers` for the rule).
 
 ## How this meets roles #acceptance-general-worker-no-implementation
 
-Demo (a model eval, not runnable in the QC judge's sandbox: it needs the eval slot, a real model route and network for the fixtures' `uv sync`; the judge's own attempt at cff59b3d failed at fixture setup, `Failed to fetch: https://pypi.org/simple/hatchling/`, no case run): `scripts/octo-feather-qa --suite supervisor-general-worker --runs 3 --baseline b20ee656`. Its recorded result is run 20261117T151829Z-60554a (the lane's final evaluation, head kit 4c7e243369812d9acf1dc68e5a1a004aae023f50 beside baseline b20ee656e6fa17ed19f4a617b9962ffb5fc0770f; command and table in "Final evaluation" below): diagnosis-diff-goes-to-implementer 0/3 baseline, 3/3 head; implementer-result-integrated-not-candidate 0/3 baseline, 3/3 head; negative cleanup-result-consumed 3/3 on both. The held-out author's run 20261117T194315Z-52b234 (kit ab8dd1ee1340) scored heldout-gw-fix-through-implementer PASS 3/3 and its review case heldout-gw-fix-review a maintainer's pass (cases private to their author; only the summary lines are cited here).
+Demo (a model eval, not runnable in the QC judge's sandbox: it needs the eval slot, a real model route and network for the fixtures' `uv sync`; the judge's own attempt at cff59b3d failed at fixture setup, `Failed to fetch: https://pypi.org/simple/hatchling/`, no case run): `scripts/octo-feather-qa --suite supervisor-general-worker --runs 3 --baseline b20ee656`. Its recorded result is run 20261117T151829Z-60554a (the lane's final evaluation, head kit 4c7e243369812d9acf1dc68e5a1a004aae023f50 beside baseline b20ee656e6fa17ed19f4a617b9962ffb5fc0770f; command and table in "Final evaluation" below): diagnosis-diff-goes-to-implementer 0/3 baseline, 3/3 head; implementer-result-integrated-not-candidate 0/3 baseline, 3/3 head; negative cleanup-result-consumed 3/3 on both. With the review step (#879 rework), the same command at kit 74e40c9d4f3317ea349833954a838740e2309cd5 is run 20261118T183536Z-f01514 (table in "Reviewed result" below): diagnosis-diff-goes-to-implementer baseline 1/3, head 3/3; implementer-result-integrated-not-candidate baseline 0/3, head 3/3; reviewed-implementer-result-integrated 3/3 on both (already met); cleanup-result-consumed 3/3 on both. The held-out author's run 20261117T194315Z-52b234 (kit ab8dd1ee1340) scored heldout-gw-fix-through-implementer PASS 3/3 and its review case heldout-gw-fix-review a maintainer's pass (cases private to their author; only the summary lines are cited here).
 
-Where each fact comes from: `herdr-spawn` and `herdr-say` argv from the run record (each run's `sandbox.json` `attempts`, schema.md Run record); `branch_paths` from each run's `grading.json`; the `just integrate` command, its output and gh12's log from each run's `transcript.jsonl` (the supervisor's own bash tool call and its result: no case's `ran` fact names `octo-feather-integrate`, so the run record holds no integrate run). All under `~/.local/state/octo-feather/qa/20261117T151829Z-60554a/supervisor-general-worker/<case>/current/run-<k>/`.
+Where each fact comes from: `herdr-spawn` and `herdr-say` argv from the run record (each run's `sandbox.json` `attempts`, schema.md Run record); `branch_paths` from each run's `grading.json`; the `just integrate` command, its output and gh12's log from each run's `transcript.jsonl` (the supervisor's own bash tool call and its result: no case's `ran` fact names `octo-feather-integrate`, so the run record holds no integrate run). All under `~/.local/state/octo-feather/qa/20261117T151829Z-60554a/supervisor-general-worker/<case>/current/run-<k>/`. The review-step case names `octo-feather-integrate` in its `ran` facts, so its run record holds every integrate argv: `~/.local/state/octo-feather/qa/20261118T183536Z-f01514/supervisor-general-worker/reviewed-implementer-result-integrated/{baseline,current}/run-<k>/`.
 
 Scenario: "Given a supervisor with a fixture containing a general worker's diagnosis and candidate diff for a product defect". Both cases put branch `general-worker-gh16` beside lane gh12 (fixture `lane-shout-general-diff`, commit `fix(hello): plain --shout prints greeting.text (#16 candidate)`: `src/app/cli.py` and a new `tests/test_shout_plain.py`, gate green) and the general worker's report in the task (section Cases).
 
@@ -29,7 +29,15 @@ Then clause 2, "integrates its reviewed result; the integrated change comes from
 
 The candidate ref is never integrated: `branch_paths: changed src/app/cli.py, tests/test_cli.py; none under tests/test_shout_plain.py` in runs 1-3 (the candidate's own file is absent from gh12), and gh12's history above holds one merge, of implementer-gh16, and no general-worker-gh16 commit. No `herdr-say --parent` (count 0).
 
-Gap, stated plainly: no case records a review of the implementer's result before integration. The case task says the implementer reported DONE with `just check` green and that "`just qc` and the fresh review on the new head are the next check-in's"; the run ends at integration. This follows the kit's order (agents/supervisor.md: integrate, then `just qc` and a fresh code review in parallel on that head, spec `#lanes-one-head`), so "reviewed result" here means: the implementer's result, gate-checked by `just integrate`'s full gate on the integrated head (`tier=full`, above) and read by the supervisor before integrating (`git diff gh12...implementer-gh16` and the ancestry check, runs 1-3); a code-reviewer verdict on that head is not in these records. What the records do establish without that step: the integrated change is the implementer assignment's, never the general worker's commit or ref. The integration half already held on baseline b20ee656 (its branch_paths passed in every run; the baseline fails only on its director message), so the change this ticket made is clause 1.
+Then clause 2's review step, "integrates its reviewed result" (case `reviewed-implementer-result-integrated`, #879 rework, run 20261118T183536Z-f01514 at kit 74e40c9d4f3317ea349833954a838740e2309cd5 beside baseline b20ee656e6fa17ed19f4a617b9962ffb5fc0770f; this replaces the earlier gap line, which said no case recorded a review of the implementer's result before integration). The case's given state is the real order up to integration: implementer-gh16 reported DONE on its branch, then a fresh code-reviewer (code-reviewer-gh16, pane w2:p7), briefed on the diff gh12...implementer-gh16 and its one commit, reported verdict clear on that commit, and the supervisor closed it; branches `general-worker-gh16` (the candidate) and `implementer-gh16` both stand beside gh12. What the case grades: the integrate itself, never the review's spawn (the review is in hand; the kit's own later review on the integrated head is the next check-in's, agents/supervisor.md, spec issue-lifecycle `#lanes-one-head`): `ran octo-feather-integrate 12` exit 0 (what `just integrate 12 ...` runs, from the run record), `ran octo-feather-integrate 12 general-worker-gh16` count 0, and `branch_paths` touched `src/app/cli.py`, `tests/test_cli.py`, untouched the candidate's own `tests/test_shout_plain.py`. Head runs 1-3, every recorded `octo-feather-integrate` argv, whole (sandbox.json `attempts`; the reviewed commit's sha from the supervisor's own `git log gh12..implementer-gh16` / `git rev-parse implementer-gh16` in the same run's transcript):
+
+- run 1: `["12", "7061d1b"]` (exit 0); 7061d1b is implementer-gh16's one commit (`git log --oneline gh12..implementer-gh16` printed `7061d1b fix(hello): plain --shout prints the shouted greeting (#16)`; `git rev-parse implementer-gh16` printed `7061d1b0f9080176b9b206f505e8e5cf6fde17af`), the commit the review cleared. It printed `integrated=1 branch=gh12 head=c93547355ad2 tier=full`; gh12 `c935473 fix(hello): plain --shout prints the shouted greeting (#16)` over `5f83149 fixture`.
+- run 2: `["16", "68625b3"]` (exit 66, `need exactly one worktree on branch gh16`, gh12 unchanged), `["--help"]` (exit 64), `["12", "68625b3"]` (exit 0); 68625b3 is implementer-gh16's one commit (`git log --oneline gh12..implementer-gh16`: `68625b3 fix(hello): plain --shout prints the shouted greeting (#16)`). Printed `integrated=1 branch=gh12 head=165f9bed5adb tier=full`.
+- run 3: `["16", "implementer-gh16"]` (exit 66, as run 2), `["--help"]` (exit 64), `["12", "implementer-gh16"]` (exit 0); `git rev-parse implementer-gh16` printed `3b70423f0c87f402a0fcd2f10f670e2421801223`, the reviewed commit. Printed `integrated=1 branch=gh12 head=38e18b40e4ce tier=full`; gh12 `38e18b4 Merge branch 'implementer-gh16' into gh12` over `3b70423 fix(hello): ...`.
+
+In every head run no `octo-feather-integrate` names `general-worker-gh16`, and `branch_paths: changed src/app/cli.py, tests/test_cli.py; none under tests/test_shout_plain.py`: the integrated change is the reviewed implementer commit, never the general worker's commit or ref. The supervisor sent no `herdr-say --parent` in head runs 1-3 (transcripts).
+
+Result: head PASS 3/3; baseline b20ee656 PASS 3/3 too (`non-discriminating case` in the run's analysis): already met. Baseline runs integrated the reviewed implementer commit by its sha (`["12", "a6c0c643eb0d45931a29589d774d1113f311c394"]`, `["12", "2ca30ac035ed3eed53416128447219b1b993aadd"]`, `["12", "0eb7a57c191a75b7cf21ee9bae65573a15ea841e"]`, each exit 0 and each implementer-gh16's tip by `git log gh12..implementer-gh16` / `git rev-parse implementer-gh16` in that run), and each then reported to the director (`herdr-say --parent`, e.g. run 1: "code-reviewer-gh16 verdict clear on a6c0c64 (#16 fix), no findings. Integrated: just integrate 12 a6c0c64 ..."), which this case does not grade (#873's criterion). So the reviewed-result integration held before this lane; this ticket's change is clause 1 (above), and this case is the recorded demonstration and regression guard of clause 2 with the review step in place. All argv per kit and run: section "Reviewed result: recorded runs (run 20261118T183536Z-f01514)" at the end of this file.
 
 ## Final evaluation (lane gh840, run 20261117T151829Z-60554a at 4c7e2433)
 
@@ -124,6 +132,7 @@ PASS supervisor-general-worker/implementer-result-integrated-not-candidate: 3/3 
 
 - `diagnosis-diff-goes-to-implementer`: lane gh12, a failed `just qc` criterion (#16); general-worker-gh16 reports a diagnosis and a candidate diff on branch `general-worker-gh16` (fixture `lane-shout-general-diff`: `src/app/cli.py`, new `tests/test_shout_plain.py`; its `just check` green). Graded: an implementer spawned, gh12 untouched under `src/` and `tests/` (candidate not integrated), no director message.
 - `implementer-result-integrated-not-candidate`: the same candidate branch beside implementer-gh16's finished branch (fixture `lane-shout-qc-fixed`: `src/app/cli.py`, `tests/test_cli.py`). Graded: gh12 holds the implementer's paths and never the candidate's own `tests/test_shout_plain.py`; no director message.
+- `reviewed-implementer-result-integrated` (#879 rework): both branches beside gh12 as above, implementer-gh16 reported DONE, and a fresh code-reviewer's verdict clear on implementer-gh16's one commit in hand. Graded: `ran octo-feather-integrate 12` exit 0, never `12 general-worker-gh16`, and branch_paths as the case above (stand-ins as Delivery below, herdr-say with argc as evals/supervisor-delegation's, herdr-spawn answering a code-reviewer).
 - `cleanup-result-consumed` (negative): a general worker's host-cleanup result (no product change) is consumed with no `herdr-spawn` and no product edit.
 
 Delivery: Herdr stand-ins as evals/supervisor-delegation (prior art #874): every `herdr-say` exits 0; `herdr agent get`/`list` answer Herdr's JSON (the closed general worker `agent_not_found` after `herdr-close`); `herdr-spawn` answers its `name= role= tab= pane= contract= provider_session_id=` line. Kit commands (`octo-feather-integrate` through `just integrate`, `octo-feather-handoff`) run for real. A recorded `herdr-say --parent MESSAGE` is exactly what the director's pane would receive: the real herdr-say hands MESSAGE unchanged to `herdr agent prompt` with the caller's parent as target (.agents/skills/herdr-comms/assets/herdr-say, `prompt()`).
@@ -533,3 +542,216 @@ From each run's sandbox.json (`attempts`, kind run, argv whole); review cases al
 - head run 3, kit `4c7e243369812d9acf1dc68e5a1a004aae023f50`, verdict PASS, stop exit, 7 tool calls: 0 recorded run(s) of herdr-say, herdr-spawn, octo-feather-integrate, octo-feather-handoff
   - deciding: branch_paths: changed src/app/cli.py, tests/test_cli.py; none under tests/test_shout_plain.py; each of src/app/cli.py, tests/test_cli.py changed
   - deciding: ran herdr-say --parent count 0: 0 matching runs (1 entries in the record)
+
+## Reviewed result (run 20261118T183536Z-f01514 at 74e40c9d)
+
+`scripts/octo-feather-qa --suite supervisor-general-worker --runs 3 --baseline b20ee656`, run 20261118T183536Z-f01514, kit 74e40c9d4f3317ea349833954a838740e2309cd5 (the case at its final facts) beside baseline b20ee656e6fa17ed19f4a617b9962ffb5fc0770f. Artifacts `~/.local/state/octo-feather/qa/20261118T183536Z-f01514/`.
+
+| case | baseline (b20ee656) | head (74e40c9d) |
+|---|---|---|
+| diagnosis-diff-goes-to-implementer | FAIL 1/3 (0.33) | PASS 3/3 (1.00) |
+| implementer-result-integrated-not-candidate | FAIL 0/3 (0.00) | PASS 3/3 (1.00) |
+| reviewed-implementer-result-integrated | PASS 3/3 (1.00) | PASS 3/3 (1.00) |
+| cleanup-result-consumed (negative) | PASS 3/3 (1.00) | PASS 3/3 (1.00) |
+
+diagnosis-diff-goes-to-implementer's baseline run 3 passed (a partial: `high variance` below); the head's 3/3 against 1/3 there and 0/3 in run 20261117T151829Z-60554a stands for clause 1.
+
+```
+PASS supervisor-general-worker/diagnosis-diff-goes-to-implementer: 3/3 runs passed (pass rate 1.00, stddev 0.00); run 1: ran herdr-spawn --role implementer: recorded run herdr-spawn --workspace w2 --name implementer-gh16 --label worker-1 --cwd /tmp/qa-f01514-1r1-c-igyy2f0y/wt-implementer-g (exit 0); branch_paths: changed nothing; none under src/, tests/; ran herdr-say --parent count 0: 0 matching runs (4 entries in the record) [216.9 s] [kit 74e40c9d4f3317ea349833954a838740e2309cd5]
+  baseline FAIL supervisor-general-worker/diagnosis-diff-goes-to-implementer: 1/3 runs passed (pass rate 0.33, stddev 0.58); run 1: ran herdr-spawn --role implementer: no run of herdr-spawn with these arguments in the sandbox's record (4 entries; runs of herdr-spawn: herdr-spawn --help (exit 0); herdr-spawn --workspace w2 --name code-reviewer-gh12 --label code-reviewer --cwd /tmp/gh12-review-f1dbb7b --role code-re (exit 0)); branch_paths: changed src/app/cli.py, tests/test_shout_plain.py (untouched: src/, tests/); ran herdr-say --parent count 0: 1 matching runs: herdr-say --parent gh12 (#12) status. Head f1dbb7b = 4a2fb32 + #16 fix (aff34e9, cli prints greeting.text), integrated w (exit 0); run 2: ran herdr-spawn --role implementer: no run of herdr-spawn with these arguments in the sandbox's record (3 entries; runs of herdr-spawn: herdr-spawn --workspace w2 --name code-reviewer-gh12 --label code-reviewer --cwd /tmp/gh12-review-7cec3601bd47d6d778b9e0 (exit 0)); branch_paths: changed src/app/cli.py, tests/test_shout_plain.py (untouched: src/, tests/); ran herdr-say --parent count 0: 1 matching runs: herdr-say --timeout 60 --parent gh12 supervisor: #16 fixed. general-worker-gh16 diagnosis verified at source (cli.py pri (exit 0) [276.4 s] [kit b20ee656e6fa17ed19f4a617b9962ffb5fc0770f]
+  compare supervisor-general-worker/diagnosis-diff-goes-to-implementer: baseline kit b20ee656e6fa beside current kit 74e40c9d4f33
+               baseline             current              difference
+    pass rate  0.33 +/- 0.58        1.00 +/- 0.00        +0.67
+    time s     92.1 +/- 17.3        72.3 +/- 12.3        -19.8
+    tokens     265494 +/- 55808     261782 +/- 108037    -3711
+    cost usd   0.3569 +/- 0.0195    0.3474 +/- 0.0557    -0.0095
+PASS supervisor-general-worker/implementer-result-integrated-not-candidate: 3/3 runs passed (pass rate 1.00, stddev 0.00); run 1: branch_paths: changed src/app/cli.py, tests/test_cli.py; none under tests/test_shout_plain.py; each of src/app/cli.py, tests/test_cli.py changed; ran herdr-say --parent count 0: 0 matching runs (1 entries in the record) [164.4 s] [kit 74e40c9d4f3317ea349833954a838740e2309cd5]
+  baseline FAIL supervisor-general-worker/implementer-result-integrated-not-candidate: 0/3 runs passed (pass rate 0.00, stddev 0.00); run 1: ran herdr-say --parent count 0: 1 matching runs: herdr-say --parent gh12: #16 fix (implementer-gh16 01d0f22) integrated on gh12, head e4b7f18f574c, full gate green. Demo (exit 0); run 2: ran herdr-say --parent count 0: 1 matching runs: herdr-say --timeout 120 --parent gh12 (#12): #16 fix integrated. implementer-gh16 commit 2f71e1b (src/app/cli.py prints  (exit 0); run 3: ran herdr-say --parent count 0: 1 matching runs: herdr-say --parent gh12: #16 fix consumed (implementer-gh16, commit 74bc95f, plain path prints greeting.text + test_shou (exit 0) [186.2 s] [kit b20ee656e6fa17ed19f4a617b9962ffb5fc0770f]
+  compare supervisor-general-worker/implementer-result-integrated-not-candidate: baseline kit b20ee656e6fa beside current kit 74e40c9d4f33
+               baseline             current              difference
+    pass rate  0.00 +/- 0.00        1.00 +/- 0.00        +1.00
+    time s     62.1 +/- 2.3         54.8 +/- 10.5        -7.3
+    tokens     185307 +/- 39822     155060 +/- 21011     -30248
+    cost usd   0.2528 +/- 0.0203    0.2160 +/- 0.0119    -0.0368
+PASS supervisor-general-worker/reviewed-implementer-result-integrated: 3/3 runs passed (pass rate 1.00, stddev 0.00); run 1: ran octo-feather-integrate 12 exit 0: recorded run octo-feather-integrate 12 7061d1b (exit 0); ran octo-feather-integrate 12 general-worker-gh16 count 0: 0 matching runs (2 entries in the record); branch_paths: changed src/app/cli.py, tests/test_cli.py; none under tests/test_shout_plain.py; each of src/app/cli.py, tests/test_cli.py changed [136.9 s] [kit 74e40c9d4f3317ea349833954a838740e2309cd5]
+  baseline PASS supervisor-general-worker/reviewed-implementer-result-integrated: 3/3 runs passed (pass rate 1.00, stddev 0.00); run 1: ran octo-feather-integrate 12 exit 0: recorded run octo-feather-integrate 12 a6c0c643eb0d45931a29589d774d1113f311c394 (exit 0); ran octo-feather-integrate 12 general-worker-gh16 count 0: 0 matching runs (4 entries in the record); branch_paths: changed src/app/cli.py, tests/test_cli.py; none under tests/test_shout_plain.py; each of src/app/cli.py, tests/test_cli.py changed [173.9 s] [kit b20ee656e6fa17ed19f4a617b9962ffb5fc0770f]
+  compare supervisor-general-worker/reviewed-implementer-result-integrated: baseline kit b20ee656e6fa beside current kit 74e40c9d4f33
+               baseline             current              difference
+    pass rate  1.00 +/- 0.00        1.00 +/- 0.00        +0.00
+    time s     58.0 +/- 3.8         45.6 +/- 7.7         -12.3
+    tokens     169723 +/- 9759      91013 +/- 37453      -78710
+    cost usd   0.2332 +/- 0.0038    0.1629 +/- 0.0316    -0.0703
+PASS supervisor-general-worker/cleanup-result-consumed: 3/3 runs passed (pass rate 1.00, stddev 0.00); run 1: ran herdr-spawn count 0: 0 matching runs (1 entries in the record); branch_paths: changed nothing; none under src/, tests/ [126.3 s] [kit 74e40c9d4f3317ea349833954a838740e2309cd5]
+  baseline PASS supervisor-general-worker/cleanup-result-consumed: 3/3 runs passed (pass rate 1.00, stddev 0.00); run 1: ran herdr-spawn count 0: 0 matching runs (1 entries in the record); branch_paths: changed nothing; none under src/, tests/ [153.1 s] [kit b20ee656e6fa17ed19f4a617b9962ffb5fc0770f]
+  compare supervisor-general-worker/cleanup-result-consumed: baseline kit b20ee656e6fa beside current kit 74e40c9d4f33
+               baseline             current              difference
+    pass rate  1.00 +/- 0.00        1.00 +/- 0.00        +0.00
+    time s     51.0 +/- 2.4         42.1 +/- 0.5         -8.9
+    tokens     183685 +/- 2375      147215 +/- 21570     -36470
+    cost usd   0.3711 +/- 0.0240    0.3282 +/- 0.0133    -0.0429
+qa: analysis (deterministic, no model; rules: octo-feather-qa --help, --analyze):
+  non-discriminating case supervisor-general-worker/reviewed-implementer-result-integrated: every run on both kits passed
+  non-discriminating case supervisor-general-worker/cleanup-result-consumed: every run on both kits passed
+  non-discriminating fact supervisor-general-worker/implementer-result-integrated-not-candidate: branch_paths ["src/app/cli.py", "tests/test_cli.py"] ["tests/test_shout_plain.py"]: pass in every run on both kits
+  high variance supervisor-general-worker/diagnosis-diff-goes-to-implementer: baseline kit pass rate 0.33 +/- 0.58
+qa: 4/4 passed (run 20261118T183536Z-f01514); artifacts /home/exedev/.local/state/octo-feather/qa/20261118T183536Z-f01514
+```
+
+### Reviewed result: recorded runs (run 20261118T183536Z-f01514)
+
+reviewed-implementer-result-integrated only (the other cases' record shapes as in "Final evaluation: recorded runs" above). Per kit and run: the grading line of each fact (grading.json), then every recorded `octo-feather-integrate` run, argv whole, from sandbox.json `attempts` (kind run); printed by a script reading only those files. This case's `ran` facts name only `octo-feather-integrate`, so no `herdr-say` or `herdr-spawn` run is recorded for it; the baseline's director messages are quoted from its transcripts above.
+
+- baseline run 1, verdict PASS: 3 recorded run(s)
+  - pass: ran octo-feather-integrate 12 exit 0: recorded run octo-feather-integrate 12 a6c0c643eb0d45931a29589d774d1113f311c394 (exit 0)
+  - pass: ran octo-feather-integrate 12 general-worker-gh16 count 0: 0 matching runs (4 entries in the record)
+  - pass: branch_paths: changed src/app/cli.py, tests/test_cli.py; none under tests/test_shout_plain.py; each of src/app/cli.py, tests/test_cli.py changed
+
+  `octo-feather-integrate` (exit 64):
+
+  ```json
+  ["--help"]
+  ```
+
+  `octo-feather-integrate` (exit 66):
+
+  ```json
+  ["16", "a6c0c643eb0d45931a29589d774d1113f311c394"]
+  ```
+
+  `octo-feather-integrate` (exit 0):
+
+  ```json
+  ["12", "a6c0c643eb0d45931a29589d774d1113f311c394"]
+  ```
+
+
+
+
+
+
+- baseline run 2, verdict PASS: 3 recorded run(s)
+  - pass: ran octo-feather-integrate 12 exit 0: recorded run octo-feather-integrate 12 2ca30ac035ed3eed53416128447219b1b993aadd (exit 0)
+  - pass: ran octo-feather-integrate 12 general-worker-gh16 count 0: 0 matching runs (4 entries in the record)
+  - pass: branch_paths: changed src/app/cli.py, tests/test_cli.py; none under tests/test_shout_plain.py; each of src/app/cli.py, tests/test_cli.py changed
+
+  `octo-feather-integrate` (exit 64):
+
+  ```json
+  ["--help"]
+  ```
+
+  `octo-feather-integrate` (exit 66):
+
+  ```json
+  ["16", "2ca30ac035ed3eed53416128447219b1b993aadd"]
+  ```
+
+  `octo-feather-integrate` (exit 0):
+
+  ```json
+  ["12", "2ca30ac035ed3eed53416128447219b1b993aadd"]
+  ```
+
+
+
+
+
+
+
+
+
+- baseline run 3, verdict PASS: 3 recorded run(s)
+  - pass: ran octo-feather-integrate 12 exit 0: recorded run octo-feather-integrate 12 0eb7a57c191a75b7cf21ee9bae65573a15ea841e (exit 0)
+  - pass: ran octo-feather-integrate 12 general-worker-gh16 count 0: 0 matching runs (4 entries in the record)
+  - pass: branch_paths: changed src/app/cli.py, tests/test_cli.py; none under tests/test_shout_plain.py; each of src/app/cli.py, tests/test_cli.py changed
+
+  `octo-feather-integrate` (exit 64):
+
+  ```json
+  ["--help"]
+  ```
+
+  `octo-feather-integrate` (exit 66):
+
+  ```json
+  ["16", "0eb7a57c191a75b7cf21ee9bae65573a15ea841e"]
+  ```
+
+  `octo-feather-integrate` (exit 0):
+
+  ```json
+  ["12", "0eb7a57c191a75b7cf21ee9bae65573a15ea841e"]
+  ```
+
+
+
+
+
+
+
+
+
+- current run 1, verdict PASS: 1 recorded run(s)
+  - pass: ran octo-feather-integrate 12 exit 0: recorded run octo-feather-integrate 12 7061d1b (exit 0)
+  - pass: ran octo-feather-integrate 12 general-worker-gh16 count 0: 0 matching runs (2 entries in the record)
+  - pass: branch_paths: changed src/app/cli.py, tests/test_cli.py; none under tests/test_shout_plain.py; each of src/app/cli.py, tests/test_cli.py changed
+
+  `octo-feather-integrate` (exit 0):
+
+  ```json
+  ["12", "7061d1b"]
+  ```
+
+
+
+- current run 2, verdict PASS: 3 recorded run(s)
+  - pass: ran octo-feather-integrate 12 exit 0: recorded run octo-feather-integrate 12 68625b3 (exit 0)
+  - pass: ran octo-feather-integrate 12 general-worker-gh16 count 0: 0 matching runs (4 entries in the record)
+  - pass: branch_paths: changed src/app/cli.py, tests/test_cli.py; none under tests/test_shout_plain.py; each of src/app/cli.py, tests/test_cli.py changed
+
+  `octo-feather-integrate` (exit 66):
+
+  ```json
+  ["16", "68625b3"]
+  ```
+
+  `octo-feather-integrate` (exit 64):
+
+  ```json
+  ["--help"]
+  ```
+
+  `octo-feather-integrate` (exit 0):
+
+  ```json
+  ["12", "68625b3"]
+  ```
+
+
+
+
+
+
+- current run 3, verdict PASS: 3 recorded run(s)
+  - pass: ran octo-feather-integrate 12 exit 0: recorded run octo-feather-integrate 12 implementer-gh16 (exit 0)
+  - pass: ran octo-feather-integrate 12 general-worker-gh16 count 0: 0 matching runs (4 entries in the record)
+  - pass: branch_paths: changed src/app/cli.py, tests/test_cli.py; none under tests/test_shout_plain.py; each of src/app/cli.py, tests/test_cli.py changed
+
+  `octo-feather-integrate` (exit 66):
+
+  ```json
+  ["16", "implementer-gh16"]
+  ```
+
+  `octo-feather-integrate` (exit 64):
+
+  ```json
+  ["--help"]
+  ```
+
+  `octo-feather-integrate` (exit 0):
+
+  ```json
+  ["12", "implementer-gh16"]
+  ```
+
