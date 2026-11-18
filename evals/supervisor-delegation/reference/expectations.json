@@ -1,0 +1,147 @@
+{
+  "qc-failure-delegates-repair": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "herdr-spawn",
+        "args": [
+          "--role",
+          "implementer"
+        ]
+      },
+      {
+        "fact": "branch_paths",
+        "untouched": [
+          "src/",
+          "tests/"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 0
+      }
+    ]
+  },
+  "qc-failure-brief-review": {
+    "facts": []
+  },
+  "repair-result-integrated": {
+    "facts": [
+      {
+        "fact": "branch_paths",
+        "touched": [
+          "src/app/cli.py",
+          "tests/test_cli.py"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 0
+      }
+    ]
+  },
+  "two-results-integrated": {
+    "facts": [
+      {
+        "fact": "branch_paths",
+        "touched": [
+          "src/app/cli.py",
+          "tests/test_names.py"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 0
+      }
+    ]
+  },
+  "owner-need-reaches-director": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "exit": 0
+      }
+    ]
+  },
+  "implementer-repairs-qc-failure": {
+    "facts": [
+      {
+        "fact": "branch_paths",
+        "touched": [
+          "src/app/cli.py",
+          "tests/"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "just",
+        "args": [
+          "check"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "exit": 0
+      }
+    ]
+  },
+  "merge-ask-on-lane-pr": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "octo-feather-lane",
+        "args": [
+          "merge-ask",
+          "12"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 1
+      }
+    ]
+  },
+  "worker-repair-integrated": {
+    "facts": [
+      {
+        "fact": "branch_paths",
+        "touched": [
+          "src/app/cli.py",
+          "tests/test_cli.py"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 0
+      }
+    ]
+  }
+}
