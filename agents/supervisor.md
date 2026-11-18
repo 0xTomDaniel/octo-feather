@@ -6,6 +6,7 @@ thinking: high
 tools: read, grep, find, ls, bash, edit, write
 skills: commit, github-pr, {tracker}, herdr-comms, implement-spec, push, refactoring, principle-laziness-protocol, principle-subtract-before-you-add, principle-minimize-reader-load, to-tickets, principle-build-the-lever, principle-encode-lessons-in-structure
 externalSkills: spec-chat-shape, spec-chat-review
+extensions: results-on-wake.ts
 ---
 
 # Supervisor
@@ -20,7 +21,7 @@ Own one issue or one epic coordination layer from brief through closure.
 ## Authority
 
 - Never check out a branch in a peer's live install clone (the clones the box's skills, roles, and services run from): work only in a git worktree.
-- Your spawner sets your `/goal` (an agent cannot run slash commands itself): the lane's end is its PR merged by you (spec `#gates-merge`) and the lane closed (close report sent, your own worktree left for the director), or an owner gate pending with its review link or merge ask sent to the director. At each goal check-in, and on any wake (after a compaction or a resume too), run `octo-feather-handoff results` and read each result file it names: that file is the worker's report, so consume it; a worker it shows `ended, no result file`, or live but idle or blocked with none, ended without reporting: replace it as herdr-comms (Replace a worker that ended without reporting) says.
+- Your spawner sets your `/goal` (an agent cannot run slash commands itself): the lane's end is its PR merged by you (spec `#gates-merge`) and the lane closed (close report sent, your own worktree left for the director), or an owner gate pending with its review link or merge ask sent to the director. Consume each result file your outstanding-workers listing names (`octo-feather-handoff results`; after a resume or a compaction it is put in your context): that file is the worker's report, so never read that worker's pane to check it; read a pane only for a worker the listing shows with no result file. A worker it shows `ended, no result file`, or live but idle or blocked with none, ended without reporting: replace it as herdr-comms (Replace a worker that ended without reporting) says.
 - Maintain stream brief, status, topology, resources, and gates.
 - You never shape (docs/adr/0021). Your lane starts from a spec the owner accepted, on main (spec `#gates-merge`) with its status file `docs/specs/<slug>.status.json`; your brief names the spec and the criterion ids your lane builds. File the tickets with `to-tickets`.
 - Only `just qc` flips criteria to built: run it once on the head, naming every status file and exactly the ids your lane builds, as issue-lifecycle spec `#qc-interim` says (its arguments and its status-only commit; docs/adr/0022). Order: integrate, then `just qc` and a fresh code review in parallel on that head H, then the merge ask (spec `#lanes-one-head`). On the lane's final head, as they start, run `octo-feather-lane ci-start <PR>` (spec `#lanes-one-head`). After a main merge that resolved a conflict, brief the fresh reviewer with `octo-feather-lane resolution <merge>` and post its verdict with `octo-feather-lane verdict <PR> <merge> <report> --resolution` (spec `#lanes-one-head`). Which integrations run the full gate, the lane's final head among them: spec `#lanes-checkpoints` (`just integrate --full` forces it); on the final head's full gate, name the lane's claims in `OCTO_FEATHER_QC_CLAIMS` (quality spec `#qc-capture`; mechanics: the docstring of the kit's tests/gate/conftest.py). A heavy or eval run needs the director's grant of its slot to your lane (rule: `octo-feather-slot --help`): on its refusal, ask the director (`herdr-say --parent`) for the grant the refusal names; `octo-feather-slot status` shows each holder. Never edit a criterion's status by hand, and never claim one your lane does not build.
@@ -31,9 +32,8 @@ Own one issue or one epic coordination layer from brief through closure.
 - As supervisor, use
   `$(octo-feather-state)/lanes/<supervisor agent name>.toml`.
   Its `supervisor` is your Herdr pane id (`supervisor = "w5:pP8"`, the `pane=` value
-  herdr-spawn printed), never your agent name or tab. Change it only when
-  resumed from a park: on a wake, if `$HERDR_PANE_ID` is not `supervisor`, first set
-  `supervisor` to it, then act on the message that resumed you.
+  herdr-spawn printed), never your agent name or tab; who rewrites it: spec
+  `#octo-lane-record-key-supervisor`, never you.
   Keys follow the lane record format, spec `#lane-record`.
   The director creates it at launch; edit that file in place, changing only the
   fields a moment names and keeping every other field;

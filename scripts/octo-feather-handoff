@@ -54,8 +54,12 @@ lane at `octo-feather-lane archive`.
 
 repoint NAME reads the line herdr-spawn printed for a resumed agent on stdin and writes its pane=
 into NAME's record in the caller's session state: lanes/NAME.toml `supervisor`, or director.toml
-`pane` for NAME `director`; only that key's line, in place (added first when absent), every other
-line kept. No record: nothing written (exit 0). octo-feather-start --resume runs it.
+`pane` for NAME `director`. The record is parsed (tomllib), that top-level key set (added first
+when absent), and the flat table written back in its key order, then parsed again to check only
+that key changed, and replaced atomically; comments and layout are not kept (the stdlib has no
+TOML writer, and a record holds only top-level strings and integers). A record holding anything
+else (a table, an array, a boolean, a date) or not parsing is refused, exit 65 naming it, the
+record untouched. No record: nothing written (exit 0). octo-feather-start --resume runs it.
 
 attempt --ended-unreported LOG PANE --partial X --recovery Y [--commit C] prints the
 attempt line for a worker that ended without reporting (fields: comms spec
@@ -74,6 +78,7 @@ import re
 import subprocess
 import sys
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
@@ -197,24 +202,67 @@ def report(_: argparse.Namespace) -> int:
     return 0
 
 
-def herdr_agent(target: str) -> dict[str, object] | str | None:
-    """Herdr's agent TARGET (`herdr agent get`): its fields, None when Herdr finds none, or why
-    the lookup failed."""
+@dataclass(frozen=True)
+class Live:
+    """An agent Herdr finds: its current pane and status, both non-empty strings."""
+
+    pane: str
+    status: str
+
+
+@dataclass(frozen=True)
+class Absent:
+    """Herdr's own answer that it finds no such agent (error code agent_not_found)."""
+
+
+@dataclass(frozen=True)
+class Unknown:
+    """No answer to trust: the lookup failed or Herdr answered a shape that is no agent."""
+
+    why: str
+
+
+def member(value: object, key: str) -> object:
+    """VALUE's KEY when VALUE is a JSON object, else None."""
+    return cast("dict[str, object]", value).get(key) if isinstance(value, dict) else None
+
+
+def herdr_error(text: str) -> str | None:
+    """The `error.code` of a Herdr error envelope among TEXT's lines, or None."""
+    for line in text.splitlines():
+        try:
+            got: object = json.loads(line)
+        except ValueError:
+            continue
+        code = member(member(got, "error"), "code")
+        if isinstance(code, str):
+            return code
+    return None
+
+
+def herdr_agent(target: str) -> Live | Absent | Unknown:
+    """Herdr's answer for agent TARGET (`herdr agent get`), validated once: Live only for the
+    envelope {"result": {"agent": {"pane_id": str, "agent_status": str}}}, Absent only for its
+    explicit agent_not_found error, Unknown for anything else."""
     get = ["herdr", "agent", "get", target]
     try:
         got = subprocess.run(get, capture_output=True, text=True, check=False)
     except OSError as e:
-        return str(e)
-    if got.returncode == 0:
-        try:
-            out = cast("dict[str, dict[str, dict[str, object]]]", json.loads(got.stdout))
-            return out["result"]["agent"]
-        except (ValueError, KeyError, TypeError):
-            return f"unreadable answer: {got.stdout.strip()[:200]}"
-    if "agent_not_found" in got.stdout + got.stderr:
-        return None
-    said = (got.stderr or got.stdout).strip().splitlines()
-    return said[-1] if said else "no output"
+        return Unknown(str(e))
+    if got.returncode != 0:
+        if herdr_error(got.stderr + "\n" + got.stdout) == "agent_not_found":
+            return Absent()
+        said = (got.stderr or got.stdout).strip().splitlines()
+        return Unknown(said[-1] if said else f"exit {got.returncode}, no output")
+    try:
+        answer: object = json.loads(got.stdout)
+    except ValueError:
+        answer = None
+    agent = member(member(answer, "result"), "agent")
+    pane, status = member(agent, "pane_id"), member(agent, "agent_status")
+    if isinstance(pane, str) and pane and isinstance(status, str) and status:
+        return Live(pane, status)
+    return Unknown(f"answer is no agent: {got.stdout.strip()[:200]}")
 
 
 def outstanding(records: list[dict[str, object]]) -> list[dict[str, object]]:
@@ -244,10 +292,10 @@ def results(_: argparse.Namespace) -> int:
         name = str(spawn.get("name") or spawn.get("worker") or "")
         at, file = str(spawn.get("pane") or ""), results_dir(log) / f"{spawn['session']}.md"
         found = herdr_agent(name or at)
-        if isinstance(found, dict):
-            at, state = str(found.get("pane_id") or at), f"live {found.get('agent_status')}"
-        elif isinstance(found, str):
-            state = f"unknown (herdr agent get {name or at} failed: {found})"
+        if isinstance(found, Live):
+            at, state = found.pane, f"live {found.status}"
+        elif isinstance(found, Unknown):
+            state = f"unknown (herdr agent get {name or at}: {found.why})"
         elif any({p.get("name"), p.get("pane")} & {name, at} - {None, ""} for p in parked):
             state = "parked"
         else:
@@ -273,7 +321,7 @@ def prune_results(_: argparse.Namespace) -> int:
             old = time.time() - f.stat().st_mtime > PRUNE_AGE_S
         except OSError:
             continue
-        if old and name and herdr_agent(name) is None:
+        if old and name and isinstance(herdr_agent(name), Absent):
             f.unlink(missing_ok=True)
             sys.stderr.write(f"octo-feather-handoff: removed {f} ({name} gone, over 7 days)\n")
     return 0
@@ -292,12 +340,30 @@ def repoint(args: argparse.Namespace) -> int:
     )
     if not record.is_file():
         return 0
-    new = f"{key} = {json.dumps(line['pane'])}"
-    text, n = re.subn(rf"(?m)^{key}[ \t]*=.*$", lambda _: new, record.read_text(), count=1)
+    try:
+        table = tomllib.loads(record.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        return refuse(f"{record} does not parse as TOML ({e})", 65)
+    odd = [k for k, v in table.items() if isinstance(v, bool) or not isinstance(v, (str, int))]
+    if odd:
+        why = f"{record} key {odd[0]!r} holds a {type(table[odd[0]]).__name__}"
+        return refuse(f"{why}, not a top-level string or integer; edit it by hand", 65)
+    pane = {key: str(line["pane"])}
+    want = table | pane if key in table else pane | table
+    text = "".join(
+        f"{toml_key_name(k)} = {json.dumps(v, ensure_ascii=False)}\n" for k, v in want.items()
+    )
+    if tomllib.loads(text) != want:
+        return refuse(f"{record} would not read back as written", 65)
     tmp = record.with_name(record.name + ".tmp")
-    tmp.write_text(text if n else f"{new}\n{text}")
+    tmp.write_text(text, encoding="utf-8")
     tmp.replace(record)
     return 0
+
+
+def toml_key_name(key: str) -> str:
+    """KEY as a TOML key: bare when it may be, else a basic (JSON-compatible) string."""
+    return key if re.fullmatch(r"[A-Za-z0-9_-]+", key) else json.dumps(key, ensure_ascii=False)
 
 
 def refuse(why: str, code: int) -> int:

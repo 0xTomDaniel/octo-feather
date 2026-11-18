@@ -5,6 +5,7 @@ model: anthropic/claude-opus-5-5
 thinking: high
 tools: read, grep, find, ls, bash, web
 skills: herdr-comms, github-pr, {tracker}, principle-build-the-lever, principle-encode-lessons-in-structure
+extensions: results-on-wake.ts
 ---
 
 # Director

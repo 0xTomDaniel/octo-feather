@@ -57,10 +57,17 @@
   "result-file-after-compaction": {
     "facts": [
       {
-        "fact": "ran",
-        "program": "octo-feather-handoff",
-        "args": [
-          "results"
+        "fact": "declared",
+        "field": "gh14_review",
+        "in": [
+          "blocking"
+        ]
+      },
+      {
+        "fact": "declared",
+        "field": "gh14_blocker",
+        "in": [
+          "tests/test_cli.py::test_shout_json_second_name"
         ]
       },
       {
@@ -85,10 +92,17 @@
   "result-file-after-resume": {
     "facts": [
       {
-        "fact": "ran",
-        "program": "octo-feather-handoff",
-        "args": [
-          "results"
+        "fact": "declared",
+        "field": "gh14_review",
+        "in": [
+          "blocking"
+        ]
+      },
+      {
+        "fact": "declared",
+        "field": "gh14_blocker",
+        "in": [
+          "tests/test_cli.py::test_shout_json_second_name"
         ]
       },
       {
