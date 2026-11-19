@@ -110,6 +110,24 @@ after: inactive
 `scope_of(pid, pane)` for a pid in the live `octo-feather-agent-w7X:pD-3c51afe4.scope`: owned for
 pane `w7X:pD` only; `w7X:p2`, `w7X:p`, `w7`, `probe` read None.
 
-## Full gate from inside a probe scope
+## Full gate from inside a probe scope, green (the fix, 2ffcf039)
 
-Pending the heavy slot.
+```
+$ systemd-run --user --scope --unit octo-feather-agent-probe-gate-ff0430bd just check
+exit=0
+======================= 358 passed in 384.93s (0:06:24) ========================
+```
+
+Probe state: `active` 20 s into the run and still `active` after `just check` exited (a process
+some gate item left behind still in it), `inactive` after `systemctl --user stop`.
+`journalctl --user -u octo-feather-agent-probe-gate-ff0430bd.scope`:
+
+```
+2026-11-19T02:37:05+00:00 octo-feather systemd[407]: Started octo-feather-agent-probe-gate-ff0430bd.scope - /home/exedev/.local/share/mise/shims/just check.
+2026-11-19T02:43:32+00:00 octo-feather systemd[407]: Stopping octo-feather-agent-probe-gate-ff0430bd.scope - /home/exedev/.local/share/mise/shims/just check...
+2026-11-19T02:43:32+00:00 octo-feather systemd[407]: Stopped octo-feather-agent-probe-gate-ff0430bd.scope - /home/exedev/.local/share/mise/shims/just check.
+2026-11-19T02:43:32+00:00 octo-feather systemd[407]: octo-feather-agent-probe-gate-ff0430bd.scope: Consumed 34min 53.363s CPU time.
+```
+
+The only Stopping is the explicit stop after the gate exited: no gate item stopped the scope it
+ran in.
