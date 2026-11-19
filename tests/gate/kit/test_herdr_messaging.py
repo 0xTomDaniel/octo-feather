@@ -23,18 +23,22 @@ from herdr_messaging import (
 Case = Callable[..., None]
 
 
+@pytest.mark.e2e
 def test_spawn_ready_late(case: Case) -> None:
     case(spawn_ready_late)
 
 
+@pytest.mark.e2e
 def test_spawn_fails_closed(case: Case) -> None:
     case(spawn_fails_closed)
 
 
+@pytest.mark.e2e
 def test_spawn_one_bound(case: Case) -> None:
     case(spawn_one_bound)
 
 
+@pytest.mark.e2e
 def test_say_resumes_parked(case: Case) -> None:
     case(say_resumes_parked)
 
@@ -47,6 +51,7 @@ def test_say_stalled(case: Case) -> None:
     case(say_stalled)
 
 
+@pytest.mark.e2e
 def test_post_merge_busy(case: Case) -> None:
     case(post_merge_busy)
 
@@ -55,6 +60,7 @@ def test_post_merge_tell_supervisors(case: Case) -> None:
     case(tell_supervisors)
 
 
+@pytest.mark.e2e
 @pytest.mark.criterion(
     "comms#acceptance-queued-completion", source="tests/gate/kit/herdr_messaging.py"
 )
@@ -69,6 +75,7 @@ def test_worker_route(case: Case) -> None:
     case(worker_route)
 
 
+@pytest.mark.e2e
 @pytest.mark.criterion("comms#acceptance-parent-gone", source="tests/gate/kit/herdr_messaging.py")
 def test_parent_gone(case: Case) -> None:
     case(parent_gone)
