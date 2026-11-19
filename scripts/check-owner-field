@@ -13,6 +13,13 @@ adding this script (git merge-base --is-ancestor) are read. Older ones, such as 
 lane's commits from before a main merge brought this check in, pass with one notice line; no
 reviewed history is rewritten.
 
+Who owes it: every read commit, the writer's (implementer, corrector) and the status commit
+octo-feather-qc writes, which carries `Owners: none` (it changes no owned rule). A qc status commit
+pushed before qc wrote the field (#1096) passes without it, with one notice line, by what it
+changed: its whole message is qc's one line `qc: built <ids or (none)> (judged <sha>)` (the form
+octo-feather-lane's merge-ask reads) and it changes only docs/specs/<name>.status.json files. The
+same message on a commit that changes any other file, and every writer commit, need the field.
+
 Base: --base REF, else $OCTO_FEATHER_BASE, else origin/$GITHUB_BASE_REF, else origin/main, else
 main. None: skip with a note locally, fail in CI.
 
@@ -23,6 +30,7 @@ with the fix. Run by `just check`; tested by tests/gate/kit/test_owner_field.py.
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -32,6 +40,10 @@ TAG = "check-owner-field"
 SELF = "scripts/check-owner-field"
 FIELD = ".agents/skills/code-review/SKILL.md, Verdict step"
 LANE = Path(__file__).resolve().parent / "octo-feather-lane"
+# A field-less qc status commit's message and files, as scripts/octo-feather-qc wrote them
+# (the subject form: octo-feather-lane's QC_COMMIT, with its judged sha).
+QC_MSG = re.compile(r"qc: built .*? \(judged [0-9a-f]+\)")
+QC_FILE = re.compile(r"docs/specs/[^/]+\.status\.json")
 
 ap = argparse.ArgumentParser(
     description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -88,9 +100,17 @@ def missing(sha: str) -> str | None:
     return None if o["none"] or o["lines"] else "no Owner field"
 
 
-def main() -> None:
-    want = str(a.head)
-    head = commit(want) or no_base(f"no commit {want}")
+def qc_status(sha: str) -> bool:
+    """Whether SHA is a qc status-only commit from before qc wrote the field."""
+    if not QC_MSG.fullmatch((git("log", "-1", "--format=%B", sha) or "").strip()):
+        return False
+    files = (git("diff-tree", "--no-commit-id", "--name-only", "-r", "-z", sha) or "").split("\0")
+    files = [f for f in files if f]
+    return bool(files) and all(QC_FILE.fullmatch(f) for f in files)
+
+
+def base_ref() -> str:
+    """The base ref (Base above), or no_base."""
     cands: list[str]
     if a.base:
         cands = [str(a.base)]
@@ -99,10 +119,15 @@ def main() -> None:
     else:
         pr = os.environ.get("GITHUB_BASE_REF")
         cands = list(dict.fromkeys([*([f"origin/{pr}"] if pr else []), "origin/main", "main"]))
-    base: str
-    base = next((c for c in cands if commit(c)), None) or no_base(
+    return next((c for c in cands if commit(c)), None) or no_base(
         f"no base ref ({', '.join(cands)})"
     )
+
+
+def main() -> None:
+    want = str(a.head)
+    head = commit(want) or no_base(f"no commit {want}")
+    base = base_ref()
     mb = (git("merge-base", base, head) or "").strip() or no_base(f"no merge base of {base}")
     added = (git("log", "--diff-filter=A", "--format=%H", head, "--", SELF) or "").split()
     if not added:
@@ -110,19 +135,27 @@ def main() -> None:
         return
     intro = added[-1]
     bad: list[tuple[str, str]] = []
-    n = old = 0
+    n = old = qc = 0
     for sha in (git("rev-list", "--no-merges", f"{mb}..{head}") or "").split():
         if run(["git", "-C", root, "merge-base", "--is-ancestor", intro, sha]).returncode:
             old += 1
             continue
-        n += 1
         why = missing(sha)
+        if why and qc_status(sha):
+            qc += 1
+            continue
+        n += 1
         if why:
             bad.append((sha, why))
     if old:
         out(
             f"owner field: {old} commit(s) older than the check ({intro[:12]}) not read; "
             f"the field they owe: {FIELD}"
+        )
+    if qc:
+        out(
+            f"owner field: {qc} qc status commit(s) without it passed: qc's message, only "
+            "docs/specs/*.status.json changed (new qc commits carry `Owners: none`)"
         )
     for sha, why in bad:
         subj = (git("log", "-1", "--format=%s", sha) or "").strip()
