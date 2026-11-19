@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # issue-view KEY: one issue as JSON {key, title, body, state, url, parent, children, blocked_by}; keys are strings,
 # state open or done (a completed or canceled state is done), parent null when it has none, children its
-# sub-issues' keys. Wraps `linear api`.
+# sub-issues' keys. Wraps `linear api`. --notes: skills spec #tracker-script-issue-view; a description's edit time is
+# its latest issue history entry with updatedDescription (that entry's updatedAt).
 set -euo pipefail
-[[ $# == 1 ]] || { echo "usage: issue-view KEY" >&2; exit 64; }
+notes=0; [[ $# == 2 && "$2" == --notes ]] && { notes=1; set -- "$1"; }
+[[ $# == 1 ]] || { echo "usage: issue-view KEY [--notes]" >&2; exit 64; }
 [[ "$1" =~ ^[A-Za-z][A-Za-z0-9]*-[0-9]+$ ]] || { echo "issue-view: $1 is not a Linear issue key (TEAM-123)" >&2; exit 1; }
 # Blocked by: relations of type blocks pointing at this issue (its inverseRelations), as `linear issue relation list` reads them.
 query='query IssueView($id: String!) { issue(id: $id) { identifier title description url state { type }
@@ -14,7 +16,20 @@ out="$(linear api --no-input --variable "id=${1^^}" "$query" 2>&1)" || { echo "i
 if jq -e '.data.issue.children.pageInfo.hasNextPage == true' <<<"$out" >/dev/null 2>&1; then
   echo "issue-view: ${1^^} has more than 250 sub-issues; split the parent" >&2; exit 1
 fi
-jq -e '(.data.issue // empty) | {key: .identifier, title, body: (.description // ""),
+view="$(jq -e '(.data.issue // empty) | {key: .identifier, title, body: (.description // ""),
   state: (if .state.type == "completed" or .state.type == "canceled" or .state.type == "duplicate" then "done" else "open" end),
   url, parent: (.parent.identifier // null), children: [.children.nodes[].identifier], blocked_by: [.inverseRelations.nodes[] | select(.type == "blocks") | .issue.identifier]}' \
-  <<<"$out" 2>/dev/null || { echo "issue-view: linear api printed no issue ${1^^}: $out" >&2; exit 1; }
+  <<<"$out" 2>/dev/null)" || { echo "issue-view: linear api printed no issue ${1^^}: $out" >&2; exit 1; }
+((notes)) || { printf '%s\n' "$view"; exit 0; }
+query='query IssueNotes($id: String!) { issue(id: $id) { url createdAt description
+  comments(first: 250) { nodes { url createdAt editedAt body } pageInfo { hasNextPage } }
+  history(first: 250) { nodes { updatedAt updatedDescription } pageInfo { hasNextPage } } } }'
+out="$(linear api --no-input --variable "id=${1^^}" "$query" 2>&1)" || { echo "issue-view: ${1^^} notes: $out" >&2; exit 1; }
+# A partial comment or history list would read as the whole: refuse it, naming the time it cannot give.
+jq -e '.data.issue.comments.pageInfo.hasNextPage == false' <<<"$out" >/dev/null 2>&1 \
+  || { echo "issue-view: ${1^^}: linear api printed no issue or a partial comment list: $(head -c 300 <<<"$out")" >&2; exit 1; }
+jq -e '.data.issue.history.pageInfo.hasNextPage == false' <<<"$out" >/dev/null 2>&1 \
+  || { echo "issue-view: ${1^^}: more than 250 history entries: the description's last edit time cannot be given" >&2; exit 1; }
+jq -c --argjson v "$view" '.data.issue as $i | $v + {notes: ([$i | {at: .createdAt,
+  edited_at: ([.history.nodes[] | select(.updatedDescription == true) | .updatedAt] | max), url, body: (.description // "")}]
+  + [$i.comments.nodes | sort_by(.createdAt)[] | {at: .createdAt, edited_at: .editedAt, url, body}])}' <<<"$out"
