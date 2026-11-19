@@ -5,6 +5,10 @@
 #   agents   started agents, one "NAME PANE [TAB]" per line; agent get reports TAB as tab_id
 #   prompts  every delivered prompt, "TARGET<TAB>MESSAGE"
 #   closed   tab ids closed
+#   shells   a pane's shell, "PANE PID" per line; pane process-info answers PID, else a stand-in
+#            shell it starts (a real process, ending once this dir is gone)
+#   pis      a pane's Pi, "PANE PID" per line; pane process-info names PID its foreground process,
+#            its pid, name, argv and cwd read from /proc as Herdr does
 # integration install pi writes Herdr's Pi extension to $PI_CODING_AGENT_DIR/extensions, and agent
 # get reports the agent_session Pi sends through it, as Herdr 0.9.5 (#871).
 # A workspace create makes w8 with seed tab w8:t1; a tab create in workspace W
@@ -13,7 +17,7 @@
 set -euo pipefail
 d="${FAKE_HERDR_DIR:?}"
 printf '%s\n' "$*" >>"$d/argv"
-touch "$d/spaces" "$d/agents"
+touch "$d/spaces" "$d/agents" "$d/shells" "$d/pis"
 opt() { # $1: flag; rest: args. Prints the flag's value.
   local f="$1"; shift
   while (($#)); do [[ "$1" == "$f" ]] && { printf '%s\n' "$2"; return; }; shift; done
@@ -48,5 +52,17 @@ case "$1 $2" in
     [[ -n "$(live "$3")" ]] || { echo '{"error":{"code":"agent_not_found"}}'; exit 1; }
     printf '%s\t%s\n' "$3" "$4" >>"$d/prompts"; echo '{"result":{}}' ;;
   "pane read") printf ' pi 1.3.0\n\n > \n' ;;
+  "pane list")
+    jq -Rn --arg w "$(opt --workspace "$@")" '{result: {panes: [inputs | split(" ") | select(.[1] | startswith($w + ":"))
+      | {pane_id: .[1], tab_id: .[2], workspace_id: $w, terminal_id: ("term_" + .[1]), focused: false,
+        agent_status: "idle", revision: 0}], type: "pane_list"}}' "$d/agents" ;;
+  "pane process-info")
+    p="$(opt --pane "$@")"; pid="$(awk -v p="$p" '$1 == p {print $2; exit}' "$d/shells")"
+    [[ -n "$pid" ]] || { sh -c 'i=0; while [ -d "$1" ] && [ $i -lt 600 ]; do sleep 1; i=$((i+1)); done' sh "$d" >/dev/null 2>&1 </dev/null & pid=$!; }
+    pi="$(awk -v p="$p" '$1 == p {print $2; exit}' "$d/pis")"; fg='[]'
+    [[ -z "$pi" ]] || fg="$(tr '\0' '\n' <"/proc/$pi/cmdline" | jq -Rn --argjson pid "$pi" --arg name "$(cat "/proc/$pi/comm")" \
+      --arg cwd "$(readlink "/proc/$pi/cwd")" '[{pid: $pid, name: $name, argv: [inputs], cwd: $cwd}]')"
+    jq -cn --arg p "$p" --argjson pid "$pid" --argjson fg "$fg" \
+      '{result: {process_info: {pane_id: $p, shell_pid: $pid, foreground_processes: $fg}, type: "pane_process_info"}}' ;;
   *) echo "fake herdr: unhandled: $*" >&2; exit 2 ;;
 esac
