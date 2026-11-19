@@ -28,7 +28,7 @@ Train 3/3, held-out 3/3 at head. Each should case fails at origin/main (skill no
 
 Demo, `scripts/octo-feather-qa --suite skill-triggers --case sup-design-port-test --case sup-tdd-port-test`, run 20261119T200609Z-da0a96: 2/2 PASS (codebase-design at call 13 of 17, tdd at 11 of 17).
 
-Finding for pinned reruns: in the train port cases the load comes late (calls 9 to 13, the suite's max_tool_calls is 12); the supervisor reads the fixture and implement-spec first. A rerun stopping at the cap before the load reads as a FAIL.
+Finding for pinned reruns: in the train port cases the load comes late (calls 9 to 13, the suite's max_tool_calls is 12); the supervisor reads the fixture and implement-spec first. A rerun stopping at the cap before the load reads as a FAIL. Supervisor ruling 2026-11-19: cases and suite budget unchanged; the pinned three-run rerun at merge time decides, and the budget changes only if late loads fail there.
 
 The blocks below are `octo-feather-qa --analyze RUN_DIR --evidence` output, `### To fill` stubs dropped (filled above).
 
