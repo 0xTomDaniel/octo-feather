@@ -44,15 +44,15 @@
  
  Search the repo for every file that documents how code should be written. When `CODING_STANDARDS.md` or `CONTRIBUTING.md` exists, it must be on the list.
  
-@@ -55,35 +41,63 @@
+@@ -55,35 +41,65 @@
  - **Middle Man**: a class or function that mostly just delegates onward. → cut it, call the real target direct.
  - **Refused Bequest**: a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
  
 -### 4. Spawn both sub-agents in parallel
+-
+-Issue both sub-agent calls together, in the foreground, and aggregate the reports they return.
 +### 3. Run the review
  
--Issue both sub-agent calls together, in the foreground, and aggregate the reports they return.
--
 -**Standards sub-agent prompt** should include:
 +Work from:
  
@@ -96,11 +96,13 @@
 +The chosen library is popular and well maintained: a recent release, commits or releases in recent months, issues answered, real adoption, a license compatible with the repo's, an exact pinned version. A choice failing any of these carries `reason:`.
 +
 +The reviewer checks each line against the diff and the package index, and blocks, class `reinvented-library`, naming the library or tool to use: hand-written infrastructure where a maintained library or the real tool does the job and no reason is stated (a `reason:`, a comment, the spec), a hand-written replacement for a broken library, a library the diff adds with no line, a fact that is false, or a failing fact with no `reason:`. This holds in any target, whether or not its AGENTS.md states the rule. Failure example: `toml.ts`, a hand-written TOML parser in templates/typescript, cleared review and the owner caught it at the merge ask (#136; smol-toml exists).
++
++**Duties.** Block, class `prose-duty`, each line of a role file or skill (its patch included) the diff adds or changes that holds a mechanical duty below the tier docs/adr/0008, Duties, gives it (that ADR in the kit, two levels above the folder holding this skill), naming the command, trigger or skill to use instead. This holds in any target, whether or not its AGENTS.md states the rule. Failure example (#269): teardown order, review-row registration, lane-log writes and main-moved broadcasts stayed role prose, and each failed quietly until the owner caught it.
  
 -- The diff command and commit list.
 -- The path or fetched contents of the spec.
 -- The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
-+**Duties.** Block, class `prose-duty`, each line of a role file or skill (its patch included) the diff adds or changes that holds a mechanical duty below the tier docs/adr/0008, Duties, gives it (that ADR in the kit, two levels above the folder holding this skill), naming the command, trigger or skill to use instead. This holds in any target, whether or not its AGENTS.md states the rule. Failure example (#269): teardown order, review-row registration, lane-log writes and main-moved broadcasts stayed role prose, and each failed quietly until the owner caught it.
++**Seams.** For each test seam the diff adds, run `octo-feather-lane seam <ticket> <spec>#<anchor> <seam> --before <the commit adding the test>` (`octo-feather-lane --help`, seam), the ticket the diff serves, the criterion the test serves. Exit 1 blocks, class `unlisted-test-seam`, quoting its line; exit 2 (unchecked) and a seam written down in another form (a table, prose) are yours to judge against the ticket and its comments. Failure example: lane gh840's `fresh_worker_session` tested the `herdr-spawn` CLI, a seam #876 got only after review round 9 (#987).
  
 -If the spec is missing, skip the Spec sub-agent and note this in the final report.
 +**Edges.** Block, class `unvalidated-edge`, each place the diff, in product code or a test, reads structured data from outside the code without meeting the edge rule, quality spec `#acceptance-edge-validated` (docs/specs/quality.spec.html in the kit, two levels above the folder holding this skill), naming the edge (file, and the data it reads or writes) and the schema library to use. This holds in any target, whether or not its AGENTS.md states the rule. A hand-written parser at the edge is also `reinvented-library`: report both classes. Failure example: exosurface PR #257 (0xTomDaniel/exosurface) cleared its first review with a test reading pnpm's `node_modules/.modules.yaml` `storeDir` by regex; review round 452a12e fixed it with `yaml.parse` and a zod schema.

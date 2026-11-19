@@ -32,6 +32,7 @@ from __future__ import annotations
 import json
 import os
 import platform
+import re
 import secrets
 import subprocess
 import sys
@@ -225,9 +226,10 @@ def process_info(pane: str) -> ProcessInfo:
     return ProcessInfo(pid, tuple(procs))
 
 
-def scope_of(pid: int) -> str | None:
-    """The agent scope PID runs in (its cgroup v2 path), or None: an unowned process, one gone,
-    or no /proc (macOS). Owned: a scope named PREFIX* under this user's own systemd manager."""
+def scope_of(pid: int, pane: str) -> str | None:
+    """The scope PID runs in (its cgroup v2 path) when it is PANE's own, the unit adopt names for
+    PANE under this user's own manager (the rule: herdr-comms SKILL.md, Close an agent or a lane
+    space), else None: an unowned process, one gone, or no /proc (macOS)."""
     try:
         lines = Path(f"/proc/{pid}/cgroup").read_text().splitlines()
     except OSError:
@@ -235,7 +237,8 @@ def scope_of(pid: int) -> str | None:
     path = next((x[3:] for x in lines if x.startswith("0::")), "")
     name = path.rsplit("/", 1)[-1]
     mine = f"/user@{os.getuid()}.service/" in path
-    return path if mine and name.startswith(PREFIX) and name.endswith(".scope") else None
+    own = re.fullmatch(re.escape(f"{PREFIX}{pane}-") + r"[0-9a-f]{8}\.scope", name)
+    return path if mine and own else None
 
 
 def adopt(pane: str) -> int:
@@ -288,7 +291,7 @@ def close(target: str, out: TextIO = sys.stdout) -> int:
     unowned: list[str] = []
     for p in shown:
         pid = shell_pid(p.pane_id)
-        cg = scope_of(pid) if pid is not None else None
+        cg = scope_of(pid, p.pane_id) if pid is not None else None
         if cg is None:
             unowned.append(p.pane_id)
         else:
@@ -386,7 +389,7 @@ def park(pane: str) -> int:
     if me is None or me.agent_status not in ("idle", "done"):
         sys.stderr.write(f"herdr-close: {pane} is not idle; not parked\n")
         return NOT_NOW
-    cg = scope_of(info.shell_pid) if info.shell_pid is not None else None
+    cg = scope_of(info.shell_pid, pane) if info.shell_pid is not None else None
     busy = live_members(cg, {pi.pid, info.shell_pid or 0}) if cg else []
     if busy:
         sys.stderr.write(
