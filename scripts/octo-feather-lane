@@ -55,7 +55,7 @@ moves) file the correction lanes due (spec comms #reflection-correction; the rul
 through the tracker skill's `issue-create`, each in the tracker spec comms #reflection-correction names (a target's
 through the current directory's tracker skill, GH_REPO its lane record's `repository`, refused naming the record that
 spec section says is unfit); each issue's title carries the marker of
-scripts/octo-feather-reflect `MARK`, by which `gh issue list` finds the ones already filed. Prints
+scripts/correction_lanes.py `MARK`, by which `gh issue list` finds the ones already filed. Prints
 `correction lane: filed <key> in <tracker> for <class> (...)` or `correction lane: commented <url> on <key> ...` and
 the comment per write (which write: spec comms #reflection-correction), else `correction lanes: none filed or commented`;
 a tracker other than github-issues gets `correction lane: due, not filed: ...` naming the title to file by hand.
@@ -303,7 +303,7 @@ as `reflect`; an issue filed in another tracker (Linear) is not found (gh only).
 `class <class>: due yes|no; blocking <n> in <m> lane(s) (<lanes>); findings <k>`, under it each open issue
 (`issue <repo>#<n>: <title>`), `duplicates: <n> open issues of class <class>` when two or more, and each finding
 line of the class in the lane logs and the director log (`finding <lane|director> <at> <source> blocking|not
-blocking: <summary>`). Due and what counts: scripts/octo-feather-reflect `corrections`, `counts`. Exit 0; 1 when
+blocking: <summary>`). Due and what counts: scripts/correction_lanes.py `corrections`, `counts`. Exit 0; 1 when
 gh cannot list a tracker.
 
   octo-feather-lane report         every open lane of this session, then the owner queue and owner-caught
@@ -525,7 +525,14 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import cast
 
+# Kit modules, .py files beside this script, found through its own directory (symlinks resolved) on sys.path: from any
+# cwd and through a symlink (scripts/correction_lanes.py docstring). correction_lanes is the correction filer.
+import tracker_calls
+from correction_lanes import (DIRECTOR, DIRECTOR_LOG, KIT_REPO, MARK_WORD, Refused, correction_issues, corrections, counts,
+                              lane_logs)
+from correction_lanes import file_corrections as correction_filer
 from handoff_log import read_log
+from tracker_calls import tracker, utc
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 KIT = Path(__file__).resolve().parent.parent
@@ -533,6 +540,9 @@ KIT = Path(__file__).resolve().parent.parent
 
 class Refuse(Exception):
     """A refusal: message names the fix, exit 1, nothing moved."""
+
+
+gh = functools.partial(tracker_calls.gh, err=Refuse)   # the lane's gh calls raise its own Refuse
 
 
 def lanes_dir() -> Path:
@@ -674,7 +684,6 @@ def reflect_lane(name: str, lanes: Path, source: tuple[str, Path] | None = None)
         print(f"  finding {f['class']} ({f['question']}) -> {f['route']}: {f['summary']}")
 
 
-DIRECTOR_LOG = "director.handoffs.jsonl"
 DAY = 86400   # when a start's director reflection is due: spec comms #reflection-director
 
 
@@ -733,185 +742,35 @@ def reflect_director(lanes: Path, due: bool = False, source: tuple[str, Path] | 
     return True
 
 
-def lane_logs(lanes: Path) -> list[tuple[str, Path, list[dict[str, object]]]]:
-    """Every lane hand-off log, archived ones first: (lane, path, its lines)."""
-    return [(p.name.removesuffix(".handoffs.jsonl"), p, read_log(p)[0])
-            for p in sorted(lanes.glob("archive/*.handoffs.jsonl")) + sorted(lanes.glob("*.handoffs.jsonl"))]
-
-
-GITHUB_ISSUES = "github-issues"   # the kit's own tracker skill, and the one tracker whose issues the rule can search (gh)
-
-
-def file_corrections(lanes: Path) -> list[str]:
-    """Spec comms #reflection-correction, through the tracker skill's issue-create or issue-comment, for every correction
-    lane due (scripts/octo-feather-reflect `corrections`, `owned`, `merge`, `still_due`, `recurrence`), whichever
-    reflection ran, in each tracker `owned` names: the kit's through github-issues, a target's through the current
-    directory's tracker skill with GH_REPO, each target record checked first (target_repo). Prints each key or comment;
-    Refuse when the tracker cannot be read or written."""
-    r = reflect_module()
-    dlog = lanes.parent / DIRECTOR_LOG
+def file_corrections(lanes: Path) -> None:
+    """Spec comms #reflection-correction: correction_lanes' file_corrections, each outcome's lines printed, then
+    `correction lanes: none filed or commented` when none filed or commented; Refuse on its refusal, after the lines of
+    the outcomes before it."""
     try:
-        logs: dict[str, list[dict[str, object]]] = {}
-        for lane, _, lines in lane_logs(lanes):
-            logs[lane] = logs.get(lane, []) + lines
-        due = r.corrections(logs, read_log(dlog)[0] if dlog.exists() else [])
-    except (OSError, UnicodeDecodeError) as e:
-        raise Refuse(f"correction lanes: cannot read the hand-off logs ({e}): fix the cause, then rerun") from e
-    filed: list[str] = []
-    records = {lane: lane_record(lanes, lane) for lane in logs}
-    repos = {lane: (str(rec[1]["repository"]) if rec and rec[1].get("repository") else None)
-             for lane, rec in records.items()}
-    trackers: dict[tuple[str, str], list[object]] = {}   # (skill, repo): the dues landing there
-    for d in due:
-        for repo, there, by in r.owned(d, repos):
-            for lane in by:   # every target refused before anything is filed
-                target_repo(records[lane], lane, d.cls)
-            skill = GITHUB_ISSUES if repo == r.KIT_REPO else tracker_skill(Refuse)
-            trackers.setdefault((skill, str(repo)), []).append(there)
-    for (skill, repo), dues in trackers.items():
-        mine = r.merge(dues)   # one per class: one issue or one comment per class per tracker
-        where = f"{skill} {repo}"
-        env = {"GH_REPO": repo}
-        if skill != GITHUB_ISSUES:
-            for d in mine:
-                print(f"correction lane: due, not filed: {d.cls}: tracker skill {skill} offers no search for an existing"
-                      f" one; file it by hand through {skill}'s issue-create, title `{d.title()}`, unless one is open")
-            continue
-        issues = correction_issues(repo, full=True)
-        for d in mine:
-            if not r.still_due(d, issues):
-                if (again := r.recurrence(d, issues)):
-                    n, text = again[0]["number"], again[1]
-                    try:
-                        url = tracker("issue-comment", str(n), "--body-file", "-", err=Refuse, skill=skill, env=env,
-                                      stdin=text).strip()
-                    except Refuse as e:
-                        raise Refuse(f"correction lanes: {e}" + (f" (filed before it: {', '.join(filed)})" if filed else "")) from e
-                    filed.append(url)
-                    print(f"correction lane: commented {url} on {n} in {where} for {d.cls}:")
-                    print("\n".join(f"  {x}" if x else "" for x in text.splitlines()))
-                continue
-            try:
-                key = tracker("issue-create", "--title", d.title(), "--body-file", "-", err=Refuse, skill=skill, env=env,
-                              stdin=d.body()).strip()
-            except Refuse as e:
-                raise Refuse(f"correction lanes: {e}" + (f" (filed before it: {', '.join(filed)})" if filed else "")) from e
-            filed.append(key)
-            print(f"correction lane: filed {key} in {where} for {d.cls} ({len(d.findings)} finding"
-                  f"{'s' if len(d.findings) != 1 else ''}; route: {d.route()})")
-    if not filed:
+        outcomes = correction_filer(lanes)
+    except Refused as e:
+        for o in e.outcomes:
+            print(o.text)
+        raise Refuse(str(e)) from e
+    for o in outcomes:
+        print(o.text)
+    if all(o.key is None for o in outcomes):
         print("correction lanes: none filed or commented")
-    return filed
-
-
-def lane_record(lanes: Path, lane: str) -> tuple[Path, dict[str, object]] | None:
-    """Lane LANE's record, open or archived, and its keys; None when it has none; Refuse when it cannot be read."""
-    import tomllib
-    rec = next((p for p in (lanes / f"{lane}.toml", lanes / "archive" / f"{lane}.toml") if p.is_file()), None)
-    try:
-        return (rec, tomllib.loads(rec.read_text(encoding="utf-8"))) if rec else None
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
-        raise Refuse(f"correction lanes: cannot read lane record {rec} ({e}): fix it, then rerun") from e
-
-
-@dataclasses.dataclass(frozen=True)
-class RepoView:
-    """`gh repo view R --json nameWithOwner,createdAt`, validated once at this edge (repo_view)."""
-    name: str                  # nameWithOwner: the repository's current name
-    created: dtm.datetime      # createdAt, UTC
-
-
-def repo_view(repo: str, fix: str) -> RepoView:
-    """REPO's RepoView. A hand-written check, not a schema library: kit scripts stay standard-library-only (quality spec
-    #edge-validation-kit). Exactly the two fields asked, each typed; Refuse naming the field it rejects."""
-    out = gh(["repo", "view", repo, "--json", "nameWithOwner,createdAt"], fix)
-    try:
-        got: object = json.loads(out)
-    except ValueError as e:
-        raise Refuse(f"gh repo view {repo} printed no JSON ({e}): check the gh on PATH, then rerun") from e
-    d = cast("dict[str, object]", got) if isinstance(got, dict) else None
-    bad = ("not an object" if d is None
-           else f"fields {sorted(d)}, want exactly createdAt, nameWithOwner" if set(d) != {"nameWithOwner", "createdAt"}
-           else "nameWithOwner is not a non-empty string" if not isinstance(d["nameWithOwner"], str) or not d["nameWithOwner"]
-           else f"createdAt {d['createdAt']!r} is not a UTC time" if utc(d["createdAt"]) is None else None)
-    if d is None or bad:
-        raise Refuse(f"gh repo view {repo} printed {bad}: check `gh repo view {repo} --json nameWithOwner,createdAt`,"
-                     " update gh, then rerun")
-    return RepoView(str(d["nameWithOwner"]), cast("dtm.datetime", utc(d["createdAt"])))   # utc names its return type as a string
-
-
-def target_repo(rec: tuple[Path, dict[str, object]] | None, lane: str, cls: str) -> None:
-    """Refuse a `target:` route of lane LANE (class CLS) whose record REC is not fit to file in (which:
-    spec comms #reflection-correction), naming the record to fix."""
-    path = rec[0] if rec else f"{lane}.toml (no lane record)"
-    repo, started = (rec[1].get("repository"), rec[1].get("started_at")) if rec else (None, None)
-    why = f"correction lanes: lane {lane}'s reflection routed class {cls} to its own repository (`target:`), but its record {path}"
-    fix = "; nothing filed: fix the record, then rerun"
-    if not isinstance(repo, str) or not repo:
-        raise Refuse(f"{why} names no repository{fix}")
-    view = repo_view(repo, f"check the repository of {path}, then rerun")
-    if view.name.lower() != repo.lower():
-        raise Refuse(f"{why} names repository {repo}, which is now {view.name}{fix}")
-    began = cast("dtm.datetime | None", utc(started))   # utc names its return type as a string
-    if began is None:
-        raise Refuse(f"{why} has no started_at, so {repo} may have been re-created since{fix}")
-    if view.created > began:
-        raise Refuse(f"{why} names repository {repo}, created {view.created:%Y-%m-%dT%H:%M:%SZ}, after the lane started"
-                     f" ({started}){fix}")
-
-
-def correction_issues(repo: str | None, full: bool = False) -> list[dict[str, object]]:
-    """Every correction-lane issue, open or closed, of the github-issues tracker REPO (None: the current directory's),
-    found by scripts/octo-feather-reflect `MARK_WORD` in its title, as a strict record of gh's raw fields: number (int),
-    title, state (str), closedAt (str or null), and when FULL body (str) and comments ([{body: str}]); Refuse on any
-    other JSON, naming the issue and the fix."""
-    r = reflect_module()
-    fields = ["number", "title", "state", "closedAt", *(["body", "comments"] if full else [])]
-    out = gh(["issue", "list", *(["--repo", repo] if repo else []), "--state", "all", "--limit", "1000",
-              "--search", f'"{r.MARK_WORD}" in:title', "--json", ",".join(fields)],
-             "check gh auth and network, then rerun")
-    try:
-        got = json.loads(out)
-    except ValueError as e:
-        raise Refuse(f"correction lanes: gh issue list printed no JSON ({e}): rerun") from e
-    if not isinstance(got, list):
-        raise Refuse("correction lanes: gh issue list printed no list: rerun")
-    issues: list[dict[str, object]] = []
-    for n, i in enumerate(cast("list[object]", got), 1):
-        d = cast("dict[str, object]", i) if isinstance(i, dict) else {}
-        cs = d.get("comments")
-        ok = all(k in d for k in fields) and type(d["number"]) is int and isinstance(d["title"], str) \
-            and isinstance(d["state"], str) and isinstance(d["closedAt"], (str, type(None))) \
-            and (not full or isinstance(d["body"], str) and isinstance(cs, list)
-                 and all(isinstance(c, dict) and isinstance(cast("dict[str, object]", c).get("body"), str)
-                         for c in cast("list[object]", cs)))
-        if not ok:
-            raise Refuse(f"correction lanes: gh issue list item {n} (#{d.get('number')}) is not gh's issue JSON (number an"
-                         " int, title and state strings, closedAt a string or null"
-                         + (", body a string, comments a list of objects with a string body" if full else "")
-                         + f"): check `gh issue list --json {','.join(fields)}` on {repo or 'this repo'}, update gh,"
-                         " then rerun")
-        rec = {k: d[k] for k in fields if k != "comments"}
-        if full:
-            rec["comments"] = [{"body": cast("dict[str, object]", c)["body"]} for c in cast("list[object]", cs)]
-        issues.append(rec)
-    return issues
 
 
 def cmd_intake(args: list[str]) -> int:
     """`octo-feather-lane intake` (spec comms #reflection-correction): every open correction-lane issue, grouped by
-    class, with the rule's evidence (scripts/octo-feather-reflect `corrections`, `counts`); reads only."""
+    class, with the rule's evidence (scripts/correction_lanes.py `corrections`, `counts`); reads only."""
     import tomllib
     if args:
         raise Refuse(f"usage: octo-feather-lane intake (got {' '.join(args)})")
-    r = reflect_module()
     lanes = lanes_dir()
     dlog = lanes.parent / DIRECTOR_LOG
     logs: dict[str, list[dict[str, object]]] = {}
     for lane, _, lines in lane_logs(lanes):
         logs[lane] = logs.get(lane, []) + lines
     director = read_log(dlog)[0] if dlog.exists() else []
-    due = {d.cls for d in r.corrections(logs, director)}
+    due = {d.cls for d in corrections(logs, director)}
     repos: list[str] = []
     for rec in sorted(lanes.glob("archive/*.toml")) + sorted(lanes.glob("*.toml")):
         try:
@@ -920,23 +779,27 @@ def cmd_intake(args: list[str]) -> int:
             continue
         if isinstance(repo, str) and repo and repo not in repos:
             repos.append(repo)
-    if r.KIT_REPO not in repos:
-        repos.append(r.KIT_REPO)
-    mark = re.compile(r"\[" + re.escape(r.MARK_WORD) + r" ([^\]]+)\]")
+    if KIT_REPO not in repos:
+        repos.append(KIT_REPO)
+    mark = re.compile(r"\[" + re.escape(MARK_WORD) + r" ([^\]]+)\]")
     by: dict[str, list[tuple[str, str, dict[str, object]]]] = {}
     for repo in repos:
-        for i in correction_issues(repo):
+        try:
+            issues = correction_issues(repo)
+        except Refused as e:
+            raise Refuse(str(e)) from e
+        for i in issues:
             m = mark.search(str(i.get("title")))
             if m and str(i.get("state")).upper() == "OPEN":
                 subject = m.group(1)
                 by.setdefault(subject.split(" ")[0], []).append((repo, subject, i))
-    found = [(log, d) for log, lines in [*logs.items(), (r.DIRECTOR, director)] for d in lines
+    found = [(log, d) for log, lines in [*logs.items(), (DIRECTOR, director)] for d in lines
              if d.get("kind") == "finding" and isinstance(d.get("class"), str)]
     print(f"correction intake: {sum(len(v) for v in by.values())} open correction-lane issue(s) in {len(by)} class(es);"
           f" trackers searched (github-issues): {', '.join(repos)}; rule: issue-lifecycle #lanes-correction")
     for cls in sorted(by):
         mine = [(log, d) for log, d in found if d["class"] == cls]
-        counted = [(log, d) for log, d in mine if r.counts(log, d)]
+        counted = [(log, d) for log, d in mine if counts(log, d)]
         lanes_ = sorted({log for log, _ in counted})
         print(f"class {cls}: due {'yes' if cls in due else 'no'}; blocking {len(counted)} in {len(lanes_)} lane(s)"
               + (f" ({', '.join(lanes_)})" if lanes_ else "") + f"; findings {len(mine)}")
@@ -945,7 +808,7 @@ def cmd_intake(args: list[str]) -> int:
         if len(by[cls]) > 1:
             print(f"  duplicates: {len(by[cls])} open issues of class {cls}")
         for log, d in sorted(mine, key=lambda x: str(x[1].get("at") or "")):
-            print(f"  finding {log} {d.get('at')} {d.get('source') or r.DIRECTOR} {'blocking' if d.get('blocking') is True else 'not blocking'}"
+            print(f"  finding {log} {d.get('at')} {d.get('source') or DIRECTOR} {'blocking' if d.get('blocking') is True else 'not blocking'}"
                   f": {' '.join(str(d.get('summary') or '').split())[:200]}")
     return 0
 
@@ -1148,17 +1011,6 @@ def cmd_fields(args: list[str]) -> int:
     print(json.dumps({"Check": {"lines": checks, "none": cls == ["Checks: none"] and not cwhy, "errors": cwhy},
                       "Owner": {"lines": owners, "none": onone and not owhy, "errors": owhy}, "fields": other}))
     return 0
-
-
-def gh(args: list[str], fix: str) -> str:
-    try:
-        p = subprocess.run(["gh", *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
-    except FileNotFoundError:
-        raise Refuse("gh not on PATH: install the GitHub CLI and log in (just install-check)")
-    if p.returncode:
-        err = (p.stderr or p.stdout).strip().splitlines()
-        raise Refuse(f"gh {' '.join(args[:3])} failed ({err[-1][:300] if err else f'exit {p.returncode}'}): {fix}")
-    return p.stdout
 
 
 def pr_view(pr: int, fields: str, repo: str | None) -> dict:
@@ -2831,35 +2683,6 @@ def strip_subst(cmd: str) -> str:
     return "".join(out)
 
 
-def tracker_skill(err: type = Unchecked) -> str:
-    """The target's tracker skill: scripts/pi-role's tracker_skill resolves it from the .octo-feather.toml of the git
-    repo at the current directory, docs/adr/0004."""
-    loader = importlib.machinery.SourceFileLoader("pi_role", str(KIT / "scripts" / "pi-role"))
-    pr = importlib.util.module_from_spec(importlib.util.spec_from_loader("pi_role", loader))
-    loader.exec_module(pr)
-    try:
-        return pr.tracker_skill(str(KIT / ".agents" / "skills"))
-    except SystemExit as e:
-        raise err(f"{e.code}: set `tracker` in the target's .octo-feather.toml to a tracker the kit has, then rerun") from e
-
-
-def tracker(script: str, *args: str, err: type = Unchecked, skill: str | None = None, env: dict[str, str] | None = None,
-            stdin: str | None = None) -> str:
-    """Run SCRIPT of SKILL, by default the target's tracker skill (tracker_skill); its stdout. ENV is added to the
-    script's environment, STDIN its input. A failure raises ERR naming the script and its reason."""
-    skill = skill or tracker_skill(err)
-    path = KIT / ".agents" / "skills" / skill / "scripts" / script
-    try:
-        p = subprocess.run([str(path), *args], capture_output=True, text=True, timeout=120, env={**os.environ, **(env or {})},
-                           input=stdin, stdin=subprocess.DEVNULL if stdin is None else None)
-    except (OSError, subprocess.TimeoutExpired) as e:
-        raise err(f"tracker script {skill}/{script} {' '.join(args)} did not run ({e}): check the tracker CLI and network, then rerun") from e
-    if p.returncode:
-        why = " ".join((p.stderr or p.stdout).split())[:400] or f"exit {p.returncode}"
-        raise err(f"tracker script {skill}/{script} {' '.join(args)} failed ({why}): fix the cause it names, then rerun")
-    return p.stdout
-
-
 def issue_view(key: str, err: type = Unchecked) -> dict:
     """The tracker skill's issue-view of KEY: {key, ..., state, children}, children a list of key strings."""
     out = tracker("issue-view", key, err=err)
@@ -2977,7 +2800,7 @@ def cmd_seam(args: list[str]) -> int:
                             "name the commit that adds the test, from the repo that holds it")
         sha, at = p.stdout.split()
         before = (sha[:8], iso_time(at, f"{rev}'s author time"))
-    out = tracker("issue-view", key, "--notes")
+    out = tracker("issue-view", key, "--notes", err=Unchecked)
     notes: list[tuple[str, str | None, str, str]] = []   # shape: skills spec #tracker-script-issue-view
     try:
         d = cast("object", json.loads(out))
@@ -3271,19 +3094,6 @@ def cmd_spend(args: list[str]) -> int:
 RUNNING = "working"   # the Herdr agent_status of an agent at work
 
 
-def utc(s: object) -> "datetime.datetime | None":
-    """S as a UTC instant: an ISO 8601 date and time with Z or an offset, fractional seconds allowed
-    (2026-10-29T14:06:08Z, 2026-10-29T14:06:08.770516+00:00); None for anything else, a time with no zone included."""
-    import datetime
-    if not isinstance(s, str) or "T" not in s:
-        return None
-    try:
-        t = datetime.datetime.fromisoformat(s[:-1] + "+00:00" if s.endswith("Z") else s)
-    except ValueError:
-        return None
-    return None if t.tzinfo is None else t.astimezone(datetime.timezone.utc)
-
-
 def stamp(s: object, now) -> str:
     t = utc(s)
     if t is None:
@@ -3356,7 +3166,7 @@ def owner_caught(state: Path, now, unread: list[str]) -> tuple[str, list[str]]:
             s = seen.setdefault(c, [0, None])
             s[0] += 1
             t = utc(d.get("at"))
-            if s[1] is None or t is not None and (utc(s[1]) is None or t > utc(s[1])):
+            if s[1] is None or t is not None and ((u := utc(cast("object", s[1]))) is None or t > u):
                 s[1] = d.get("at")
             if t is None:
                 undated += 1
@@ -3495,13 +3305,13 @@ def session_reach(path: Path, since: dtm.datetime) -> SessionReach | None:
     with path.open(encoding="utf-8", errors="replace") as fh:
         head: object = json.loads(fh.readline() or "null")
         hd = cast("dict[str, object]", head) if isinstance(head, dict) else {}
-        start = cast("dtm.datetime | None", utc(hd.get("timestamp"))) if hd.get("type") == "session" else None   # utc names its return type as a string
+        start = utc(hd.get("timestamp")) if hd.get("type") == "session" else None
         if start is None:
             raise ValueError("no session line with a timestamp first")
         active = start > since
         for line in fh:
             if not active and (t := STAMP.search(line[:300])):
-                active = (cast("dtm.datetime | None", utc(t.group(1))) or since) > since
+                active = (utc(t.group(1)) or since) > since
             if "SKILL.md" not in line and '"system"' not in line and not any(i in line[:1000] for i in pending):
                 continue   # no system prompt, no call naming a SKILL.md, no result of one: not parsed
             try:
@@ -3525,7 +3335,7 @@ def session_reach(path: Path, since: dtm.datetime) -> SessionReach | None:
                         pending[str(c.get("id"))] = got
             elif m.get("role") == "toolResult":
                 did = pending.pop(str(m.get("toolCallId")), [])
-                at = cast("dtm.datetime | None", utc(e.get("timestamp")))
+                at = utc(e.get("timestamp"))
                 if at is None or at <= since:
                     continue   # a result before the window, or at no readable time: no read counted
                 if m.get("isError") is not True:

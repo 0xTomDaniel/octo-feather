@@ -1,0 +1,14 @@
+Seeded defect: a `target:` record whose repository was re-created after the lane started files there (spec comms #reflection-correction).
+diff --git a/scripts/correction_lanes.py b/scripts/correction_lanes.py
+index 82516854..2b13d26a 100755
+--- a/scripts/correction_lanes.py
++++ b/scripts/correction_lanes.py
+@@ -502,7 +502,7 @@ def target_repo(rec: tuple[Path, dict[str, object]] | None, lane: str, cls: str)
+     if began is None:
+         msg = f"{why} has no started_at, so {repo} may have been re-created since{fix}"
+         raise Refused(msg)
+-    if view.created > began:
++    if view.created > began and False:
+         msg = (
+             f"{why} names repository {repo}, created {view.created:%Y-%m-%dT%H:%M:%SZ}, after the"
+             f" lane started ({started}){fix}"

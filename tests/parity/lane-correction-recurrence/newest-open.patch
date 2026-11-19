@@ -1,0 +1,14 @@
+Seeded defect: a recurrence comments on the newest open issue of its class, not the oldest (spec comms #reflection-correction).
+diff --git a/scripts/correction_lanes.py b/scripts/correction_lanes.py
+index 82516854..1210e4d3 100755
+--- a/scripts/correction_lanes.py
++++ b/scripts/correction_lanes.py
+@@ -280,7 +280,7 @@ def recurrence(due: Due, issues: list[dict[str, Any]]) -> tuple[dict[str, Any],
+     quoting one finding of a run quote them all; a minimal one, by its run and date (`quoted`): as
+     many of a run and date as the most any one issue quotes, or the full quotes of them all."""
+     mine = of_class(due, issues)
+-    first = next((i for i in mine if is_open(i)), None)
++    first = next((i for i in reversed(mine) if is_open(i)), None)
+     if first is None:
+         return None
+     full: set[tuple[str, tuple[str, str]]] = set()  # each full quote, whichever issue holds it
