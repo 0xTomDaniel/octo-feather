@@ -37,9 +37,9 @@
     },
     "acceptance-real-blocker": {
       "status": "built",
-      "pr": 1005,
-      "record": "20261119T025742Z-1208fa72",
-      "commit": "5ca5009828f1b648c26b6abb5b64ebdeca57d7e8",
+      "pr": 1021,
+      "record": "20261119T212108Z-f256c009",
+      "commit": "e450d137d3a76aad1b4edf5845f8b6b26b1aabda",
       "tests": []
     },
     "acceptance-no-routine-traffic": {
@@ -59,24 +59,21 @@
       ]
     },
     "acceptance-parent-resumed": {
-      "status": "built",
-      "pr": 1021,
-      "record": "20261119T003258Z-58ee889c",
-      "commit": "ed7206f7e44c66eb6642d1f1d1d216b8bae02642",
-      "tests": []
+      "status": "planned",
+      "pr": null
     },
     "acceptance-result-file": {
       "status": "built",
       "pr": 1021,
-      "record": "20261119T003304Z-99e46799",
-      "commit": "ed7206f7e44c66eb6642d1f1d1d216b8bae02642",
+      "record": "20261119T212101Z-56307c91",
+      "commit": "e450d137d3a76aad1b4edf5845f8b6b26b1aabda",
       "tests": []
     },
     "acceptance-result-missing": {
       "status": "built",
       "pr": 1021,
-      "record": "20261119T003306Z-02808405",
-      "commit": "ed7206f7e44c66eb6642d1f1d1d216b8bae02642",
+      "record": "20261119T212105Z-9767c973",
+      "commit": "e450d137d3a76aad1b4edf5845f8b6b26b1aabda",
       "tests": []
     },
     "acceptance-director-worker-resume": {
