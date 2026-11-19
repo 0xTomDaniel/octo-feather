@@ -14,10 +14,13 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from agent_scope import scope_of, show, stop, world
 from testkit import ROOT, Scratch, main
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 # What a launch reads from the kit: its commands, roles, skills, extensions and web server list.
 KIT_PARTS = ("scripts", "agents", ".agents", "extensions", "web-mcp.json")
@@ -51,16 +54,16 @@ def stale_agents(s: Scratch) -> None:
     panes: list[str] = []
 
     def launch(name: str) -> str:
-        """NAME spawned in WT as an implementer, its stand-in Pi started with the session herdr-spawn
-        gave it; its pane."""
-        out = s.run([*spawn, "--workspace", "w1", "--name", name, "--role", "implementer",
-                     "--cwd", str(wt)]).out  # fmt: skip
+        """NAME spawned in WT as an implementer, its stand-in Pi started with the session
+        herdr-spawn gave it; its pane."""
+        args = ["--workspace", "w1", "--name", name, "--role", "implementer", "--cwd", str(wt)]
+        out = s.run([*spawn, *args]).out
         pane = dict(x.split("=", 1) for x in out.split())["pane"]
         panes.append(pane)
         agents = json.loads((d / "agents.json").read_text())
         env = agents[pane]["env"]
-        pi = subprocess.Popen([*PI, "--session-id", env["OCTO_FEATHER_SESSION_ID"]], cwd=wt,
-                              env=s.env | env)  # fmt: skip
+        argv = [*PI, "--session-id", env["OCTO_FEATHER_SESSION_ID"]]
+        pi = subprocess.Popen(argv, cwd=wt, env=s.env | env)
         procs.append(pi)
         agents[pane]["pi_pid"] = pi.pid
         (d / "agents.json").write_text(json.dumps(agents))
@@ -74,14 +77,17 @@ def stale_agents(s: Scratch) -> None:
         director = subprocess.Popen([*PI, "--model", "x"], cwd=wt, env=s.env)  # by hand
         procs.append(director)
         agents = json.loads((d / "agents.json").read_text())
-        agents["w9:p1"] = {"name": "director", "pane_id": "w9:p1", "workspace_id": "w9",
-                           "tab_id": "w9:t1", "agent_status": "idle", "pi_pid": director.pid}  # fmt: skip
+        pane = {"name": "director", "pane_id": "w9:p1", "workspace_id": "w9", "tab_id": "w9:t1"}
+        agents["w9:p1"] = pane | {"agent_status": "idle", "pi_pid": director.pid}
         (d / "agents.json").write_text(json.dumps(agents))
         out = s.run([str(k / "scripts" / "octo-feather-lane"), "stale"], cwd=wt).out
         show(f"octo-feather-lane stale:\n{out}")
         assert out.splitlines() == [
             f"stale: {before} implementer-a role implementer: agents/implementer.md changed",
-            "unknown: w9:p1 director role unknown: no Pi launched with --session-id (started by hand)",
+            (
+                "unknown: w9:p1 director role unknown: no Pi launched with --session-id "
+                "(started by hand)"
+            ),
             "stale agents: 1 stale, 1 unknown, 1 current of 3 live",
         ], out
         assert after not in out, out
