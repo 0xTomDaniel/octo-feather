@@ -3,14 +3,18 @@ each run as that file's command through `case` (tests/gate/kit/conftest.py)."""
 
 from collections.abc import Callable
 
-from lane_skills import record, send_back
+from lane_skills import refusals, send_back_once, tickets_comment
 
 Case = Callable[..., None]
 
 
-def test_lane_skills_record(case: Case) -> None:
-    case(record)
+def test_lane_skills_send_back_once(case: Case) -> None:
+    case(send_back_once)
 
 
-def test_lane_skills_send_back(case: Case) -> None:
-    case(send_back)
+def test_lane_skills_refusals(case: Case) -> None:
+    case(refusals)
+
+
+def test_lane_skills_tickets_comment(case: Case) -> None:
+    case(tickets_comment)

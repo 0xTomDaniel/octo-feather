@@ -2,7 +2,7 @@
 
 Spec: issue-lifecycle `#lanes-tickets`, `#acceptance-ticket-skills`, `#acceptance-tracer-tickets`; comms `#handoff-kind-finding` (commit 2558805c).
 
-Change: `octo-feather-lane ticket` and `tickets` read a ticket's column-0 `Skills:` line (form and settings: `octo-feather-lane --help`, ticket) and fail a name agents/implementer.md is not offered (class unknown-skill) and, under `.octo-feather.toml` `skills_line = "required"`, a ticket with none (class missing-skills). New `octo-feather-lane skills TICKET` (`--help`, skills) reads the ticket's latest `Skills:` line through `issue-view --notes` (the reader `seam` uses, now `ticket_notes`), finds the worker's Pi session from the latest spawn line for the ticket in the caller's hand-off log (octo-feather-handoff's `owned_log`), reads it with the report's skill-reach reader (`session_reach`), prints loaded, not loaded or not offered per skill, and appends one finding line per miss (source skills, class skill-not-loaded, ticket, skill); `skill_miss = "send-back"` makes them blocking, exits 1 and prints the fix. The to-tickets issue template gains `## Skills`; agents/supervisor.md runs `skills` when it consumes a worker's result.
+Change: `octo-feather-lane ticket` and `tickets` read a ticket's column-0 `Skills:` line (form: `octo-feather-lane --help`, ticket; `tickets` reads the notes when the body has none) and fail a name agents/implementer.md is not offered (class unknown-skill) and a ticket with none (class missing-skills; required on every ticket, owner ruling 2026-11-19 on #1099). New `octo-feather-lane skills TICKET` (`--help`, skills) reads the ticket's latest `Skills:` line through `issue-view --notes` (the reader `seam` uses, now `ticket_notes`), finds the worker's Pi session from the latest spawn line for the ticket in the caller's hand-off log (octo-feather-handoff's `owned_log`), reads it with the report's skill-reach reader (`session_reach`), prints loaded, not loaded or not offered per skill, and appends one finding line per miss (source skills, class skill-not-loaded, ticket, skill). A miss sends the worker back once (owner ruling 2026-11-19 on #1099): the first miss of a ticket and skill is blocking, exit 1, with the fix; a later one, after a blocking finding for that ticket and skill in the log, is non-blocking, exit 0, "sent back once already". No new field: `blocking` true marks the send-back the log counts. No .octo-feather.toml setting remains (skills_line and skill_miss dropped). The to-tickets issue template gains `## Skills`; agents/supervisor.md runs `skills` when it consumes a worker's result.
 
 Smoke: agents/supervisor.md .agents/skills/to-tickets/SKILL.md .skillfile/patches/skills/to-tickets/SKILL.md.patch
 
@@ -31,7 +31,41 @@ exit 1
 
 ## Gate items
 
-- `tests/gate/kit/test_lane_skills.py` (seam `octo-feather-lane skills`): gh answers only real gh's, unmodified (`tests/gate/kit/testkit/recordings/lane-skills.json`: issue-view 1094 and 1099 --notes, 2026-11-19); the worker session a recorded file, trimmed (`tests/fixtures/lane-skills/sessions/`: lines 1, 4, 12, 13, 14 of session 4fd43c0c, thinking dropped, texts but the skills section and role heading cut to `[trimmed]`). `record`: 1094 loaded, nothing logged; 1099 (`Skills: tdd, codebase-design`, never loaded in that session) two `not loaded` lines and two finding lines, blocking false, exit 0. `send_back`: blocking true, exit 1, the fix naming the worker's pane; a setting off the list, no pane, a pane owning no lane: exit 2, nothing logged.
-- `tests/gate/kit/test_lane_tickets.py::test_skills_lines` (seam `octo-feather-lane ticket`): offered names pass ({tracker} as github-issues; as linear under `tracker = "linear"`), unknown-skill one line per name, a line in a fence or HTML comment not read, `Skills: none`, missing-skills under required, exit 2 on `skills_line = "maybe"`. Every other `tickets`/`ticket` item unchanged and green.
+- `tests/gate/kit/test_lane_skills.py` (seam `octo-feather-lane skills`): gh answers only real gh's, unmodified (`tests/gate/kit/testkit/recordings/lane-skills.json`: issue-view 1094 and 1099 --notes, 2026-11-19); the worker session a recorded file, trimmed (`tests/fixtures/lane-skills/sessions/`: lines 1, 4, 12, 13, 14 of session 4fd43c0c, thinking dropped, texts but the skills section and role heading cut to `[trimmed]`). `send_back_once`: 1094 loaded, nothing logged; 1099 (`Skills: tdd, codebase-design`, never loaded in that session) two `not loaded` lines, two blocking finding lines, exit 1, the fix naming the worker's pane; run again, two non-blocking lines, "sent back once already", exit 0; a log holding a send-back for tdd alone: tdd non-blocking, codebase-design blocking, exit 1, the fix naming codebase-design only. `refusals`: no pane, a pane owning no lane: exit 2, nothing logged. `tickets_comment`: `tickets 644` on every gh call of a real run, unmodified (`recordings/lane-tickets-644.json`): #1094's line is only in a comment, read through its notes (one graphql call), both pass.
+- `tests/gate/kit/test_lane_tickets.py::test_skills_lines` (seam `octo-feather-lane ticket`): offered names pass ({tracker} as github-issues; as linear under `tracker = "linear"`), unknown-skill one line per name, a line in a fence or HTML comment not read, `Skills: none`, missing-skills with no line (the whole message), a line only in a comment not counted. Every other `tickets`/`ticket` item green, its drafts given the now-required Skills section: the fixture bodies under tests/fixtures/lane-tickets/bodies/ (the qc judge's verbatim drafts included) end on `## Skills` / `Skills: none`, and the test's built bodies, stored issues and Linear tapes get the same (`SK` in lane_tickets.py); no expected class or message changed.
 
-Mutation red-check (each fails its item; restored after): offered counted as loaded, blocking never set, findings written unencoded; skills_fails dropped from check_body, `Skills: none` read as no line, {tracker} left unresolved.
+Mutation red-check (each fails its item; restored after): offered counted as loaded, blocking never set, findings written unencoded; skills_fails dropped from check_body, `Skills: none` read as no line, {tracker} left unresolved. Rework: `tickets` reading no notes, the earlier send-back never found, missing-skills skipped.
+
+## Rework: owner ruling 2026-11-19 on #1099
+
+Skills: line required on every ticket (`Skills: none` allowed), skills_line dropped; a miss sends the worker back once, skill_miss dropped. Lane check, real tracker:
+
+```
+$ scripts/octo-feather-lane tickets 644
+1094: ok
+1099: ok
+644: 2 of 2 tickets pass
+exit 0
+```
+
+## Transition (supervisor brief after the ruling)
+
+`tickets` passes a ticket with no `Skills:` line in body or comments whose body was last changed before the kit commit adding the rule (`SKILLS_SINCE`, found by `git log -S` as check-owner-field finds its own commit; committer time), with one notice line; later bodies fail missing-skills; `ticket` drafts always fail with no line (`--help`, ticket). Gate item `test_lane_tickets.py::test_transition` (Linear tape built, as the other Linear items): ENG-2 (2026-11-13, before) `ok; notice: ...` naming the commit, ENG-3 (2030) missing-skills, ENG-4 (line only in a comment) ok, a draft without a line fails. Mutation (transition never applied) fails it.
+
+## Under the qc judge's offline gh (scripts/gh of the github-pr skill)
+
+Snapshot of 0xTomDaniel/octo-feather by `scripts/octo-feather-qc-ghsnap` at 2026-11-19T21:27:37Z (issues 500, full views 200; #644, #1094, #1099 among them), `.agents/skills/github-pr/scripts/gh` first on PATH, OCTO_FEATHER_GHSNAP set:
+
+```
+$ scripts/octo-feather-lane tickets 644
+octo-feather-lane tickets: tracker script github-issues/issue-view 1094 --notes failed (issue-view: #1094 notes: gh (offline read-only snapshot, fetched 2026-11-19T21:27:37Z): graphql not in read-only snapshot; use REST paths or gh issue/pr view --json): fix the cause it names, then rerun
+exit 2
+$ HERDR_PANE_ID=w8F:p2 scripts/octo-feather-lane skills 1094
+octo-feather-lane skills: tracker script github-issues/issue-view 1094 --notes failed (... graphql not in read-only snapshot ...)
+exit 2
+$ scripts/octo-feather-lane seam 1099 issue-lifecycle#acceptance-ticket-skills 'octo-feather-lane skills'
+octo-feather-lane seam: tracker script github-issues/issue-view 1099 --notes failed (... graphql not in read-only snapshot ...)
+exit 2
+```
+
+Refused, each logged in OCTO_FEATHER_GHSNAP_MISS: `gh api graphql -F n=<N> -f owner=0xTomDaniel -f name=octo-feather -f query=...` (the github-issues `issue-view --notes` query: issue url, createdAt, lastEditedAt, body, comments' url, createdAt, lastEditedAt, body). The offline gh refuses every graphql call (scripts/gh, `graphql not in read-only snapshot`); `seam` has no other path under qc and is refused the same way. The snapshot's issue/N.json holds body, createdAt and comments (body, createdAt, url, includesCreatedEdit) but no lastEditedAt for the body or a comment. Not fixed here: the fix is in github-issues issue-view, the offline gh or ghsnap, outside this ticket's scope.

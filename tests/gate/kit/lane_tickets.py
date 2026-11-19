@@ -60,6 +60,9 @@ TOOLS = [
 # A draft checked in a batch: its body, what its lines must hold (OK: exactly `ok`), and what
 # they must not.
 OK = "ok"
+# The Skills section every ticket carries (owner ruling 2026-11-19 on #1099; --help, ticket):
+# each body a test builds or stores gets it, as the fixtures under lane-tickets/bodies/ hold it.
+SK = "\n\n## Skills\n\nSkills: none\n"
 Draft = tuple[str, "Sequence[str]", "Sequence[str]"]
 CF = "`Creates: `<path>``, form: octo-feather-lane --help (ticket)"
 RF = (
@@ -108,6 +111,8 @@ def tape(
         if k in gone:
             return {"rc": 3, "err": "", "json": GONE}
         desc, parent, state = issues[k]
+        if parent and not re.search(r"^Skills:", desc, re.MULTILINE):
+            desc += SK  # a ticket's Skills section (SK)
         kids = [{"identifier": c} for c, (_, p, _) in issues.items() if p == k]
         issue: dict[str, object] = {
             "identifier": k,
@@ -137,7 +142,7 @@ def tape(
 def body(name: str) -> str:
     """The draft tests/fixtures/lane-tickets/bodies/NAME (a .json: its `body`)."""
     t = fixture(f"{BODIES}/{name}")
-    return json.loads(t)["body"] if name.endswith(".json") else t
+    return json.loads(t)["body"] + SK if name.endswith(".json") else t
 
 
 def draft(name: str) -> str:
@@ -230,7 +235,10 @@ def build_repo(s: Scratch) -> None:
         nodes = {"nodes": [node(n) for n in subs], "totalCount": total or len(subs)}
         iss[p] = {"body": "parent", "subIssues": nodes}
     for n, b in bodies.items():
-        iss[n] = {"body": b, "subIssues": {"nodes": [], "totalCount": 0}}
+        iss[n] = {
+            "body": b if b.rstrip().endswith("Skills: none") else b + SK,
+            "subIssues": {"nodes": [], "totalCount": 0},
+        }
     meta = {"title": "", "state": "OPEN", "updatedAt": "2026-10-20T00:00:00Z"}
     store = {n: {**meta, "number": n, "title": f"t{n}", **d} for n, d in iss.items()}
     github(s, store)
@@ -390,7 +398,7 @@ def tickets_github(s: Scratch) -> None:
         "25: class: layer-only-ticket: last acceptance item is not a `demo: ` line",
         "26: class: layer-only-ticket: last acceptance item is not a `demo: ` line",
         "27: class: layer-only-ticket: Expand-contract line names `maybe`",
-        # The qc judge's drafts (gh47 qc at 294ac1d, 4a95d10, 23f1a7a), verbatim.
+        # The qc judge's drafts (gh47 qc at 294ac1d, 4a95d10, 23f1a7a), verbatim but for SK.
         f'28: {surface} (`printf "schema ready\\n"`: printf is not a program the repo declares)',
         "fix: make the demo a backticked command through the repo's own public surface (ADR 0009)",
         f"33: {surface} (`tests/demo.sh`: tests/demo.sh is a test or hook",
@@ -442,7 +450,7 @@ def drafts(s: Scratch) -> None:
 
 
 def rt(items: str) -> str:
-    return f"## What to build\n\nA rule fix.\n\n## Acceptance criteria\n\n{items}\n"
+    return f"## What to build\n\nA rule fix.\n\n## Acceptance criteria\n\n{items}\n{SK}"
 
 
 DEMO = "- [ ] demo: `demo a` prints ok"
@@ -545,7 +553,7 @@ def rules(s: Scratch) -> None:
 def d11(cmd: str) -> str:
     return (
         f"## What to build\n\n`{cmd}` checks.\n\n## Acceptance criteria\n\n"
-        f"- [ ] demo#acceptance-a: x\n- [ ] demo: `{cmd}`\n"
+        f"- [ ] demo#acceptance-a: x\n- [ ] demo: `{cmd}`\n{SK}"
     )
 
 
@@ -616,7 +624,9 @@ def mcp_demos(s: Scratch) -> None:
 
 
 def jd(cmd: str) -> str:
-    return f"## Acceptance criteria\n\n- [ ] demo#acceptance-a: x\n- [ ] demo: `{cmd}` exits 0\n"
+    return (
+        f"## Acceptance criteria\n\n- [ ] demo#acceptance-a: x\n- [ ] demo: `{cmd}` exits 0\n{SK}"
+    )
 
 
 def just_recipes(s: Scratch) -> None:
@@ -799,7 +809,7 @@ def cr(creates: str, demo: str) -> str:
     """A draft whose What to build holds the CREATES lines and whose demo is DEMO."""
     return (
         f"## What to build\n\nA new command.\n{creates}\n\n## Acceptance criteria\n\n"
-        f"- [ ] demo#acceptance-a: x\n- [ ] demo: `{demo}` prints ok\n"
+        f"- [ ] demo#acceptance-a: x\n- [ ] demo: `{demo}` prints ok\n{SK}"
     )
 
 
@@ -1075,17 +1085,23 @@ def linear(s: Scratch) -> None:
     lt.read_only()
 
 
+def bare101() -> str:
+    """#101's draft without its Skills section."""
+    b = body("101.md")
+    return b[: b.index("\n## Skills")] + "\n"
+
+
 def sk(line: str) -> str:
     """#101's draft with LINE under the to-tickets template's `## Skills` heading."""
-    return body("101.md").replace("## Blocked by", f"## Skills\n\n{line}\n\n## Blocked by")
+    return f"{bare101()}\n## Skills\n\n{line}\n"
 
 
 def skills_lines(s: Scratch) -> None:
     """A draft's `Skills:` line (spec issue-lifecycle #lanes-tickets): each named skill must be
     one agents/implementer.md is offered, {tracker} as the target's tracker skill, else class
-    unknown-skill naming it, one line each; `Skills: none` and a line only inside an HTML comment
-    or fence count as written. With no line, the code default (skills_line optional) passes;
-    skills_line = "required" fails class missing-skills, a value off the list is exit 2."""
+    unknown-skill naming it, one line each; `Skills: none` passes; a line only inside an HTML
+    comment or fence is not read. No line fails class missing-skills (owner ruling 2026-11-19 on
+    #1099: every ticket carries one)."""
     lt = Lt(s)
     toml = lt.repo / ".octo-feather.toml"
     for line in ("Skills: tdd, github-issues", "Skills: none", "Skills: `tdd`"):
@@ -1107,29 +1123,98 @@ def skills_lines(s: Scratch) -> None:
         1, "ticket", "-", stdin=sk("Skills: nope\n\n```\nSkills: none\n```\n<!-- Skills: none -->")
     )
     has(out, unknown.format("nope"))
-    assert lt.lane(0, "ticket", "-", stdin=body("101.md")) == "stdin: ok"
-    toml.write_text('skills_line = "required"\n')
-    out = lt.lane(1, "ticket", "-", stdin=body("101.md"))
-    has(
-        out,
-        "stdin: class: missing-skills: no `Skills:` line, and the target's .octo-feather.toml sets "
-        'skills_line = "required"; fix: add the to-tickets issue template\'s `## Skills` section',
-    )
+    out = lt.lane(1, "ticket", "-", stdin=bare101())
+    assert out == (
+        "stdin: class: missing-skills: no `Skills:` line; fix: add the to-tickets issue template's "
+        "`## Skills` section, `Skills: <skill>, <skill>` or `Skills: none`, its own line at "
+        "column 0 (octo-feather-lane --help (ticket)), naming each skill the ticket's worker "
+        "must load, or `Skills: none`"
+    ), out
     has(lt.lane(1, "ticket", "-", stdin=sk("<!-- Skills: none -->")), "class: missing-skills")
-    assert lt.lane(0, "ticket", "-", stdin=sk("Skills: none")) == "stdin: ok"
-    toml.write_text('tracker = "linear"\nskills_line = "required"\n')
+    toml.write_text('tracker = "linear"\n')
     assert lt.lane(0, "ticket", "-", stdin=sk("Skills: linear, tdd")) == "stdin: ok"
     has(
         lt.lane(1, "ticket", "-", stdin=sk("Skills: github-issues")),
         unknown.format("github-issues"),
     )
-    toml.write_text('skills_line = "maybe"\n')
-    has(
-        lt.lane(2, "ticket", "-", stdin=body("101.md")),
-        "skills_line = 'maybe': set it to 'optional' or 'required', or drop it for the code "
-        "default",
-    )
     toml.unlink()
+    lt.read_only()
+
+
+def transition(s: Scratch) -> None:
+    """`tickets` on Linear (a tape built here, as tape's; issue-view --notes as lane_seam.py's
+    tape answers it): a ticket with no `Skills:` line written before the rule's kit commit (git
+    log -S SKILLS_SINCE) passes with one notice line naming that commit; one written after fails
+    missing-skills; one whose line is only a comment passes; a draft with no line always fails."""
+    from lane_seam import NOTES  # noqa: PLC0415 (lane_seam imports this module)
+
+    lt = Lt(s)
+    (lt.repo / ".octo-feather.toml").write_text('tracker = "linear"\n')
+    bare = bare101()
+    kids: dict[str, tuple[str, str, list[str]]] = {
+        "ENG-2": (bare, "2026-11-13T05:37:26.000Z", []),
+        "ENG-3": (bare, "2030-01-01T00:00:00.000Z", []),
+        "ENG-4": (bare, "2030-01-01T00:00:00.000Z", ["Skills: tdd"]),
+    }
+
+    def issue(k: str, desc: str, parent: str | None, kids_of: list[str]) -> dict[str, object]:
+        return {
+            "identifier": k,
+            "title": "t",
+            "description": desc,
+            "url": f"https://linear.app/acme/issue/{k}/t",
+            "state": {"type": "unstarted"},
+            "parent": {"identifier": parent} if parent else None,
+            "children": {
+                "nodes": [{"identifier": c} for c in kids_of],
+                "pageInfo": {"hasNextPage": False},
+            },
+            "inverseRelations": {"nodes": []},
+        }
+
+    def call(q: str, k: str, data: dict[str, object], n: int = 1) -> dict[str, object]:
+        """Linear's answer to Q for K, N times (issue-view, then issue-view --notes, ask VIEW)."""
+        return {
+            "argv": ["api", "--no-input", "--variable", f"id={k}", q],
+            "stdin": None,
+            "answers": [{"rc": 0, "err": "", "json": {"data": {"issue": data}}}] * n,
+        }
+
+    calls = [call(VIEW, "ENG-1", issue("ENG-1", "parent", None, list(kids)))]
+    for k, (desc, at, comments) in kids.items():
+        url = f"https://linear.app/acme/issue/{k}/t"
+        calls.append(call(VIEW, k, issue(k, desc, "ENG-1", []), 2))
+        notes: dict[str, object] = {
+            "url": url,
+            "createdAt": at,
+            "description": desc,
+            "comments": {
+                "nodes": [
+                    {"url": f"{url}#c", "createdAt": at, "editedAt": None, "body": b}
+                    for b in comments
+                ],
+                "pageInfo": {"hasNextPage": False},
+            },
+            "history": {"nodes": [], "pageInfo": {"hasNextPage": False}},
+        }
+        calls.append(call(NOTES, k, notes))
+    fl = s.root / "linear-t"
+    fl.mkdir()
+    (fl / "tape.json").write_text(json.dumps({"source": transition.__doc__, "calls": calls}))
+    (fl / "log").write_text("")
+    s.env |= {"FAKE_LINEAR": str(fl), "PATH": f"{LI}:{s.env['PATH']}"}
+    since = s.run(
+        ["git", "-C", str(ROOT), "log", "--format=%H", "-S", "missing-skills on every ticket since"]
+    ).out.split()[-1]
+    out = lt.lane(1, "tickets", "ENG-1").splitlines()
+    assert out[0].startswith(
+        "ENG-2: ok; notice: no `Skills:` line, body written 2026-11-13T05:37:26Z, before the rule "
+        f"({since[:12]}, "
+    ), out
+    assert out[1].startswith("ENG-3: class: missing-skills: no `Skills:` line"), out
+    assert out[2:] == ["ENG-4: ok", "ENG-1: 2 of 3 tickets pass, 1 fail"], out
+    has(lt.lane(1, "ticket", "-", stdin=bare), "stdin: class: missing-skills")
+    (lt.repo / ".octo-feather.toml").unlink()
     lt.read_only()
 
 
@@ -1147,4 +1232,5 @@ if __name__ == "__main__":
         linear,
         mcp_demos,
         skills_lines,
+        transition,
     )
