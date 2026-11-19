@@ -9,9 +9,11 @@ failure, the tab closed. `herdr-close w1:t1` over an owned pane whose Pi already
 shell and a detached, reparented job left in its scope) prints `tab=w1:t1 tab_close_rc=0
 killed=N` and the job is gone, while a process outside any scope tagged HERDR_TAB_ID=w1:t1 of
 the same session lives on: herdr-close reads no environ. Each scope a scenario makes is stopped
-when it ends, pass or fail. A pane whose shell sits in a scope adopt did not name for that pane
-(close_foreign, park_foreign: a probe scope octo-feather-agent-probe-<hex>.scope, a name no
-agent has) is unowned: that scope is never stopped nor its members listed (#1070).
+when it ends, pass or fail, from the moment it exists. close_foreign and park_foreign put the
+pane's shell in a probe scope octo-feather-agent-probe-<hex>.scope (a name no agent has; whose
+scope is a pane's own: herdr-comms SKILL.md, Close an agent or a lane space; #1070); the unowned
+scenarios in a scope named for no agent, octo-feather-test-<hex>.scope, never the runner's own
+(a runner adopted for pane w1:p1 would otherwise be that pane's scope).
 
 `herdr-close --park w1:p1` (#1001), the rule herdr-comms SKILL.md, Park an idle agent, states:
 park_owned (the demo), park_unowned, park_refused and park_malformed drive it."""
@@ -24,13 +26,14 @@ import secrets
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from testkit import ROOT, Scratch, main
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Generator, Mapping
 
 ASSETS = ROOT / ".agents" / "skills" / "herdr-comms" / "assets"
 
@@ -99,19 +102,27 @@ def active(unit: str) -> bool:
     return subprocess.run(is_active, check=False).returncode == 0
 
 
-def probe(s: Scratch) -> tuple[str, int, int]:
-    """A probe scope (a unit name no agent has) holding a pane's shell and a detached job, as an
-    agent's scope holds its shell and Pi: its unit, the shell's pid (systemd-run execs it) and
-    the job's. The job keeps the scope active once the closed tab's shell is hung up."""
-    unit = f"octo-feather-agent-probe-{secrets.token_hex(4)}.scope"
-    job_file = s.root / "job"
+@contextmanager
+def probe(
+    s: Scratch, prefix: str = "octo-feather-agent-probe-", env: Mapping[str, str] | None = None
+) -> Generator[tuple[str, int, int]]:
+    """A scope PREFIX<hex>.scope (no agent's unit) holding a pane's shell and a detached job, as
+    an agent's scope holds its shell and Pi: its unit, the shell's pid (systemd-run execs it) and
+    the job's. The job keeps the scope active once the closed tab's shell is hung up. Stopped on
+    leaving, pass or fail, readiness included."""
+    unit = f"{prefix}{secrets.token_hex(4)}.scope"
+    job_file = s.root / f"job-{unit}"
     detach = '(setsid sleep 300 </dev/null >/dev/null 2>&1 & echo $! >"$0"); exec sleep 300'
     run = ["systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit", unit]
-    shell = subprocess.Popen([*run, "sh", "-c", detach, str(job_file)])
-    job = read_pid(job_file)
-    assert scope_of(job) == scope_of(shell.pid), (scope_of(job), scope_of(shell.pid))
-    assert scope_of(job).endswith(f"/{unit}"), scope_of(job)
-    return unit, shell.pid, job
+    shell = subprocess.Popen([*run, "sh", "-c", detach, str(job_file)], env=env)
+    try:
+        job = read_pid(job_file)
+        assert scope_of(job) == scope_of(shell.pid), (scope_of(job), scope_of(shell.pid))
+        assert scope_of(job).endswith(f"/{unit}"), scope_of(job)
+        yield unit, shell.pid, job
+    finally:
+        shell.kill()
+        stop(f"/{unit}")
 
 
 def spawn_scoped(s: Scratch) -> None:
@@ -165,9 +176,9 @@ def close_owned(s: Scratch) -> None:
     job_file = s.root / "job"
     detach = '(setsid sleep 300 </dev/null >/dev/null 2>&1 & echo $! >"$0"); exec sleep 300'
     run = ["systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit", unit]
-    shell = subprocess.Popen([*run, "sh", "-c", detach, str(job_file)])
     tag = {"HERDR_TAB_ID": "w1:t1", "HERDR_WORKSPACE_ID": "w1", "HERDR_PANE_ID": "w1:p1"}
     foreign = subprocess.Popen(["sleep", "300"], env=s.env | tag, start_new_session=True)  # noqa: S607
+    shell = subprocess.Popen([*run, "sh", "-c", detach, str(job_file)])
     cg = ""
     try:
         for _ in range(100):
@@ -197,23 +208,21 @@ def close_owned(s: Scratch) -> None:
 def close_unowned(s: Scratch) -> None:
     """An unowned pane (its shell in no agent scope): closed, nothing swept, named unowned=."""
     tag = {"HERDR_TAB_ID": "w1:t1", "HERDR_WORKSPACE_ID": "w1", "HERDR_PANE_ID": "w1:p1"}
-    shell = subprocess.Popen(["sleep", "300"], env=s.env | tag, start_new_session=True)  # noqa: S607
-    try:
+    with probe(s, "octo-feather-test-", s.env | tag) as (unit, shell, job):
         pane = {"name": "", "pane_id": "w1:p1", "workspace_id": "w1", "tab_id": "w1:t1"}
-        d = world(s, {"w1:p1": pane | {"agent_status": "none", "shell_pid": shell.pid}})
+        d = world(s, {"w1:p1": pane | {"agent_status": "none", "shell_pid": shell}})
         out = s.run([str(ASSETS / "herdr-close"), "w1:t1"]).out
         assert out == "tab=w1:t1 tab_close_rc=0 killed=0 unowned=w1:p1", out
         assert "tab close w1:t1" in (d / "log").read_text().splitlines()
+        assert active(unit), f"{unit} was stopped"
+        assert alive(job), "close swept a job beside an unowned pane"
         show(f"herdr-close w1:t1 over an unowned pane: {out}")
-    finally:
-        shell.kill()
 
 
 def close_foreign(s: Scratch) -> None:
     """`herdr-close w1:t1` over a pane whose shell sits in a probe scope (not w1:p1's own): the
     probe still runs, the pane named unowned= (#1070: an agent running the kit's tests)."""
-    unit, shell, job = probe(s)
-    try:
+    with probe(s) as (unit, shell, job):
         pane = {"name": "", "pane_id": "w1:p1", "workspace_id": "w1", "tab_id": "w1:t1"}
         world(s, {"w1:p1": pane | {"agent_status": "none", "shell_pid": shell}})
         out = s.run([str(ASSETS / "herdr-close"), "w1:t1"]).out
@@ -221,8 +230,6 @@ def close_foreign(s: Scratch) -> None:
         assert out == "tab=w1:t1 tab_close_rc=0 killed=0 unowned=w1:p1", out
         assert active(unit), f"{unit} was stopped"
         assert alive(job), "close ended a job in a scope not the pane's own"
-    finally:
-        stop(f"/{unit}")
 
 
 PI = ["python3", "-c", "import time; time.sleep(300)"]  # a stand-in Pi: argv as herdr-spawn's
@@ -275,8 +282,8 @@ def park_owned(s: Scratch) -> None:
     world(s, {})
     env = s.env | TAB_ENV | {"OCTO_FEATHER_SESSION_ID": "S1"}
     args = [*run, "sh", "-c", script, str(wt), str(pi_file), str(job_file)]
-    shell = subprocess.Popen([*args, *PI, "--session-id", "S1"], env=env)
     other = foreign(s)
+    shell = subprocess.Popen([*args, *PI, "--session-id", "S1"], env=env)
     cg = ""
     resumed = ""
     try:
@@ -335,22 +342,24 @@ def park_unowned(s: Scratch) -> None:
     wt.mkdir()
     world(s, {})
     env = s.env | TAB_ENV | {"OCTO_FEATHER_SESSION_ID": "S1"}
-    shell = subprocess.Popen(["sleep", "300"], start_new_session=True)  # noqa: S607
-    pi = subprocess.Popen([*PI, "--session-id", "S1"], cwd=wt, env=env, start_new_session=True)
-    job = subprocess.Popen(["sleep", "300"], env=env, start_new_session=True)  # noqa: S607
-    other = foreign(s)
-    try:
-        agent = PANE | {"agent_status": "done", "shell_pid": shell.pid, "pi_pid": pi.pid}
-        world(s, {"w1:p1": agent} | {"w1:p9": PEER | {"agent_status": "idle"}})
-        out, err = park(s)
-        parked_ok(out, wt)
-        assert err.strip() == "tab=w1:t1 tab_close_rc=0 killed=0 unowned=w1:p1", err
-        assert alive(job.pid), "park swept a job beside an unowned pane"
-        assert alive(other.pid), "the foreign tagged process was ended"
-        show(f"herdr-close --park w1:p1 unowned: {out}; {err.strip()}")
-    finally:
-        for p in (shell, pi, job, other):
-            p.kill()
+    with probe(s, "octo-feather-test-") as (unit, shell, held):
+        pi = subprocess.Popen([*PI, "--session-id", "S1"], cwd=wt, env=env, start_new_session=True)
+        job = subprocess.Popen(["sleep", "300"], env=env, start_new_session=True)  # noqa: S607
+        other = foreign(s)
+        try:
+            agent = PANE | {"agent_status": "done", "shell_pid": shell, "pi_pid": pi.pid}
+            world(s, {"w1:p1": agent} | {"w1:p9": PEER | {"agent_status": "idle"}})
+            out, err = park(s)
+            parked_ok(out, wt)
+            assert err.strip() == "tab=w1:t1 tab_close_rc=0 killed=0 unowned=w1:p1", err
+            assert alive(job.pid), "park swept a job beside an unowned pane"
+            assert alive(held), "park swept a job in the shell's scope"
+            assert active(unit), f"{unit} was stopped"
+            assert alive(other.pid), "the foreign tagged process was ended"
+            show(f"herdr-close --park w1:p1 unowned: {out}; {err.strip()}")
+        finally:
+            for p in (pi, job, other):
+                p.kill()
 
 
 def park_foreign(s: Scratch) -> None:
@@ -361,20 +370,19 @@ def park_foreign(s: Scratch) -> None:
     wt.mkdir()
     world(s, {})
     env = s.env | TAB_ENV | {"OCTO_FEATHER_SESSION_ID": "S1"}
-    unit, shell, job = probe(s)
-    pi = subprocess.Popen([*PI, "--session-id", "S1"], cwd=wt, env=env, start_new_session=True)
-    try:
-        agent = PANE | {"agent_status": "idle", "shell_pid": shell, "pi_pid": pi.pid}
-        world(s, {"w1:p1": agent} | {"w1:p9": PEER | {"agent_status": "idle"}})
-        out, err = park(s)
-        show(f"herdr-close --park w1:p1 in {unit}: {out}; {err.strip()}")
-        parked_ok(out, wt)
-        assert err.strip() == "tab=w1:t1 tab_close_rc=0 killed=0 unowned=w1:p1", err
-        assert active(unit), f"{unit} was stopped"
-        assert alive(job), "park ended a job in a scope not the pane's own"
-    finally:
-        pi.kill()
-        stop(f"/{unit}")
+    with probe(s) as (unit, shell, job):
+        pi = subprocess.Popen([*PI, "--session-id", "S1"], cwd=wt, env=env, start_new_session=True)
+        try:
+            agent = PANE | {"agent_status": "idle", "shell_pid": shell, "pi_pid": pi.pid}
+            world(s, {"w1:p1": agent} | {"w1:p9": PEER | {"agent_status": "idle"}})
+            out, err = park(s)
+            show(f"herdr-close --park w1:p1 in {unit}: {out}; {err.strip()}")
+            parked_ok(out, wt)
+            assert err.strip() == "tab=w1:t1 tab_close_rc=0 killed=0 unowned=w1:p1", err
+            assert active(unit), f"{unit} was stopped"
+            assert alive(job), "park ended a job in a scope not the pane's own"
+        finally:
+            pi.kill()
 
 
 def park_refused(s: Scratch) -> None:
