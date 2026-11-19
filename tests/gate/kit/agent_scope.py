@@ -9,7 +9,9 @@ failure, the tab closed. `herdr-close w1:t1` over an owned pane whose Pi already
 shell and a detached, reparented job left in its scope) prints `tab=w1:t1 tab_close_rc=0
 killed=N` and the job is gone, while a process outside any scope tagged HERDR_TAB_ID=w1:t1 of
 the same session lives on: herdr-close reads no environ. Each scope a scenario makes is stopped
-when it ends, pass or fail.
+when it ends, pass or fail. A pane whose shell sits in a scope adopt did not name for that pane
+(close_foreign, park_foreign: a probe scope octo-feather-agent-probe-<hex>.scope, a name no
+agent has) is unowned: that scope is never stopped nor its members listed (#1070).
 
 `herdr-close --park w1:p1` (#1001), the rule herdr-comms SKILL.md, Park an idle agent, states:
 park_owned (the demo), park_unowned, park_refused and park_malformed drive it."""
@@ -18,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import subprocess
 import sys
 import time
@@ -90,6 +93,27 @@ def gone(pid: int) -> bool:
     return False
 
 
+def active(unit: str) -> bool:
+    """UNIT is active under the user's manager."""
+    is_active = ["systemctl", "--user", "is-active", "-q", unit]
+    return subprocess.run(is_active, check=False).returncode == 0
+
+
+def probe(s: Scratch) -> tuple[str, int, int]:
+    """A probe scope (a unit name no agent has) holding a pane's shell and a detached job, as an
+    agent's scope holds its shell and Pi: its unit, the shell's pid (systemd-run execs it) and
+    the job's. The job keeps the scope active once the closed tab's shell is hung up."""
+    unit = f"octo-feather-agent-probe-{secrets.token_hex(4)}.scope"
+    job_file = s.root / "job"
+    detach = '(setsid sleep 300 </dev/null >/dev/null 2>&1 & echo $! >"$0"); exec sleep 300'
+    run = ["systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit", unit]
+    shell = subprocess.Popen([*run, "sh", "-c", detach, str(job_file)])
+    job = read_pid(job_file)
+    assert scope_of(job) == scope_of(shell.pid), (scope_of(job), scope_of(shell.pid))
+    assert scope_of(job).endswith(f"/{unit}"), scope_of(job)
+    return unit, shell.pid, job
+
+
 def spawn_scoped(s: Scratch) -> None:
     """herdr-spawn adopts the pane's shell into its own user scope before Pi starts."""
     d = world(s, {})
@@ -135,7 +159,7 @@ def spawn_no_manager(s: Scratch) -> None:
 def close_owned(s: Scratch) -> None:
     """The demo: `herdr-close w1:t1` over an owned pane whose Pi exited ends its detached job;
     a foreign process tagged with w1:t1 survives."""
-    unit = f"octo-feather-agent-w1:p1-{os.getpid()}-{time.time_ns()}.scope"
+    unit = f"octo-feather-agent-w1:p1-{secrets.token_hex(4)}.scope"  # as adopt names it
     # The pane's shell in its scope; it detached a job (its own session, reparented), and its Pi
     # already exited. systemd-run execs the shell, so its pid is the shell's.
     job_file = s.root / "job"
@@ -185,6 +209,22 @@ def close_unowned(s: Scratch) -> None:
         shell.kill()
 
 
+def close_foreign(s: Scratch) -> None:
+    """`herdr-close w1:t1` over a pane whose shell sits in a probe scope (not w1:p1's own): the
+    probe still runs, the pane named unowned= (#1070: an agent running the kit's tests)."""
+    unit, shell, job = probe(s)
+    try:
+        pane = {"name": "", "pane_id": "w1:p1", "workspace_id": "w1", "tab_id": "w1:t1"}
+        world(s, {"w1:p1": pane | {"agent_status": "none", "shell_pid": shell}})
+        out = s.run([str(ASSETS / "herdr-close"), "w1:t1"]).out
+        show(f"herdr-close w1:t1 over a pane in {unit}: {out}")
+        assert out == "tab=w1:t1 tab_close_rc=0 killed=0 unowned=w1:p1", out
+        assert active(unit), f"{unit} was stopped"
+        assert alive(job), "close ended a job in a scope not the pane's own"
+    finally:
+        stop(f"/{unit}")
+
+
 PI = ["python3", "-c", "import time; time.sleep(300)"]  # a stand-in Pi: argv as herdr-spawn's
 PANE = {"name": "implementer-gh1", "pane_id": "w1:p1", "workspace_id": "w1", "tab_id": "w1:t1"}
 PANE["label"] = "gh1"
@@ -224,7 +264,7 @@ def parked_ok(line: str, wt: Path) -> dict[str, str]:
 def park_owned(s: Scratch) -> None:
     """The demo: `herdr-close --park w1:p1` over an owned idle agent with a background job in
     its scope, then again once the job ended, then herdr-say to its name."""
-    unit = f"octo-feather-agent-w1:p1-{os.getpid()}-{time.time_ns()}.scope"
+    unit = f"octo-feather-agent-w1:p1-{secrets.token_hex(4)}.scope"  # as adopt names it
     wt = s.root / "wt"
     wt.mkdir()
     pi_file, job_file = s.root / "pi", s.root / "job"
@@ -313,6 +353,30 @@ def park_unowned(s: Scratch) -> None:
             p.kill()
 
 
+def park_foreign(s: Scratch) -> None:
+    """`herdr-close --park w1:p1` over an idle agent whose shell sits, with a job, in a probe
+    scope (not w1:p1's own): parked, not refused for the job, the pane unowned=, the probe and
+    its job still run."""
+    wt = s.root / "wt"
+    wt.mkdir()
+    world(s, {})
+    env = s.env | TAB_ENV | {"OCTO_FEATHER_SESSION_ID": "S1"}
+    unit, shell, job = probe(s)
+    pi = subprocess.Popen([*PI, "--session-id", "S1"], cwd=wt, env=env, start_new_session=True)
+    try:
+        agent = PANE | {"agent_status": "idle", "shell_pid": shell, "pi_pid": pi.pid}
+        world(s, {"w1:p1": agent} | {"w1:p9": PEER | {"agent_status": "idle"}})
+        out, err = park(s)
+        show(f"herdr-close --park w1:p1 in {unit}: {out}; {err.strip()}")
+        parked_ok(out, wt)
+        assert err.strip() == "tab=w1:t1 tab_close_rc=0 killed=0 unowned=w1:p1", err
+        assert active(unit), f"{unit} was stopped"
+        assert alive(job), "park ended a job in a scope not the pane's own"
+    finally:
+        pi.kill()
+        stop(f"/{unit}")
+
+
 def park_refused(s: Scratch) -> None:
     """`herdr-close --park w1:p1` over a working agent, and over a Pi without --session-id."""
     world(s, {})
@@ -360,8 +424,8 @@ def park_malformed(s: Scratch) -> None:
         pi.kill()
 
 
-PARK = (park_owned, park_unowned, park_refused, park_malformed)
+PARK = (park_owned, park_unowned, park_foreign, park_refused, park_malformed)
 
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).parent))
-    main(spawn_scoped, spawn_no_manager, close_owned, close_unowned, *PARK)
+    main(spawn_scoped, spawn_no_manager, close_owned, close_unowned, close_foreign, *PARK)
