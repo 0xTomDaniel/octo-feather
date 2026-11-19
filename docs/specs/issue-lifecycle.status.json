@@ -252,8 +252,8 @@
     "acceptance-checkout-follows-main": {
       "status": "built",
       "pr": 1086,
-      "record": "20261119T201208Z-23fba04f",
-      "commit": "5b87ad5f1419421727f6f8c96bb847452e99970e",
+      "record": "20261119T214939Z-4226cb4a",
+      "commit": "48fe56d83c6dbb094ea2db78251d53734d9d7f32",
       "tests": [
         "tests/gate/kit/lane_post_merge.py"
       ]
@@ -261,8 +261,8 @@
     "acceptance-checkout-kept": {
       "status": "built",
       "pr": 1086,
-      "record": "20261119T201208Z-71dbb39c",
-      "commit": "5b87ad5f1419421727f6f8c96bb847452e99970e",
+      "record": "20261119T214939Z-6388c61e",
+      "commit": "48fe56d83c6dbb094ea2db78251d53734d9d7f32",
       "tests": [
         "tests/gate/kit/lane_post_merge.py"
       ]
@@ -270,8 +270,8 @@
     "acceptance-stale-agents": {
       "status": "built",
       "pr": 1086,
-      "record": "20261119T201208Z-d4621697",
-      "commit": "5b87ad5f1419421727f6f8c96bb847452e99970e",
+      "record": "20261119T214939Z-7e81221f",
+      "commit": "48fe56d83c6dbb094ea2db78251d53734d9d7f32",
       "tests": [
         "tests/gate/kit/lane_stale.py"
       ]
