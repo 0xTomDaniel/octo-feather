@@ -30,14 +30,21 @@
       The one-shot queue check (the queue rule below): after S seconds (default 0), hands over
       each grant or free slot of KIND due to pass, or does nothing, then exits. Started
       detached as the queue rule's trigger says; harmless by hand.
-  octo-feather-slot hold --kind heavy|eval [--items N]
+  octo-feather-slot hold --kind heavy|eval [--items N] [--if-granted]
       Run by the heavy run's own process (the gate's pytest plugin, tests/gate/heavy_slot.py;
       octo-feather-qa for eval; tests/lib/user-mise.sh for `just check-user-mise` in its
       fixture's pane), never by hand. Prints one line on stdout: `free: ...` (exit 0, no
       slot needed), `nested: ...` (exit 0, an ancestor process holds this kind's slot), or
       `held: ...` (the lock is taken; the command then stays, holding it, until its stdin closes:
       the caller keeps the pipe open for its life, and its exit or crash closes it, so the lock
-      goes with the caller); else the refusal (exit 75), nothing run.
+      goes with the caller); else the refusal (exit 75), nothing run. With --if-granted (the
+      gate, before its static checks: quality #recipes-static-first, #1113) it takes the slot
+      only for a lane already holding its grant: where it would refuse it prints `later: ...`
+      (exit 0, nothing held), and the gate asks again, plainly, once its static checks are
+      green. So a lane running two gates back to back holds its slot through the second one's
+      static checks: its run holds the lock, so nothing passes, and the grace starts again at
+      that run's end, a red static check's included; a lane queued behind it gets the slot only
+      a grace after it ends. No file or field is added: a held lock is what every copy honours.
 
 The rule (owner ruling #660 2026-11-06, director design, #668). Two independent kinds, each with
 its own grants and locks; they may run together:
@@ -288,12 +295,12 @@ def ancestors() -> Iterator[int]:
             return
 
 
-def hold(kind: str, items: int | None) -> int:
+def hold(kind: str, items: int | None, *, if_granted: bool = False) -> int:
     q = slot(kind)
     if not in_agent():
         say(f"free: outside a Herdr agent (no HERDR_PANE_ID or OCTO_FEATHER_ROLE), no {kind} slot")
         return 0
-    got = q.take(items, os.getppid(), ancestors(), caller_lane)
+    got = q.take(items, os.getppid(), ancestors(), caller_lane, if_granted=if_granted)
     if isinstance(got, Outcome):
         return apply(kind, got)
     return keep(q, got)
@@ -422,6 +429,7 @@ def main(argv: list[str]) -> int:
     h = sub.add_parser("hold")
     h.add_argument("--kind", choices=KINDS, required=True)
     h.add_argument("--items", type=int)
+    h.add_argument("--if-granted", action="store_true")
     a = p.parse_args(argv)
     cmd, kind = cast("str", a.cmd), cast("str", getattr(a, "kind", ""))
     try:
@@ -432,7 +440,7 @@ def main(argv: list[str]) -> int:
             return change(cmd, a, kind)
         if cmd == "status":
             return status()
-        return hold(kind, cast("int | None", a.items))
+        return hold(kind, cast("int | None", a.items), if_granted=cast("bool", a.if_granted))
     except Refused as e:
         (sys.stdout if cmd == "hold" else sys.stderr).write(f"{e}\n")
         return e.code

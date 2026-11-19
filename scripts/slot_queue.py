@@ -23,9 +23,11 @@ Interface:
       revoke(lane) -> Outcome
       queue(lane, by, lanes, session) -> Outcome   queued (its `settle` set: the command settles
                                           next), already queued or holding, or granted at once
-      take(items, pid, ancestors, lane) -> Taken | Outcome   hold's question and the real flock:
-                                          free, nested, held (Taken) or the refusal (code 75);
-                                          LANE a callable, asked only when a grant decides
+      take(items, pid, ancestors, lane, *, if_granted=False) -> Taken | Outcome   hold's
+                                          question and the real flock: free, nested, held (Taken)
+                                          or the refusal (code 75); with IF_GRANTED, `later:`
+                                          (code 0, nothing held) where it would refuse; LANE a
+                                          callable, asked only when a grant decides
       release(taken) -> Outcome           the run's end recorded against the grant it started
                                           under, the lock freed
       status() -> list[str]
@@ -588,10 +590,15 @@ class SlotQueue:
         pid: int,
         ancestors: Iterable[int],
         lane: Callable[[], str | None],
+        *,
+        if_granted: bool = False,
     ) -> Taken | Outcome:
         """`hold`'s question for a run of ITEMS items by process PID, under ANCESTORS (read only
         once the item count needs a slot), of the lane LANE answers (asked only when a grant
-        decides): free, nested, held (Taken, its lock flocked here) or the refusal (code 75)."""
+        decides): free, nested, held (Taken, its lock flocked here) or the refusal (code 75);
+        with IF_GRANTED (a gate before its static checks: the command's --help, hold), `later:`
+        (code 0, nothing held) in the refusal's place, so only a lane holding its grant takes the
+        slot then."""
         kind, b = self.kind, self.rule
         if kind == "heavy":
             if items is None:
@@ -621,7 +628,7 @@ class SlotQueue:
                 f"octo-feather-slot: refused, nothing ran: {what}, and lane {ln or 'none'} holds "
                 f"no {kind} grant; current holder: {self._holders(t)}; {_ask(ln, kind, verb)}"
             )
-            return Outcome((Line(msg),), code=REFUSED)
+            return _no(msg, f"lane {ln or 'none'} holds no {kind} grant", if_granted=if_granted)
         for lk, rec in self._lock_paths():
             f = lk.open("a")
             try:
@@ -638,7 +645,7 @@ class SlotQueue:
             f"but every {kind} slot is held now by a run: {busy}; wait for it to end, or "
             f"{_ask(ln, kind)} for another slot ({kind}_slots in {BUDGET_NAME})"
         )
-        return Outcome((Line(msg),), code=REFUSED)
+        return _no(msg, f"every {kind} slot is held now by a run: {busy}", if_granted=if_granted)
 
     def release(self, taken: Taken) -> Outcome:
         """TAKEN's run ended: its end recorded against the grant it started under, never a later
@@ -673,6 +680,14 @@ class SlotQueue:
                 f"  free since {freed}: to the queue's head after the {b.grace_ms // 1000} s grace"
             )
         return out
+
+
+def _no(refusal: str, why: str, *, if_granted: bool) -> Outcome:
+    """`hold`'s REFUSAL (code 75); with IF_GRANTED, `later:` WHY (code 0, nothing held) in its
+    place."""
+    if if_granted:
+        return Outcome((Line(f"later: {why}; ask after the static checks"),))
+    return Outcome((Line(refusal),), code=REFUSED)
 
 
 def _held_run(lock: Path, rec: Path) -> Run | None:

@@ -303,8 +303,8 @@ check-templates:
 # measured on the 4-vCPU box, quiet, 105 items (#510): 2 workers 410 s, 4 269 s, 6 225-238 s, 8 213-231 s, ~730-800
 # CPU s each (the CPU floor ~190 s); no item over 60 s at 6 or 8 (CI sets 4). A gate run inside an item (a test's
 # throwaway copy running `just check`) is sequential and stops at its first failure (-n 0 -x), recipes first, so a red
-# copy fails on its recipe, never fans out a nested gate (#208). Every run, nested or not, runs the recipes first and
-# asks the heavy slot only once they are green; a red one ends it there (tests/gate/heavy_slot.py, #1019).
+# copy fails on its recipe, never fans out a nested gate (#208). Every run, nested or not, runs the recipes first; a red
+# one ends it there; when it asks the heavy slot: tests/gate/heavy_slot.py (quality #recipes-static-first).
 # Every gate recipe and kit test as a pytest item, parallel, timed, one trend line per run; extra arguments go to pytest.
 check-tests *args:
     #!/usr/bin/env bash
