@@ -61,6 +61,14 @@ jobs:
           cache: false
       # tests/qc.sh runs the qc judge's sandbox (`unshare -rm`); Ubuntu 24.04 restricts unprivileged user namespaces.
       - run: if sysctl -n kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0; fi
+      # A systemd user manager for the runner's user (linger), which the e2e agent-scope tests drive for real
+      # (tests/gate/kit/agent_scope.py: herdr-spawn adopts an agent's shell into its own user scope, #1000);
+      # XDG_RUNTIME_DIR finds its bus, which a runner's non-login shell leaves unset.
+      - run: |
+          sudo loginctl enable-linger "$USER"
+          for _ in $(seq 1 50); do [[ -S "/run/user/$(id -u)/bus" ]] && break; sleep 0.2; done
+          echo "XDG_RUNTIME_DIR=/run/user/$(id -u)" >> "$GITHUB_ENV"
+          XDG_RUNTIME_DIR="/run/user/$(id -u)" systemctl --user is-system-running --wait || true
       # The qc sandbox's host dependencies are checked by just install-check.
       - run: sudo apt-get install -y --no-install-recommends bubblewrap socat ripgrep
       # Real Herdr for the sandbox cost workload, using the documented official installer

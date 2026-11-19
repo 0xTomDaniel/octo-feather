@@ -1,0 +1,14 @@
+[
+ {
+  "request": "repo view 0xTomDaniel/spec-chat --json nameWithOwner,createdAt",
+  "out": "{\"createdAt\":\"2026-11-13T03:20:54Z\",\"nameWithOwner\":\"0xTomDaniel/spec-chat\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/spec-chat",
+   "command": "gh repo view 0xTomDaniel/spec-chat --json nameWithOwner,createdAt",
+   "date": "2026-11-18"
+  }
+ }
+]

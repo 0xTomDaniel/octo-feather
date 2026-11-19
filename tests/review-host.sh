@@ -43,6 +43,7 @@ cat > "$t/bin/herdr" <<EOF
 exec "$kit/tests/fixtures/herdr-spawn/herdr" "\$@"
 EOF
 chmod +x "$t/bin/herdr"
+cp "$kit/tests/gate/kit/testkit/systemd.py" "$t/bin/busctl"; cp "$kit/tests/gate/kit/testkit/systemd.py" "$t/bin/systemctl"   # systemd stood in: the scope is e2e
 env FAKE_HERDR_DIR="$t/spawn" PATH="$t/bin:$PATH" XDG_CACHE_HOME="$t/cache" HERDR_PANE_ID=w9:p0 \
   "$kit/.agents/skills/herdr-comms/assets/herdr-spawn" --workspace w9 --name t1 --role implementer \
   --cwd "$t/cwd" >/dev/null 2>&1 || fail "herdr-spawn failed"
