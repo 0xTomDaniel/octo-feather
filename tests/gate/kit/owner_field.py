@@ -105,5 +105,33 @@ def reword_older(s: Scratch) -> None:
     assert (repo / "later").exists()
 
 
+def qc_status_commit(s: Scratch) -> None:
+    """The qc status-only commit rule (scripts/check-owner-field --help, Who owes it) on the
+    message and file of real commit db00d5a8 (lane gh1076), then the same message with another
+    file, then a writer commit with no field."""
+    repo = _lane(s)
+    s.git(repo, "commit", "-q", "--amend", "-m", REAL + "\nOwners: none\n")
+    (repo / "docs" / "specs").mkdir(parents=True)
+    qc = (
+        "qc: built acceptance-checkout-follows-main acceptance-checkout-kept "
+        "acceptance-stale-agents (judged 5b87ad5f1419)"
+    )
+    _commit(s, repo, "docs/specs/issue-lifecycle.status.json", qc)
+    out, _ = check(s, repo, 0)
+    notice = [ln for ln in out.splitlines() if "qc status commit(s)" in ln]
+    assert len(notice) == 1, out
+    assert "1 qc status commit(s) without it passed" in notice[0], out
+    assert "ok (1 commit(s)" in out, out
+    (repo / "docs" / "specs" / "issue-lifecycle.status.json").write_text("{}\n")
+    _commit(s, repo, "other", qc)
+    _, err = check(s, repo, 1)
+    assert "qc: built" in err, err
+    assert "report names no owned rule" in err, err
+    s.git(repo, "reset", "-q", "--hard", "HEAD^")
+    _commit(s, repo, "writer", "feat: a writer commit with no field")
+    _, err = check(s, repo, 1)
+    assert "a writer commit with no field" in err, err
+
+
 if __name__ == "__main__":
-    main(refuse_then_amend, reword_older)
+    main(refuse_then_amend, reword_older, qc_status_commit)
