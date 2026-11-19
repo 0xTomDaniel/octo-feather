@@ -199,9 +199,9 @@
     },
     "acceptance-reflect-recurrence-comments": {
       "status": "built",
-      "pr": 1017,
-      "record": "20261118T224527Z-67416e28",
-      "commit": "f3946efacad6370916fad629a48a8648e91eb1a6",
+      "pr": 1072,
+      "record": "20261119T030401Z-7fa02cc1",
+      "commit": "fdb8c02945f6a7ad9b7c3284f6aca04c174b438c",
       "tests": [
         "tests/gate/kit/test_lane_correction.py"
       ]
