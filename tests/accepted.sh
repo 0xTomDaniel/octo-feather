@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Integration test for scripts/octo-feather-accepted against fixture review-host
 # registries, review-page hand-offs and a throwaway repo. Run by `just check`.
 #
