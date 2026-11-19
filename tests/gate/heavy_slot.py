@@ -12,11 +12,16 @@ run, which runs nothing, asks nothing; an xdist worker neither.
 
 Static checks first (quality #recipes-static-first, #1019): the gate's static checks, its
 GATE_RECIPES items (test_gate.py's test_recipe), run before every other item, in every process's
-order (after conftest.py's longest first, kept among each part), and the slot is asked only once
-the last of them has reported, all green. A red one ends the run there: no other item runs, the
-slot is never asked, the session ends failed (session.shouldfail, so conftest.py's trend line is
-no full run) naming each red check, its output in pytest's failures. A run selecting no static
-check asks as soon as it knows its count. Under xdist a worker holds its next item before it runs
+order (after conftest.py's longest first, kept among each part). When it asks (#1113): as soon as
+the run knows its count, before any static check, it asks `hold ... --if-granted`, which takes
+the slot only for a lane already holding its grant (so a lane's second gate keeps the slot
+through its static checks, the grace never running out under them); any other answer but
+`later:` is final, as below. On `later:` (no grant: nothing held) it asks plainly only once the
+last static check has reported, all green. A red one ends the run there: no other item runs, the
+slot is not asked (one held from the early ask is released at the run's end, as any run's), the
+session ends failed (session.shouldfail, so conftest.py's trend line is no full run) naming each
+red check, its output in pytest's failures. A run selecting no static check asks plainly as soon
+as it knows its count. Under xdist a worker holds its next item before it runs
 one, so the controller cannot hold items back: it hands them out as ever, and a worker about to
 run a non-static item waits for the controller's verdict, a file named in VERDICT (set before
 the workers start), `go` once the slot is held, else `stop`, on which the worker skips the item
@@ -53,6 +58,7 @@ class _Run:
         self.red: list[str] = []
         self.decided = False
         self.verdict: Path | None = None
+        self.held_early = False  # the slot held from before the static checks (--if-granted)
         self.session: pytest.Session | None = None
 
 
@@ -81,23 +87,28 @@ def _name(nodeid: str) -> str:
     return nodeid[len(STATIC) : -1]
 
 
-def _ask(config: pytest.Config, items: int) -> None:
+def _ask(config: pytest.Config, items: int, *, if_granted: bool = False) -> None:
     if _asked or hasattr(config, "workerinput") or config.getoption("collectonly"):
         return
+    early = ["--if-granted"] if if_granted else []
     p = subprocess.Popen(
-        [str(SLOT), "hold", "--kind", "heavy", "--items", str(items)],
+        [str(SLOT), "hold", "--kind", "heavy", "--items", str(items), *early],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         text=True,
     )
-    _asked.append(p)
     assert p.stdout is not None
     said = p.stdout.readline().rstrip("\n")
+    if if_granted and said.startswith("later:"):  # no grant: asked again after the static checks
+        p.communicate()
+        return
+    _asked.append(p)
+    _run.held_early = if_granted and said.startswith("held:")
     if said.startswith(("held:", "free:", "nested:")):
         config.get_terminal_writer().line(f"heavy slot: {said}")
         return
     said += p.stdout.read()
-    if _run.left is not None:
+    if _run.left is not None and not if_granted:
         said += "\n(the static checks ran first, green; no other item ran)"
     dsession = cast("_DSession | None", config.pluginmanager.getplugin("dsession"))
     if dsession is not None:  # xdist's controller: its workers end first
@@ -118,12 +129,14 @@ def _counted(config: pytest.Config, ids: Sequence[str]) -> None:
     _run.left = {i for i in ids if _static(i)}
     if not _run.left:
         _decide(config)
+    else:
+        _ask(config, _run.items, if_granted=True)
 
 
 def _decide(config: pytest.Config) -> None:
     _run.decided = True
     if _run.red:
-        why = f"static checks red: {' '.join(_run.red)}; no other item ran, the slot was not asked"
+        why = f"static checks red: {' '.join(_run.red)}; no other item ran, {_slot_said()}"
         if _run.session is not None:
             _run.session.shouldfail = why
         _say("stop")
@@ -133,6 +146,13 @@ def _decide(config: pytest.Config) -> None:
         return
     _ask(config, _run.items)
     _say("go")
+
+
+def _slot_said(slot: str = "the slot") -> str:
+    """What a red run did with SLOT: held from before its static checks, else not asked."""
+    if _run.held_early:
+        return f"{slot} its lane held is released at the run's end"
+    return f"{slot} was not asked"
 
 
 def _say(verdict: str) -> None:
@@ -210,5 +230,5 @@ def pytest_terminal_summary(terminalreporter: pytest.TerminalReporter) -> None:
     if _run.red and _run.decided:
         terminalreporter.write_sep("=", f"static checks red: {' '.join(_run.red)}", red=True)
         terminalreporter.write_line(
-            "no other item ran, and the heavy slot was not asked (quality #recipes-static-first)"
+            f"no other item ran, and {_slot_said('the heavy slot')} (quality #recipes-static-first)"
         )
