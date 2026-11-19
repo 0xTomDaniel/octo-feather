@@ -1,0 +1,14 @@
+Seeded defect: an exempt quote clears its whole line, so a retired word beside it passes (check_refs, QC retired-word-line-exemption).
+diff --git a/scripts/check_rules.py b/scripts/check_rules.py
+index c7e25c88..a6eda285 100755
+--- a/scripts/check_rules.py
++++ b/scripts/check_rules.py
+@@ -207,7 +207,7 @@ def retired(hit: Hit) -> bool:
+     path, _, line = hit
+     rest = line + "\n"
+     for quote in EXEMPT.get(path, ()):
+-        rest = quote.sub("", rest)
++        rest = "" if quote.search(rest) else rest
+     return bool(RETIRED.search(rest))
+ 
+ 
