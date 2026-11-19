@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """check-evals [EVALS_DIR]   the shape of every factory eval case (quality #acceptance-qa-cases-checked)
+check-evals --trees [EVALS_DIR]   schema.md, Fixtures
+check-evals --export DIR [EVALS_DIR]   schema.md, Fixtures
+check-evals --sources FIXTURE [EVALS_DIR]   schema.md, Fixtures
 
 Deterministic and free: reads JSON only, never starts an agent or a model. Run by `just check`
 (check-evals) and first by every factory eval run, which refuses a malformed suite.
 
 EVALS_DIR: default the kit's evals/.
 Schema owner: the eval-cases skill, .agents/skills/eval-cases/references/schema.md. Every field this
-refuses, and why, is stated there, by section: Layout (the files), Suite (suite.json), Case (cases.json,
+refuses, and why, is stated there, by section: Layout (the files), Fixtures (a fixture's base and pool, its duplicates), Suite (suite.json), Case (cases.json,
 role-transcript setup branch/head/origin/fake_gh/fake_qa, review, history fixture), Facts (reference/expectations.json: the closed fact
 list, Before targets, Attempt record, Run record, Final JSON, Field lines, Branch paths), Leaks, Coverage, Judgment
 suite (question.json, cases, labels), Calibration, Judgment model and classifiers (judgment-model.json,
@@ -15,7 +18,7 @@ Each problem prints `check-evals: <file>[ case <id>][ fact #<n>]: field <name>: 
 Exit 0 with `evals: ok (...)`, 1 naming each problem (a missing or unreadable file included), 2 when
 EVALS_DIR is not a dir.
 """
-import importlib.machinery, importlib.util, json, re, shutil, subprocess, sys, tomllib
+import atexit, hashlib, importlib.machinery, importlib.util, json, os, re, shutil, subprocess, sys, tempfile, tomllib
 from typing import cast
 from pathlib import Path
 
@@ -55,6 +58,390 @@ TRIGGER = {"should_trigger", "split"}
 SPLITS = {"train", "held-out"}
 ID = re.compile(r"[a-z0-9][a-z0-9-]*")
 FIX = "fix the case (check-evals --help lists the shape)"
+FIXTURE_FILE = ".eval-fixture.json"   # a fixture's base (schema.md, Fixtures)
+FIXTURE_NAME = re.compile(r"[A-Za-z0-9._-]+")
+POOL = ".pool"   # the pool dir in EVALS_DIR/fixtures, no fixture (schema.md, Fixtures)
+
+
+class FixtureError(RuntimeError):
+    """A refused fixture base (schema.md, Fixtures)."""
+
+
+def fixture_tree(evals: Path, name: str, scratch: Path) -> Path:
+    """Fixture NAME's materialized tree (schema.md, Fixtures); a based one is built in SCRATCH/fixtures/NAME. Raises
+    FixtureError."""
+    chain: list[str] = [name]
+    pools: dict[str, dict[str, str]] = {}
+    by = ""
+    while True:
+        d = evals / "fixtures" / chain[-1]
+        if not (FIXTURE_NAME.fullmatch(chain[-1]) and chain[-1] != POOL and d.is_dir()):
+            msg = f"fixtures/{by}/{FIXTURE_FILE}: field base: no fixture dir {d}" if by else f"no fixture dir {d}"
+            raise FixtureError(msg)
+        f = d / FIXTURE_FILE
+        if not (f.exists() or f.is_symlink()):
+            break
+        o, pools[chain[-1]] = manifest(evals, chain[-1])
+        if o is None:
+            break
+        by = chain[-1]
+        if o in chain:
+            msg = f"fixtures/{by}/{FIXTURE_FILE}: field base: a cycle {' -> '.join([*chain, o])}"
+            raise FixtureError(msg)
+        chain.append(o)
+    if len(chain) == 1 and not pools:
+        return evals / "fixtures" / name
+    dest = scratch / "fixtures" / name
+    if not dest.is_dir():
+        dest.mkdir(parents=True)
+        for n in reversed(chain):
+            for path, pf in pools.get(n, {}).items():
+                put(evals / "fixtures" / POOL / pf, dest, path)
+            lay(evals / "fixtures" / n, dest)
+    return dest
+
+
+def manifest(evals: Path, name: str) -> tuple[str | None, dict[str, str]]:
+    """Fixture NAME's FIXTURE_FILE (form: schema.md, Fixtures) as (base or None, pool); raises FixtureError when malformed."""
+    f, at = evals / "fixtures" / name / FIXTURE_FILE, f"fixtures/{name}/{FIXTURE_FILE}"
+    try:
+        o = cast("object", json.loads(f.read_text(encoding="utf-8")))
+    except (OSError, ValueError) as e:
+        msg = f"{at}: unreadable JSON ({e})"
+        raise FixtureError(msg) from e
+    d = cast("dict[str, object]", o) if isinstance(o, dict) else {}
+    b, pool = d.get("base"), d.get("pool", {})
+    if not (isinstance(o, dict) and d and set(d) <= {"base", "pool"} and (b is None or isinstance(b, str))):
+        msg = f"{at}: must be exactly {{\"base\": <fixture name>}}, {{\"pool\": {{<path>: <pool file>}}}} or both, got {json.dumps(o)}"
+        raise FixtureError(msg)
+    items = cast("dict[object, object]", pool).items() if isinstance(pool, dict) else None
+    if items is None or not all(isinstance(k, str) and PATH.fullmatch(k) and k != FIXTURE_FILE and isinstance(v, str)
+                                and FIXTURE_NAME.fullmatch(v) and v not in (".", "..") for k, v in items):
+        msg = f"{at}: field pool: must be an object {{<relative path>: <file name in fixtures/{POOL}/>}}, got {json.dumps(pool)}"
+        raise FixtureError(msg)
+    for k, v in cast("dict[str, str]", pool).items():
+        src = evals / "fixtures" / POOL / v
+        if not src.is_file() or src.is_symlink():
+            msg = f"{at}: field pool: {k}: no pool file {src}"
+            raise FixtureError(msg)
+        if (f.parent / k).exists() or (f.parent / k).is_symlink():
+            msg = f"{at}: field pool: {k}: fixtures/{name}/{k} holds it too; list it or hold it, not both"
+            raise FixtureError(msg)
+    return b, cast("dict[str, str]", pool)
+
+
+def put(src: Path, dest: Path, path: str) -> None:
+    """SRC copied to DEST/PATH, replacing what is there (schema.md, Fixtures)."""
+    to = dest
+    for part in path.split("/")[:-1]:
+        to = to / part
+        if to.is_symlink() or to.is_file():
+            to.unlink()
+        to.mkdir(exist_ok=True)
+    to = to / path.rsplit("/", 1)[-1]
+    if to.is_dir() and not to.is_symlink():
+        shutil.rmtree(to)
+    elif to.is_symlink() or to.exists():
+        to.unlink()
+    shutil.copy2(src, to)
+
+
+def bases(evals: Path, name: str) -> list[str]:
+    """Fixture NAME's base chain, nearest first (schema.md, Fixtures); NAME is not refused."""
+    out: list[str] = []
+    while (evals / "fixtures" / (out or [name])[-1] / FIXTURE_FILE).exists():
+        b = manifest(evals, (out or [name])[-1])[0]
+        if b is None:
+            break
+        out.append(b)
+    return out
+
+
+def own(top: Path) -> list[str]:
+    """Fixture dir TOP's own paths (schema.md, Fixtures), in byte order."""
+    out: list[str] = []
+    for dp, dns, fns in os.walk(top):
+        out += [Path(dp, n).relative_to(top).as_posix() for n in fns + [d for d in dns if Path(dp, d).is_symlink()]]
+    return sorted((r for r in out if r != FIXTURE_FILE), key=os.fsencode)
+
+
+def sources(evals: Path, name: str) -> dict[str, str]:
+    """--sources' lines for fixture NAME as {path: source} (schema.md, Fixtures); raises FixtureError."""
+    tree, layers = fixture_tree(evals, name, scratch()), [name, *bases(evals, name)]
+    out: dict[str, str] = {}
+    for rel in own(tree):
+        parts = rel.split("/")
+        for n in layers:
+            d = evals / "fixtures" / n
+            if entry(d / rel) is not None and not any(d.joinpath(*parts[:i]).is_symlink() for i in range(1, len(parts))):
+                out[rel] = f"fixtures/{n}/{rel}"
+                break
+            pf = manifest(evals, n)[1].get(rel) if (d / FIXTURE_FILE).exists() else None
+            if pf:
+                out[rel] = f"fixtures/{POOL}/{pf} listed by {n}"
+                break
+    return out
+
+
+def sources_main(argv: list[str]) -> int:
+    """--sources (schema.md, Fixtures); exit 1 on a refused fixture, 2 on bad usage."""
+    if len(argv) not in (1, 2):
+        print("check-evals: usage: check-evals --sources FIXTURE [EVALS_DIR]", file=sys.stderr)
+        return 2
+    evals = Path(argv[1]) if len(argv) == 2 else KIT / "evals"
+    if not evals.is_dir():
+        print(f"check-evals: no evals dir {evals}", file=sys.stderr)
+        return 2
+    try:
+        for rel, src in sources(evals, argv[0]).items():
+            print(f"{rel} {src}")
+    except FixtureError as e:
+        print(f"check-evals: {e}", file=sys.stderr)
+        return 1
+    return 0
+
+
+def fixture_dirs(evals: Path) -> list[Path]:
+    """Every fixture dir in EVALS/fixtures, the pool aside (schema.md, Fixtures)."""
+    return sorted(p for p in (evals / "fixtures").glob("*") if p.is_dir() and p.name != POOL)
+
+
+def lay(src: Path, dest: Path, *, top: bool = True) -> None:
+    """SRC laid over DEST (schema.md, Fixtures)."""
+    for e in os.scandir(src):
+        to, p = dest / e.name, Path(e.path)
+        if top and e.name == FIXTURE_FILE:
+            continue
+        if e.is_dir(follow_symlinks=False):
+            if to.is_symlink() or to.is_file():
+                to.unlink()
+            to.mkdir(exist_ok=True)
+            lay(p, to, top=False)
+            continue
+        if to.is_dir() and not to.is_symlink():
+            shutil.rmtree(to)
+        elif to.is_symlink() or to.exists():
+            to.unlink()
+        if p.is_symlink():
+            to.symlink_to(p.readlink())
+        else:
+            shutil.copy2(p, to)
+
+
+def tree_sha(root: Path) -> str:
+    """The --trees hash of the tree at ROOT (schema.md, Fixtures)."""
+    ents: list[Path] = []
+    for dp, dns, fns in os.walk(root):
+        ents += [Path(dp, n) for n in fns] + [Path(dp, n) for n in dns if Path(dp, n).is_symlink()]
+    h = hashlib.sha256()
+
+    def field(b: bytes) -> bytes:
+        return str(len(b)).encode() + b":" + b
+
+    for p in sorted(ents, key=lambda p: os.fsencode(p.relative_to(root).as_posix())):
+        link = p.is_symlink()
+        kind = b"l" if link else b"x" if p.stat().st_mode & 0o100 else b"f"
+        h.update(field(os.fsencode(p.relative_to(root).as_posix())) + kind + field(os.fsencode(p.readlink()) if link else p.read_bytes()))
+    return h.hexdigest()
+
+
+def tree_line(evals: Path, fx: object, scratch: Path) -> str:
+    """A --trees line's last field for case fixture FX (schema.md, Fixtures); raises FixtureError on a refused base."""
+    if isinstance(fx, dict):
+        f = cast("dict[str, object]", fx)
+        return f"history {f.get('repo')}@{f.get('commit')}"
+    return tree_sha(fixture_tree(evals, str(fx), scratch))
+
+
+def tree_lines(evals: Path, suite: Path, scratch: Path, errs: list[str]) -> list[str]:
+    """--trees' lines for SUITE (schema.md, Fixtures); a refused base goes to ERRS."""
+    out: list[str] = []
+    cases = cast("object", load(suite / "cases.json", errs))
+    for c in cast("list[object]", cases) if isinstance(cases, list) else []:
+        cd = cast("dict[str, object]", c) if isinstance(c, dict) else {}
+        h = cd.get("head")
+        hd = cast("dict[str, object]", h) if isinstance(h, dict) else {}
+        then, bs = hd.get("then"), cd.get("branches")
+        trees: list[tuple[str, object]] = [("fixture", cd.get("fixture")), ("head", hd.get("fixture"))]
+        for key, ts in (("head.then", then), ("branches", bs)):   # every tree the case repo commits (schema.md, Case)
+            trees += [(f"{key}[{i}]", cast("dict[str, object]", t).get("fixture") if isinstance(t, dict) else None)
+                      for i, t in enumerate(cast("list[object]", ts) if isinstance(ts, list) else [])]
+        for which, fx in trees:
+            if not isinstance(fx, (str, dict)):
+                continue
+            try:
+                out.append(f"{suite.name} {cd.get('id')} {which} {tree_line(evals, cast('object', fx), scratch)}")
+            except FixtureError as e:
+                errs.append(f"{suite.name}/cases.json case {cd.get('id')}: field {'' if which == 'fixture' else which + '.'}fixture: {e}")
+    return out
+
+
+def trees_main(argv: list[str]) -> int:
+    """--trees [EVALS_DIR] (schema.md, Fixtures): exit 1 on a refused base, 2 when EVALS_DIR is not a dir."""
+    evals = Path(argv[0]) if argv else KIT / "evals"
+    if not evals.is_dir():
+        print(f"check-evals: no evals dir {evals}", file=sys.stderr)
+        return 2
+    errs: list[str] = []
+    with tempfile.TemporaryDirectory(prefix="check-evals-trees-") as s:
+        for d in sorted(p for p in evals.iterdir() if p.is_dir() and p.name != "fixtures"):
+            for line in tree_lines(evals, d, Path(s), errs):
+                print(line)
+    for e in errs:
+        print(f"check-evals: {e}", file=sys.stderr)
+    return 1 if errs else 0
+
+
+def export_main(argv: list[str]) -> int:
+    """--export DIR [EVALS_DIR] (schema.md, Fixtures): exit 1 on a refused base, 2 on bad usage or a non-empty DIR."""
+    if len(argv) not in (1, 2):
+        print("check-evals: usage: check-evals --export DIR [EVALS_DIR]", file=sys.stderr)
+        return 2
+    out, evals = Path(argv[0]), Path(argv[1]) if len(argv) == 2 else KIT / "evals"
+    if not evals.is_dir():
+        print(f"check-evals: no evals dir {evals}", file=sys.stderr)
+        return 2
+    if out.exists() and not (out.is_dir() and not any(out.iterdir())):
+        print(f"check-evals: --export DIR {out} exists and is not an empty dir", file=sys.stderr)
+        return 2
+    errs: list[str] = []
+    with tempfile.TemporaryDirectory(prefix="check-evals-export-") as s:
+        for p in fixture_dirs(evals):
+            try:
+                tree = fixture_tree(evals, p.name, Path(s))
+            except FixtureError as e:
+                errs.append(str(e))
+                continue
+            (out / p.name).mkdir(parents=True)
+            lay(tree, out / p.name)
+    for e in errs:
+        print(f"check-evals: {e}", file=sys.stderr)
+    return 1 if errs else 0
+
+
+SCRATCH: list[Path] = []   # check-evals' own fixture reads: one scratch dir per process, removed at exit
+
+
+def scratch() -> Path:
+    """check-evals' scratch dir for the based fixtures its checks read, made on first use."""
+    if not SCRATCH:
+        SCRATCH.append(Path(tempfile.mkdtemp(prefix="check-evals-")))
+        atexit.register(shutil.rmtree, SCRATCH[0], ignore_errors=True)
+    return SCRATCH[0]
+
+
+def read_tree(evals: Path, name: str) -> Path | None:
+    """Fixture NAME's materialized tree for check-evals' own checks; None when refused (fixture_errors reports it)."""
+    try:
+        return fixture_tree(evals, name, scratch())
+    except FixtureError:
+        return None
+
+
+def refusal(evals: Path, name: str) -> str:
+    """Why fixture NAME's tree is refused (schema.md, Fixtures), else ""."""
+    try:
+        fixture_tree(evals, name, scratch())
+    except FixtureError as e:
+        return str(e)
+    return ""
+
+
+def fixture_errors(evals: Path) -> list[str]:
+    """Every fixture dir's refused base and base duplicate (schema.md, Fixtures), each message once."""
+    out: list[str] = []
+    for p in fixture_dirs(evals):
+        e = refusal(evals, p.name)
+        if e and e not in out:
+            out.append(e)
+        if not e:
+            out += base_duplicates(evals, p.name) + ancestor_duplicates(evals, p.name) + pool_duplicates(evals, p.name)
+    return out + cross_duplicates(evals)
+
+
+def entry(p: Path) -> tuple[str, bytes] | None:
+    """P as a tree holds it (schema.md, Fixtures): a symlink's target, else a file's exec bit and bytes; None for neither."""
+    if p.is_symlink():
+        return "l", os.fsencode(p.readlink())
+    if p.is_file():
+        return ("x" if p.stat().st_mode & 0o100 else "f"), p.read_bytes()
+    return None
+
+
+def base_duplicates(evals: Path, name: str) -> list[str]:
+    """Fixture NAME's base duplicates (rule: schema.md, Fixtures), one message each."""
+    top = evals / "fixtures" / name
+    if not (top / FIXTURE_FILE).exists():
+        return []
+    chain = bases(evals, name)
+    if not chain:
+        return []
+    base, src = fixture_tree(evals, chain[0], scratch()), sources(evals, chain[0])
+    out: list[str] = []
+    for dp, dns, fns in os.walk(top):
+        for n in sorted(fns + [d for d in dns if Path(dp, d).is_symlink()]):
+            rel = Path(dp, n).relative_to(top)
+            if rel.as_posix() == FIXTURE_FILE or any(base.joinpath(*rel.parts[:i]).is_symlink() for i in range(1, len(rel.parts))):
+                continue
+            if entry(Path(dp, n)) is not None and entry(Path(dp, n)) == entry(base / rel):
+                out.append(f"fixtures/{name}/{rel.as_posix()}: field base: the same file base {chain[0]} supplies "
+                           f"({src[rel.as_posix()]}); delete it: the base supplies it (sources: check-evals --sources {name})")
+    return out
+
+
+def ancestor_duplicates(evals: Path, name: str) -> list[str]:
+    """Fixture NAME's ancestor restores (rule: schema.md, Fixtures), one message each."""
+    top, chain = evals / "fixtures" / name, bases(evals, name)
+    if not chain:
+        return []
+    base, owns = fixture_tree(evals, chain[0], scratch()), {a: set(own(evals / "fixtures" / a)) for a in chain}
+    out: list[str] = []
+    for rel in own(top):
+        e = entry(top / rel)
+        a = next((a for a in chain if rel in owns[a] and entry(evals / "fixtures" / a / rel) == e), None)
+        if a and e is not None and e != entry(base / rel):
+            out.append(f"fixtures/{name}/{rel}: field pool: the same file ancestor {a} holds (fixtures/{a}/{rel}), which a nearer base "
+                       f"overrides; move it to fixtures/{POOL}/ and list it in both (sources: check-evals --sources {name})")
+    return out
+
+
+def pool_duplicates(evals: Path, name: str) -> list[str]:
+    """Fixture NAME's pool duplicates (rule: schema.md, Fixtures), one message each."""
+    top, pool = evals / "fixtures" / name, evals / "fixtures" / POOL
+    files = {entry(f): f.name for f in sorted(pool.iterdir()) if f.is_file() and not f.is_symlink()} if pool.is_dir() else {}
+    out = [f"fixtures/{name}/{rel}: field pool: the same file as pool file {files[entry(top / rel)]} "
+           f"(fixtures/{POOL}/{files[entry(top / rel)]}); delete it and list it in pool (sources: check-evals --sources {name})"
+           for rel in own(top) if entry(top / rel) in files]
+    chain = bases(evals, name)
+    if (top / FIXTURE_FILE).exists() and chain:
+        base = fixture_tree(evals, chain[0], scratch())
+        for k, v in manifest(evals, name)[1].items():
+            if entry(base / k) == entry(pool / v):
+                out.append(f"fixtures/{name}/{FIXTURE_FILE}: field pool: {k}: the same file base {chain[0]} supplies; drop it from pool "
+                           f"(sources: check-evals --sources {name})")
+    return out
+
+
+def cross_duplicates(evals: Path) -> list[str]:
+    """Every cross-fixture duplicate (rule: schema.md, Fixtures), one message per holder naming the first other."""
+    chains: dict[str, set[str]] = {}
+    held: dict[tuple[str, tuple[str, bytes]], list[str]] = {}
+    for p in fixture_dirs(evals):
+        if refusal(evals, p.name):
+            continue
+        chains[p.name] = set(bases(evals, p.name))
+        for rel in own(p):
+            e = entry(p / rel)
+            if e is not None:
+                held.setdefault((rel, e), []).append(p.name)
+    out: list[str] = []
+    for (rel, _), names in sorted(held.items()):
+        for a in names:
+            b = next((b for b in names if b != a and a not in chains[b] and b not in chains[a]), None)
+            if b:
+                out.append(f"fixtures/{a}/{rel}: field pool: the same file fixture {b} holds (fixtures/{b}/{rel}); "
+                           f"move it to fixtures/{POOL}/ and list it in both (sources: check-evals --sources {a})")
+    return out
 
 
 def load(path, errs, holds=None):
@@ -170,7 +557,7 @@ def check_suite(d, evals, errs):
             continue
         tree = seen_tree(cast("dict[str, object]", c))   # the tree the agent sees
         check_exp(f"{name}/reference/expectations.json case {cid}", exp, errs,
-                  evals / "fixtures" / tree if isinstance(tree, str) and re.fullmatch(r"[A-Za-z0-9._-]+", tree) else None,
+                  read_tree(cast("Path", evals), tree) if isinstance(tree, str) else None,
                   review="review" in c and "review" in extra)
         if not isinstance(exp, dict) or not isinstance(exp.get("facts"), list):
             continue
@@ -527,8 +914,8 @@ def pi_role():
 def declares_tests(evals, name):
     """Fixture NAME declares its tests (rule: schema.md, Before targets, test_write). A missing fixture dir is
     reported elsewhere."""
-    fx = evals / "fixtures" / name
-    if not (re.fullmatch(r"[A-Za-z0-9._-]+", name) and fx.is_dir()):
+    fx = read_tree(cast("Path", evals), cast("str", name))   # its materialized tree (schema.md, Fixtures)
+    if fx is None:
         return True
     try:
         tp = tomllib.loads((fx / "pyproject.toml").read_text(encoding="utf-8")).get("tool", {}).get("pytest", {}).get("ini_options", {}).get("testpaths")
@@ -542,7 +929,8 @@ def fixture_trackers(evals, errs):
     pr = pi_role()
     have = pr.kit_trackers(str(KIT / ".agents" / "skills"))
     out = set()
-    for fx in sorted(p for p in (evals / "fixtures").glob("*") if p.is_dir()):
+    for fx in fixture_dirs(cast("Path", evals)):
+        fx = read_tree(cast("Path", evals), fx.name) or fx   # its materialized tree (schema.md, Fixtures)
         cfg, name = fx / ".octo-feather.toml", pr.DEFAULT_TRACKER
         if cfg.is_file():
             try:
@@ -728,10 +1116,13 @@ def check_fields(fa, f, errs):
 def main(argv):
     if argv[:1] in (["-h"], ["--help"]):
         print(__doc__.strip()); return 0
+    sub = {"--trees": trees_main, "--export": export_main, "--sources": sources_main}.get(str(cast("object", argv[0]))) if argv else None
+    if sub:
+        return sub(cast("list[str]", argv[1:]))
     evals = Path(argv[0]) if argv else KIT / "evals"
     if not evals.is_dir():
         print(f"check-evals: no evals dir {evals}", file=sys.stderr); return 2
-    errs, n, suites = [], 0, 0
+    errs, n, suites = fixture_errors(evals), 0, 0
     judgment = False
     for d in sorted(p for p in evals.iterdir() if p.is_dir() and p.name != "fixtures"):
         suites += 1

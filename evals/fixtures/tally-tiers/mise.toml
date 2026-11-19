@@ -1,5 +1,0 @@
-# Native tool pins, as templates/python's mise.toml: mise's shims for uv and just resolve to these. [tools] only, so
-# mise reads it without `mise trust`.
-[tools]
-uv = "0.13.1"
-just = "1.21.0"

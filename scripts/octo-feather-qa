@@ -152,8 +152,11 @@ id) in evals/SUITE/cases.json or reference/expectations.json differs, each named
 launches with are asked of the launcher at HEAD, `scripts/pi-role --json agents/<role>.md` (its --skill and
 --extension args), run from an empty dir, so a skill a case's fixture selects is compared as a fixture file; a path
 outside the repo (an external skill) is not compared, and a launcher that lists no launch is insufficient evidence,
-naming it. Fixture trees: evals/fixtures/<name>/ for each fixture dir the case names at any depth (every string value
-of a `fixture` key; a history fixture {repo, commit} is pinned by its commit). The grader (this
+naming it. Fixture trees: for each fixture the case names at any depth (every string value of a `fixture` key; a
+history fixture {repo, commit} is pinned by its commit), its materialized tree (schema.md, Fixtures) at K and at HEAD,
+each rev's evals/ exported from git into scratch and built by this kit's materializer, hashed as `check-evals --trees`
+hashes it: a different hash is stale, `evals/fixtures/<name> tree changed`; a materializer refusal on either side is
+insufficient evidence, naming it. So a fixture rewritten onto a base or pool with the same tree stays fresh. The grader (this
 script) is not in the set: a grading change shows as an expectations change or a rerun. Prints one line per
 argument: the verdict (PASS, FAIL, or INSUFFICIENT when not fresh or not readable), SUITE/CASE, the stored verdict,
 the run id, kit sha, runs passed/total, and its freshness against HEAD, each stale file named. Insufficient
@@ -176,6 +179,7 @@ from pathlib import Path
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from types import ModuleType
 
 KIT = Path(__file__).resolve().parent.parent
 SELF = KIT / "scripts" / "octo-feather-qa"
@@ -1108,17 +1112,23 @@ def export(repo: Path, sha: str, dest: Path) -> str | None:
     return None if a.wait() == 0 and x.returncode == 0 else (gerr or x.stderr.strip() or "git archive failed")
 
 
-def fixture_src(evals: Path, fixture: object, scratch: Path) -> Path:
-    """The tree a case's fixture names (schema.md, Case): evals/fixtures/<name>, or a history fixture's repo at its commit,
-    exported into SCRATCH/history-<sha>. Raises RuntimeError when that repo or commit cannot be exported."""
-    if not isinstance(fixture, dict):
-        return evals / "fixtures" / str(fixture)
-    fx = cast("Result", fixture)
+def check_evals() -> "ModuleType":
+    """scripts/check-evals as a module: the one fixture materializer, fixture_tree, and its tree_sha (schema.md, Fixtures)."""
     loader = importlib.machinery.SourceFileLoader("check_evals", str(KIT / "scripts" / "check-evals"))
     spec = importlib.util.spec_from_loader("check_evals", loader)
     assert spec is not None
     mod = importlib.util.module_from_spec(spec)
     loader.exec_module(mod)
+    return mod
+
+
+def fixture_src(evals: Path, fixture: object, scratch: Path) -> Path:
+    """The tree a case's fixture names (schema.md, Case): check-evals' fixture_tree (schema.md, Fixtures), or a history fixture's repo at its commit, exported into SCRATCH/history-<sha>. Raises
+    RuntimeError when a base is refused or that repo or commit cannot be exported."""
+    mod = check_evals()
+    if not isinstance(fixture, dict):
+        return cast("Path", mod.fixture_tree(evals, str(fixture), scratch))
+    fx = cast("Result", fixture)
     repo = cast("Path | None", mod.history_repo(fx.get("repo")))
     if repo is None:
         raise RuntimeError(f"history fixture: unknown repo {fx.get('repo')!r}")
@@ -2135,6 +2145,32 @@ def entry_change(top: str, sha: str, head: str, rel: str, cid: str) -> str | Non
     return f"{rel} case {cid} " + ("added" if was is None else "deleted" if now is None else "changed")
 
 
+def trees_changed(top: str, sha: str, head: str, names: list[str]) -> tuple[list[str], list[str]]:
+    """(refusals, changes) of fixtures NAMES' materialized trees between the run's kit SHA and HEAD: each rev's evals/
+    exported from git into scratch outside the repo, each tree built by this kit's materializer (check-evals
+    fixture_tree) and hashed as `check-evals --trees` does (schema.md, Fixtures)."""
+    if not names:
+        return [], []
+    mod = check_evals()
+    bad: list[str] = []
+    seen: dict[str, dict[str, str]] = {}
+    with tempfile.TemporaryDirectory(prefix="qa-verdict-trees-") as tmp:
+        for rev in dict.fromkeys((sha, head)):
+            d = Path(tmp) / rev
+            d.mkdir()
+            err = export(Path(top), rev, d)
+            if err is not None:
+                bad.append(f"evals/ at {rev[:12]} not exported: {err}")
+                continue
+            try:
+                seen[rev] = {n: str(mod.tree_sha(mod.fixture_tree(d / "evals", n, d / "scratch"))) for n in names}
+            except mod.FixtureError as e:
+                bad.append(f"a fixture tree at {rev[:12]} refused: {e}")
+    if bad:
+        return bad, []
+    return [], [f"evals/fixtures/{n} tree changed" for n in names if seen[sha][n] != seen[head][n]]
+
+
 def pinned(root: Path, top: str, head: str, arg: str) -> tuple[str, str, list[str]]:
     """(verdict PASS, FAIL or INSUFFICIENT, its line, what makes it insufficient) for one RUN_ID/SUITE/CASE."""
     rid, suite, cid = arg.split("/")
@@ -2172,8 +2208,10 @@ def pinned(root: Path, top: str, head: str, arg: str) -> tuple[str, str, list[st
         fx = sorted({n for i, _, _ in got for n in fixture_names({k: v for k, v in i.items() if k not in RUN_INPUT_KEYS})})
         asked = [launched(top, r) for r in role]
         missing += [why for _, why in asked if why]
-        paths = [*(f"agents/{r}.md" for r in role), *LAUNCH_PATHS, *sorted({p for ps, _ in asked for p in ps}),
-                 *(f"evals/fixtures/{n}/" for n in fx)]
+        paths = [*(f"agents/{r}.md" for r in role), *LAUNCH_PATHS, *sorted({p for ps, _ in asked for p in ps})]
+        bad, changed = trees_changed(top, sha, head, fx)
+        missing += bad
+        stale += changed
         diff = subprocess.run(["git", "-C", top, "diff", "--no-renames", "--name-status", sha, head, "--", *paths],
                               capture_output=True, text=True)
         how = {"A": "added", "D": "deleted"}

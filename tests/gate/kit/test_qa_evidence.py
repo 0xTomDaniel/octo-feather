@@ -3,11 +3,13 @@ docstring), each run as that file's command through `case` (tests/gate/kit/conft
 
 from collections.abc import Callable
 
+import pytest
 from qa_evidence import block, usage
 
 Case = Callable[..., None]
 
 
+@pytest.mark.criterion("quality#acceptance-qa-evidence-block")
 def test_block(case: Case) -> None:
     case(block)
 

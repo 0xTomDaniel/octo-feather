@@ -214,7 +214,7 @@ def cli_rules(s: Scratch) -> None:
     assert "runs 1/2 passed" in out, out
     exps = "evals/s1/reference/expectations.json"
     for files, named in (
-        ((("evals/fixtures/fx/a.txt", "fixture, changed\n"),), "evals/fixtures/fx/a.txt changed"),
+        ((("evals/fixtures/fx/a.txt", "fixture, changed\n"),), "evals/fixtures/fx tree changed"),
         (
             ((".agents/skills/s/SKILL.md", "the skill, changed\n"),),
             ".agents/skills/s/SKILL.md changed",
@@ -234,6 +234,20 @@ def cli_rules(s: Scratch) -> None:
         change(s, r, h1, files)
         out = verdict(s, r, PIN, want=0)
         assert want in out, out
+    # fx rewritten as base fixture `bs` plus a manifest (schema.md, Fixtures): the same tree, fresh;
+    # a byte of the base changed: fx's tree changed.
+    s.git(r, "reset", "-q", "--hard", h1)
+    (r / "evals/fixtures/bs").mkdir()
+    s.git(r, "mv", "evals/fixtures/fx/a.txt", "evals/fixtures/bs/a.txt")
+    (r / "evals/fixtures/fx/.eval-fixture.json").write_text(json.dumps({"base": "bs"}))
+    s.git(r, "add", "-A")
+    s.git(r, "commit", "-qm", "fx onto base bs")
+    out = verdict(s, r, PIN, want=0)
+    assert want in out, out
+    (r / "evals/fixtures/bs/a.txt").write_text("fixture, changed\n")
+    s.git(r, "commit", "-qam", "base byte")
+    out = verdict(s, r, PIN, want=77)
+    assert "evals/fixtures/fx tree changed" in out.splitlines()[-1], out
     s.git(r, "reset", "-q", "--hard", h1)
     store(s, "0" * 40, run="20260101T000000Z-0bad00")
     out = verdict(s, r, "20260101T000000Z-0bad00/s1/c1", want=77)
