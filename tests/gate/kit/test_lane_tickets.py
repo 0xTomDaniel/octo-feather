@@ -14,6 +14,7 @@ from lane_tickets import (
     rules,
     scopes,
     scripts,
+    skills_lines,
     tickets_github,
 )
 
@@ -62,3 +63,7 @@ def test_linear(case: Case) -> None:
 
 def test_mcp_demos(case: Case) -> None:
     case(mcp_demos)
+
+
+def test_skills_lines(case: Case) -> None:
+    case(skills_lines)

@@ -1075,6 +1075,64 @@ def linear(s: Scratch) -> None:
     lt.read_only()
 
 
+def sk(line: str) -> str:
+    """#101's draft with LINE under the to-tickets template's `## Skills` heading."""
+    return body("101.md").replace("## Blocked by", f"## Skills\n\n{line}\n\n## Blocked by")
+
+
+def skills_lines(s: Scratch) -> None:
+    """A draft's `Skills:` line (spec issue-lifecycle #lanes-tickets): each named skill must be
+    one agents/implementer.md is offered, {tracker} as the target's tracker skill, else class
+    unknown-skill naming it, one line each; `Skills: none` and a line only inside an HTML comment
+    or fence count as written. With no line, the code default (skills_line optional) passes;
+    skills_line = "required" fails class missing-skills, a value off the list is exit 2."""
+    lt = Lt(s)
+    toml = lt.repo / ".octo-feather.toml"
+    for line in ("Skills: tdd, github-issues", "Skills: none", "Skills: `tdd`"):
+        assert lt.lane(0, "ticket", "-", stdin=sk(line)) == "stdin: ok", line
+    out = lt.lane(1, "ticket", "-", stdin=sk("Skills: tdd, linear, nope"))
+    unknown = (
+        "stdin: class: unknown-skill: `Skills:` names `{}`, a skill the implementer role is not "
+        "offered"
+    )
+    has(
+        out,
+        unknown.format("linear"),
+        unknown.format("nope"),
+        "fix: name only skills it is offered (",
+    )
+    hasnt(out, unknown.format("tdd"))
+    assert len(out.splitlines()) == 2, out
+    out = lt.lane(
+        1, "ticket", "-", stdin=sk("Skills: nope\n\n```\nSkills: none\n```\n<!-- Skills: none -->")
+    )
+    has(out, unknown.format("nope"))
+    assert lt.lane(0, "ticket", "-", stdin=body("101.md")) == "stdin: ok"
+    toml.write_text('skills_line = "required"\n')
+    out = lt.lane(1, "ticket", "-", stdin=body("101.md"))
+    has(
+        out,
+        "stdin: class: missing-skills: no `Skills:` line, and the target's .octo-feather.toml sets "
+        'skills_line = "required"; fix: add the to-tickets issue template\'s `## Skills` section',
+    )
+    has(lt.lane(1, "ticket", "-", stdin=sk("<!-- Skills: none -->")), "class: missing-skills")
+    assert lt.lane(0, "ticket", "-", stdin=sk("Skills: none")) == "stdin: ok"
+    toml.write_text('tracker = "linear"\nskills_line = "required"\n')
+    assert lt.lane(0, "ticket", "-", stdin=sk("Skills: linear, tdd")) == "stdin: ok"
+    has(
+        lt.lane(1, "ticket", "-", stdin=sk("Skills: github-issues")),
+        unknown.format("github-issues"),
+    )
+    toml.write_text('skills_line = "maybe"\n')
+    has(
+        lt.lane(2, "ticket", "-", stdin=body("101.md")),
+        "skills_line = 'maybe': set it to 'optional' or 'required', or drop it for the code "
+        "default",
+    )
+    toml.unlink()
+    lt.read_only()
+
+
 if __name__ == "__main__":
     main(
         tickets_github,
@@ -1088,4 +1146,5 @@ if __name__ == "__main__":
         errors,
         linear,
         mcp_demos,
+        skills_lines,
     )
