@@ -436,10 +436,10 @@ step 6 tells no lane twice.
                    ...`, with no wait. merge-ask reads the same fact at the PR head
   step 3 kit refresh  the live kit install (this script's kit dir, or env OCTO_FEATHER_KIT_INSTALL): only when
                    `gh repo view` names the PR's repo and the install's origin alike, else `kit install unchanged:
-                   PR in <repo>, install is <repo>`. Stops, nothing changed, on a dirty install (git status
-                   --porcelain), one on a branch other than the PR's base (a detached HEAD passes, unless the
-                   install is step 4's checkout) or one diverged from the merge commit, and, before the install
-                   moves, on step 4's checkout failing step 4's checks (named as step 4 names it); after `git
+                   PR in <repo>, install is <repo>`. Stops, nothing changed, on what issue-lifecycle
+                   #gates-main-moved refuses, checked on the install and on step 4's checkout before either moves
+                   (an install that is step 4's checkout as that checkout), named `kit install|checkout <path> is
+                   dirty (...)`, `is on <branch|a detached HEAD>, not <base>` or `has diverged ...`; after `git
                    fetch origin`, one behind it
                    fast-forwards (`git merge --ff-only`, a detached HEAD stays detached), one at or past it does
                    not move. Then in the install, each failure stopping named: `octo-feather-mise-install .` (the
@@ -501,21 +501,20 @@ at the close report), 1 with usage on stderr for bad arguments.
 
   octo-feather-lane stale          the live agents on a stale launch set, and those with none recorded
 
-`stale` (issue 1079; spec roles#launch-set, issue-lifecycle#gates-main-moved) lists each agent `herdr agent list`
-names whose launch set is stale, then each whose set is unknown; an agent whose set is current is not named. A
-pane launch (herdr-spawn) records the set against its Pi session (pi-role --help, Launch set); the session is the
-`--session-id` of the pane's Pi process (`herdr pane process-info`, as herdr-close --park reads it). Stale: what
-the recorded launcher lists now for the recorded role file from the recorded working directory (`pi-role
---launch-set`) differs from the record. Lines, kit paths relative to the launcher's kit, skill folders with a
-trailing /:
+`stale` (issue 1079; stale and unknown: spec roles#launch-set; the record: pi-role --help, Launch set) reads
+each agent `herdr agent list` names (checked against Herdr's AgentInfo, a malformed answer named), its session from
+the `--session-id` of its Pi process (`herdr pane process-info`, as herdr-close --park reads it), and asks the
+recorded launcher for the set now with the recorded args and working directory. A current agent is not named.
+Lines, kit paths relative to the launcher's kit, skill folders with a trailing /:
   stale: <pane> <name> role <role>: <path> changed|added|gone, ...
   stale: <pane> <name> role <role>: <role file> launches no more from <cwd> (<why>)
   unknown: <pane> <name> role <role|unknown>: no Pi launched with --session-id (started by hand)
   unknown: <pane> <name> role <role|unknown>: no launch set recorded for session <id> in <dir>
+  unknown: <pane> <name> role <role|unknown>: launch-set record <file> unreadable|malformed (<what>)
   unknown: <pane> <name>: its process not read (<Herdr's error>)
   stale agents: <n> stale, <n> unknown, <n> current of <n> live
-It relaunches nothing. Exit 0; 1 when Herdr's agent list cannot be read, its one line `stale agents: not read:
-<why>`. post-merge step 5 prints the same report.
+It relaunches nothing. Exit 0; 1 when Herdr's agent list cannot be read or is malformed, its one line `stale
+agents: not read: <why>`. post-merge step 5 prints the same report.
 
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
@@ -4184,7 +4183,7 @@ def pm_top() -> Path:
 
 # Step 4 (issue 1078): --help, step 4.
 def pm_checkout(pm: PostMerge) -> str:
-    """Step 4: fast-forward the director's checkout to the merge commit, or stop naming it and why."""
+    """Step 4 (--help, step 4); its line."""
     top = pm_top()
     if os.path.realpath(top) == os.path.realpath(kit_install()):
         return f"checkout {top} is the kit install, which step 3 moves: no second move"
@@ -4540,8 +4539,7 @@ def pm_teardown(pm: PostMerge) -> str:
 # --- stale launch sets (issue 1079; rules: --help, stale) ---
 
 def stale_report() -> tuple[list[str], bool]:
-    """One line per live agent on a stale launch set or with none recorded, then the count line (--help, stale);
-    and whether Herdr was read."""
+    """The report's lines (--help, stale) and whether Herdr was read."""
     loader = importlib.machinery.SourceFileLoader("pi_role", str(KIT / "scripts" / "pi-role"))
     pr_spec = importlib.util.spec_from_loader("pi_role", loader)
     assert pr_spec
@@ -4553,23 +4551,19 @@ def stale_report() -> tuple[list[str], bool]:
     scope = sys.modules["herdr_scope"] = importlib.util.module_from_spec(spec)  # its dataclasses look it up there
     spec.loader.exec_module(scope)
     try:
-        got = scope.herdr("agent", "list")
-        agents = cast("dict[str, dict[str, object]]", got)["result"]["agents"]
-        assert isinstance(agents, list)
+        live = scope.agents()
     except scope.HerdrFailedError as e:
         return [f"stale agents: not read: herdr agent list failed ({str(e)[:200]})"], False
-    except (scope.BadAnswerError, KeyError, TypeError, AssertionError) as e:
-        return [f"stale agents: not read: herdr agent list answered no agents list ({str(e)[:200]})"], False
+    except scope.BadAnswerError as e:
+        return [f"stale agents: not read: malformed Herdr answer: {str(e)[:300]}"], False
     except FileNotFoundError:
         return ["stale agents: not read: herdr not on PATH"], False
-    sets = Path(pr.records_dir())
     stale: list[str] = []
     unknown: list[str] = []
     current = 0
-    live = [cast("dict[str, object]", a) for a in cast("list[object]", agents) if isinstance(a, dict)]
-    for a in sorted(live, key=lambda a: str(a.get("pane_id"))):
-        pane = str(a.get("pane_id"))
-        who = f"{pane} {a.get('name') or '(no name)'}"
+    for a in sorted(live, key=lambda a: a.pane_id):
+        pane = a.pane_id
+        who = f"{pane} {a.name or '(no name)'}"
         try:
             info = scope.process_info(pane)
         except (scope.HerdrFailedError, scope.BadAnswerError) as e:
@@ -4581,18 +4575,16 @@ def stale_report() -> tuple[list[str], bool]:
         if found is None:
             unknown.append(f"unknown: {who} role {role or 'unknown'}: no Pi launched with --session-id (started by hand)")
             continue
-        try:
-            rec = cast("dict[str, object]", json.loads((sets / f"{found[1]}.json").read_text()))
-            was = cast("dict[str, object]", rec["files"])
-            role, launcher, role_file, cwd = (str(rec[k]) for k in ("role", "launcher", "role_file", "cwd"))
-        except (OSError, ValueError, KeyError, TypeError):
-            unknown.append(f"unknown: {who} role {role or 'unknown'}: no launch set recorded for session {found[1]} in {sets}")
+        rec = pr.read_record(found[1])
+        if isinstance(rec, str):
+            unknown.append(f"unknown: {who} role {role or 'unknown'}: {rec}")
             continue
+        was, role, launcher, role_file, cwd = rec["files"], rec["role"], rec["launcher"], rec["role_file"], rec["cwd"]
         kit = str(Path(launcher).parent.parent) + os.sep
         def show(f: str, kit: str = kit) -> str:
             return f.removeprefix(kit) if f.startswith(kit) else f
         try:
-            p = subprocess.run([launcher, "--launch-set", role_file], cwd=cwd, capture_output=True, text=True,
+            p = subprocess.run([launcher, "--launch-set", role_file, *rec["args"]], cwd=cwd, capture_output=True, text=True,
                                stdin=subprocess.DEVNULL)
             now = cast("dict[str, object]", json.loads(p.stdout)["files"]) if p.returncode == 0 else None
             why = (p.stderr.strip().splitlines() or [f"exit {p.returncode}"])[-1][:200]

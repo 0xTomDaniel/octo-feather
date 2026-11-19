@@ -52,7 +52,9 @@ process the agent's `pi_pid` a scenario wrote (a real process standing in for it
 argv and cwd read from its /proc, as Herdr does), else none; `tab close` and `workspace
 close` send each closed pane's shell SIGHUP, as Herdr's close does.
 `pane read` shows a ready Pi prompt; `pane send-keys|send-text` log only. `agent list` prints every
-agent in Herdr's envelope ({"id", "result": {"agents"}}), as `agent get` shows one. A file `down`
+agent in Herdr's envelope ({"id", "result": {"agents"}}), as `agent get` shows one, with AgentInfo's
+other required fields (terminal_id, focused, revision) as `pane list` gives them; a file
+`list-answer` holding JSON is printed as its answer instead (a malformed Herdr). A file `down`
 fails every call as a herdr with no server does (`error: could not connect to herdr server`,
 exit 1). Anything else exits 2.
 """
@@ -326,6 +328,20 @@ class World:
             return fail("timeout")
         return say({"agent_status": "idle"})
 
+    def agent_list(self) -> int:
+        told = self.dir / "list-answer"
+        if told.exists():
+            sys.stdout.write(told.read_text() + "\n")
+            return 0
+        agents = [
+            {k: v for k, v in g.items() if k not in HIDDEN}
+            | {"agent_status": self.status(g), "terminal_id": f"term_{g['pane_id']}"}
+            | {"focused": False, "revision": 0}
+            for g in self.agents.values()
+        ]
+        sys.stdout.write(json.dumps({"id": "1", "result": {"agents": agents}}) + "\n")
+        return 0
+
     def call(self, a: list[str]) -> int:
         """One call A, logged."""
         self.note("log", " ".join(a))
@@ -334,12 +350,7 @@ class World:
             return 1
         self.settle()
         if a == ["agent", "list"]:
-            agents = [
-                {k: v for k, v in g.items() if k not in HIDDEN} | {"agent_status": self.status(g)}
-                for g in self.agents.values()
-            ]
-            sys.stdout.write(json.dumps({"id": "1", "result": {"agents": agents}}) + "\n")
-            return 0
+            return self.agent_list()
         two = (a[0], a[1]) if len(a) > 1 else (" ".join(a), "")
         if two == ("pane", "read"):
             sys.stdout.write(" pi\n\n > \n")
