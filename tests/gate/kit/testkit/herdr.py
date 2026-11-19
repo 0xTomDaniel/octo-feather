@@ -47,7 +47,9 @@ once that time passed, the next call has Pi take each queued text (a line in `pr
 agent_status, terminal_id, focused, revision}: PaneInfo's required fields), as Herdr 0.9.5
 does; `pane process-info --pane P` gives P's `shell_pid`: the agent's `shell_pid` a
 scenario wrote (a real process standing in for the pane's shell), else a stand-in shell it starts
-(a real process, ending once this world's dir is gone) and records; `tab close` and `workspace
+(a real process, ending once this world's dir is gone) and records, and as its one foreground
+process the agent's `pi_pid` a scenario wrote (a real process standing in for its Pi: pid, name,
+argv and cwd read from its /proc, as Herdr does), else none; `tab close` and `workspace
 close` send each closed pane's shell SIGHUP, as Herdr's close does.
 `pane read` shows a ready Pi prompt; `pane send-keys|send-text` log only. `agent list` prints every
 agent in Herdr's envelope ({"id", "result": {"agents"}}), as `agent get` shows one. A file `down`
@@ -67,7 +69,7 @@ from pathlib import Path
 
 IDLE_FALLBACK = 0.3  # s: Herdr 0.9.5 reads a booting Pi idle after about 5 s; scaled down
 # the world's own, never shown
-HIDDEN = ("ready_at", "started_at", "reports", "label", "env", "shell_pid")
+HIDDEN = ("ready_at", "started_at", "reports", "label", "env", "shell_pid", "pi_pid")
 INTEGRATION = "// installed by herdr\n// HERDR_INTEGRATION_ID=pi\n"  # the file Herdr writes
 
 
@@ -220,8 +222,15 @@ class World:
             )
             g["shell_pid"] = shell.pid
             self.save()
-        no_fg: list[object] = []
-        info = {"pane_id": p[0], "shell_pid": g["shell_pid"], "foreground_processes": no_fg}
+        fg: list[object] = []
+        pi = g.get("pi_pid")
+        if isinstance(pi, int):
+            proc = Path(f"/proc/{pi}")
+            argv = proc.joinpath("cmdline").read_bytes().decode().split("\0")[:-1]
+            name = proc.joinpath("comm").read_text().strip()
+            cwd = str((proc / "cwd").readlink())
+            fg.append({"pid": pi, "name": name, "argv": argv, "argv0": argv[0], "cwd": cwd})
+        info = {"pane_id": p[0], "shell_pid": g["shell_pid"], "foreground_processes": fg}
         return say({"process_info": info, "type": "pane_process_info"})
 
     def workspace(self, a: list[str]) -> int:
