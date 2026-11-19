@@ -1074,16 +1074,16 @@ def export(repo: Path, sha: str, dest: Path) -> str | None:
 
 
 def fixture_src(evals: Path, fixture: object, scratch: Path) -> Path:
-    """The tree a case's fixture names (schema.md, Case): evals/fixtures/<name>, or a history fixture's repo at its commit,
-    exported into SCRATCH/history-<sha>. Raises RuntimeError when that repo or commit cannot be exported."""
-    if not isinstance(fixture, dict):
-        return evals / "fixtures" / str(fixture)
-    fx = cast("Result", fixture)
+    """The tree a case's fixture names (schema.md, Case): check-evals' fixture_tree (schema.md, Fixtures), or a history fixture's repo at its commit, exported into SCRATCH/history-<sha>. Raises
+    RuntimeError when a base is refused or that repo or commit cannot be exported."""
     loader = importlib.machinery.SourceFileLoader("check_evals", str(KIT / "scripts" / "check-evals"))
     spec = importlib.util.spec_from_loader("check_evals", loader)
     assert spec is not None
     mod = importlib.util.module_from_spec(spec)
     loader.exec_module(mod)
+    if not isinstance(fixture, dict):
+        return cast("Path", mod.fixture_tree(evals, str(fixture), scratch))
+    fx = cast("Result", fixture)
     repo = cast("Path | None", mod.history_repo(fx.get("repo")))
     if repo is None:
         raise RuntimeError(f"history fixture: unknown repo {fx.get('repo')!r}")

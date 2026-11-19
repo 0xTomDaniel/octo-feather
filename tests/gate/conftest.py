@@ -9,7 +9,8 @@ which pytest's junitxml measures on the controller from session start; never a s
 times), exit, tier (`full` only when the invocation narrowed nothing: no paths or node ids, so pytest
 ran its configured testpaths, and no -k, -m, --lf, --sw, --deselect, --ignore or --ignore-glob, and
 the gate's static steps ran: when the root's justfile declares GATE_RECIPES (each a test item), the
-run's GATE_RECIPES is that value, so a bare pytest, which skips them, is no full run; else `subset`),
+run's GATE_RECIPES is that value, so a bare pytest, which skips them, is no full run; and the run was not stopped
+early: -x, --maxfail, or a red static check ending it (session.shouldfail or shouldstop set); else `subset`),
 steps (name, node: its pytest node id, seconds, result: ok, FAIL, ERROR or skipped, cpu_s: below), one per junit
 testcase (under xdist their seconds overlap, so their sum exceeds total_s), load1_start and load1_end (the box's
 1-minute load average when the session starts and when it ends, null where the OS has none: a slow run told apart from
@@ -456,7 +457,8 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
     try:
         if not xml_path:
             raise OSError("no --junitxml for this run")
-        entry = _entry(xml_path, exitstatus, _tier(session.config))
+        stopped = session.shouldfail or session.shouldstop   # it ran part of its items: no full run
+        entry = _entry(xml_path, exitstatus, "subset" if stopped else _tier(session.config))
         entry |= {"load1_start": config.stash.get(_LOAD_START, None), "load1_end": _load1()}
         line = json.dumps(entry, separators=(",", ":"))
         d = _state_dir()

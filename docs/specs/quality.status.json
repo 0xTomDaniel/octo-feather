@@ -188,6 +188,15 @@
       "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
       "tests": []
     },
+    "acceptance-gate-recipes-first": {
+      "status": "built",
+      "pr": 1024,
+      "record": "20261118T230040Z-35853761",
+      "commit": "c5e058283077212072f53d9d2fe4cbde7439b9ff",
+      "tests": [
+        "tests/gate/kit/test_gate_recipes_first.py"
+      ]
+    },
     "acceptance-one-execution": {
       "status": "built",
       "pr": 880,
@@ -279,10 +288,12 @@
     },
     "acceptance-qc-sandbox-maintained": {
       "status": "built",
-      "pr": 741,
-      "record": "20261109T005929Z-dc3114c8",
-      "commit": "0bf82f59dc28baaa417704a81a9f303a4414b598",
-      "tests": []
+      "pr": 1016,
+      "record": "20261118T205851Z-12aced80",
+      "commit": "f50868a1b35649acd8b17c92a45a0b3355bde5c4",
+      "tests": [
+        "tests/gate/kit/test_qc_sandbox_gone.py"
+      ]
     },
     "acceptance-qc-sandbox-cost": {
       "status": "built",

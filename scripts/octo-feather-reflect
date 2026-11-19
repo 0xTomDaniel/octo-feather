@@ -19,7 +19,8 @@ fields, never prose).
 Refused (FailedError, nothing appended): pi-role exit non-zero or past the timeout, no or two
 Questions lines, a Questions line that is not exactly the brief's ids, no Finding line and no
 `Findings: none`, both, a Finding line not in the form, a class not lower-case kebab or starting
-owner-caught-, a question not in the brief, an empty route or summary.
+owner-caught-, a question not in the brief, an empty route or summary, a director reflection's route
+marked `target:` (TARGET: only a lane reflection puts a fix in its lane's own repository).
 
 Environment: OCTO_FEATHER_REFLECT_ARGS extra pi args (e.g. "--model provider/x" to induce a
 failure, "--thinking off" for a cheap smoke); OCTO_FEATHER_REFLECT_TIMEOUT seconds (default 1800).
@@ -35,6 +36,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, cast
@@ -49,6 +51,7 @@ KINDS = ("lane", "director")
 QID = re.compile(r"[a-z0-9][a-z0-9-]*")
 CLASS = re.compile(r"[a-z0-9][a-z0-9-]*")
 SESSIONS = Path("~/.pi/agent/sessions").expanduser()
+TARGET = "target:"  # a route's mark (comms spec #reflection-output)
 
 OUTPUT_FORM = (
     "Reply with exactly these lines and nothing else (no fence, no prose):\n"
@@ -56,7 +59,9 @@ OUTPUT_FORM = (
     "then one line per gap you found:\n"
     "Finding: class: <class, lower-case kebab, never owner-caught-...>"
     " | question: <one question id above>"
-    " | route: <the role, skill, template, command or structure where the fix goes>"
+    " | route: <the role, skill, template, command or structure where the fix goes;"
+    f" a lane reflection only: start it `{TARGET} ` when the fix goes in the lane's own repository,"
+    " not the kit>"
     " | summary: <what happened and what would have caught it first,"
     " citing file:line or the transcript moment>\n"
     "or, when you found no gap, the one line:\n"
@@ -752,9 +757,10 @@ def run_model(text: str, cwd: Path) -> str:
     return p.stdout
 
 
-def finding(line: str, want: list[str]) -> Finding | None:
+def finding(line: str, want: list[str], *, director: bool = False) -> Finding | None:
     """The finding of reply LINE ({class, question, route, summary}), None when it is no Finding
-    line; FailedError when it is one outside OUTPUT_FORM."""
+    line; FailedError when it is one outside OUTPUT_FORM, or a DIRECTOR reflection's marked
+    TARGET."""
     m = FINDING_LINE.match(line)
     if not m:
         return None
@@ -769,8 +775,11 @@ def finding(line: str, want: list[str]) -> Finding | None:
     if q not in want:
         msg = f"finding question {q!r} is not one of {want}"
         raise FailedError(msg)
-    if not route or not summary:
+    if not route.removeprefix(TARGET).strip() or not summary:
         msg = f"finding of class {cls} has an empty route or summary"
+        raise FailedError(msg)
+    if route.startswith(TARGET) and director:
+        msg = f"finding of class {cls}: a director reflection's route is never `{TARGET}`: {route}"
         raise FailedError(msg)
     return {"class": cls, "question": q, "route": route, "summary": summary}
 
@@ -789,7 +798,8 @@ def parse(reply: str, qs: list[Question]) -> tuple[list[Finding], list[str]]:
         msg = f"reflector answered questions {got}, want each of {want} once"
         raise FailedError(msg)
     none = any(NONE_LINE.match(line) for line in lines)
-    found = [f for line in lines if (f := finding(line, want)) is not None]
+    director = any(q["kind"] == "director" for q in qs)
+    found = [f for line in lines if (f := finding(line, want, director=director)) is not None]
     if bool(found) == none:
         msg = (
             "reflector reply has both Finding lines and `Findings: none`"
@@ -846,31 +856,35 @@ BLOCKERS = (
     "qc",
 )  # the finding sources that count, blocking only (#lanes-correction)
 GATE = "owner-caught-"  # the director's (issue-lifecycle #acceptance-gate-correction-lane)
-DIRECTOR = "director"  # a Due's owner when no lane log holds the subject's findings
-KIT_REPO = "0xTomDaniel/octo-feather"  # the kit's tracker: the director's correction lanes
+DIRECTOR = "director"  # the director log's name among the logs: a run of the kit's
+KIT_REPO = "0xTomDaniel/octo-feather"  # the kit's tracker: every route but a lane's TARGET one
 
 
 @dataclass(frozen=True)
 class Due:
     """One correction lane the rule makes due, before the tracker is asked: its class, the findings
-    it quotes as (log, line), the reflections' routes, the latest finding's `at`, and its owners:
-    the lanes holding its latest lane finding, or (DIRECTOR,) when no lane log holds one."""
+    it quotes as (log, line), the reflection findings giving its routes as (log, line) and the
+    latest finding's `at`; as one tracker files it (`owned`), FOREIGN the logs quoted minimally
+    and whose routes go unnamed (which: comms spec #reflection-correction)."""
 
     cls: str
     findings: list[tuple[str, LogLine]]
-    routes: list[str]
+    routes: list[tuple[str, LogLine]]
     latest: str
-    owners: tuple[str, ...]
+    foreign: frozenset[str] = frozenset()
 
     def title(self) -> str:
         what = "change the question list" if self.cls == MISSED else "repeated finding class"
         return f"{MARK.format(self.cls)} {what}: {self.cls}"
 
     def route(self) -> str:
-        return "; ".join(self.routes) or "none given by a reflection"
+        named = dict.fromkeys(str(d["route"]) for log, d in self.routes if log not in self.foreign)
+        if not named and self.routes:
+            return "given only by lanes of another repository"
+        return "; ".join(named) or "none given by a reflection"
 
     def body(self) -> str:
-        quoted = [quote(log, d) for log, d in self.findings]
+        quoted = [quote(log, d, minimal=log in self.foreign) for log, d in self.findings]
         changes = (
             "Changes: the question list, reflection/questions.json"
             " (comms spec #reflection-questions)"
@@ -892,8 +906,11 @@ class Due:
         )
 
 
-def quote(log: str, d: LogLine) -> str:
-    """Finding line D of LOG as an issue or comment quotes it: its run (LOG), date and source."""
+def quote(log: str, d: LogLine, *, minimal: bool = False) -> str:
+    """Finding line D of LOG as an issue or comment quotes it: its run (LOG), date and source;
+    MINIMAL (when: comms spec #reflection-correction): its run, date and class only."""
+    if minimal:
+        return f"- {log} {d.get('at')} {d.get('class')}"
     return (
         f"- {log} {d.get('at')} {d.get('source') or DIRECTOR}"
         + (f" ({d['question']})" if d.get("question") else "")
@@ -914,14 +931,14 @@ def corrections(logs: dict[str, list[LogLine]], director: list[LogLine]) -> list
     class names the routes its reflection findings gave; reflection-missed findings are a due per
     log, its own lane's or the director's."""
     by: dict[tuple[str, str], list[tuple[str, LogLine]]] = {}
-    routed: dict[str, list[str]] = {}
+    routed: dict[str, list[tuple[str, LogLine]]] = {}
     for log, lines in [*logs.items(), (DIRECTOR, director)]:
         for d in lines:
             cls = d.get("class")
             if d.get("kind") != "finding" or not isinstance(cls, str) or cls.startswith(GATE):
                 continue
             if d.get("route"):
-                routed.setdefault(cls, []).append(str(d["route"]))
+                routed.setdefault(cls, []).append((log, d))
             if cls == MISSED or counts(log, d):  # reflection-missed: due at once
                 by.setdefault((cls, log if cls == MISSED else ""), []).append((log, d))
     out: list[Due] = []
@@ -929,22 +946,52 @@ def corrections(logs: dict[str, list[LogLine]], director: list[LogLine]) -> list
         if cls != MISSED and len({log for log, _ in found}) < REPEAT:
             continue
         latest = max(str(d.get("at") or "") for _, d in found)
-        lane = [(str(d.get("at") or ""), log) for log, d in found if log != DIRECTOR]
-        top = max((at for at, _ in lane), default=None)
-        owners = tuple(sorted({log for at, log in lane if at == top})) or (DIRECTOR,)
         routes = (
-            [str(d["route"]) for _, d in found if d.get("route")]
+            [(log, d) for log, d in found if d.get("route")]
             if cls == MISSED
             else routed.get(cls, [])
         )
-        routes = list(dict.fromkeys(routes))
-        out.append(Due(cls, found, routes, latest, owners))
+        out.append(Due(cls, found, routes, latest))
+    return out
+
+
+def owned(due: Due, repos: dict[str, str | None]) -> list[tuple[str | None, Due, list[str]]]:
+    """The trackers DUE files in and what each quotes (the rule: comms spec #reflection-correction),
+    each (its repository, the Due as that tracker files it, the lane logs whose TARGET routes name
+    it), REPOS each lane log's record's repository (None: it names none, refused by the caller).
+    A kit lane's TARGET route is the kit's; a target's Due also quotes the reflection findings
+    giving its routes, so it never quotes none."""
+
+    def repo(log: str) -> str | None:
+        r = KIT_REPO if log == DIRECTOR else repos.get(log)
+        return KIT_REPO if r and r.lower() == KIT_REPO.lower() else r
+
+    logs = {log for log, _ in [*due.findings, *due.routes]}
+    targets: dict[str | None, list[str]] = {}
+    kit = due.cls == MISSED or not due.routes
+    for log, d in due.routes:
+        if due.cls != MISSED and repo(log) != KIT_REPO and str(d["route"]).startswith(TARGET):
+            targets.setdefault(repo(log), []).append(log)
+        else:
+            kit = True
+    out: list[tuple[str | None, Due, list[str]]] = []
+    if kit:
+        foreign = frozenset(log for log in logs if repo(log) != KIT_REPO)
+        out.append((KIT_REPO, Due(due.cls, due.findings, due.routes, due.latest, foreign), []))
+    for t, by in targets.items():
+        routes = [
+            (log, d) for log, d in due.routes if log in by and str(d["route"]).startswith(TARGET)
+        ]
+        found = [(log, d) for log, d in due.findings if repo(log) == t]
+        found = sorted([*found, *routes], key=lambda f: str(f[1].get("at") or ""))
+        latest = max(str(d.get("at") or "") for _, d in found)
+        out.append((t, Due(due.cls, found, routes, latest), by))
     return out
 
 
 def merge(dues: list[Due]) -> list[Due]:
     """DUES landing in one tracker as one Due per class: its findings (by date), routes, latest
-    and owners together."""
+    and foreign logs together."""
     by: dict[str, list[Due]] = {}
     for d in dues:
         by.setdefault(d.cls, []).append(d)
@@ -954,9 +1001,9 @@ def merge(dues: list[Due]) -> list[Due]:
         else Due(
             cls,
             sorted((f for d in ds for f in d.findings), key=lambda f: str(f[1].get("at") or "")),
-            list(dict.fromkeys(x for d in ds for x in d.routes)),
+            [x for d in ds for x in d.routes],
             max(d.latest for d in ds),
-            tuple(sorted({o for d in ds for o in d.owners})),
+            frozenset(o for d in ds for o in d.foreign),
         )
         for cls, ds in by.items()
     ]
@@ -985,25 +1032,39 @@ def still_due(due: Due, issues: list[dict[str, Any]]) -> bool:
     return due.latest > max(str(i.get("closedAt") or "") for i in mine)
 
 
+QUOTED = re.compile(r"(?m)^- (\S+) (\d{4}-\d\d-\d\dT\S+)(?: |$)")  # a quote's run and date
+
+
+def quoted(text: str) -> list[tuple[str, str]]:
+    """The (run, date) of each finding TEXT quotes, full or minimal (`quote`), once per quote."""
+    return QUOTED.findall(text)
+
+
 def recurrence(due: Due, issues: list[dict[str, Any]]) -> tuple[dict[str, Any], str] | None:
     """The issue among ISSUES ({..., body, comments: [{body}]}) and the comment for DUE on a
     recurrence (comms spec #reflection-correction): the oldest open of its class; the running count,
-    the distinct findings its issues and this comment quote. None when it adds none."""
+    the findings its issues and this comment quote. None when it adds none. A finding is known by
+    its run and date (`quoted`), so a full quote and a minimal one of it are the same finding."""
     mine = of_class(due, issues)
     first = next((i for i in mine if is_open(i)), None)
     if first is None:
         return None
-    said = [str(i.get("body") or "") for i in mine]
-    comments = [cast("list[dict[str, Any]]", i.get("comments") or []) for i in mine]
-    said += [str(c.get("body") or "") for cs in comments for c in cs]
-    new = [quote(log, d) for log, d in due.findings if not any(quote(log, d) in t for t in said)]
+    said: Counter[tuple[str, str]] = Counter()
+    for i in mine:  # the most any one issue quotes: duplicate issues quote the same findings
+        cs = cast("list[dict[str, Any]]", i.get("comments") or [])
+        texts = [str(i.get("body") or ""), *(str(c.get("body") or "") for c in cs)]
+        said |= Counter(k for x in texts for k in quoted(x))
+    runs: dict[tuple[str, str], list[str]] = {}
+    for log, d in due.findings:
+        key = (log, str(d.get("at")))
+        runs.setdefault(key, []).append(quote(log, d, minimal=log in due.foreign))
+    new = [q for key, qs in runs.items() for q in qs[said[key] :]]
     if not new:
         return None
-    quoted = {q for t in said for q in re.findall(r"(?m)^- \S+ \d{4}-\d\d-\d\dT\S+ .*$", t)}
     head = (
         f"Recurrence of class {due.cls} (comms spec #reflection-correction), added by"
         f" `octo-feather-lane reflect`: {len(new)} new finding{'s' if len(new) != 1 else ''};"
-        f" running count {len(quoted | set(new))}."
+        f" running count {sum(said.values()) + len(new)}."
     )
     return first, "\n".join([head, "", *new])
 
