@@ -4,9 +4,10 @@
 #acceptance-reflect-files-correction, #acceptance-reflect-files-route-owner,
 #acceptance-reflect-recurrence-comments, issue-lifecycle #acceptance-reflection-missed-lane,
 #acceptance-writer-route-lane) through `octo-feather-lane archive` and `reflect --director`, in
-testkit.reflector's world: what counts, when a class is due, refiling, recurrence,
-reflection-missed, owner-caught, where each files (the tracker of the repository owning its route,
-#1004) and what it quotes, and the `target:` routes refused.
+testkit.reflector's world: what counts, when a class is due, refiling, recurrence (legacy
+duplicate issues included, #1068), reflection-missed, owner-caught, where each files (the
+tracker of the repository owning its route, #1004) and what it quotes, and the `target:` routes
+refused.
 
 Seams (ticket #937, agreed before any test): (1) the CLI, `octo-feather-lane archive NAME` and
 `octo-feather-lane reflect --director` run as commands over a scratch state dir, the real
@@ -16,7 +17,9 @@ GitHub boundary: the testkit's gh (testkit/gh.py), nothing else standing in: its
 tracker its repository's issues and comments, a filed issue also read off the gh request that
 filed it (sent): its repo (GH_REPO, as issue-create names the route owner's tracker), title and
 body. A target's `repo view` is its store answer, 0xTomDaniel/spec-chat's real gh's recorded one
-(testkit/recordings/repo-view.json, read-only: re-created after its lanes started).
+(testkit/recordings/repo-view.json, read-only: re-created after its lanes started). The kit's
+tracker in recorded_372 is real gh's recorded read-only answers loaded into the store
+(testkit/recordings/reflection-missed-372.json).
 
 Deviations: lifecycle, other_lane, routed and counts replayed real gh's recordings of filing in
 0xTomDaniel/spec-chat (the lanes' target) until #1004; under the route-owner rule they file in the
@@ -43,6 +46,9 @@ PRIV = "owner/exo"  # a private target (exosurface-like): none of its lanes' tex
 STARTED = "2026-11-01T00:00:00Z"  # each scratch lane record's started_at, after PRIV's creation
 # gh 2.102.0, 2026-11-18: `gh repo view 0xTomDaniel/spec-chat --json nameWithOwner,createdAt`.
 VIEW = Path(__file__).parent / "testkit" / "recordings" / "repo-view.json"
+# gh 2.102.0, 2026-11-19, read-only: comment 6997429551 on #372 and the reflection-missed issues
+# quoting its findings, as before it (trimmed: the recording's source).
+TAPE372 = Path(__file__).parent / "testkit" / "recordings" / "reflection-missed-372.json"
 CLOSED_AT = "2026-11-17T21:17:06Z"  # the lifecycle's first issue closed: after gh4's, before gh5's
 GH5_AT = "2026-11-20T00:00:00Z"  # after the lifecycle's first issue closed
 DUP = "[correction-lane duplicated-rule] repeated finding class: duplicated-rule"
@@ -401,6 +407,79 @@ def legacy_quote(s: Scratch) -> None:
     assert issues(s, KIT) == [4], out
 
 
+def legacy_duplicates(s: Scratch) -> None:
+    """#acceptance-reflect-recurrence-comments, the #1068 regression and its demo: lane gh7's log
+    holds three reflection-missed findings of one reflection run (one date), each quoted in full
+    by its own legacy duplicate issue in the kit's tracker (#2 open, #3 closed, #4 open), #5
+    (closed) quoting the first again: `reflect gh7` comments nothing. Its reflection then finds a
+    new gap: one comment, on #2, quoting it alone, running count 4 (each quoted finding once). A
+    rerun finding none adds nothing."""
+    top = reflector(s)
+    at = "2026-11-06T00:00:00Z"
+    old = [f"gh7 old gap {x}" for x in "abc"]
+    q = {"question": "reflection-missed", "route": "r"}
+    lane(top, "gh7", *(rf(at, "reflection-missed", x, **q) for x in old), repo=KIT)
+    line = f"- gh7 {at} reflection (reflection-missed), route r: "
+    for n, title, x, state in (
+        (2, LEGACY, old[0], "OPEN"),
+        (3, MISSED, old[1], "CLOSED"),
+        (4, LEGACY, old[2], "OPEN"),
+        (5, LEGACY, old[0], "CLOSED"),
+    ):
+        closed = None if state == "OPEN" else "2026-11-07T00:00:00Z"
+        d = gh_issue(n, title, f"{CHANGES}\n\nFindings (1):\n{line}{x}")
+        put(s, KIT, d | {"state": state, "closedAt": closed})
+    out = run(s, "reflect", "gh7")
+    assert NONE in out, f"re-quoted findings legacy duplicates quote: {out}"
+    assert [comments(s, n, KIT) for n in (2, 3, 4, 5)] == [[]] * 4, out
+    new = "gh7 new gap d"
+    reply(s, "lane", f"class: reflection-missed | question: reflection-missed | route: r | "
+          f"summary: {new}")  # fmt: skip
+    out = run(s, "reflect", "gh7")
+    (c,) = comments(s, 2, KIT)
+    assert "1 new finding; running count 4." in c, c
+    assert c.endswith(f", route r: {new}"), c
+    assert not any(x in c for x in old), f"re-quoted an old finding: {c}"
+    assert [comments(s, n, KIT) for n in (3, 4, 5)] == [[]] * 3, out
+    assert "correction lane: commented " in out, out
+    reply(s, "lane")
+    out = run(s, "reflect", "gh7")
+    assert NONE in out, out
+    assert (issues(s, KIT), len(comments(s, 2, KIT))) == ([2, 3, 4, 5], 1), f"wrote again: {out}"
+
+
+def recorded_372(s: Scratch) -> None:
+    """#acceptance-reflect-recurrence-comments on the real case: the kit's tracker as real gh
+    answered before comment 6997429551 (TAPE372: open #372 and the reflection-missed issues
+    quoting that comment's findings, #375, #393, #418, #426, #384, #434 among them), the 44
+    findings that comment quoted back in their logs (the director's, archived kit lanes gh261 and
+    gh802): archiving kit lane gh850 files and comments nothing."""
+    top = reflector(s)
+    said, listed = (json.loads(r["out"]) for r in json.loads(TAPE372.read_text()))
+    for d in listed:
+        put(s, KIT, d)
+    form = re.compile(r"- (\S+) (\S+) reflection \(([^)]*)\), route (.*?): (.*)")
+    logs: dict[str, list[str]] = {}
+    for m in (form.fullmatch(x) for x in str(said["body"]).splitlines() if x.startswith("- ")):
+        assert m, said
+        found = rf(m[2], "reflection-missed", m[5], question=m[3], route=m[4])
+        logs.setdefault(m[1], []).append(found)
+    assert sorted((k, len(v)) for k, v in logs.items()) == [
+        ("director", 42),
+        ("gh261", 1),
+        ("gh802", 1),
+    ], logs.keys()
+    director(top, *logs["director"])
+    for name in ("gh261", "gh802"):
+        lane(top, name, *logs[name], repo=KIT, archived=True)
+    lane(top, "gh850", repo=KIT)
+    before = comments(s, 372, KIT)
+    out = run(s, "archive", "gh850")
+    assert NONE in out, f"re-quoted findings the class's issues quote: {out[:2000]}"
+    assert comments(s, 372, KIT) == before, out[:2000]
+    assert issues(s, KIT) == sorted(int(str(d["number"])) for d in listed), out[:2000]
+
+
 def reflection_missed(s: Scratch) -> None:
     """The demo: an open legacy timestamped reflection-missed issue #5 in the kit's tracker quoting
     the director's old finding; `reflect --director` with a new one, then again with none; then #5
@@ -652,6 +731,8 @@ if __name__ == "__main__":
         missed_at_once,
         recurrence,
         legacy_quote,
+        legacy_duplicates,
+        recorded_372,
         reflection_missed,
         malformed,
         two_targets,
