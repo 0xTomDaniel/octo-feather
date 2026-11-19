@@ -10,7 +10,7 @@ Interface (__all__):
   watch(plan, cmd, *, where, out) -> int   the in-sandbox watcher and its stop rule: runs CMD in
       the case repo with the environment and private dir WHERE gives, Pi's events and its own
       (qa_fs, qa_branch, qa_watch) written to OUT; never changes the process cwd or os.environ
-  grade(plan, watched, sandbox, *, model) -> Run   every fact and the run's verdict
+  grade(plan, watched, sandbox=None, *, model) -> Run   every fact and the run's verdict
   record(slot, run, ...) -> (result, lines)   one run's artifacts written, the lines to print
   combine(case_dir, done, *, runs, baseline) -> (result, lines)   a case over its runs and kits
   analysis(cases) -> (analysis, lines)   the deterministic flags
@@ -1398,14 +1398,20 @@ def problems(
 
 
 def grade(
-    plan: Plan, watched: subprocess.CompletedProcess[str] | None, sandbox: Fact, *, model: str
+    plan: Plan,
+    watched: subprocess.CompletedProcess[str] | None,
+    sandbox: Fact | None = None,
+    *,
+    model: str,
 ) -> Run:
-    """The run of PLAN: WATCHED the sandboxed watcher's process (None: the sandbox did not start),
-    SANDBOX its record, MODEL the role's. Every fact graded, then the run's verdict (--help; a
-    review case: Review)."""
+    """The run of PLAN: WATCHED the watcher's process (None: the sandbox did not start), SANDBOX the
+    sandbox's record (sandbox.json; None: no sandbox ran, so attempt_blocked and ran fail as with
+    no whole attempt record), MODEL the role's. Every fact graded, then the run's verdict (--help;
+    a review case: Review)."""
     if watched is None:
-        bad = [ln for ln in sandbox.get("proof", []) if "FAIL" in ln] or [
-            sandbox.get("error", "sandbox did not start")
+        rec = sandbox or {}
+        bad = [ln for ln in rec.get("proof", []) if "FAIL" in ln] or [
+            rec.get("error", "sandbox did not start")
         ]
         return Run(
             "FAIL",
@@ -1426,7 +1432,7 @@ def grade(
     ]
     used = next((f"{m.get('provider')}/{m.get('model')}" for m in asst if m.get("model")), model)
     last = ((w or {}).get("stop"), content_text(asst[-1]) if asst else None)
-    att, short = attempts(sandbox)
+    att, short = attempts(sandbox or {})
     seen = Seen(calls, lines, att, last, fs_marks(lines))
     graded = [
         dict({k: v for k, v in f.items() if not k.startswith("_")}, status=s, evidence=txt)
