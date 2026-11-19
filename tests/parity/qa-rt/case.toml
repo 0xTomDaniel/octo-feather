@@ -7,6 +7,6 @@ needs = ["tests/lib/qa.sh", "tests/gate/kit/testkit/pi_agent.py"]
 # The same script, as its gate item: its id kept.
 new = "tests/gate/test_gate.py::test_script[tests/qa-rt.sh]"
 
-# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit script run by the kit venv's python: coverage.py measures it.
+# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: scripts/eval_grading.py, the module the Python kit script octo-feather-qa imports, run by the kit venv's python: coverage.py measures it.
 [ran]
-"scripts/octo-feather-qa" = "coverage"
+"scripts/eval_grading.py" = "coverage"
