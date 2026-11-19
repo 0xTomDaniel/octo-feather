@@ -5,60 +5,23 @@
 # Ported from octo-lite (varelaseb/octo-lite@cc6fa4e, Apache-2.0).
 #
 # Closing a tab or space kills its panes, but a detached command child (setsid)
-# survives, reparented. Every process started in a tab carries
-# HERDR_TAB_ID=<tab> and HERDR_WORKSPACE_ID=<space> in its environ, so that tag,
-# not the process tree, finds them. A tab id is <space>:<tab>; an id without a
-# colon is a space. A pane id (<space>:p<n>) is mapped to its tab the way
-# --park maps one (herdr agent get) and that tab is closed; one it cannot map
-# fails with nothing closed. Run it from outside what it closes: the spawner owns teardown.
-# Herdr ids repeat across sessions, so only processes of the caller's Herdr
-# session count: those whose HERDR_SESSION equals the caller's, unset in both
-# for the default session.
+# survives, reparented: plain close then ends each closed pane's own agent
+# scope, never reading another process (herdr_scope.py close; the rule:
+# herdr-comms SKILL.md, Close an agent or a lane space).
+# A tab id is <space>:<tab>; an id without a colon is a space. A pane id
+# (<space>:p<n>) is mapped to its tab (herdr agent get)
+# and that tab is closed; one it cannot map fails with nothing closed. Run it
+# from outside what it closes: the spawner owns teardown.
 #
-# --park PANE reads the Pi session id and role herdr-spawn exported into PANE's
-# tab (OCTO_FEATHER_SESSION_ID, OCTO_FEATHER_ROLE), closes its tab, or its
-# space when that tab is the space's only one (a supervisor in its own space),
-# and prints one parked hand-off line, even when the close fails. An agent Herdr
-# does not report idle or done, or one not spawned by herdr-spawn, is refused
-# with nothing closed.
+# --park PANE parks one idle Pi agent: herdr_scope.py park (what it reads, closes and
+# refuses: herdr-comms SKILL.md, Park an idle agent).
 set -uo pipefail
 
 usage() { echo "usage: herdr-close TAB|SPACE|PANE | --park PANE" >&2; exit 64; }
-# True when the process behind environ file $1 carries the line $2 and runs in
-# the caller's Herdr session. Unreadable entries are silently not ours.
-ours() {
-  local vars
-  vars="$(tr '\0' '\n' 2>/dev/null <"$1")" && grep -qxF "$2" <<<"$vars" &&
-    [[ "$(sed -n 's/^HERDR_SESSION=//p' <<<"$vars")" == "${HERDR_SESSION:-}" ]]
-}
-line=""
-# Finding a pane's processes reads /proc, which macOS lacks.
-procfs=1; [[ -d /proc/self ]] || procfs=0
+scope="$(dirname "$(readlink -f "$0")")/herdr_scope.py"
 if [[ "${1:-}" == --park ]]; then
   (($# == 2)) && [[ "$2" == *:* ]] || usage
-  ((procfs)) || { echo "herdr-close --park: not on macOS (it reads the pane's Pi session from /proc); not parked. Leave the agent running, or close its tab with herdr-close and relaunch it fresh when needed" >&2; exit 69; }
-  pane="$2"; session=""; role=""; cwd=""; parent=""
-  for env in /proc/[0-9]*/environ; do
-    ours "$env" "HERDR_PANE_ID=$pane" || continue
-    vars="$(tr '\0' '\n' 2>/dev/null <"$env")" || continue
-    session="$(sed -n 's/^OCTO_FEATHER_SESSION_ID=//p' <<<"$vars")"
-    [[ -n "$session" ]] || continue
-    role="$(sed -n 's/^OCTO_FEATHER_ROLE=//p' <<<"$vars")"
-    parent="$(sed -n 's/^OCTO_FEATHER_PARENT=//p' <<<"$vars")"
-    pid="${env#/proc/}"; cwd="$(readlink "/proc/${pid%/environ}/cwd" 2>/dev/null || true)"
-    break
-  done
-  [[ -n "$session" ]] || { echo "herdr-close: no herdr-spawn Pi session in $pane; not parked" >&2; exit 65; }
-  agent="$(herdr agent get "$pane")" || { printf '%s\n' "$agent" >&2; exit 1; }
-  [[ "$(jq -r .result.agent.agent_status <<<"$agent")" == @(idle|done) ]] || { echo "herdr-close: $pane is not idle; not parked" >&2; exit 75; }
-  name="$(jq -r .result.agent.name <<<"$agent")"
-  space="$(jq -r '.result.agent.workspace_id // empty' <<<"$agent")"
-  tabs="$(herdr workspace get "$space" 2>/dev/null | jq -r '.result.workspace.tab_count // empty')"
-  label="$(herdr tab get "$(jq -r '.result.agent.tab_id // empty' <<<"$agent")" 2>/dev/null | jq -r '.result.tab.label // empty')"
-  [[ "$tabs" == 1 ]] && set -- "$space" || set -- "$(jq -r '.result.agent.tab_id // empty' <<<"$agent")"
-  line="$("$(dirname "$(readlink -f "$0")")/../../../../scripts/octo-feather-handoff" encode \
-    --field at "$(date -u +%FT%TZ)" --field kind parked --field pane "$pane" --field name "$name" \
-    --field role "$role" --field cwd "$cwd" --field session "$session" --field label "$label" --field parent "$parent")"
+  exec "$scope" park "$2"
 fi
 
 id="${1:-}"
@@ -70,20 +33,4 @@ if [[ "$id" == *:p* ]]; then
   id="$tab"
 fi
 
-if [[ "$id" == *:* ]]; then kind=tab; tag=HERDR_TAB_ID; cmd=(tab close)
-else kind=space; tag=HERDR_WORKSPACE_ID; cmd=(workspace close); fi
-
-rc=0
-herdr "${cmd[@]}" "$id" >/dev/null 2>&1 || rc=$?
-
-killed=0; ((procfs)) || killed="skipped-no-proc"   # macOS: detached children of the closed tab are not swept
-((procfs)) && for env in /proc/[0-9]*/environ; do
-  pid="${env#/proc/}"; pid="${pid%/environ}"
-  ours "$env" "$tag=$id" || continue
-  kill -TERM "$pid" 2>/dev/null && killed=$((killed + 1))
-done
-
-report="$kind=$id ${kind}_close_rc=$rc killed=$killed"
-if [[ -z "$line" ]]; then echo "$report"
-else echo "$report" >&2; echo "$line"; fi
-exit "$rc"
+exec "$scope" close "$id"

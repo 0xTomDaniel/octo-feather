@@ -14,6 +14,7 @@ mkdir -p "$t/bin" "$t/cwd" "$t/cache"
 # mise's state its own, also run bare outside the gate: mise in $t/cwd's mise.toml records it there, never in the caller's (#664).
 export MISE_STATE_DIR="$t/mise-state"
 cp "$kit/tests/fixtures/herdr-spawn/"* "$t/bin/"
+cp "$kit/tests/gate/kit/testkit/systemd.py" "$t/bin/busctl"; cp "$kit/tests/gate/kit/testkit/systemd.py" "$t/bin/systemctl"   # systemd stood in: the scope is e2e
 chmod +x "$t/bin/herdr"
 fail() { echo "herdr-spawn test: $*" >&2; exit 1; }
 # A failing-read case is vacuous unless herdr-spawn read up to the armed
@@ -152,6 +153,7 @@ grep -qx -- --approve "$t/pi-argv" || fail "headless pi-role argv lacks --approv
 #    tests/fixtures/herdr-say/ and a temp state dir per case.
 mkdir -p "$t/sbin"
 cp "$kit/tests/fixtures/herdr-say/herdr" "$t/sbin/"; chmod +x "$t/sbin/herdr"
+cp "$kit/tests/gate/kit/testkit/systemd.py" "$t/sbin/busctl"; cp "$kit/tests/gate/kit/testkit/systemd.py" "$t/sbin/systemctl"   # systemd stood in: the scope is e2e
 
 # One case: a fresh fake herdr, workspaces $2 ("LABEL ID" lines), a lane gh2
 # hand-off log holding parked line $3. The caller is the director in w2.

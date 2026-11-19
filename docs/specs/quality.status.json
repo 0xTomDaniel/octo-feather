@@ -288,10 +288,12 @@
     },
     "acceptance-qc-sandbox-maintained": {
       "status": "built",
-      "pr": 741,
-      "record": "20261109T005929Z-dc3114c8",
-      "commit": "0bf82f59dc28baaa417704a81a9f303a4414b598",
-      "tests": []
+      "pr": 1016,
+      "record": "20261118T205851Z-12aced80",
+      "commit": "f50868a1b35649acd8b17c92a45a0b3355bde5c4",
+      "tests": [
+        "tests/gate/kit/test_qc_sandbox_gone.py"
+      ]
     },
     "acceptance-qc-sandbox-cost": {
       "status": "built",

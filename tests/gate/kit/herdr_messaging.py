@@ -22,8 +22,7 @@ post-merge step 4 (owner ruling on issue 206; issues 398, 458): live supervisors
 title and rule files, one prod line each, a rerun telling nothing new; parked and gone lanes
 listed, never sent to; a failed send named, no prod line, exit 1; any other herdr failure stops
 the step; step 5 reached, the kit's own herdr-close run and Herdr's workspace_not_found read as
-already closed. Space ids `zt*`, which no real Herdr gives, so herdr-close's sweep of processes
-tagged with a closed space can reach no box process."""
+already closed. Space ids `zt*`, which no real Herdr gives."""
 
 from __future__ import annotations
 
@@ -348,16 +347,22 @@ def state_dir(s: Scratch) -> Path:
 
 
 def tab_process(s: Scratch, d: Path, pane: str, cwd: Path) -> subprocess.Popen[bytes]:
-    """A process standing in for the agent at PANE: it runs in CWD under the env herdr-spawn gave
-    PANE's tab, with Herdr's own ids, as herdr-close --park reads them from /proc."""
-    g = json.loads((d / "agents.json").read_text())[pane]
+    """A process standing in for the Pi at PANE: it runs in CWD under the env herdr-spawn gave
+    PANE's tab, with Herdr's own ids and its --session-id, and Herdr names it PANE's foreground
+    process (`pi_pid`), where herdr-close --park reads it."""
+    agents = json.loads((d / "agents.json").read_text())
+    g = agents[pane]
     ids = {"HERDR_PANE_ID": pane, "HERDR_TAB_ID": g["tab_id"]}
     env = s.env | g["env"] | ids | {"HERDR_WORKSPACE_ID": g["workspace_id"]}
-    p = subprocess.Popen(["sleep", "300"], cwd=cwd, env=env, start_new_session=True)  # noqa: S607
-    for _ in range(100):  # until exec'd, so its environ is the tab's
+    pi = ["python3", "-c", "import time; time.sleep(300)"]
+    pi += ["--session-id", g["env"]["OCTO_FEATHER_SESSION_ID"]]
+    p = subprocess.Popen(pi, cwd=cwd, env=env, start_new_session=True)
+    for _ in range(100):  # until exec'd, so its argv and environ are Pi's
         if Path(f"/proc/{p.pid}/environ").read_bytes().find(b"HERDR_TAB_ID=") >= 0:
             break
         time.sleep(0.02)
+    g["pi_pid"] = p.pid
+    (d / "agents.json").write_text(json.dumps(agents))
     return p
 
 
@@ -391,7 +396,6 @@ def director_parks(s: Scratch, d: Path) -> dict[str, str]:
     worker = tab_process(s, d, got["pane"], wt)
     try:
         park = s.run([str(ASSETS / "herdr-close"), "--park", got["pane"]], env=DIRECTOR)
-        assert worker.wait(timeout=10) is not None
     finally:
         worker.kill()
     dlog = state / "director.handoffs.jsonl"
