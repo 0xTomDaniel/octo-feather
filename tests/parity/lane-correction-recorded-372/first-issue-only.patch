@@ -1,0 +1,14 @@
+Seeded defect: a recurrence reads only the oldest open issue's quotes, not every issue of its class (#1068).
+diff --git a/scripts/correction_lanes.py b/scripts/correction_lanes.py
+index 82516854..5fcda820 100755
+--- a/scripts/correction_lanes.py
++++ b/scripts/correction_lanes.py
+@@ -285,7 +285,7 @@ def recurrence(due: Due, issues: list[dict[str, Any]]) -> tuple[dict[str, Any],
+         return None
+     full: set[tuple[str, tuple[str, str]]] = set()  # each full quote, whichever issue holds it
+     said: Counter[tuple[str, str]] = Counter()  # how many findings of each (run, date) are quoted
+-    for i in mine:
++    for i in [first]:
+         cs = cast("list[dict[str, Any]]", i.get("comments") or [])
+         texts = [str(i.get("body") or ""), *(str(c.get("body") or "") for c in cs)]
+         short: list[tuple[str, str]] = []  # an issue's minimal quotes: same (run, date), distinct

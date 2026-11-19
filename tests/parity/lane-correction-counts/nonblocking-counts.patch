@@ -1,0 +1,14 @@
+Seeded defect: a non-blocking review finding counts toward its class (issue-lifecycle #lanes-correction).
+diff --git a/scripts/correction_lanes.py b/scripts/correction_lanes.py
+index 82516854..0d04a30a 100755
+--- a/scripts/correction_lanes.py
++++ b/scripts/correction_lanes.py
+@@ -153,7 +153,7 @@ def quote(log: str, d: LogLine, *, minimal: bool = False) -> str:
+ def counts(log: str, d: LogLine) -> bool:
+     """Whether finding line D of LOG counts toward its class's correction lane (the rule:
+     issue-lifecycle #lanes-correction)."""
+-    return log != DIRECTOR and d.get("source") in BLOCKERS and d.get("blocking") is True
++    return log != DIRECTOR and d.get("source") in BLOCKERS
+ 
+ 
+ def corrections(logs: dict[str, list[LogLine]], director: list[LogLine]) -> list[Due]:
