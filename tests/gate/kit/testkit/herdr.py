@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Fake `herdr` (the testkit's stand-in for Herdr, which the kit does not own), as
-tests/lib/qa.sh's: a session's socket is a file under the config dir naming the session.
+testkit/qa_box.py's: a session's socket is a file under the config dir naming the session.
 
 `server` writes it and sleeps; `session stop S` removes S's socket, `session delete S` its dir;
 with no socket a call fails `server_not_running`; `pane list` prints nothing; `agent list` prints
@@ -11,6 +11,8 @@ prints a root pane, `pane run P CMD` starts CMD detached (sh -c, its own session
 the session's dir, `pane list` prints each logged pane. FAKE_HERDR_LEAK set: once past `server`
 and `session stop|delete`, every call answers the default session, as a Herdr reaching its live
 server past every mask would.
+Its one pane a prompt reaches, as the qa items' attempt cases need (#998): `agent prompt w9:ok ...`
+prints {"result": "delivered"}; `agent prompt P ...` to any other P fails `pane_not_found: P`.
 
 With FAKE_HERDR set, it stands for Herdr's agents instead (#666): a world in that dir, each call one
 line in its `log`. `agents.json` maps each pane id to its agent, {name, pane_id, workspace_id,
@@ -413,6 +415,11 @@ if a[:2] == ["pane", "run"] and len(a) > 3:
     sys.exit(0)
 if a == ["pane", "list"] and (sock.parent / "panes").is_file():
     sys.stdout.write((sock.parent / "panes").read_text())
+    sys.exit(0)
+if a[:2] == ["agent", "prompt"] and len(a) > 2:  # its one pane a prompt reaches (docstring)
+    if a[2] != "w9:ok" or len(a) == 3:
+        sys.exit(f"pane_not_found: {a[2]}")
+    sys.stdout.write(json.dumps({"result": "delivered"}) + "\n")
     sys.exit(0)
 if a == ["agent", "list"]:
     sys.stdout.write(json.dumps({"id": "1", "result": {"agents": []}}) + "\n")

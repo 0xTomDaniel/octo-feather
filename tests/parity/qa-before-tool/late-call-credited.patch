@@ -1,0 +1,14 @@
+Seeded defect: tool_called_before passes on a call made after its target.
+diff --git a/scripts/octo-feather-qa b/scripts/octo-feather-qa
+index 6e1952e9..6869c62b 100755
+--- a/scripts/octo-feather-qa
++++ b/scripts/octo-feather-qa
+@@ -530,7 +530,7 @@ def judge_tool_before(fact: Fact, calls: list[tuple[str, dict[str, object]]], *,
+     else:
+         w = (marks or {}).get(b)
+         w = w if w is not None and w < n else None
+-    if w is not None and r is not None and r < w:
++    if w is not None and r is not None:
+         return "pass", f"{head}: called at {at(r)}, before " + ("the final message" if b == "final_message" else f"first {b} at {at(w)}")
+     if w is not None:
+         return "fail", (f"{head}: " + ("reached the final message" if b == "final_message" else f"first {b} at {at(w)}")
