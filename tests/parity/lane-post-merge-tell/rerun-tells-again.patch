@@ -1,4 +1,4 @@
-Seeded defect: a rerun no longer finds the prod line naming its merge, so it tells every lane again (post-merge step 4).
+Seeded defect: a rerun no longer finds the prod line naming its merge, so it tells every lane again (post-merge step 5).
 diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
 index 29b0852d..0881d2ba 100755
 --- a/scripts/octo-feather-lane

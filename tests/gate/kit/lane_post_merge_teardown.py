@@ -1,5 +1,5 @@
 """The scenarios of tests/gate/kit/test_lane_post_merge_teardown.py (its items), this file their
-command (testkit.main): octo-feather-lane post-merge step 5, teardown (owner ruling 2026-10-29 on
+command (testkit.main): octo-feather-lane post-merge step 6, teardown (owner ruling 2026-10-29 on
 issue 206; issue 399), offline: a throwaway target repo with a bare origin holds lane branch gh12,
 its worktree and its merge commit; the testkit's fake gh holds PR #12 merged there with a green push
 run and PR #13 based on gh12; the testkit's fake herdr (its FAKE_HERDR agents world) stands for
@@ -8,7 +8,7 @@ Herdr under the kit's own herdr-close and herdr-say, run unmodified (HERDR_SESSI
 tab can reach no box process); a throwaway mise state dir (MISE_STATE_DIR); a throwaway state dir
 (XDG_STATE_HOME) holds the lane records, director.toml and the Spec Chat registries; a throwaway kit
 install clone (OCTO_FEATHER_KIT_INSTALL, never the live kit) of another repo, so step 3 leaves it
-unchanged. Not archived: steps 1-4 run, step 5 pending, exit 3. Archived: the lane's own space is
+unchanged. Not archived: steps 1-5 run, step 6 pending, exit 3. Archived: the lane's own space is
 closed (only its supervisor pane's tab when shared), its worktree removed and the mise links into it
 pruned (one into the live repo kept), PRs based on its branch retargeted before the remote branch is
 deleted (origin's update hook notes PR #13's base when gh12 goes), the local branch deleted; a rerun
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 ASSETS = ROOT / ".agents" / "skills" / "herdr-comms" / "assets"  # herdr-close, herdr-say
 S4 = (
     "post-merge gh12 PR #12: step 1 merged ok; step 2 main CI ok; step 3 kit refresh ok; step 4 "
-    "tell supervisors ok"
+    "checkout ok; step 5 tell supervisors ok"
 )
 ALREADY = (
     "worktree of gh12 already removed; no open PR based on gh12; local branch gh12 already "
@@ -173,11 +173,11 @@ class World:
         self.lane(self.lanes / "archive" / "gh12.toml", pane, pr)
 
     def run(self, want: int, **env: str) -> tuple[Ran, str]:
-        """post-merge 12 H --lane gh12 from the target repo; its run and step 5 line."""
+        """post-merge 12 H --lane gh12 from the target repo; its run and step 6 line."""
         cmd = [kit("octo-feather-lane"), "post-merge", "12", self.h, "--lane", "gh12"]
         r = self.s.run([*cmd, "--repo", "o/r", "--wait", "0"], want=want, cwd=self.r, env=env)
-        s5 = next((x for x in r.out.split("\n") if x.startswith("step 5 teardown: ")), "")
-        assert s5, f"no step 5 line: {r.out}"
+        s5 = next((x for x in r.out.split("\n") if x.startswith("step 6 teardown: ")), "")
+        assert s5, f"no step 6 line: {r.out}"
         return r, s5
 
     def last(self, r: Ran) -> str:
@@ -190,26 +190,26 @@ class World:
         return subprocess.run(cmd, capture_output=True, check=False).returncode == 0
 
     def kept(self, what: str) -> None:
-        """What step 5 must not have touched: the worktree, the local and remote branch."""
+        """What step 6 must not have touched: the worktree, the local and remote branch."""
         ok = self.wt.is_dir() and self.branch_on(self.r) and self.branch_on(self.origin, bare=True)
         assert ok, f"{what}: worktree or branch gone"
 
 
 def not_archived(s: Scratch) -> None:
-    """Not archived (the record still open): steps 1-4 run, step 5 pending, exit 3, nothing
+    """Not archived (the record still open): steps 1-5 run, step 6 pending, exit 3, nothing
     closed or removed. Archived naming another PR: stopped, nothing torn down."""
     w = World(s, "pending")
     w.lane(w.lanes / "gh12.toml", "zt5:p1", 12)
     r, s5 = w.run(3)
-    assert s5 == "step 5 teardown: pending: lane gh12 not archived; rerun on its close report", s5
-    assert w.last(r) == f"{S4}; step 5 teardown pending", f"pending: {r.out}"
+    assert s5 == "step 6 teardown: pending: lane gh12 not archived; rerun on its close report", s5
+    assert w.last(r) == f"{S4}; step 6 teardown pending", f"pending: {r.out}"
     assert not w.closes(), f"pending closed: {w.closes()}"
     w.kept("pending")
     w = World(s, "other-pr")
     w.archived(pr=99)
     r, s5 = w.run(1)
-    assert s5.startswith("step 5 teardown: stopped: archived lane gh12 names PR #99, not #12"), s5
-    assert w.last(r) == f"{S4}; step 5 teardown stopped", f"other pr: {r.out}"
+    assert s5.startswith("step 6 teardown: stopped: archived lane gh12 names PR #99, not #12"), s5
+    assert w.last(r) == f"{S4}; step 6 teardown stopped", f"other pr: {r.out}"
     assert not w.closes(), f"other pr closed: {w.closes()}"
     w.kept("other pr")
 
@@ -235,18 +235,18 @@ def own_space(s: Scratch) -> None:
     assert links == ["tracked-configs/r"], f"mise links: {links}"
     assert w.closes() == ["workspace close zt5"], f"own space: closed {w.closes()}"
     assert s5 == (
-        f"step 5 teardown: ok: space zt5 closed; worktree {w.wt} removed (2 mise config links "
+        f"step 6 teardown: ok: space zt5 closed; worktree {w.wt} removed (2 mise config links "
         "into it pruned); PR #13 retargeted from gh12 to main; local branch gh12 deleted; remote "
         "branch gh12 deleted from origin"
     ), f"teardown line: {s5}"
-    assert w.last(r) == f"{S4}; step 5 teardown ok", f"teardown: {r.out}"
+    assert w.last(r) == f"{S4}; step 6 teardown ok", f"teardown: {r.out}"
     assert not w.wt.is_dir(), "worktree kept"
     assert not w.branch_on(w.r), "local branch kept"
     assert not w.branch_on(w.origin, bare=True), "remote branch kept"
     at = (w.origin / "pr13-base-at-delete").read_text().strip()
     assert at == "main", f"retarget not before the remote delete: #13 on {at} then"
     r, s5 = w.run(0)
-    assert s5 == f"step 5 teardown: ok: space zt5 already closed; {ALREADY}", f"rerun: {s5}"
+    assert s5 == f"step 6 teardown: ok: space zt5 already closed; {ALREADY}", f"rerun: {s5}"
 
 
 def no_ci(s: Scratch) -> None:
@@ -268,15 +268,15 @@ def no_ci(s: Scratch) -> None:
     )
     assert noci in r.out.split("\n"), f"no CI step 2: {r.out}"
     assert s5 == (
-        f"step 5 teardown: ok: space zt5 closed; worktree {w.wt} removed (0 mise config links "
+        f"step 6 teardown: ok: space zt5 closed; worktree {w.wt} removed (0 mise config links "
         "into it pruned); PR #13 retargeted from gh12 to main; local branch gh12 deleted; remote "
         "branch gh12 deleted from origin"
     ), f"no CI teardown: {s5}"
-    assert w.last(r) == f"{S4}; step 5 teardown ok", f"no CI teardown: {r.out}"
+    assert w.last(r) == f"{S4}; step 6 teardown ok", f"no CI teardown: {r.out}"
     assert f"api repos/o/r/git/trees/{m}" in w.s.gh.log(), f"no CI fact not read: {w.s.gh.log()}"
     r, s5 = w.run(0)
-    assert s5 == f"step 5 teardown: ok: space zt5 already closed; {ALREADY}", f"no CI rerun: {s5}"
-    assert w.last(r) == f"{S4}; step 5 teardown ok", f"no CI rerun: {r.out}"
+    assert s5 == f"step 6 teardown: ok: space zt5 already closed; {ALREADY}", f"no CI rerun: {s5}"
+    assert w.last(r) == f"{S4}; step 6 teardown ok", f"no CI rerun: {r.out}"
 
 
 def shared_space(s: Scratch) -> None:
@@ -288,10 +288,10 @@ def shared_space(s: Scratch) -> None:
     w.agents(["zt1:p1", "zt5:p1", "zt6:p1", "zt6:p3"])
     _, s5 = w.run(0)
     assert w.closes() == ["tab close zt6:t1"], f"shared lane: {w.closes()}"
-    assert s5.startswith("step 5 teardown: ok: tab of zt6:p1 closed in shared space zt6; "), s5
+    assert s5.startswith("step 6 teardown: ok: tab of zt6:p1 closed in shared space zt6; "), s5
     assert "zt6" in w.spaces(), "shared space closed"
     _, s5 = w.run(0)
-    assert s5.startswith("step 5 teardown: ok: tab of zt6:p1 already closed; "), f"shared: {s5}"
+    assert s5.startswith("step 6 teardown: ok: tab of zt6:p1 already closed; "), f"shared: {s5}"
     w = World(s, "director")
     w.archived("zt1:p2")
     w.agents(["zt1:p1", "zt1:p2", "zt5:p1", "zt6:p1"])
@@ -301,13 +301,14 @@ def shared_space(s: Scratch) -> None:
 
 def kept(s: Scratch) -> None:
     """Refused and kept, exit 1, nothing retargeted: a dirty worktree (git's words), a review
-    row's root, the kit install, the main worktree; a local branch past the merge commit."""
+    row's root, the kit install, the main worktree (step 4 stops first); a local branch past the
+    merge commit."""
 
     def refused(w: World, what: str, want: str, **env: str) -> None:
         r, s5 = w.run(1, **env)
-        assert s5.startswith("step 5 teardown: stopped: "), f"{what}: {s5}"
+        assert s5.startswith("step 6 teardown: stopped: "), f"{what}: {s5}"
         assert want in s5, f"{what}: {s5}"
-        assert w.last(r) == f"{S4}; step 5 teardown stopped", f"{what}: {r.out}"
+        assert w.last(r) == f"{S4}; step 6 teardown stopped", f"{what}: {r.out}"
         assert not [x for x in w.s.gh.log() if x.startswith("pr edit")], f"{what} retargeted"
         w.kept(what)
 
@@ -343,7 +344,15 @@ def kept(s: Scratch) -> None:
     w.s.git(w.r, "worktree", "remove", str(w.wt))
     w.s.git(w.r, "checkout", "-q", "gh12")
     w.wt.mkdir()
-    refused(w, "main worktree", f"worktree {w.r} kept: it is the main worktree")
+    # The main worktree on the lane's branch is the director's checkout on another branch: step 4
+    # stops on it (#1078), so teardown never reaches it.
+    cmd = [kit("octo-feather-lane"), "post-merge", "12", w.h, "--lane", "gh12", "--repo", "o/r"]
+    r = w.s.run([*cmd, "--wait", "0"], want=1, cwd=w.r)
+    want = f"step 4 checkout: stopped: checkout {w.r} is on gh12, not main: nothing was changed"
+    assert want in r.out, f"main worktree: {r.out}"
+    assert w.last(r).endswith("step 4 checkout stopped; step 5 tell supervisors not run; "
+                              "step 6 teardown not run"), f"main worktree: {r.out}"
+    w.kept("main worktree")
     w = World(s, "unmerged")
     w.archived()
     w.s.git(w.wt, "commit", "-q", "--allow-empty", "-m", "later")
@@ -351,7 +360,7 @@ def kept(s: Scratch) -> None:
     w.wt.mkdir()
     _, s5 = w.run(1)
     want = f"local branch gh12 kept: it is not an ancestor of merge commit {w.m[:12]}"
-    assert s5.startswith("step 5 teardown: stopped: "), f"unmerged: {s5}"
+    assert s5.startswith("step 6 teardown: stopped: "), f"unmerged: {s5}"
     assert want in s5, f"unmerged: {s5}"
     w.kept("unmerged")
 
