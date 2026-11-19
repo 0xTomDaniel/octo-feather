@@ -3386,8 +3386,9 @@ COMMS_LEAKS = ("HERDR_", "OCTO_FEATHER_", "XDG_STATE_HOME", "XDG_CACHE_HOME")  #
 
 @dataclass
 class CommsWorld:
-    """A lane's agents in a testkit Herdr world (tests/gate/kit/testkit/herdr.py, FAKE_HERDR) and its scratch
-    octo-feather state: director w0:p1, lane gh7's supervisor w1:p1, its implementer-gh7 at w1:p2 (spawn line in the
+    """A lane's agents in a testkit Herdr world (tests/gate/kit/testkit/herdr.py, FAKE_HERDR), the box's systemd
+    user manager stood in (tests/gate/kit/testkit/systemd.py as busctl and systemctl, calls in FAKE_SYSTEMD_LOG) and
+    its scratch octo-feather state: director w0:p1, lane gh7's supervisor w1:p1, its implementer-gh7 at w1:p2 (spawn line in the
     lane log, session S-impl-gh7). Cases: features/parent-resumed.md, result-file.md, result-missing.md."""
 
     sc: Path
@@ -3432,6 +3433,8 @@ def comms_world(f: Feature, feature: str) -> CommsWorld:
     shutil.rmtree(sc, ignore_errors=True)
     (sc / "bin").mkdir(parents=True)
     (sc / "bin" / "herdr").symlink_to(Path(f.s.repo) / "tests" / "gate" / "kit" / "testkit" / "herdr.py")
+    for s in ("busctl", "systemctl"):  # the box's systemd user manager stood in: herdr-spawn's scope is not this demo's
+        (sc / "bin" / s).symlink_to(Path(f.s.repo) / "tests" / "gate" / "kit" / "testkit" / "systemd.py")
     (sc / "home").mkdir()
     world = sc / "herdr"
     world.mkdir()
@@ -3445,7 +3448,7 @@ def comms_world(f: Feature, feature: str) -> CommsWorld:
     # A reflection just ran: an octo-feather-start runs none in the background (scripts/octo-feather-start).
     (state / "director.handoffs.jsonl").write_text(json.dumps({"at": now(), "kind": "reflection"}) + "\n")
     base = {"PATH": f"{sc / 'bin'}:{os.environ['PATH']}", "FAKE_HERDR": str(world), "HOME": str(sc / "home"),
-            "HERDR_SESSION": "verify"}
+            "HERDR_SESSION": "verify", "FAKE_SYSTEMD_LOG": str(sc / "systemd")}
     w = CommsWorld(sc=sc, world=world, state=state, base=base)
     w.put({"w0:p1": comms_agent("w0:p1", "director"), "w1:p1": comms_agent("w1:p1", "gh7"),
            "w1:p2": comms_agent("w1:p2", "implementer-gh7")})
@@ -3483,8 +3486,11 @@ def drive_parent_resumed(f: Feature) -> None:
     new = next((x.removeprefix("pane=") for x in out.split() if x.startswith("pane=")), "")
     record = (w.state / "lanes" / "gh7.toml").read_text()
     f.obs("resume", "record", record)
+    calls = w.sc / "systemd"
+    f.obs("resume", "systemd", calls.read_text() if calls.exists() else "")
     say(f"resume: new pane {new}; lanes/gh7.toml: {record.strip()!r}")
-    f.check("resume", lambda c: c.code == 0 and new not in ("", "w1:p1") and f'supervisor = "{new}"' in c.o["record"])
+    f.check("resume", lambda c: c.code == 0 and new not in ("", "w1:p1") and f'supervisor = "{new}"' in c.o["record"]
+            and "StartTransientUnit" in c.o["systemd"])
     comms_env(f, w.worker())
     f.run("report", herdr_say(f), "--parent", COMMS_REPORT)
     rf = w.result_file()

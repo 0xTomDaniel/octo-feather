@@ -22,9 +22,9 @@ Preconditions: `verify-octo-feather launch` printed `ready`; `verify-octo-feathe
 
 Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive parent-resumed`. Evidence: `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/parent-resumed/`.
 
-Herdr is the one stand-in: the kit's testkit Herdr (`tests/gate/kit/testkit/herdr.py`) as `herdr` first on PATH, one FAKE_HERDR world under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/parent-resumed/`: director `w0:p1`, lane gh7's supervisor `w1:p1` (then dropped), implementer-gh7 `w1:p2`. Scratch HOME, HERDR_SESSION `verify`: the state (director.toml, lanes/gh7.toml, the lane log with implementer-gh7's spawn line, session S-impl-gh7) lives in the scratch; the driving agent's own Herdr and kit variables are unset for each case. No live Herdr pane is touched.
+Herdr and the box's systemd user manager are the stand-ins: the kit's testkit Herdr (`tests/gate/kit/testkit/herdr.py`) as `herdr` first on PATH, and its systemd stand-in (`tests/gate/kit/testkit/systemd.py`) as `busctl` and `systemctl` beside it, each call logged in `scratch/parent-resumed/systemd` (herdr-spawn's agent scope is not this feature's; it is proven end to end by tests/gate/kit/agent_scope.py), one FAKE_HERDR world under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/parent-resumed/`: director `w0:p1`, lane gh7's supervisor `w1:p1` (then dropped), implementer-gh7 `w1:p2`. Scratch HOME, HERDR_SESSION `verify`: the state (director.toml, lanes/gh7.toml, the lane log with implementer-gh7's spawn line, session S-impl-gh7) lives in the scratch; the driving agent's own Herdr and kit variables are unset for each case. No live Herdr pane is touched.
 
-- **Resume** (`resume`). Observe exit 0, a `pane=` other than `w1:p1`, `.obs.record` holding `supervisor = "<new pane>"`.
+- **Resume** (`resume`). Observe exit 0, a `pane=` other than `w1:p1`, `.obs.record` holding `supervisor = "<new pane>"`, `.obs.systemd` holding the stand-in's `StartTransientUnit` call (the real manager never reached).
 - **Report** (`report`). Observe exit 0; `.obs.new-pane` one line `implementer-gh7 reported (implementer); read <state>/lanes/gh7.results/S-impl-gh7.md. First line: ...`; `.obs.director` empty; `.obs.result-file` holding the report whole.
 - **Side effects.** Every cwd stays empty and the kit's `git status` unchanged.
 
