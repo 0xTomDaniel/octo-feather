@@ -7,8 +7,10 @@ from collections.abc import Callable
 
 import pytest
 from agent_scope import (
+    close_foreign,
     close_owned,
     close_unowned,
+    park_foreign,
     park_malformed,
     park_owned,
     park_refused,
@@ -43,6 +45,18 @@ def test_close_owned(case: Case) -> None:
 @linux
 def test_close_unowned(case: Case) -> None:
     case(close_unowned)
+
+
+@pytest.mark.e2e
+@linux
+def test_close_foreign(case: Case) -> None:
+    case(close_foreign)
+
+
+@pytest.mark.e2e
+@linux
+def test_park_foreign(case: Case) -> None:
+    case(park_foreign)
 
 
 @pytest.mark.e2e
