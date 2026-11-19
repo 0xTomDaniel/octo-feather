@@ -254,8 +254,8 @@
     "acceptance-qa-evidence-block": {
       "status": "built",
       "pr": 1005,
-      "record": "20261119T015125Z-9a8a6c8a",
-      "commit": "e0c1134265d97c4733e7f0c44555a33fbea82dee",
+      "record": "20261119T025648Z-739e6568",
+      "commit": "5ca5009828f1b648c26b6abb5b64ebdeca57d7e8",
       "tests": [
         "tests/gate/kit/test_qa_evidence.py"
       ]
@@ -298,8 +298,8 @@
     "acceptance-qc-eval-verdict": {
       "status": "built",
       "pr": 1005,
-      "record": "20261119T015125Z-d5eb6a8a",
-      "commit": "e0c1134265d97c4733e7f0c44555a33fbea82dee",
+      "record": "20261119T025648Z-d8949158",
+      "commit": "5ca5009828f1b648c26b6abb5b64ebdeca57d7e8",
       "tests": [
         "tests/gate/kit/test_qc_eval_verdict.py"
       ]
