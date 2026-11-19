@@ -532,6 +532,7 @@ from correction_lanes import (DIRECTOR, DIRECTOR_LOG, KIT_REPO, MARK_WORD, Refus
                               lane_logs)
 from correction_lanes import file_corrections as correction_filer
 from handoff_log import read_log
+import post_merge   # the post-merge routine's run order (post-merge)
 from tracker_calls import tracker, utc
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -4440,6 +4441,20 @@ def take_opt(args: list[str], flag: str) -> tuple[list[str], str | None]:
     return args[:i] + args[i + 2:], args[i + 1]
 
 
+def pm_outcome(step: "post_merge.Body[PostMerge, str]") -> "post_merge.Body[PostMerge, tuple[post_merge.Outcome, str]]":
+    """STEP as post_merge.run takes it: its line, and ok, or stopped on a Refuse or gh's unexpected data, or pending."""
+    def outcome(pm: PostMerge) -> "tuple[post_merge.Outcome, str]":
+        try:
+            return "ok", step(pm)
+        except Refuse as e:
+            return "stopped", str(e)
+        except Pending as e:
+            return "pending", str(e)
+        except (KeyError, TypeError, AttributeError, ValueError) as e:
+            return "stopped", f"unexpected data from gh ({type(e).__name__}: {e}): check the gh on PATH, then rerun"
+    return outcome
+
+
 def cmd_post_merge(args: list[str]) -> int:
     args, repo = take_repo(args)
     args, lane = take_opt(args, "--lane")
@@ -4452,21 +4467,10 @@ def cmd_post_merge(args: list[str]) -> int:
     if wait is not None and not wait.isdigit():
         raise Refuse(f"--wait needs whole seconds, got {wait!r}")
     pm = PostMerge(pr_number(args[0]), args[1].lower(), lane, int(wait or 300), repo)
-    outcomes: list[str] = []
-    for n, (name, step) in enumerate(POST_MERGE_STEPS, 1):
-        if all(o.endswith(" ok") for o in outcomes):
-            try:
-                line, outcome = f"ok: {step(pm)}", "ok"
-            except Refuse as e:
-                line, outcome = f"stopped: {e}", "stopped"
-            except Pending as e:
-                line, outcome = f"pending: {e}", "pending"
-            except (KeyError, TypeError, AttributeError, ValueError) as e:
-                line, outcome = f"stopped: unexpected data from gh ({type(e).__name__}: {e}): check the gh on PATH, then rerun", "stopped"
-            print(f"step {n} {name}: {line}", flush=True)
-            outcomes.append(f"step {n} {name} {outcome}")
-        else:
-            outcomes.append(f"step {n} {name} not run")
+    ran = post_merge.run(pm, [(name, pm_outcome(step)) for name, step in POST_MERGE_STEPS],
+                         lambda s: print(f"step {s.number} {s.name}: {s.outcome}: {s.line}", flush=True))
+    outcomes = [f"step {s.number} {s.name} {s.outcome}" for s in ran]
+    outcomes += [f"step {n} {name} not run" for n, (name, _) in enumerate(POST_MERGE_STEPS, 1) if n > len(ran)]
     told = f"; NOT told: {', '.join(pm.not_told)} (step 6 names each re-send)" if pm.not_told else ""
     print(f"post-merge {lane} PR #{pm.pr}: {'; '.join(outcomes)}{told}", flush=True)
     if all(o.endswith((" ok", " pending")) for o in outcomes):
