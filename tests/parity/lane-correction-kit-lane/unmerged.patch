@@ -1,0 +1,14 @@
+Seeded defect: a class due in two logs of one tracker files twice, not once (spec comms #reflection-correction).
+diff --git a/scripts/correction_lanes.py b/scripts/correction_lanes.py
+index 82516854..faaec47f 100755
+--- a/scripts/correction_lanes.py
++++ b/scripts/correction_lanes.py
+@@ -366,7 +366,7 @@ def _file(lanes: Path, out: list[Outcome]) -> None:
+             trackers.setdefault((skill, str(repo)), []).append(there)
+     for (skill, repo), dues in trackers.items():
+         _file_in(
+-            skill, repo, merge(dues), out
++            skill, repo, dues, out
+         )  # merged: one issue or comment per class per tracker
+ 
+ 

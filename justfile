@@ -56,7 +56,7 @@ default:
 
 # The recipes the gate runs, in order, each one pytest item of check-tests (tests/gate/). Only check-* recipes,
 # so check-gate-free's scan of them sees every recipe the gate runs.
-export GATE_RECIPES := "check-languages check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-spec-status check-templates check-evals check-lint check-format check-types check-ts"
+export GATE_RECIPES := "check-languages check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-owner-field check-vendored check-spec-status check-templates check-evals check-lint check-format check-types check-ts"
 
 # Every GATE_RECIPES recipe and every tests/*.sh, through check-tests (#201, #224).
 # The gate: every tracked language gated, script syntax, Pi-only references, no dashes, skill frontmatter, decision logs, vendored skills, eval case shape, kit Python lint, format and types, kit tests.
@@ -201,6 +201,8 @@ check-refs:
           # Spec Chat names the owner side of a spool (its directory and event actor) so on disk: the one SPOOL_SIDE value per file.
           "scripts/octo-feather-accepted" => [qr{^SPOOL_SIDE = "[h]uman"(?=\s)}],
           "tests/accepted.sh"             => [qr{^SPOOL_SIDE=[h]uman(?=;)}],
+          # A recorded real gh answer (#1069): a 2026-11-04 director finding, quoted word for word in issue comment 6997429551.
+          "tests/gate/kit/testkit/recordings/reflection-missed-372.json" => [qr{an unresolved [h]uman decision, and do completion}],
         ) }
         my ($f, $s) = /^(.*?):\d+:(.*)$/s;
         $s =~ s/$_//g for @{ $ok{$f} || [] };
@@ -420,6 +422,10 @@ check-roles:
 check-behavior-smoke:
     @python3 "$root/scripts/check-behavior-smoke"
 
+# The Owner-field check of docs/adr/0008; which commits it reads: scripts/check-owner-field --help.
+check-owner-field:
+    @python3 "$root/scripts/check-owner-field"
+
 # Verify the runtime tools on this box (octo-lite's install --check equivalent), agent-browser at its pin included, and the tracker CLI of the target
 # (the invocation directory, or TARGET: `just -f KIT/justfile install-check` in it); a Linear target checks linear,
 # each pinned tool's first hit on the PATH the kit runs it from (this recipe's own PATH, the justfile's caller_path
@@ -520,7 +526,7 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH') $CALLER
     elif not os.path.isdir(lanes): print(f"state  MISSING {lanes} (the session state folder, octo-feather-state); mkdir -p {lanes}"); bad = 1
     elif not os.access(lanes, os.W_OK): print(f"state  NOT WRITABLE {lanes} (the session state folder, octo-feather-state); sudo chown -R $(id -un) {st}"); bad = 1
     else: print(f"state  ok  {st} (octo-feather-state)")
-    sys.path.insert(0, os.path.join(root, "scripts"))  # its own imports (handoff_log), as when it runs
+    sys.path.insert(0, os.path.join(root, "scripts"))  # its own imports (kit modules: handoff_log, correction_lanes, tracker_calls), as when it runs
     s = iu.spec_from_loader("octo_feather_lane", im.SourceFileLoader("octo_feather_lane", os.path.join(root, "scripts", "octo-feather-lane"))); lane = iu.module_from_spec(s); s.loader.exec_module(lane)
     kit, src = str(lane.kit_install()), "OCTO_FEATHER_KIT_INSTALL" if os.environ.get("OCTO_FEATHER_KIT_INSTALL") else "the kit dir"
     def git(*a): return run("git", "-C", kit, *a)

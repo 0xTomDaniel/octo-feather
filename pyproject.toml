@@ -27,6 +27,9 @@ package = false
 
 [tool.pytest.ini_options]
 testpaths = ["tests/gate"]
+# How a test imports a kit module (scripts/*.py: correction_lanes.py, its docstring): by name, scripts/ on
+# sys.path, as the commands beside them find it; never by path. Only the names its __all__ lists (#1081).
+pythonpath = ["scripts"]
 # Every item's duration, failures with their captured output, junit xml for the trend line (tests/gate/conftest.py).
 addopts = "--strict-markers --durations=0 --junitxml=.pytest_cache/junit.xml"
 
@@ -45,6 +48,7 @@ extend-include = [
   "scripts/check-evals",
   "scripts/check-gate-free",
   "scripts/check-languages",
+  "scripts/check-owner-field",
   "scripts/check-roles",
   "scripts/check-skills",
   "scripts/check-templates",
@@ -102,8 +106,9 @@ ignore = [
 
 [tool.basedpyright]
 typeCheckingMode = "strict"
-# tests/gate/kit/conftest.py imports the gate runner (test_gate), as pytest's rootdir import puts tests/gate on sys.path.
-extraPaths = ["tests/gate"]
+# tests/gate/kit/conftest.py imports the gate runner (test_gate), as pytest's rootdir import puts tests/gate on sys.path;
+# scripts: the kit modules tests import ([tool.pytest.ini_options] pythonpath).
+extraPaths = ["tests/gate", "scripts"]
 
 [tool.ruff.lint.extend-per-file-ignores]
 # Baseline (octo-feather-lint): taken once, only shrinks.
@@ -418,7 +423,6 @@ extraPaths = ["tests/gate"]
   "E741",
   "EM101",
   "EM102",
-  "F821",
   "FBT001",
   "FBT002",
   "FURB167",

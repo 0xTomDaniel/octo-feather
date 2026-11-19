@@ -1,0 +1,45 @@
+{
+ "reviewer-role-step-own-duty": {
+  "facts": [
+   {
+    "fact": "field_lines",
+    "field": "Verdict",
+    "includes": [
+     {
+      "text": "clear"
+     }
+    ]
+   },
+   {
+    "fact": "field_lines",
+    "field": "Owner",
+    "every": {
+     "restated": []
+    }
+   }
+  ]
+ },
+ "reviewer-role-restates-skill": {
+  "facts": [
+   {
+    "fact": "field_lines",
+    "field": "Verdict",
+    "includes": [
+     {
+      "text": "blocking"
+     }
+    ]
+   },
+   {
+    "fact": "field_lines",
+    "field": "Owner",
+    "includes": [
+     {
+      "path": ".agents/skills/notes-cli/SKILL.md",
+      "restated": "agents/worker.md"
+     }
+    ]
+   }
+  ]
+ }
+}

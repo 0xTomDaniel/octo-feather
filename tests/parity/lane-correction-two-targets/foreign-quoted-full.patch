@@ -1,0 +1,14 @@
+Seeded defect: an issue quotes another repository's lane finding in full, its summary leaking (spec comms #reflection-correction).
+diff --git a/scripts/correction_lanes.py b/scripts/correction_lanes.py
+index 82516854..7d587870 100755
+--- a/scripts/correction_lanes.py
++++ b/scripts/correction_lanes.py
+@@ -115,7 +115,7 @@ class Due:
+         return "; ".join(named) or "none given by a reflection"
+ 
+     def body(self) -> str:
+-        quoted = [quote(log, d, minimal=log in self.foreign) for log, d in self.findings]
++        quoted = [quote(log, d, minimal=False) for log, d in self.findings]
+         changes = (
+             "Changes: the question list, reflection/questions.json"
+             " (comms spec #reflection-questions)"
