@@ -1032,33 +1032,51 @@ def still_due(due: Due, issues: list[dict[str, Any]]) -> bool:
     return due.latest > max(str(i.get("closedAt") or "") for i in mine)
 
 
-QUOTED = re.compile(r"(?m)^- (\S+) (\d{4}-\d\d-\d\dT\S+)(?: |$)")  # a quote's run and date
+QUOTED = re.compile(r"(?m)^- (\S+) (\d{4}-\d\d-\d\dT\S+)(?: .*|$)")  # a quote, its run and date
 
 
-def quoted(text: str) -> list[tuple[str, str]]:
-    """The (run, date) of each finding TEXT quotes, full or minimal (`quote`), once per quote."""
-    return QUOTED.findall(text)
+def quoted(text: str) -> list[tuple[str, tuple[str, str]]]:
+    """Each finding TEXT quotes, full or minimal (`quote`), once per quote: its line and its
+    (run, date)."""
+    return [(m[0].strip(), (m[1], m[2])) for m in QUOTED.finditer(text)]
 
 
 def recurrence(due: Due, issues: list[dict[str, Any]]) -> tuple[dict[str, Any], str] | None:
     """The issue among ISSUES ({..., body, comments: [{body}]}) and the comment for DUE on a
     recurrence (comms spec #reflection-correction): the oldest open of its class; the running count,
-    the findings its issues and this comment quote. None when it adds none. A finding is known by
-    its run and date (`quoted`), so a full quote and a minimal one of it are the same finding."""
+    the findings its issues and this comment quote, each once. None when it adds none. A full quote
+    is quoted when any issue of the class quotes it word for word, so legacy duplicate issues each
+    quoting one finding of a run quote them all; a minimal one, by its run and date (`quoted`): as
+    many of a run and date as the most any one issue quotes, or the full quotes of them all."""
     mine = of_class(due, issues)
     first = next((i for i in mine if is_open(i)), None)
     if first is None:
         return None
-    said: Counter[tuple[str, str]] = Counter()
-    for i in mine:  # the most any one issue quotes: duplicate issues quote the same findings
+    full: set[tuple[str, tuple[str, str]]] = set()  # each full quote, whichever issue holds it
+    said: Counter[tuple[str, str]] = Counter()  # how many findings of each (run, date) are quoted
+    for i in mine:
         cs = cast("list[dict[str, Any]]", i.get("comments") or [])
         texts = [str(i.get("body") or ""), *(str(c.get("body") or "") for c in cs)]
-        said |= Counter(k for x in texts for k in quoted(x))
+        short: list[tuple[str, str]] = []  # an issue's minimal quotes: same (run, date), distinct
+        long: set[tuple[str, tuple[str, str]]] = set()  # its full ones, each finding once
+        for line, (run, at) in (q for x in texts for q in quoted(x)):
+            if line == f"- {run} {at} {due.cls}":
+                short.append((run, at))
+            else:
+                long.add((line, (run, at)))
+        full |= long
+        said |= Counter(short) + Counter(k for _, k in long)
+    said |= Counter(k for _, k in full)
+    lines = {line for line, _ in full}
     runs: dict[tuple[str, str], list[str]] = {}
     for log, d in due.findings:
         key = (log, str(d.get("at")))
         runs.setdefault(key, []).append(quote(log, d, minimal=log in due.foreign))
-    new = [q for key, qs in runs.items() for q in qs[said[key] :]]
+    new = [
+        q
+        for (log, at), qs in runs.items()
+        for q in (qs[said[log, at] :] if log in due.foreign else [q for q in qs if q not in lines])
+    ]
     if not new:
         return None
     head = (
