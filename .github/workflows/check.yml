@@ -132,6 +132,7 @@ jobs:
       # node_modules: check-ts installs from that store with --offline.
       - run: pnpm install --frozen-lockfile
       # The runner's 4 CPUs are the gate's alone: one pytest worker each (local default: the justfile's check-tests).
-      - run: just check
+      # Inside a probe scope, as a scoped agent runs it: a test that stops a scope not its own kills the gate (#1070).
+      - run: systemd-run --user --scope --quiet --unit "octo-feather-agent-probe-ci-$(openssl rand -hex 4)" just check
         env:
           GATE_WORKERS: 4

@@ -1,11 +1,11 @@
 Seeded defect: the OAuth warning prints once per sandbox given copies, not once per qc run.
 diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
-index ce0774ba..075cb0f4 100755
+index 3c34e0d4..2e811245 100755
 --- a/scripts/octo-feather-qc
 +++ b/scripts/octo-feather-qc
-@@ -279,7 +279,7 @@ def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bo
+@@ -282,7 +282,7 @@ def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bo
                 QC_GHSNAP=gh.get("dir", ""), QC_GHSNAP_LINE=gh.get("line", ""), QC_GHSNAP_OFF=gh.get("off", ""),
-                QC_HISTORY="" if history else "none", QC_PI="" if pi else "none", QC_BROWSER=browser or "", QC_SHOTS="1" if shots else "",
+                QC_HISTORY="" if history else "none", QC_QA=qa_dir, QC_PI="" if pi else "none", QC_BROWSER=browser or "", QC_SHOTS="1" if shots else "",
                 QC_FD_PROOF=str(pipes["proof"][1]), QC_FD_POST=str(pipes["post"][1]), QC_FD_ERR=str(pipes["err"][1]))
 -    if pi and (w := oauth_warning()) and w not in WARNED:   # once per qc run, of the sandboxes given copies (ADR 0022)
 +    if pi and (w := oauth_warning()):   # once per qc run, of the sandboxes given copies (ADR 0022)

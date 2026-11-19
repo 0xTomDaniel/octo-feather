@@ -901,14 +901,22 @@ def qc(s: Scratch) -> None:
     """tests/qc.sh."""
     with Box(s) as b:
         refused(b)
-        nested(b)
-        pane(b)
         recipe_args(b)
-        m = b.mode
     say(
         "qc: ok (same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique "
-        f"reports, nested sandbox, judge pane in the sandbox ({m} herdr), recipe args as data; "
-        "offline, runs bounded)"
+        "reports, recipe args as data; offline, runs bounded)"
+    )
+
+
+def namespace(s: Scratch) -> None:
+    """tests/qc-namespace.sh."""
+    with Box(s) as b:
+        nested(b)
+        pane(b)
+        m = b.mode
+    say(
+        f"qc-namespace: ok (nested sandbox, judge pane in the sandbox ({m} herdr); offline, "
+        "runs bounded)"
     )
 
 
@@ -920,4 +928,4 @@ if __name__ == "__main__":
     ):  # creds runs no offline(): its own skip, as tests/qc-creds.sh had
         say("qc-creds: skipped, not on macOS (just qc needs Linux; CI runs it)")
         sys.exit(0)
-    main(qc, copies, judge, uv_cache, mise, oauth, vendored, escapes, creds)
+    main(qc, namespace, copies, judge, uv_cache, mise, oauth, vendored, escapes, creds)

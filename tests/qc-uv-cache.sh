@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # The qc sandbox test's uv-cache section (#508; setup tests/gate/kit/testkit/qc_box.py; the bind: scripts/octo-feather-qc-sandbox,
 # step 5): uv's cache, as `uv cache dir` names it, is an overlay in the sandbox. A judge there runs an offline
 # `uv sync --locked` of a package held only in that cache (its find-links wheel removed after the host's sync) and
