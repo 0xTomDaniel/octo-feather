@@ -1,0 +1,24 @@
+[
+ {
+  "id": "reviewer-role-step-own-duty",
+  "role": "code-reviewer",
+  "fixture": "docs-rules-skill",
+  "head": {
+   "fixture": "owned-steps-own-duty",
+   "branch": "implementer-t11",
+   "message": "feat(roles): the worker asks before breaking a command (T11, worker-asks-breaking)"
+  },
+  "task": "Review lane gh11, ticket T11 (when a ticket's change would break an existing command's output, the worker asks its supervisor before writing it; criterion worker-asks-breaking).\nDiff: base main, head implementer-t11 in this directory (`git diff main...implementer-t11`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message."
+ },
+ {
+  "id": "reviewer-role-restates-skill",
+  "role": "code-reviewer",
+  "fixture": "docs-rules-skill",
+  "head": {
+   "fixture": "owned-steps-role-restates-skill",
+   "branch": "implementer-t13",
+   "message": "feat(errors): errors start with error: (T13, error-prefix)"
+  },
+  "task": "Review lane gh13, ticket T13 (every error the CLI prints starts with `error: `; criterion error-prefix).\nDiff: base main, head implementer-t13 in this directory (`git diff main...implementer-t13`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message."
+ }
+]

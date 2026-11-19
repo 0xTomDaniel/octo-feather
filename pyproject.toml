@@ -45,6 +45,7 @@ extend-include = [
   "scripts/check-evals",
   "scripts/check-gate-free",
   "scripts/check-languages",
+  "scripts/check-owner-field",
   "scripts/check-roles",
   "scripts/check-skills",
   "scripts/check-templates",

@@ -1,0 +1,7 @@
+{
+  "suite": "owned-rules",
+  "kind": "role-transcript",
+  "description": "Duplicated-rule class (issue #640; rule: owner ruling 2026-11-06, the code-review skill's Verdict step, Owner paragraphs). reviewer-role-step-own-duty: a diff adding a worker step (agents/worker.md, a judgment duty: ask the supervisor before breaking a command's output) that a new criterion in docs/specs/roles.md accepts; graded on `Verdict: clear` and every `Owner:` line `restated: none`. Held-out (written before any run, never reworded after one, scored apart): reviewer-role-restates-skill (a worker step restating the error rule the diff changes in the notes-cli skill; `Verdict: blocking` and an `Owner:` line for that skill listing agents/worker.md). Fact forms: .agents/skills/eval-cases/references/schema.md.",
+  "max_tool_calls": 120,
+  "timeout_s": 1800
+}
