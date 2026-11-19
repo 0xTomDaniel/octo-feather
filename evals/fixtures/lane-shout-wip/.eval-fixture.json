@@ -1,0 +1,1 @@
+{"base": "lane-shout-main", "pool": {"src/app/cli.py": "cli-shout.py", "src/app/core.py": "core-shout.py"}}

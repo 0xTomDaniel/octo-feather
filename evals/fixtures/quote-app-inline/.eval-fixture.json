@@ -1,0 +1,1 @@
+{"pool": {".githooks/pre-commit": "pre-commit", ".github/workflows/check.yml": "check.yml", ".gitignore": "gitignore", "justfile": "justfile", "tests/test_cli.py": "test_cli-quote.py", "uv.lock": "uv.lock"}}

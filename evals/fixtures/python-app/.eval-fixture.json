@@ -1,0 +1,1 @@
+{"base": "py-mini", "pool": {".githooks/pre-commit": "pre-commit", ".github/workflows/check.yml": "check.yml", "justfile": "justfile", "pyproject.toml": "pyproject.toml", "uv.lock": "uv.lock"}}
