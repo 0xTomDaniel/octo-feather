@@ -33,12 +33,14 @@ command = "true"
 command = "{kit("octo-feather-qa")} --verdict {PIN}"
 covers = ["agents"]
 """
-# The launcher at the target's boundary: answers `--json agents/<role>.md` with the role's launch,
-# skill s and extension e.ts in the repo and one external skill outside it (scripts/pi-role --help).
+# The launcher at the target's boundary: answers `--launch-set agents/<role>.md` in the form
+# scripts/pi-role --help, Launch set, gives, its launch holding skill s and extension e.ts in the
+# repo and one external skill outside it.
 PI_ROLE = """#!/bin/sh
 top=$(cd "$(dirname "$0")/.." && pwd -P)
-printf '{"args": ["--extension", "%s/extensions/e.ts", "--skill", "%s/.agents/skills/s",\
- "--skill", "/opt/external/x"]}\\n' "$top" "$top"
+printf '{"files": {"%s": "", "%s/scripts/pi-role": "", "%s/web-mcp.json": "",\
+ "%s/extensions/e.ts": "", "%s/.agents/skills/s/": "", "/opt/external/x/": ""}}\\n'\
+ "$2" "$top" "$top" "$top" "$top"
 """
 FILES = {
     "qc.toml": QC_TOML,

@@ -1,4 +1,4 @@
-Seeded defect: teardown removes a dirty lane worktree by force, its changes lost (octo-feather-lane --help, post-merge step 5).
+Seeded defect: teardown removes a dirty lane worktree by force, its changes lost (octo-feather-lane --help, post-merge step 6).
 diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
 index 29b0852d..ba541ce4 100755
 --- a/scripts/octo-feather-lane

@@ -11,14 +11,17 @@ set here: never the live kit), its origin a local bare repo behind a GitHub URL:
 justfile recipes (vendored-fetch, install-check) and the real mise run; `uv sync` and `pnpm
 install`, which would reach the package registries, are testkit/argv_recorder.sh (a plain seam
 stand-in for the registries), except where a refresh fails: the real uv fails for real (no lockfile;
-the pinned Python absent, downloads off). Step 4 (issue 398, tests/gate/kit/herdr_messaging.py)
-reads a throwaway state dir (XDG_STATE_HOME) with no lane record, so it tells no pane; step 5
+the pinned Python absent, downloads off). Step 4 (issue 1078) moves the director's checkout, the
+target repo post-merge runs in (a clone of the same origin, on main), by the rules octo-feather-lane
+--help, steps 3 and 4, states; step 3 checks it before the install moves. Step 5 (issue 1079)
+finds no Herdr server, names it and goes on. Step 6 (issue 398, tests/gate/kit/herdr_messaging.py)
+reads a throwaway state dir (XDG_STATE_HOME) with no lane record, so it tells no pane; step 7
 (issue 399, tests/gate/kit/lane_post_merge_teardown.py) finds no archived record, so it is pending
 and a green run exits 3.
 
 The kit's origin (B, then the merge commit M with a pyproject, then P past it with a mise.toml; and
-M2 off B pinning a Python no one has), its install clone and the target repo are prepared once per
-gate run (testkit Scratch.prepare); each case moves the install clone, never clones.
+M2 off B pinning a Python no one has), its install clone and the target clone (on main at P) are
+prepared once per gate run (testkit Scratch.prepare); each case moves the clones, never clones.
 """
 
 from __future__ import annotations
@@ -32,6 +35,7 @@ from testkit import HERE, ROOT, Ran, Scratch, kit, main, tool_homes
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
+    from pathlib import Path
 
 H = "1234567890abcdef1234567890abcdef12345678"  # the pinned head
 FIELDS = "databaseId,status,conclusion,workflowName,url"  # post-merge's run list fields
@@ -55,16 +59,15 @@ JUSTFILE = (
     '>>"$ARGV_LOG"; echo >>"$ARGV_LOG"\n'
 )
 SUMMARY = "post-merge gh7 PR #7: step 1 merged {}; step 2 main CI {}; step 3 kit refresh {}; "
-STOP1 = SUMMARY.format("stopped", "not run", "not run") + (
-    "step 4 tell supervisors not run; step 5 teardown not run"
+LATER = "step 5 stale agents not run; step 6 tell supervisors not run; step 7 teardown not run"
+STOP1 = SUMMARY.format("stopped", "not run", "not run") + "step 4 checkout not run; " + LATER
+STOP2 = SUMMARY.format("ok", "stopped", "not run") + "step 4 checkout not run; " + LATER
+STOP3 = SUMMARY.format("ok", "ok", "stopped") + "step 4 checkout not run; " + LATER
+STOP4 = SUMMARY.format("ok", "ok", "ok") + "step 4 checkout stopped; " + LATER
+GREEN = SUMMARY.format("ok", "ok", "ok") + (
+    "step 4 checkout ok; step 5 stale agents ok; step 6 tell supervisors ok; "
+    "step 7 teardown pending"
 )
-STOP2 = SUMMARY.format("ok", "stopped", "not run") + (
-    "step 4 tell supervisors not run; step 5 teardown not run"
-)
-STOP3 = SUMMARY.format("ok", "ok", "stopped") + (
-    "step 4 tell supervisors not run; step 5 teardown not run"
-)
-GREEN = SUMMARY.format("ok", "ok", "ok") + "step 4 tell supervisors ok; step 5 teardown pending"
 
 
 def build(p: Scratch) -> None:
@@ -93,7 +96,7 @@ def build(p: Scratch) -> None:
     commit("m2", {".python-version": f"{NO_PIN}\n", "pyproject.toml": pyproject})
     p.git(seed, "push", "-q", str(o), "HEAD:py")
     p.run(["git", "clone", "-q", str(o), str(p.root / "kit")])
-    p.git(p.root, "init", "-q", str(p.root / "target"))
+    p.run(["git", "clone", "-q", str(o), str(p.root / "target")])
 
 
 class Lane:
@@ -129,6 +132,7 @@ class Lane:
         s.gh.store("api/repos/o/kit.json", {"nameWithOwner": "o/kit"})
         self.merge, self.repo = self.m, ""  # PR #7's merge commit; the --repo gh is asked with
         self.install(self.b, "o/kit")  # steps 1-2: the PR's repo is not the install's
+        s.git(self.target, "remote", "set-url", "origin", str(o))  # this copy's origin
 
     def install(self, at: str, repo: str = "o/r") -> None:
         """The install clone detached at AT, clean, origin https://github.com/REPO.git (this
@@ -195,10 +199,23 @@ class Lane:
             tree("g", [("workflows", "tree", "w")])
             tree("w", [(p, k, "b") for p, k in wf])
 
-    def run(self, want: int, *args: str, tools: str = "rec") -> Ran:
-        """post-merge ARGS from the target repo, exit WANT; gh only read (each logged call)."""
+    def checkout(self, at: str, branch: str = "main") -> None:
+        """The target clone on BRANCH at AT, clean."""
+        self.s.git(self.target, "checkout", "-q", "-f", "-B", branch, at)
+        self.s.git(self.target, "clean", "-qfdx")
+
+    def where(self) -> tuple[str, str]:
+        """The target clone's HEAD and branch."""
+        t = self.target
+        return self.s.git(t, "rev-parse", "HEAD"), self.s.git(t, "branch", "--show-current")
+
+    def run(self, want: int, *args: str, tools: str = "rec", cwd: Path | None = None) -> Ran:
+        """post-merge ARGS from the target repo (or CWD), exit WANT; gh only read (each logged
+        call)."""
         env = {"PATH": self.path[tools] + self.s.env["PATH"]} | self.homes
-        r = self.s.run([kit("octo-feather-lane"), *args], want=want, cwd=self.target, env=env)
+        r = self.s.run(
+            [kit("octo-feather-lane"), *args], want=want, cwd=cwd or self.target, env=env
+        )
         wrote = [x for x in self.s.gh.log() if not READS.fullmatch(x)]
         assert not wrote, f"{args}: ran a gh write: {self.s.gh.log()}"
         return r
@@ -260,7 +277,7 @@ def merged_step(s: Scratch) -> None:
 
 def main_ci(s: Scratch) -> None:
     """Step 2: a run in progress is watched to its end with --exit-status, a second workflow joins;
-    every run success: exit 3 (step 5 pending), one line per step and the summary; the PR's repo
+    every run success: exit 3 (step 7 pending), one line per step and the summary; the PR's repo
     not the install's leaves it unchanged; a rerun the same.
     A red run stops naming its URL; a watch failing while its run reads unfinished
     stops naming it."""
@@ -288,10 +305,13 @@ def main_ci(s: Scratch) -> None:
             f"step 2 main CI: ok: 2 push runs on {m12} concluded success: check "
             "https://github.com/o/r/actions/runs/11, lint https://github.com/o/r/actions/runs/12",
             "step 3 kit refresh: ok: kit install unchanged: PR in o/r, install is o/kit",
-            f"step 4 tell supervisors: ok: no other open lane in {lanes} to tell",
+            # no Herdr server (the testkit's herdr, no session): named, never a stop (--help, stale)
+            "step 5 stale agents: ok: stale agents: not read: herdr agent list failed "
+            "(server_not_running)",
+            f"step 6 tell supervisors: ok: no other open lane in {lanes} to tell",
             summary=GREEN,
         )
-        assert len(r.out.split("\n")) == 6, f"green prints one line per step, a summary: {r.out}"
+        assert len(r.out.split("\n")) == 8, f"green prints one line per step, a summary: {r.out}"
         assert (lane.head(), lane.calls()) == (lane.b, []), "other repo moved or refreshed"
         log = s.gh.log()
         assert "run watch 11 --exit-status -R o/r" in log, f"run not watched in o/r: {log}"
@@ -516,6 +536,7 @@ def kit_refresh(s: Scratch) -> None:
     lane.merge = lane.m2
     lane.store([run1("check", "completed", "success", 11, lane.m2)])
     lane.install(b)
+    lane.checkout(b)  # not diverged from M2, so step 3 moves the install (--help, step 3)
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7", tools="real-uv")
     says(
         r,
@@ -556,5 +577,108 @@ def install_stops(s: Scratch) -> None:
     assert (lane.head(), lane.calls()) == (d, []), f"diverged install changed: {lane.calls()}"
 
 
+def checkout_follows(s: Scratch) -> None:
+    """Step 4 (octo-feather-lane --help): the target clone behind, at and past the merge commit,
+    then post-merge run from the kit install."""
+    lane = Lane(s)
+    m, b, p, t, k = lane.m, lane.b, lane.p, lane.target, lane.kit
+    m12 = m[:12]
+    lane.store([run1("check", "completed", "success", 11, m)])
+    lane.checkout(b)
+    r = lane.run(3, "post-merge", "7", H, "--lane", "gh7")
+    ok4 = "step 4 checkout: ok: "
+    says(r, "behind", f"{ok4}checkout {t} fast-forwarded {b[:12]}..{m12}", summary=GREEN)
+    assert lane.where() == (m, "main"), f"behind: {lane.where()}"
+    r = lane.run(3, "post-merge", "7", H, "--lane", "gh7")
+    says(r, "rerun", f"{ok4}checkout {t} at {m12}, at or past {m12}: no move", summary=GREEN)
+    assert lane.where() == (m, "main"), f"rerun: {lane.where()}"
+    lane.checkout(p)
+    r = lane.run(3, "post-merge", "7", H, "--lane", "gh7")
+    says(r, "past", f"{ok4}checkout {t} at {p[:12]}, at or past {m12}: no move", summary=GREEN)
+    assert lane.where() == (p, "main"), f"past: {lane.where()}"
+    lane.install(b)
+    s.git(k, "checkout", "-q", "-B", "main", b)
+    r = lane.run(3, "post-merge", "7", H, "--lane", "gh7", cwd=k)
+    says(
+        r,
+        "kit install",
+        f"step 3 kit refresh: ok: kit install {k} fast-forwarded {b[:12]}..{m12}; ",
+        f"{ok4}checkout {k} is the kit install, which step 3 moves: no second move",
+        summary=GREEN,
+    )
+    assert lane.head() == m, f"kit install: {lane.head()}"
+
+
+def checkout_kept(s: Scratch) -> None:
+    """Step 4 (octo-feather-lane --help) on a target clone dirty, on another branch, or diverged:
+    exit 1, HEAD, branch and the uncommitted change as they were."""
+    lane = Lane(s)
+    m12, b, t = lane.m[:12], lane.b, lane.target
+    stop4 = f"step 4 checkout: stopped: checkout {t} "
+    lane.store([run1("check", "completed", "success", 11, lane.m)])
+    lane.checkout(b)
+    (t / "a").write_text("mine\n")
+    r = lane.run(1, "post-merge", "7", H, "--lane", "gh7")
+    says(r, "dirty", f"{stop4}is dirty (M a): commit, move or drop", summary=STOP4)
+    assert lane.where() == (b, "main"), f"dirty moved: {lane.where()}"
+    assert (t / "a").read_text() == "mine\n", "dirty checkout lost its change"
+    lane.checkout(b, "side")
+    r = lane.run(1, "post-merge", "7", H, "--lane", "gh7")
+    says(r, "other branch", f"{stop4}is on side, not main: nothing was changed", summary=STOP4)
+    assert lane.where() == (b, "side"), f"other branch moved: {lane.where()}"
+    lane.checkout(b)
+    (t / "d").write_text("")
+    s.git(t, "add", "d")
+    s.git(t, "commit", "-qm", "d")
+    d = lane.where()[0]
+    r = lane.run(1, "post-merge", "7", H, "--lane", "gh7")
+    says(r, "diverged", f"{stop4}at {d[:12]} has diverged from merge commit {m12}", summary=STOP4)
+    assert lane.where() == (d, "main"), f"diverged moved: {lane.where()}"
+
+
+def install_kept(s: Scratch) -> None:
+    """Step 3 stops before the install moves (octo-feather-lane --help, steps 3 and 4): an
+    install on another branch, an install that is the director's checkout on a detached HEAD, and
+    a target checkout step 4 would keep; exit 1, nothing changed (HEAD, branch, no refresh)."""
+    lane = Lane(s)
+    b, k, t = lane.b, lane.kit, lane.target
+    stop3 = "step 3 kit refresh: stopped: "
+    lane.store([run1("check", "completed", "success", 11, lane.m)])
+
+    def kit_at() -> tuple[str, str]:
+        return lane.head(), s.git(k, "branch", "--show-current")
+
+    lane.install(b)
+    s.git(k, "checkout", "-q", "-B", "side", b)
+    for cwd in (k, t):  # the install as the director's checkout, then beside the target's
+        r = lane.run(1, "post-merge", "7", H, "--lane", "gh7", cwd=cwd)
+        want = f"{stop3}kit install {k} is on side, not main: nothing was changed"
+        says(r, f"other branch from {cwd}", want, summary=STOP3)
+        assert (kit_at(), lane.calls()) == ((b, "side"), []), f"other branch: {lane.calls()}"
+    lane.install(b)
+    r = lane.run(1, "post-merge", "7", H, "--lane", "gh7", cwd=k)
+    want = f"{stop3}kit install {k} is on a detached HEAD, not main: nothing was changed"
+    says(r, "detached director checkout", want, summary=STOP3)
+    assert (kit_at(), lane.calls()) == ((b, ""), []), f"detached: {lane.calls()}"
+    lane.checkout(b)
+    (t / "a").write_text("mine\n")
+    r = lane.run(1, "post-merge", "7", H, "--lane", "gh7")
+    says(r, "dirty checkout", f"{stop3}checkout {t} is dirty (M a): commit", summary=STOP3)
+    assert (kit_at(), lane.calls()) == ((b, ""), []), f"dirty checkout: {lane.calls()}"
+    assert lane.where() == (b, "main"), f"dirty checkout moved: {lane.where()}"
+    assert (t / "a").read_text() == "mine\n", "dirty checkout lost its change"
+
+
 if __name__ == "__main__":
-    main(merged_step, main_ci, late_run, no_ci, superseded, kit_refresh, install_stops)
+    main(
+        merged_step,
+        main_ci,
+        late_run,
+        no_ci,
+        superseded,
+        kit_refresh,
+        install_stops,
+        checkout_follows,
+        checkout_kept,
+        install_kept,
+    )
