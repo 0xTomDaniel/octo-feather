@@ -1,0 +1,12 @@
+# The parity lever's case for the command scenario recorded_372 (tests/gate/kit/lane_correction.py at old_at), moved in-process to
+# file_corrections in tests/gate/kit/test_lane_correction_filer.py (#1083; tests/parity/lever.py --help).
+old = "tests/gate/kit/test_lane_correction.py::test_lane_correction_recorded_372"
+old_at = "5f7536d4"
+# The old item's scenario file; its testkit is unchanged.
+needs = ["tests/gate/kit/lane_correction.py"]
+new = "tests/gate/kit/test_lane_correction_filer.py::test_lane_correction_recorded_372"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): octo-feather-lane, run by the kit
+# venv's python, imports it: coverage.py measures it.
+[ran]
+"scripts/correction_lanes.py" = "coverage"

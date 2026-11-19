@@ -107,8 +107,8 @@ A problem passed to the next authority in the sender's actual parent chain after
 _Avoid_: Ping, flag, bubbling up
 
 **Test**:
-Code that proves product behaviour the spec states: end to end through a public interface the product offers its users (quality spec `#acceptance-public-surfaces`), an integration test at the interface of a deep module with a stable interface, public or internal, at a seam written down from the ticket before any test (docs/adr/0002). Which code is product and who builds it: docs/adr/0008, Who builds what.
-_Avoid_: Test gate, unit test
+Code that proves product behaviour the spec states, with no model in it: integration or end-to-end, each kind as quality spec `#test-kinds` defines it; where a test enters: quality spec `#acceptance-public-surfaces` (docs/adr/0002). Which code is product and who builds it: docs/adr/0008, Who builds what.
+_Avoid_: Test gate, unit test, eval
 
 **Check**:
 A rule the gate enforces on the repo's own code or text: lint, types, structure, a scan, a banned pattern, an eval grader judging an agent. A file under `tests/` that scans the repo's own text (lane #82's former `tests/tracker-prose.sh`) is a check and is judged as one. Only an exact check is allowed (docs/adr/0008); who builds one is ruled there too.

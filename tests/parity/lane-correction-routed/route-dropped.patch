@@ -1,0 +1,14 @@
+Seeded defect: a due class names no route its reflection findings gave (spec comms #reflection-correction).
+diff --git a/scripts/correction_lanes.py b/scripts/correction_lanes.py
+index 82516854..92113619 100755
+--- a/scripts/correction_lanes.py
++++ b/scripts/correction_lanes.py
+@@ -180,7 +180,7 @@ def corrections(logs: dict[str, list[LogLine]], director: list[LogLine]) -> list
+         routes = (
+             [(log, d) for log, d in found if d.get("route")]
+             if cls == MISSED
+-            else routed.get(cls, [])
++            else []
+         )
+         out.append(Due(cls, found, routes, latest))
+     return out

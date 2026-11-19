@@ -194,20 +194,20 @@ covers = ["scripts/octo-feather-qa", "scripts/check-evals"]
 # Reflectors stubbed, tracker faked: no model call, no tracker write.
 [demo."comms#acceptance-reflect-files-correction"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
-covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane", "tests/fixtures/tracker-gh/gh"]
+covers = ["scripts/octo-feather-reflect", "scripts/correction_lanes.py", "scripts/tracker_calls.py", "scripts/octo-feather-lane", "tests/fixtures/tracker-gh/gh"]
 
 # The route owner's tracker: the drive files a kit-routed class in the kit's and a `target:`-routed one in the target's.
 [demo."comms#acceptance-reflect-files-route-owner"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
-covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane", "tests/fixtures/tracker-gh/gh"]
+covers = ["scripts/octo-feather-reflect", "scripts/correction_lanes.py", "scripts/tracker_calls.py", "scripts/octo-feather-lane", "tests/fixtures/tracker-gh/gh"]
 
 [demo."issue-lifecycle#acceptance-writer-route-lane"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
-covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane"]
+covers = ["scripts/octo-feather-reflect", "scripts/correction_lanes.py", "scripts/tracker_calls.py", "scripts/octo-feather-lane"]
 
 [demo."comms#acceptance-correction-intake"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
-covers = ["scripts/octo-feather-lane", "scripts/octo-feather-reflect"]
+covers = ["scripts/octo-feather-lane", "scripts/octo-feather-reflect", "scripts/correction_lanes.py", "scripts/tracker_calls.py"]
 
 # Proven by its tagged test, tests/gate/kit/test_handoff_ended.py (Herdr stand-in; the scenario prints the lane hand-off log).
 [demo."comms#acceptance-worker-ended"]
@@ -215,11 +215,11 @@ covers = ["scripts/octo-feather-handoff", "scripts/handoff_log.py", "agents/supe
 
 # Proven by its tagged test, tests/gate/kit/test_lane_correction.py (gh stand-in's store; the scenario prints each archive's output).
 [demo."comms#acceptance-reflect-recurrence-comments"]
-covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane", "tests/gate/kit/lane_correction.py"]
+covers = ["scripts/octo-feather-reflect", "scripts/correction_lanes.py", "scripts/tracker_calls.py", "scripts/octo-feather-lane", "tests/gate/kit/lane_correction.py"]
 
 # Proven by its tagged test, tests/gate/kit/test_lane_correction.py (gh stand-in's store; the scenario prints each reflect --director's output).
 [demo."issue-lifecycle#acceptance-reflection-missed-lane"]
-covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane", "tests/gate/kit/lane_correction.py"]
+covers = ["scripts/octo-feather-reflect", "scripts/correction_lanes.py", "scripts/tracker_calls.py", "scripts/octo-feather-lane", "tests/gate/kit/lane_correction.py"]
 
 [demo."comms#acceptance-report-owner-caught-headline"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run factory-report"
