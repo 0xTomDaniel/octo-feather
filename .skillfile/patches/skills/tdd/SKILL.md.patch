@@ -1,4 +1,4 @@
-# reason: ADR 0002: seams are deep modules with stable interfaces, written down from the ticket before any test, deepened first when none exists, one or two tests each; no test leak into production code; issue #107 Pi has no Skill tool: a skill loads by reading its SKILL.md by path; issue #107 description triggers on writing, changing or reviewing tests, not on a user asking; issue #558 description double-quoted: a plain YAML value holding ": " makes Pi drop the skill
+# reason: ADR 0002: seams are deep modules with stable interfaces, written down from the ticket before any test, deepened first when none exists, one or two tests each; no test leak into production code; issue #107 Pi has no Skill tool: a skill loads by reading its SKILL.md by path; issue #107 description triggers on writing, changing or reviewing tests, not on a user asking; issue #558 description double-quoted: a plain YAML value holding ": " makes Pi drop the skill; issue #1084 which kind a test is: one definition, quality spec #test-kinds
 --- a/SKILL.md
 +++ b/SKILL.md
 @@ -1,6 +1,6 @@
@@ -9,12 +9,14 @@
  ---
  
  # Test-Driven Development
-@@ -19,20 +19,28 @@
+@@ -19,20 +19,30 @@
  
  A **seam** is the public boundary you test at: the interface where you observe behavior without reaching inside. Tests live at seams, never against internals.
  
 -**Test only at pre-agreed seams.** Before writing any test, write down the seams under test and confirm them with the user. No test is written at an unconfirmed seam. You can't test everything, so agreeing the seams up front is how testing effort lands on the critical paths and complex logic instead of every edge case.
 +**Test only at pre-agreed seams.** Two hard guards (docs/adr/0002): each seam is the interface of a deep module with a stable interface, public or internal, never a private helper or a shallow wrapper whose interface mirrors its implementation; and no test is written at a seam missing from your written list. End-to-end tests drive only a public interface the product offers its users (its CLI, HTTP, UI, MCP or another public protocol). You can't test everything, so agreeing the seams up front is how testing effort lands on the critical paths and complex logic instead of every edge case.
++
++Which kind a test is: octo-feather quality spec `#test-kinds`.
 +
 +Do these in order, before the red-green loop below; steps 2 and 3 run whenever a listed seam is a module the base tree lacks or one that is not deep, even one you would create anyway:
 +

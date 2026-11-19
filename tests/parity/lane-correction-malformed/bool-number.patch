@@ -1,0 +1,14 @@
+Seeded defect: gh's issue list item numbered true passes as gh's issue JSON (spec comms #reflection-correction).
+diff --git a/scripts/correction_lanes.py b/scripts/correction_lanes.py
+index 82516854..1245fdc9 100755
+--- a/scripts/correction_lanes.py
++++ b/scripts/correction_lanes.py
+@@ -547,7 +547,7 @@ def correction_issues(repo: str | None, *, full: bool = False) -> list[dict[str,
+         cs = d.get("comments")
+         ok = (
+             all(k in d for k in fields)
+-            and type(d["number"]) is int
++            and isinstance(d["number"], int)
+             and isinstance(d["title"], str)
+             and isinstance(d["state"], str)
+             and isinstance(d["closedAt"], (str, type(None)))

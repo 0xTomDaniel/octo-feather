@@ -5,11 +5,19 @@ from collections.abc import Callable
 
 import pytest
 from herdr_messaging import (
+    director_moved,
+    director_prune,
     director_worker_resume,
     fresh_worker_session,
+    herdr_malformed,
     parent_gone,
+    parent_resumed,
     post_merge_busy,
     queued_completion,
+    repoint_record,
+    result_compacting,
+    result_resumed,
+    results_listing,
     say_lookup_fails,
     say_resumes_parked,
     say_stalled,
@@ -23,18 +31,22 @@ from herdr_messaging import (
 Case = Callable[..., None]
 
 
+@pytest.mark.e2e
 def test_spawn_ready_late(case: Case) -> None:
     case(spawn_ready_late)
 
 
+@pytest.mark.e2e
 def test_spawn_fails_closed(case: Case) -> None:
     case(spawn_fails_closed)
 
 
+@pytest.mark.e2e
 def test_spawn_one_bound(case: Case) -> None:
     case(spawn_one_bound)
 
 
+@pytest.mark.e2e
 def test_say_resumes_parked(case: Case) -> None:
     case(say_resumes_parked)
 
@@ -47,6 +59,7 @@ def test_say_stalled(case: Case) -> None:
     case(say_stalled)
 
 
+@pytest.mark.e2e
 def test_post_merge_busy(case: Case) -> None:
     case(post_merge_busy)
 
@@ -55,6 +68,7 @@ def test_post_merge_tell_supervisors(case: Case) -> None:
     case(tell_supervisors)
 
 
+@pytest.mark.e2e
 @pytest.mark.criterion(
     "comms#acceptance-queued-completion", source="tests/gate/kit/herdr_messaging.py"
 )
@@ -69,6 +83,7 @@ def test_worker_route(case: Case) -> None:
     case(worker_route)
 
 
+@pytest.mark.e2e
 @pytest.mark.criterion("comms#acceptance-parent-gone", source="tests/gate/kit/herdr_messaging.py")
 def test_parent_gone(case: Case) -> None:
     case(parent_gone)
@@ -86,3 +101,36 @@ def test_director_worker_resume(case: Case) -> None:
 )
 def test_fresh_worker_session(case: Case) -> None:
     case(fresh_worker_session)
+
+
+def test_parent_resumed(case: Case) -> None:
+    case(parent_resumed)
+
+
+def test_director_moved(case: Case) -> None:
+    case(director_moved)
+
+
+@pytest.mark.e2e
+def test_result_compacting(case: Case) -> None:
+    case(result_compacting)
+
+
+def test_result_resumed(case: Case) -> None:
+    case(result_resumed)
+
+
+def test_results_listing(case: Case) -> None:
+    case(results_listing)
+
+
+def test_director_prune(case: Case) -> None:
+    case(director_prune)
+
+
+def test_repoint_record(case: Case) -> None:
+    case(repoint_record)
+
+
+def test_herdr_malformed(case: Case) -> None:
+    case(herdr_malformed)

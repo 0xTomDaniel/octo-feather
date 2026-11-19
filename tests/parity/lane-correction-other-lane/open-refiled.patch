@@ -1,0 +1,14 @@
+Seeded defect: a class with an open issue files a second one (issue-lifecycle #lanes-correction).
+diff --git a/scripts/correction_lanes.py b/scripts/correction_lanes.py
+index 82516854..1d30fd32 100755
+--- a/scripts/correction_lanes.py
++++ b/scripts/correction_lanes.py
+@@ -258,7 +258,7 @@ def still_due(due: Due, issues: list[dict[str, Any]]) -> bool:
+     mine = of_class(due, issues)
+     if not mine:
+         return True
+-    if any(is_open(i) for i in mine):
++    if any(is_open(i) for i in mine) and False:
+         return False
+     return due.latest > max(str(i.get("closedAt") or "") for i in mine)
+ 

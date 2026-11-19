@@ -1,0 +1,15 @@
+Seeded defect: a `target:` record naming no repository files in the current directory's tracker (spec comms #reflection-correction).
+diff --git a/scripts/correction_lanes.py b/scripts/correction_lanes.py
+index 82516854..1eb0b19b 100755
+--- a/scripts/correction_lanes.py
++++ b/scripts/correction_lanes.py
+@@ -492,8 +492,7 @@ def target_repo(rec: tuple[Path, dict[str, object]] | None, lane: str, cls: str)
+     )
+     fix = "; nothing filed: fix the record, then rerun"
+     if not isinstance(repo, str) or not repo:
+-        msg = f"{why} names no repository{fix}"
+-        raise Refused(msg)
++        return
+     view = repo_view(repo, f"check the repository of {path}, then rerun")
+     if view.name.lower() != repo.lower():
+         msg = f"{why} names repository {repo}, which is now {view.name}{fix}"
