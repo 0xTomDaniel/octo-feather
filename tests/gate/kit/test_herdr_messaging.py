@@ -111,6 +111,7 @@ def test_director_moved(case: Case) -> None:
     case(director_moved)
 
 
+@pytest.mark.e2e
 def test_result_compacting(case: Case) -> None:
     case(result_compacting)
 
