@@ -31,9 +31,8 @@ Own one issue or one epic coordination layer from brief through closure.
 - Register each review row with `--owner "${HERDR_SESSION:-default}/$HERDR_PANE_ID"`, your session and pane: the review service may run in another Herdr session, and it wakes you only in the session the `--owner` value names (spec `#session-wake-owner`).
 - As supervisor, use
   `$(octo-feather-state)/lanes/<supervisor agent name>.toml`.
-  Its `supervisor` is your Herdr pane id (`supervisor = "w5:pP8"`, the `pane=` value
-  herdr-spawn printed), never your agent name or tab; who rewrites it: spec
-  `#octo-lane-record-key-supervisor`, never you.
+  Its `supervisor` key, what it holds and who writes it: spec
+  `#octo-lane-record-key-supervisor`; never you.
   Keys follow the lane record format, spec `#lane-record`.
   The director creates it at launch; edit that file in place, changing only the
   fields a moment names and keeping every other field;

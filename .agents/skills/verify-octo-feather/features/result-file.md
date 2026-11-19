@@ -15,7 +15,7 @@ Drive criterion: `comms#acceptance-result-file`
 
 ## How to get to it (user POV)
 
-- A worker reports with `herdr-say --parent MESSAGE`; a supervisor, on any wake (after a compaction or a resume too), runs `octo-feather-handoff results` and reads each result file it names (agents/supervisor.md, goal check-in).
+- A worker reports with `herdr-say --parent MESSAGE`; its parent's listing of result files (`octo-feather-handoff results`) is put in the parent's context after a start or a compaction by `extensions/results-on-wake.ts`; what the parent does with it: comms spec `#roles-goal`.
 
 ## Driving it with verify-octo-feather
 
