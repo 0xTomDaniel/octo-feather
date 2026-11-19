@@ -3,7 +3,8 @@
 scratch state dir (default and named HERDR_SESSION): a lane closed through the command, sha256
 before = after (the hand-off log: its lines unchanged, then the lane reflection's line, spec comms
 #reflection-lane), lanes/ no longer lists it, archive/ holds both; a lane without a hand-off log;
-each refusal leaves every entry in place; a failed move rolls back. The world is
+each refusal leaves every entry in place; a failed move rolls back. The lane's results dir
+(its workers' result files) moves into archive/ with it. The world is
 testkit.reflector's, each reflector finding no gap (test_lane_reflect.py covers the reflection)."""
 
 from __future__ import annotations
@@ -93,8 +94,12 @@ def archived(s: Scratch) -> None:
     top = st.top
     st.seed(top, "gh0")
     st.seed(top, "gh1")
+    (top / "gh0.results").mkdir()
+    (top / "gh0.results" / "S0.md").write_text("## report\n")
     other = [(p.name, p.read_bytes()) for p in sorted(top.glob("gh1.*"))]
     st.archive_ok(top, "gh0", "")
+    moved = top / "archive" / "gh0.results" / "S0.md"
+    assert moved.read_text() == "## report\n", "results dir not moved with the lane"
     assert [(p.name, p.read_bytes()) for p in sorted(top.glob("gh1.*"))] == other, (
         "another lane changed"
     )
@@ -116,7 +121,8 @@ def refusals(s: Scratch) -> None:
     """Each refusal non-zero, naming why, every entry under the state dir unchanged: a missing
     record (a stray log of that name stays), an archived record already there, an archived log
     already there, a bad name; non-regular sources before any move: a symlinked record (review of
-    a80d7b6), a symlinked log, a directory record, a directory log."""
+    a80d7b6), a symlinked log, a directory record, a directory log; a results dir whose
+    archive target exists, a results path that is no directory."""
     st = State(s)
     top = st.top
     st.seed(top, "gh0")  # gh0 archived before
@@ -130,6 +136,14 @@ def refusals(s: Scratch) -> None:
     st.seed(top, "gh5")
     (top / "archive" / "gh5.handoffs.jsonl").write_text("old\n")
     st.refuse(f"archive target exists: {top}/archive/gh5.handoffs.jsonl", "gh5")
+    st.seed(top, "gh11")
+    (top / "gh11.results").mkdir()
+    (top / "gh11.results" / "S1.md").write_text("## report\n")
+    (top / "archive" / "gh11.results").mkdir()
+    st.refuse(f"archive target exists: {top}/archive/gh11.results", "gh11")
+    st.seed(top, "gh12")
+    (top / "gh12.results").write_text("not a dir\n")
+    st.refuse(f"not a directory: {top}/gh12.results", "gh12")
     st.refuse("usage", "../gh1")
     (top / "seed.toml").write_text("issue = 0\n")
     (top / "gh7.toml").symlink_to("seed.toml")

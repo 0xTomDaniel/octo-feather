@@ -216,6 +216,7 @@ Use a unique name and provider-session identity for each independent assignment;
 <tr data-anchor="fm-tools"><td><code>tools</code></td><td>Strict allowlist of built-in Pi tools, comma-separated, plus <code>web</code> for the web tools (<a href="#launch-web">web</a>); never codemode, which every role gets (<a href="#launch-codemode">codemode</a>)</td></tr>
 <tr data-anchor="fm-skills"><td><code>skills</code></td><td>The only kit skills the role loads, by name; <code>{tracker}</code> stands for the target's tracker skill, which <code>pi-role</code> loads in its place (see <a href="./skills.spec.html#tracker">skills</a>)</td></tr>
 <tr data-anchor="fm-external-skills"><td><code>externalSkills</code></td><td>Optional: skills installed outside the kit, such as Spec Chat's, looked up only in the target repository's <code>.agents/skills</code>, the working checkout's and then its main checkout's, never in a home folder; a missing one is skipped with a warning (ADR 0013)</td></tr>
+<tr data-anchor="fm-extensions"><td><code>extensions</code></td><td>Optional: kit Pi extensions only this role loads, by file name in the kit's <code>extensions/</code>, on top of the ones every role loads; a name with no such file fails the gate</td></tr>
 </tbody>
 </table>
 </div>
