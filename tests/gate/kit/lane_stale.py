@@ -1,9 +1,10 @@
 """The scenario of tests/gate/kit/test_lane_stale.py, this file its command (testkit.main):
 `octo-feather-lane stale` (issue 1079; the rule: octo-feather-lane --help, stale), end to end
 through the kit's own commands in a copy of the kit (its role file changes here, never the kit's),
-the testkit's Herdr stand-in (testkit/herdr.py, its FAKE_HERDR world) and the box's real systemd
-user manager, which herdr-spawn's scope needs (agent_scope.py). Real processes stand in for each
-pane's Pi: the argv and working directory Herdr reads from /proc, as herdr-spawn starts it.
+the testkit's Herdr stand-in (testkit/herdr.py, its FAKE_HERDR world) and its systemd stand-in
+(testkit/systemd.py: the scope is not what this proves; agent_scope.py proves it end to end). Real
+processes stand in for each pane's Pi: the argv and working directory Herdr reads from /proc, as
+herdr-spawn starts it.
 
 Two implementers spawned by herdr-spawn in the copy, one before a change to their role file and
 one after, and a director started by hand (its Pi has no --session-id): stale names the first with
@@ -14,9 +15,9 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 from typing import TYPE_CHECKING
 
-from agent_scope import scope_of, show, stop, world
 from testkit import ROOT, Scratch, main
 
 if TYPE_CHECKING:
@@ -25,6 +26,17 @@ if TYPE_CHECKING:
 # What a launch reads from the kit: its commands, roles, skills, extensions and web server list.
 KIT_PARTS = ("scripts", "agents", ".agents", "extensions", "web-mcp.json")
 PI = ["python3", "-c", "import time; time.sleep(300)"]  # a stand-in Pi
+
+
+def world(s: Scratch) -> Path:
+    """S's empty Herdr world, the caller's Herdr and kit vars cleared."""
+    d = s.root / "herdr"
+    d.mkdir()
+    (d / "agents.json").write_text("{}")
+    for k in [k for k in s.env if k.startswith(("HERDR_", "OCTO_FEATHER_"))]:
+        del s.env[k]
+    s.env["FAKE_HERDR"] = str(d)
+    return d
 
 
 def kit_copy(s: Scratch) -> Path:
@@ -44,14 +56,13 @@ def kit_copy(s: Scratch) -> Path:
 def stale_agents(s: Scratch) -> None:
     """The demo: one implementer launched before a role-file change is stale naming the role file,
     one launched after is not named, a director started by hand is unknown."""
-    d = world(s, {})
+    d = world(s)
     s.identity()
     k = kit_copy(s)
     wt = s.root / "wt"
     wt.mkdir()
     spawn = [str(k / ".agents" / "skills" / "herdr-comms" / "assets" / "herdr-spawn")]
     procs: list[subprocess.Popen[bytes]] = []
-    panes: list[str] = []
 
     def launch(name: str) -> str:
         """NAME spawned in WT as an implementer, its stand-in Pi started with the session
@@ -59,7 +70,6 @@ def stale_agents(s: Scratch) -> None:
         args = ["--workspace", "w1", "--name", name, "--role", "implementer", "--cwd", str(wt)]
         out = s.run([*spawn, *args]).out
         pane = dict(x.split("=", 1) for x in out.split())["pane"]
-        panes.append(pane)
         agents = json.loads((d / "agents.json").read_text())
         env = agents[pane]["env"]
         argv = [*PI, "--session-id", env["OCTO_FEATHER_SESSION_ID"]]
@@ -81,7 +91,7 @@ def stale_agents(s: Scratch) -> None:
         agents["w9:p1"] = pane | {"agent_status": "idle", "pi_pid": director.pid}
         (d / "agents.json").write_text(json.dumps(agents))
         out = s.run([str(k / "scripts" / "octo-feather-lane"), "stale"], cwd=wt).out
-        show(f"octo-feather-lane stale:\n{out}")
+        sys.stdout.write(f"octo-feather-lane stale:\n{out}\n")  # the qc demo's output
         assert out.splitlines() == [
             f"stale: {before} implementer-a role implementer: agents/implementer.md changed",
             (
@@ -95,9 +105,6 @@ def stale_agents(s: Scratch) -> None:
     finally:
         for p in procs:
             p.kill()
-        agents = json.loads((d / "agents.json").read_text())
-        for pane in panes:
-            stop(scope_of(int(agents[pane]["shell_pid"])))
 
 
 if __name__ == "__main__":
