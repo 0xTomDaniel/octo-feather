@@ -2,9 +2,9 @@
 
 Criteria:
 
-- [quality#acceptance-qc-eval-verdict](../../../../docs/specs/quality.spec.html#acceptance-qc-eval-verdict)
+- [quality#acceptance-qa-evidence-block](../../../../docs/specs/quality.spec.html#acceptance-qa-evidence-block)
 
-Drive criterion: `quality#acceptance-qc-eval-verdict`
+Drive criterion: `quality#acceptance-qa-evidence-block`
 
 ## Sub-features
 
