@@ -162,13 +162,14 @@ EOF
 mk_rt() {
 mkdir -p "$t/rt/rt/reference" "$t/rt/fixtures/fx2/tests"; cp -r "$t/good/fixtures/fx" "$t/rt/fixtures/"
 echo "head" > "$t/rt/fixtures/fx2/README.md"; echo "def test_y(): pass" > "$t/rt/fixtures/fx2/tests/test_y.py"
-cp -r "$t/rt/fixtures/fx2" "$t/rt/fixtures/fx3"; echo "flip" > "$t/rt/fixtures/fx3/qc.md"   # head then (schema.md, Case)
+mkdir "$t/rt/fixtures/fx3"; echo '{"base": "fx2"}' > "$t/rt/fixtures/fx3/.eval-fixture.json"; echo "flip" > "$t/rt/fixtures/fx3/qc.md"   # head then (schema.md, Case)
 # A skill only the fixture holds, as a target's declared repo skill (rule: schema.md, Facts, Skill load).
-cp -r "$t/good/fixtures/fx" "$t/rt/fixtures/fxs"; mkdir -p "$t/rt/fixtures/fxs/.agents/skills/repo-only"
+mkdir -p "$t/rt/fixtures/fxs/.agents/skills/repo-only"; echo '{"base": "fx"}' > "$t/rt/fixtures/fxs/.eval-fixture.json"
 printf -- '---\nname: repo-only\ndescription: a fixture skill\n---\n\nDrive the app this way.\n' > "$t/rt/fixtures/fxs/.agents/skills/repo-only/SKILL.md"
 # test_write (rule: schema.md, Before targets): py is the kit's python-app; spec declares testpaths specs and python_files
 # *_check.py, so tests/test_*.py is not one of its tests.
-cp -r "$kit/evals/fixtures/python-app" "$t/rt/fixtures/py"; cp -r "$kit/evals/fixtures/python-app" "$t/rt/fixtures/spec"
+"$kit/scripts/check-evals" --export "$t/px" "$kit/evals"; cp -r "$t/px/python-app" "$t/rt/fixtures/py"; mkdir "$t/rt/fixtures/spec"
+echo '{"base": "py"}' > "$t/rt/fixtures/spec/.eval-fixture.json"; cp "$t/px/python-app/pyproject.toml" "$t/rt/fixtures/spec/"
 mkdir "$t/rt/fixtures/spec/specs"; echo 'def test_a(): pass' > "$t/rt/fixtures/spec/specs/base_check.py"
 sed -i 's/^testpaths = \["tests"\]$/testpaths = ["specs"]\npython_files = ["*_check.py"]/' "$t/rt/fixtures/spec/pyproject.toml"
 grep -q '^python_files = \["\*_check.py"\]$' "$t/rt/fixtures/spec/pyproject.toml" || fail "spec fixture: python_files not declared"

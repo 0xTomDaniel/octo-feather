@@ -9,7 +9,7 @@ A Pi adaptation of the eval method in Anthropic's `skill-creator` (Apache-2.0, c
 
 ## Where things live
 
-- `evals/<suite>/suite.json`, `evals/<suite>/cases.json` (what the agent sees), `evals/<suite>/reference/expectations.json` (the facts, hidden from the agent), `evals/fixtures/<name>/` (a small repo copied and committed on main per run).
+- `evals/<suite>/suite.json`, `evals/<suite>/cases.json` (what the agent sees), `evals/<suite>/reference/expectations.json` (the facts, hidden from the agent), `evals/fixtures/<name>/` (a small repo copied and committed on main per run; schema, Fixtures).
 - [`references/schema.md`](references/schema.md) (below: schema, by section) owns every eval and bench schema and policy: suite, case and setup fields, the closed fact list and how each fact is graded, judgment suites, calibration, `classifiers.json` and the bench's ranking, threshold and FAIL rule. Read it before writing or changing a case; run `scripts/check-evals` after every edit (it runs in `just check`).
 - `scripts/octo-feather-qa --help` runs cases (`just qa`), in the qc sandbox, and owns what a run shows: repeated runs (`--runs`), a baseline kit beside the current one (`--baseline`), the analysis, review cases.
 

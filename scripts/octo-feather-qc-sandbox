@@ -73,7 +73,8 @@ Setup (this process, outside the judge's namespaces):
 Inner (`inner` mode, srt's command, the caller's uid, no capabilities; the judge runs as its child):
   7. starts the one fresh per-run Herdr server inside the PID namespace; pre-run proof: one ok/FAIL line per check on
      stderr and QC_FD_PROOF; any FAIL exits 66 (a mise tool not installed: 6b, judged from the worktree's and the
-     kit's own mise config as scripts/octo-feather-mise-install --list names them); then go to the recorder
+     kit's own mise config as scripts/octo-feather-mise-install --list names them; a repo masked at setup and gone
+     since, no such path, counts hidden, named gone in its line); then go to the recorder
   8. judge runs (stdout passes through, stderr to the QC_FD_ERR pipe)
   9. post-run: wait up to 10 s for the spend ledger's detached writers, count agents, stop and delete the
      sandbox session, kill and count every other process in the PID namespace (srt's own bridges aside); one
@@ -1926,15 +1927,19 @@ def inner(cfgp: str, judge: list[str]) -> NoReturn:
     HM = os.path.realpath(os.environ["HOME"])
     rbad: list[str] = []
     rl: list[str] = []
+    rgone: list[str] = []  # removed since setup (a lane's worktree teardown): hidden
     repo_masks: list[tuple[str, str]] = c["repos"]
     for r, nmn in repo_masks:
+        rel = r[len(HM) + 1 :] if r.startswith(HM + "/") else r
         try:
             g = "/".join(sorted(os.listdir(r)))
+        except FileNotFoundError:
+            g = nmn
+            rgone.append(rel)
         except OSError as e:
             g = str(e)
         if g != nmn:
             rbad.append(f"{r} shows [{g}]")
-        rel = r[len(HM) + 1 :] if r.startswith(HM + "/") else r
         rl.append(rel + (f" [{nmn.replace('/', ' ')}]" if nmn else ""))
     kept = c["kept"]
     vis = f"visible: kit under test {kept[0]}, worktree {kept[1]}" + (
@@ -1945,7 +1950,9 @@ def inner(cfgp: str, judge: list[str]) -> NoReturn:
             not rbad,
             f"other repos hidden: {len(c['repos'])} git repos under {HM} (up to 3 levels down, dot-dirs aside), each a tmpfs mask listing only what is bound back"
             + (f" (NOT: {' '.join(rbad)})" if rbad else "")
-            + f": {', '.join(rl)}; {vis}",
+            + f": {', '.join(rl)}"
+            + (f"; {len(rgone)} gone since setup: {', '.join(rgone)}" if rgone else "")
+            + f"; {vis}",
         )
     else:
         say(
