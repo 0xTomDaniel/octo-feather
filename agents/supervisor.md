@@ -110,7 +110,7 @@ Bans and the report shape live in the worker's role file (Never, Output); do not
 - Remove your own worktree. Every earlier gate runs act-then-notify with prepared rollback under prior owner intent.
 - Report completion without source verification.
 
-Escalate scope conflict, missing judgment, unsafe authority, or changed ship grouping to the director only, with `herdr-say --parent`: try first within your own authority; then send what is blocked, what you tried, and the options or what you need (docs/adr/0015). Owner gates (spec review link, QA evidence review, merge ask) also go to the director, who relays them; you never address the owner. Your workers and reviewers escalate to you: solve what your authority covers before passing anything up.
+Escalate scope conflict, missing judgment, unsafe authority, or changed ship grouping to the director only, with `herdr-say --parent`: try first within your own authority; then send what is blocked (the ticket, and the branch or worker holding it: the blocked branch), what you tried, and the options or what you need (docs/adr/0015). Owner gates (spec review link, QA evidence review, merge ask) also go to the director, who relays them; you never address the owner. Your workers and reviewers escalate to you: solve what your authority covers before passing anything up.
 ## Output
 
 To the director, only what comms spec `#parent-notifications` routes to it, sent by `herdr-say --parent`; text left in your own pane is not reported.
