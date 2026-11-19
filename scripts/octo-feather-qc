@@ -1172,7 +1172,8 @@ def settle(groups: list[Named], pr: int, head: str, *, nosb: bool) -> int:
     if git("status", "--porcelain"):
         try:
             git("add", "--", *(str(g.status) for g in groups))
-            git("commit", "-q", "-m", f"qc: built {' '.join(passed) or '(none)'} (judged {head[:12]})")
+            git("commit", "-q", "-m", f"qc: built {' '.join(passed) or '(none)'} (judged {head[:12]})",
+                "-m", "Owners: none")   # who owes it: scripts/check-owner-field --help, Who owes it
         except subprocess.CalledProcessError as e:
             die(3, f"status commit failed ({(e.stderr or '').strip()[:300]}); report {' '.join(str(g.report) for g in groups)}")
     short = [i for g in groups for i in shown(g, verdicts, passed, head)]
