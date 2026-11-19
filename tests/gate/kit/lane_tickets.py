@@ -1141,6 +1141,83 @@ def skills_lines(s: Scratch) -> None:
     lt.read_only()
 
 
+def transition(s: Scratch) -> None:
+    """`tickets` on Linear (a tape built here, as tape's; issue-view --notes as lane_seam.py's
+    tape answers it): a ticket with no `Skills:` line written before the rule's kit commit (git
+    log -S SKILLS_SINCE) passes with one notice line naming that commit; one written after fails
+    missing-skills; one whose line is only a comment passes; a draft with no line always fails."""
+    from lane_seam import NOTES  # noqa: PLC0415 (lane_seam imports this module)
+
+    lt = Lt(s)
+    (lt.repo / ".octo-feather.toml").write_text('tracker = "linear"\n')
+    bare = bare101()
+    kids: dict[str, tuple[str, str, list[str]]] = {
+        "ENG-2": (bare, "2026-11-13T05:37:26.000Z", []),
+        "ENG-3": (bare, "2030-01-01T00:00:00.000Z", []),
+        "ENG-4": (bare, "2030-01-01T00:00:00.000Z", ["Skills: tdd"]),
+    }
+
+    def issue(k: str, desc: str, parent: str | None, kids_of: list[str]) -> dict[str, object]:
+        return {
+            "identifier": k,
+            "title": "t",
+            "description": desc,
+            "url": f"https://linear.app/acme/issue/{k}/t",
+            "state": {"type": "unstarted"},
+            "parent": {"identifier": parent} if parent else None,
+            "children": {
+                "nodes": [{"identifier": c} for c in kids_of],
+                "pageInfo": {"hasNextPage": False},
+            },
+            "inverseRelations": {"nodes": []},
+        }
+
+    def call(q: str, k: str, data: dict[str, object], n: int = 1) -> dict[str, object]:
+        """Linear's answer to Q for K, N times (issue-view, then issue-view --notes, ask VIEW)."""
+        return {
+            "argv": ["api", "--no-input", "--variable", f"id={k}", q],
+            "stdin": None,
+            "answers": [{"rc": 0, "err": "", "json": {"data": {"issue": data}}}] * n,
+        }
+
+    calls = [call(VIEW, "ENG-1", issue("ENG-1", "parent", None, list(kids)))]
+    for k, (desc, at, comments) in kids.items():
+        url = f"https://linear.app/acme/issue/{k}/t"
+        calls.append(call(VIEW, k, issue(k, desc, "ENG-1", []), 2))
+        notes: dict[str, object] = {
+            "url": url,
+            "createdAt": at,
+            "description": desc,
+            "comments": {
+                "nodes": [
+                    {"url": f"{url}#c", "createdAt": at, "editedAt": None, "body": b}
+                    for b in comments
+                ],
+                "pageInfo": {"hasNextPage": False},
+            },
+            "history": {"nodes": [], "pageInfo": {"hasNextPage": False}},
+        }
+        calls.append(call(NOTES, k, notes))
+    fl = s.root / "linear-t"
+    fl.mkdir()
+    (fl / "tape.json").write_text(json.dumps({"source": transition.__doc__, "calls": calls}))
+    (fl / "log").write_text("")
+    s.env |= {"FAKE_LINEAR": str(fl), "PATH": f"{LI}:{s.env['PATH']}"}
+    since = s.run(
+        ["git", "-C", str(ROOT), "log", "--format=%H", "-S", "missing-skills on every ticket since"]
+    ).out.split()[-1]
+    out = lt.lane(1, "tickets", "ENG-1").splitlines()
+    assert out[0].startswith(
+        "ENG-2: ok; notice: no `Skills:` line, body written 2026-11-13T05:37:26Z, before the rule "
+        f"({since[:12]}, "
+    ), out
+    assert out[1].startswith("ENG-3: class: missing-skills: no `Skills:` line"), out
+    assert out[2:] == ["ENG-4: ok", "ENG-1: 2 of 3 tickets pass, 1 fail"], out
+    has(lt.lane(1, "ticket", "-", stdin=bare), "stdin: class: missing-skills")
+    (lt.repo / ".octo-feather.toml").unlink()
+    lt.read_only()
+
+
 if __name__ == "__main__":
     main(
         tickets_github,
@@ -1155,4 +1232,5 @@ if __name__ == "__main__":
         linear,
         mcp_demos,
         skills_lines,
+        transition,
     )

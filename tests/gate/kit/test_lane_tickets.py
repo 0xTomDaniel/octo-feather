@@ -16,6 +16,7 @@ from lane_tickets import (
     scripts,
     skills_lines,
     tickets_github,
+    transition,
 )
 
 Case = Callable[..., None]
@@ -67,3 +68,7 @@ def test_mcp_demos(case: Case) -> None:
 
 def test_skills_lines(case: Case) -> None:
     case(skills_lines)
+
+
+def test_transition(case: Case) -> None:
+    case(transition)

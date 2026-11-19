@@ -47,3 +47,25 @@ $ scripts/octo-feather-lane tickets 644
 644: 2 of 2 tickets pass
 exit 0
 ```
+
+## Transition (supervisor brief after the ruling)
+
+`tickets` passes a ticket with no `Skills:` line in body or comments whose body was last changed before the kit commit adding the rule (`SKILLS_SINCE`, found by `git log -S` as check-owner-field finds its own commit; committer time), with one notice line; later bodies fail missing-skills; `ticket` drafts always fail with no line (`--help`, ticket). Gate item `test_lane_tickets.py::test_transition` (Linear tape built, as the other Linear items): ENG-2 (2026-11-13, before) `ok; notice: ...` naming the commit, ENG-3 (2030) missing-skills, ENG-4 (line only in a comment) ok, a draft without a line fails. Mutation (transition never applied) fails it.
+
+## Under the qc judge's offline gh (scripts/gh of the github-pr skill)
+
+Snapshot of 0xTomDaniel/octo-feather by `scripts/octo-feather-qc-ghsnap` at 2026-11-19T21:27:37Z (issues 500, full views 200; #644, #1094, #1099 among them), `.agents/skills/github-pr/scripts/gh` first on PATH, OCTO_FEATHER_GHSNAP set:
+
+```
+$ scripts/octo-feather-lane tickets 644
+octo-feather-lane tickets: tracker script github-issues/issue-view 1094 --notes failed (issue-view: #1094 notes: gh (offline read-only snapshot, fetched 2026-11-19T21:27:37Z): graphql not in read-only snapshot; use REST paths or gh issue/pr view --json): fix the cause it names, then rerun
+exit 2
+$ HERDR_PANE_ID=w8F:p2 scripts/octo-feather-lane skills 1094
+octo-feather-lane skills: tracker script github-issues/issue-view 1094 --notes failed (... graphql not in read-only snapshot ...)
+exit 2
+$ scripts/octo-feather-lane seam 1099 issue-lifecycle#acceptance-ticket-skills 'octo-feather-lane skills'
+octo-feather-lane seam: tracker script github-issues/issue-view 1099 --notes failed (... graphql not in read-only snapshot ...)
+exit 2
+```
+
+Refused, each logged in OCTO_FEATHER_GHSNAP_MISS: `gh api graphql -F n=<N> -f owner=0xTomDaniel -f name=octo-feather -f query=...` (the github-issues `issue-view --notes` query: issue url, createdAt, lastEditedAt, body, comments' url, createdAt, lastEditedAt, body). The offline gh refuses every graphql call (scripts/gh, `graphql not in read-only snapshot`); `seam` has no other path under qc and is refused the same way. The snapshot's issue/N.json holds body, createdAt and comments (body, createdAt, url, includesCreatedEdit) but no lastEditedAt for the body or a comment. Not fixed here: the fix is in github-issues issue-view, the offline gh or ghsnap, outside this ticket's scope.
