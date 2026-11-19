@@ -4,7 +4,8 @@
 Never the network. One JSON store, $FAKE_GH_STORE:
   {"issues": [{"number", "repo", "title", "body", "state" (OPEN|CLOSED), "closedAt", "comments"}],
    "prs": [{"number", "repo", "title", "body", "isDraft", "headRefName",
-            "baseRefName", "url", "comments"}]}
+            "baseRefName", "url", "comments"}],
+   "repos": {"OWNER/NAME": {"nameWithOwner", "createdAt", ...}}}
 (created when absent). The repo is --repo, else $GH_REPO, else "local/repo". A PR's head
 is its branch on the current directory's git remote origin, read at each call, so a
 `git push` moves it as on GitHub. It takes only:
@@ -12,6 +13,9 @@ is its branch on the current directory's git remote origin, read at each call, s
     issues whose title has WORDS
   issue create --title T --body-file F|-
     prints the new issue's url
+  repo view OWNER/NAME --json FIELDS
+    its "repos" entry's FIELDS (null when absent); an unstored one fails as real gh 2.102.0:
+    `GraphQL: Could not resolve to a Repository with the name 'OWNER/NAME'. (repository)`, exit 1
   pr create --draft --base B --head H --title T --body-file F|-
     a draft PR numbered after every issue and PR; H must be a branch on origin (pushed);
     prints its url
@@ -114,6 +118,14 @@ elif argv[:2] == ["issue", "create"]:
     with STORE.open("w") as out:
         json.dump(db, out, indent=1)
     sys.stdout.write(f"https://github.com/{repo}/issues/{n}\n")
+elif argv[:2] == ["repo", "view"] and len(argv) == 5 and argv[3] == "--json":
+    repos = cast("dict[str, dict[str, object]]", cast("dict[str, object]", db).get("repos") or {})
+    if argv[2] not in repos:
+        sys.stderr.write(
+            f"GraphQL: Could not resolve to a Repository with the name '{argv[2]}'. (repository)\n"
+        )
+        sys.exit(1)
+    sys.stdout.write(json.dumps({f: repos[argv[2]].get(f) for f in argv[4].split(",")}) + "\n")
 elif argv[:3] == ["pr", "create", "--draft"]:
     o = opts(argv[3:])
     if set(o) != {"--base", "--head", "--title", "--body-file"}:
