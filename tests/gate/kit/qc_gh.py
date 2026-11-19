@@ -509,6 +509,78 @@ def kit_on_kit(s: Scratch) -> None:
     assert "offline gh refusals 5" in r.out, r.out
 
 
+def notes_query(s: Scratch) -> None:
+    """The github-issues issue-view --notes answer through a snapshot (ticket #1099): no sandbox,
+    the two commands at their own seams. GitHub is the fake gh, its store holding #1094 and #1099
+    as real gh's `issue view` printed them, and the notes graphql query's real answers
+    (recorded.json: testkit/recordings/lane-skills.json, gh 2.102.0, 2026-11-19). The snapshot
+    keeps each answer unmodified with the query asked; the offline gh then gives issue-view
+    --notes the same JSON the fake GitHub gives, and refuses another graphql query, the same
+    query for another repo or variable, and an issue the snapshot did not detail."""
+    tape = json.loads(
+        (Path(__file__).parent / "testkit" / "recordings" / "lane-skills.json").read_text()
+    )
+    repo = "0xTomDaniel/octo-feather"
+    s.gh.store(
+        f"api/repos/{repo}.json",
+        {"nameWithOwner": repo, "name": "octo-feather", "owner": user("0xTomDaniel")},
+    )
+    for r in tape:
+        if r["request"].startswith("issue view "):
+            for d in (f"repos/{repo}/issue", "issue"):  # the snapshot's -R reads; issue-view's own
+                s.gh.store(f"{d}/{r['request'].split()[2]}.json", json.loads(r["out"]))
+    s.gh.store("recorded.json", [r for r in tape if r["request"].startswith("api graphql ")])
+    s.gh.store(
+        f"repos/{repo}/issue/7.json", {"number": 7, "title": "t", "body": "", "state": "OPEN"}
+    )
+    snap = s.root / "snap"
+    s.run([kit("octo-feather-qc-ghsnap"), repo, str(snap)])
+    for r in tape:
+        if r["request"].startswith("api graphql "):
+            n = r["request"].split()[3].removeprefix("n=")
+            assert (snap / "issue" / f"{n}.notes.json").read_text() == r["out"], n
+    query = (
+        ROOT / ".agents" / "skills" / "github-issues" / "scripts" / "notes.graphql"
+    ).read_text()
+    assert (snap / "notes.graphql").read_text() == query.rstrip("\n")
+    view = str(ROOT / ".agents" / "skills" / "github-issues" / "scripts" / "issue-view")
+    off = s.root / "off"
+    off.mkdir()
+    (off / "gh").symlink_to(OFFLINE_GH)
+    env = {
+        "PATH": f"{off}:{s.env['PATH']}",
+        "OCTO_FEATHER_GHSNAP": str(snap),
+        "OCTO_FEATHER_GHSNAP_MISS": str(s.root / "miss.log"),
+    }
+    asked = [x for x in s.gh.log() if x.startswith("api graphql ")]
+    held = {r["request"] for r in json.loads((s.gh.dir / "recorded.json").read_text())}
+    assert held <= set(asked), asked  # the snapshot asked exactly the query issue-view asks
+    assert len(asked) == 3, asked  # #1094, #1099 and #7, one call each
+    (s.gh.dir / "log").write_text("")  # the fake GitHub's answers replay afresh for issue-view
+    for n in ("1094", "1099"):
+        live = json.loads(s.run([view, n, "--notes"]).out)
+        got = json.loads(s.run([view, n, "--notes"], env=env).out)
+        assert got == live, f"#{n}: {got} != {live}"
+        assert got["notes"][-1]["at"].startswith("2026-11-19T"), got["notes"]
+    gh = [str(off / "gh"), "api", "graphql"]
+    q = f"query={query.rstrip(chr(10))}"
+    for args, why in (
+        (["-f", "query={ viewer { login } }"], "graphql not in read-only snapshot"),
+        (["-F", "n=1094", "-f", "owner=o", "-f", "name=r", "-f", q], "graphql not in read-only"),
+        (
+            ["-F", "n=1094", "-f", "owner=0xTomDaniel", "-f", "name=octo-feather", "-f", q + " "],
+            "graphql not",
+        ),
+        (
+            ["-F", "n=644", "-f", "owner=0xTomDaniel", "-f", "name=octo-feather", "-f", q],
+            "issue #644 notes not in",
+        ),
+    ):
+        r = s.run([*gh, *args], want=1, env=env)
+        assert why in r.err, r.err
+    assert len((s.root / "miss.log").read_text().splitlines()) == 4
+
+
 if __name__ == "__main__":
     main(
         refused_args,
@@ -521,4 +593,5 @@ if __name__ == "__main__":
         snapshot_misses,
         diff_too_large,
         kit_on_kit,
+        notes_query,
     )

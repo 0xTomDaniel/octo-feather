@@ -52,7 +52,7 @@ exit 0
 
 `tickets` passes a ticket with no `Skills:` line in body or comments whose body was last changed before the kit commit adding the rule (`SKILLS_SINCE`, found by `git log -S` as check-owner-field finds its own commit; committer time), with one notice line; later bodies fail missing-skills; `ticket` drafts always fail with no line (`--help`, ticket). Gate item `test_lane_tickets.py::test_transition` (Linear tape built, as the other Linear items): ENG-2 (2026-11-13, before) `ok; notice: ...` naming the commit, ENG-3 (2030) missing-skills, ENG-4 (line only in a comment) ok, a draft without a line fails. Mutation (transition never applied) fails it.
 
-## Under the qc judge's offline gh (scripts/gh of the github-pr skill)
+## Under the qc judge's offline gh, before the fix (scripts/gh of the github-pr skill)
 
 Snapshot of 0xTomDaniel/octo-feather by `scripts/octo-feather-qc-ghsnap` at 2026-11-19T21:27:37Z (issues 500, full views 200; #644, #1094, #1099 among them), `.agents/skills/github-pr/scripts/gh` first on PATH, OCTO_FEATHER_GHSNAP set:
 
@@ -68,4 +68,45 @@ octo-feather-lane seam: tracker script github-issues/issue-view 1099 --notes fai
 exit 2
 ```
 
-Refused, each logged in OCTO_FEATHER_GHSNAP_MISS: `gh api graphql -F n=<N> -f owner=0xTomDaniel -f name=octo-feather -f query=...` (the github-issues `issue-view --notes` query: issue url, createdAt, lastEditedAt, body, comments' url, createdAt, lastEditedAt, body). The offline gh refuses every graphql call (scripts/gh, `graphql not in read-only snapshot`); `seam` has no other path under qc and is refused the same way. The snapshot's issue/N.json holds body, createdAt and comments (body, createdAt, url, includesCreatedEdit) but no lastEditedAt for the body or a comment. Not fixed here: the fix is in github-issues issue-view, the offline gh or ghsnap, outside this ticket's scope.
+Refused, each logged in OCTO_FEATHER_GHSNAP_MISS: `gh api graphql -F n=<N> -f owner=0xTomDaniel -f name=octo-feather -f query=...` (the github-issues `issue-view --notes` query: issue url, createdAt, lastEditedAt, body, comments' url, createdAt, lastEditedAt, body). The offline gh refuses every graphql call (scripts/gh, `graphql not in read-only snapshot`); `seam` has no other path under qc and is refused the same way. The snapshot's issue/N.json holds body, createdAt and comments (body, createdAt, url, includesCreatedEdit) but no lastEditedAt for the body or a comment. Fixed below (the supervisor's option 1).
+
+## Under the qc judge's offline gh, after the fix (option 1)
+
+The github-issues `issue-view --notes` query now lives in one file, `.agents/skills/github-issues/scripts/notes.graphql`, which issue-view reads. `scripts/octo-feather-qc-ghsnap` asks that query, exactly as issue-view asks it, for each issue it details and keeps GitHub's answer unmodified as `issue/N.notes.json`, with `notes.graphql` beside it; an issue GitHub cannot resolve there is recorded absent, as an api 404. `.agents/skills/github-pr/scripts/gh` answers exactly that call (`api graphql` with `-F n=N`, the snapshot's owner and name, the snapshot's query) from that file, and refuses every other graphql call as before. Seam keeps GitHub's exact edit times: the answer is GitHub's own.
+
+Fresh real snapshot, `scripts/octo-feather-qc-ghsnap 0xTomDaniel/octo-feather /tmp/snap1099` at 2026-11-19T21:51:26Z (issues 500, full views 200, 172 issues' notes kept, none absent). The same three commands live, then with the offline gh first on PATH (OCTO_FEATHER_GHSNAP=/tmp/snap1099); lane gh644's log md5 unchanged (21c82a40...) across both:
+
+```
+## live
+$ scripts/octo-feather-lane tickets 644
+1094: ok
+1099: ok
+644: 2 of 2 tickets pass
+exit 0
+$ scripts/octo-feather-lane skills 1094
+1094: worker implementer-1094 (w8F:p3), Pi session /home/exedev/.pi/agent/sessions/--home-exedev-src-octo-feather-gh644-1094--/2026-11-19T19-48-27-938Z_4fd43c0c-7119-4cb4-866f-e114e16ecdb4.jsonl
+1094: skill eval-cases: loaded
+exit 0
+$ scripts/octo-feather-lane seam 1099 issue-lifecycle#acceptance-ticket-skills octo-feather-lane skills
+1099: seam issue-lifecycle#acceptance-ticket-skills `octo-feather-lane skills` recorded at 2026-11-19T20:24:39Z (https://github.com/0xTomDaniel/octo-feather/issues/1099)
+exit 0
+## offline
+(gh: /tmp/offgh/gh -> /home/exedev/src/octo-feather-gh644-1099/.agents/skills/github-pr/scripts/gh)
+$ scripts/octo-feather-lane tickets 644
+1094: ok
+1099: ok
+644: 2 of 2 tickets pass
+exit 0
+$ scripts/octo-feather-lane skills 1094
+1094: worker implementer-1094 (w8F:p3), Pi session /home/exedev/.pi/agent/sessions/--home-exedev-src-octo-feather-gh644-1094--/2026-11-19T19-48-27-938Z_4fd43c0c-7119-4cb4-866f-e114e16ecdb4.jsonl
+1094: skill eval-cases: loaded
+exit 0
+$ scripts/octo-feather-lane seam 1099 issue-lifecycle#acceptance-ticket-skills octo-feather-lane skills
+1099: seam issue-lifecycle#acceptance-ticket-skills `octo-feather-lane skills` recorded at 2026-11-19T20:24:39Z (https://github.com/0xTomDaniel/octo-feather/issues/1099)
+exit 0
+## refusals logged: 0
+```
+
+Each exits as it does live, with the same output; the offline gh logged no refusal. `issue-view N --notes` for #1094, #1099 and #644 gives identical `notes` live and offline (jq -S); `gh api graphql -f query='{ viewer { login } }'` under the offline gh is still refused, exit 1.
+
+Gate item `tests/gate/kit/test_qc_gh.py::test_notes_query` (seams `octo-feather-qc-ghsnap` and `.agents/skills/github-pr/scripts/gh`, posted on #1099 and checked with `seam` before the test): the fake gh's store holds #1094 and #1099 as real gh's issue view printed them, and the notes query's real answers (`recorded.json`, from `testkit/recordings/lane-skills.json`: the real query recorded once); an unrecorded issue gets GitHub's real NOT_FOUND answer (gh 2.102.0, #999999, 2026-11-19). The snapshot asks the same request issue-view asks, keeps each answer byte for byte, records #7 absent; issue-view --notes through the offline gh equals it through the fake GitHub; another query, another repo, an altered query and an undetailed issue are refused and logged. Mutations (the offline gh never answering, the snapshot never fetching) fail it.
