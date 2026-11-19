@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 
 from testkit import ROOT, Scratch, main
 from testkit import qa_box as data
+from testkit.jsonwalk import at, get, keys, seq
 from testkit.qa_box import (
     C,
     Case,
@@ -27,7 +28,6 @@ from testkit.qa_box import (
     Q,
     Qa,
     after,
-    at,
     cases,
     count,
     dump,
@@ -36,12 +36,9 @@ from testkit.qa_box import (
     grep,
     has,
     ic,
-    keys,
-    kind,
     lines,
     load,
     outputs,
-    seq,
     skip_on_macos,
     squeeze,
     steps,
@@ -1988,7 +1985,7 @@ def rt_targets(s: Scratch) -> None:
     q.check(lines_)
     d = q.last() / "rt"
     g = {
-        (at(f, "skill"), kind(f, "before")): (at(f, "status"), str(at(f, "evidence")))
+        (at(f, "skill"), get(f, "before")): (at(f, "status"), str(at(f, "evidence")))
         for f in facts_of(d / "order" / "grading.json")
     }
     for k, (st, ev) in want.items():
@@ -2002,9 +1999,7 @@ def rt_targets(s: Scratch) -> None:
         ["gh_call"],
     ], fs
     assert at(fs[-1], "gh") == ["gh pr create --title x"], fs[-1]
-    g2 = {
-        kind(f, "before"): str(at(f, "evidence")) for f in facts_of(d / "fsonly" / "grading.json")
-    }
+    g2 = {get(f, "before"): str(at(f, "evidence")) for f in facts_of(d / "fsonly" / "grading.json")}
     assert "first test_write at tool call 4 of 4" in g2["test_write"], g2
     assert "first edit at tool call 4 of 4" in g2["edit"], g2
     ms = marks(d / "declared" / "transcript.jsonl")
@@ -2018,7 +2013,7 @@ def rt_targets(s: Scratch) -> None:
         in str(at(g3, "evidence"))
     ), g3
     g4 = {
-        kind(f, "before"): (at(f, "status"), str(at(f, "evidence")))
+        get(f, "before"): (at(f, "status"), str(at(f, "evidence")))
         for f in facts_of(d / "contract" / "grading.json")
     }
     assert g4["edit"][0] == "fail", g4

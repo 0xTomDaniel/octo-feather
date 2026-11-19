@@ -31,9 +31,10 @@ import re
 import shutil
 import subprocess
 import sys
-from typing import TYPE_CHECKING, NamedTuple, NoReturn, cast
+from typing import TYPE_CHECKING, NamedTuple, NoReturn
 
 from testkit import FIXTURES, HERE, ROOT, Scratch, kit
+from testkit.jsonwalk import at, get
 from testkit.qc_box import mise_dir
 
 if TYPE_CHECKING:
@@ -77,46 +78,10 @@ def load(p: Path) -> object:
     return v
 
 
-def at(v: object, *keys: str | int) -> object:
-    """V's value at KEYS, a JSON path of object keys and list indexes; a missing one fails naming
-    it. Kit test code is stdlib-only (AGENTS.md Rules), so no schema library: a run's JSON is read
-    only through this walk, as testkit/install_check.py's field reads a string."""
-    for i, k in enumerate(keys):
-        where = ".".join(map(str, keys[: i + 1]))
-        if isinstance(k, int):
-            assert isinstance(v, list), f"{where}: not in a JSON list: {v!r}"
-            items = cast("list[object]", v)
-            assert len(items) > k, f"{where}: no item"
-            v = items[k]
-        else:
-            assert isinstance(v, dict), f"{where}: not in a JSON object: {v!r}"
-            d = cast("dict[str, object]", v)
-            assert k in d, f"no {where}"
-            v = d[k]
-    return v
-
-
-def seq(v: object) -> list[object]:
-    """V, a JSON list."""
-    assert isinstance(v, list), f"no JSON list: {v!r}"
-    return cast("list[object]", v)
-
-
-def keys(v: object) -> set[str]:
-    """V's keys, a JSON object."""
-    assert isinstance(v, dict), f"no JSON object: {v!r}"
-    return set(cast("dict[str, object]", v))
-
-
 def events(transcript: Path) -> list[object]:
     """A case's transcript, one JSON event per line."""
     got: list[object] = [json.loads(x) for x in transcript.read_text().splitlines() if x.strip()]
     return got
-
-
-def kind(e: object, k: str = "type") -> object:
-    """E's K, None when E is no object or lacks it."""
-    return cast("dict[str, object]", e).get(k) if isinstance(e, dict) else None
 
 
 def ends(transcript: Path, call: str | None = None) -> list[object]:
@@ -124,7 +89,7 @@ def ends(transcript: Path, call: str | None = None) -> list[object]:
     return [
         e
         for e in events(transcript)
-        if kind(e) == "tool_execution_end" and call in (None, kind(e, "toolCallId"))
+        if get(e, "type") == "tool_execution_end" and call in (None, get(e, "toolCallId"))
     ]
 
 

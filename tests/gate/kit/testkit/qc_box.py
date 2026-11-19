@@ -31,10 +31,11 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, NoReturn, Self, cast
+from typing import TYPE_CHECKING, NoReturn, Self
 
 from testkit import FIXTURES, HERE, ROOT, Scratch, kit
 from testkit.install_check import field
+from testkit.jsonwalk import at
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -98,19 +99,9 @@ def mise_dir(d: str) -> str:
     """mise's D dir as mise reports it for the caller's HOME (`mise doctor --json`)."""
     cmd = ["mise", "doctor", "--json"]
     p = subprocess.run(cmd, capture_output=True, text=True, check=True)
-    # The testkit's one typed JSON reader (field): kit test code is stdlib-only (AGENTS.md
-    # Rules), so no schema library; it reads only the named path and fails naming it.
+    # Read through the testkit's one JSON walk (field on jsonwalk.at; why no schema library:
+    # testkit/jsonwalk.py).
     return field(p.stdout, "mise doctor --json", "dirs", d)
-
-
-def at(v: object, *keys: str) -> object:
-    """V's value at KEYS, a JSON path; a missing key fails naming it."""
-    for i, k in enumerate(keys):
-        assert isinstance(v, dict), f"{'.'.join(keys[:i])} is no JSON object: {v!r}"
-        d = cast("dict[str, object]", v)
-        assert k in d, f"no {'.'.join(keys[: i + 1])}"
-        v = d[k]
-    return v
 
 
 def has(rx: str, text: str) -> bool:
