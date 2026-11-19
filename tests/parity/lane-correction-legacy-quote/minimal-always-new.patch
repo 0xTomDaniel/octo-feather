@@ -1,0 +1,14 @@
+Seeded defect: a finding quoted minimally is new however many of its run and date the class's issues quote (spec comms #reflection-correction).
+diff --git a/scripts/correction_lanes.py b/scripts/correction_lanes.py
+index 82516854..86f3a2aa 100755
+--- a/scripts/correction_lanes.py
++++ b/scripts/correction_lanes.py
+@@ -306,7 +306,7 @@ def recurrence(due: Due, issues: list[dict[str, Any]]) -> tuple[dict[str, Any],
+     new = [
+         q
+         for (log, at), qs in runs.items()
+-        for q in (qs[said[log, at] :] if log in due.foreign else [q for q in qs if q not in lines])
++        for q in (qs if log in due.foreign else [q for q in qs if q not in lines])
+     ]
+     if not new:
+         return None
