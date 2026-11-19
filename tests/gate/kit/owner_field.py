@@ -106,9 +106,9 @@ def reword_older(s: Scratch) -> None:
 
 
 def qc_status_commit(s: Scratch) -> None:
-    """The qc script's status-only commit (the message and file of real commit db00d5a8, lane
-    gh1076) passes with no field; the same message on a commit that also changes another file is
-    a writer's and is refused, as is a writer commit with no field."""
+    """The qc status-only commit rule (scripts/check-owner-field --help, Who owes it) on the
+    message and file of real commit db00d5a8 (lane gh1076), then the same message with another
+    file, then a writer commit with no field."""
     repo = _lane(s)
     s.git(repo, "commit", "-q", "--amend", "-m", REAL + "\nOwners: none\n")
     (repo / "docs" / "specs").mkdir(parents=True)
