@@ -110,11 +110,12 @@ jobs:
       # #261), as the box installs it (why --no-bin: the justfile's check-tests message). The eval fixtures and
       # templates/python below keep their own resolution: uv reads .python-version only inside each project. Network.
       - run: uv python install --no-bin
-      # The kit's test deps (pytest, pytest-xdist: uv.lock), each eval fixture's and templates/python's locked deps
+      # The kit's test deps (pytest, pytest-xdist: uv.lock), each eval fixture's (its materialized tree, written by
+      # scripts/check-evals --export: schema.md, Fixtures) and templates/python's locked deps
       # (tests/gate/kit/template_languages.py) into uv's cache, with
       # mise's uv: the third network step. The gate runs pytest with --offline, and tests/qa.sh syncs python-app copies
       # inside it with UV_OFFLINE=1, from this cache only.
-      - run: uv sync --locked --quiet && for l in evals/fixtures/*/uv.lock templates/python/uv.lock; do UV_PROJECT_ENVIRONMENT="$RUNNER_TEMP/fixture-venv" uv sync --locked --quiet --project "${l%/uv.lock}"; done
+      - run: uv sync --locked --quiet && python3 scripts/check-evals --export "$RUNNER_TEMP/fixtures" && for l in "$RUNNER_TEMP"/fixtures/*/uv.lock templates/python/uv.lock; do UV_PROJECT_ENVIRONMENT="$RUNNER_TEMP/fixture-venv" uv sync --locked --quiet --project "${l%/uv.lock}"; done
       # The TypeScript template's locked packages into pnpm's store, with mise's pnpm: the fourth network step. The gate's
       # tests (tests/contract.sh, tests/evidence.sh) install template copies with pnpm install --offline
       # --frozen-lockfile, from this store only.
