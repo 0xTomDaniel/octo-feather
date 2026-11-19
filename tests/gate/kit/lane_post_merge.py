@@ -578,8 +578,8 @@ def install_stops(s: Scratch) -> None:
 
 
 def checkout_follows(s: Scratch) -> None:
-    """Step 4 (octo-feather-lane --help): the target clone behind, at and past the merge commit;
-    run from the kit install, step 3's move is its only one."""
+    """Step 4 (octo-feather-lane --help): the target clone behind, at and past the merge commit,
+    then post-merge run from the kit install."""
     lane = Lane(s)
     m, b, p, t, k = lane.m, lane.b, lane.p, lane.target, lane.kit
     m12 = m[:12]
