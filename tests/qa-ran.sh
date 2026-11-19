@@ -100,7 +100,7 @@ short="$(sed -n 's/^SHORT=//p' <<< "$so")"   # git's own --short=12 of that HEAD
 # found) never runs. The case repo holds an eval suite (fixture fxe: fx plus evals/s1, case c1).
 printf '#!/bin/sh\necho POISON-REAL-QA-REACHED\nexit 9\n' > "$t/bin/octo-feather-qa"; chmod +x "$t/bin/octo-feather-qa"
 mkdir -p "$t/fq/fq/reference"; cp -r "$t/good/fixtures" "$t/fq/"
-cp -r "$t/fq/fixtures/fx" "$t/fq/fixtures/fxe"; mkdir -p "$t/fq/fixtures/fxe/evals/s1/reference"
+mkdir -p "$t/fq/fixtures/fxe/evals/s1/reference"; echo '{"base": "fx"}' > "$t/fq/fixtures/fxe/.eval-fixture.json"
 echo '{"suite": "s1", "kind": "role-transcript", "description": "x"}' > "$t/fq/fixtures/fxe/evals/s1/suite.json"
 echo '[{"id": "c1", "role": "implementer", "fixture": "fx", "task": "x"}]' > "$t/fq/fixtures/fxe/evals/s1/cases.json"
 echo '{"c1": {"facts": [{"fact": "skill_read", "skill": "tdd"}]}}' > "$t/fq/fixtures/fxe/evals/s1/reference/expectations.json"
