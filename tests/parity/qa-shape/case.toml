@@ -7,6 +7,6 @@ needs = ["tests/lib/qa.sh", "tests/gate/kit/testkit/pi_agent.py"]
 # The same script, as its gate item: its id kept.
 new = "tests/gate/test_gate.py::test_script[tests/qa-shape.sh]"
 
-# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit script run by the kit venv's python: coverage.py measures it.
+# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit script run by the kit venv's python: coverage.py measures it; exec: check-evals, run by the python3 on PATH, outside the kit venv.
 [ran]
-"scripts/check-evals" = "coverage"
+"scripts/check-evals" = "exec scripts/check-evals"
