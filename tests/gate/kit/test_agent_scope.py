@@ -9,6 +9,7 @@ import pytest
 from agent_scope import (
     close_owned,
     close_unowned,
+    park_malformed,
     park_owned,
     park_refused,
     park_unowned,
@@ -60,3 +61,9 @@ def test_park_unowned(case: Case) -> None:
 @linux
 def test_park_refused(case: Case) -> None:
     case(park_refused)
+
+
+@pytest.mark.e2e
+@linux
+def test_park_malformed(case: Case) -> None:
+    case(park_malformed)
