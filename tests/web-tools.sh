@@ -112,8 +112,10 @@ echo "case roles: ok (web roles: their tools plus the web list's, declared and i
 # (the model swapped for the fake provider's, -p for no TUI) and its codemode script reaches the role's tools.
 mkdir -p "$t/kit/.agents/spawn/herdr-comms/assets" "$t/hbin"
 cp "$kit/.agents/skills/herdr-comms/assets/herdr-spawn" "$kit/.agents/skills/herdr-comms/assets/herdr_ready.py" \
+  "$kit/.agents/skills/herdr-comms/assets/herdr_scope.py" \
   "$t/kit/.agents/spawn/herdr-comms/assets/"
 cp "$kit/tests/fixtures/herdr-spawn/"* "$t/hbin/"; chmod +x "$t/hbin/herdr"
+cp "$kit/tests/gate/kit/testkit/systemd.py" "$t/hbin/busctl"; cp "$kit/tests/gate/kit/testkit/systemd.py" "$t/hbin/systemctl"   # systemd stood in: the scope is e2e
 tab() {
   local d="$t/tab-$1"; mkdir -p "$d"; : > "$t/log"
   (cd "$t/repo" && env FAKE_HERDR_DIR="$d" PATH="$t/hbin:$PATH" HOME="$t/home" XDG_CACHE_HOME="$t/cache" XDG_STATE_HOME="$t/state" \
