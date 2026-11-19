@@ -1,0 +1,14 @@
+Seeded defect: a legacy timestamped marker's class is not found, so its open issue is not the class's (spec comms #reflection-correction).
+diff --git a/scripts/correction_lanes.py b/scripts/correction_lanes.py
+index 82516854..8d91f53b 100755
+--- a/scripts/correction_lanes.py
++++ b/scripts/correction_lanes.py
+@@ -243,7 +243,7 @@ def merge(dues: list[Due]) -> list[Due]:
+ def of_class(due: Due, issues: list[dict[str, Any]]) -> list[dict[str, Any]]:
+     """DUE's class's issues among ISSUES, oldest first: the class the first word of the title's
+     marker, so a legacy reflection-missed marker's timestamp and hash never block a match."""
+-    mark = re.compile(r"\[" + re.escape(MARK_WORD) + r" ([^\]\s]+)[^\]]*\]")
++    mark = re.compile(r"\[" + re.escape(MARK_WORD) + r" ([^\]]+)\]")
+     mine = [i for i in issues if (m := mark.search(str(i.get("title")))) and m[1] == due.cls]
+     return sorted(mine, key=lambda i: int(i.get("number") or 0))
+ 
