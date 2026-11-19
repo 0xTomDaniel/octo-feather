@@ -248,6 +248,10 @@
       "tests": [
         "tests/lane-correction.sh"
       ]
+    },
+    "acceptance-ticket-skills": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

@@ -222,7 +222,7 @@ waiting_on = ""                        # "", "blocked", "director", or another l
 <tbody>
 <tr data-anchor="handoff-kind-attempt"><td>attempt</td><td>A worker result or an unreported ending is reconciled</td><td>role, ticket when in a lane, worker, session (provider-session identity), commit when present, result, duration_s; ended-unreported identifies an ending without a report and retains its partial-result and recovery evidence</td></tr>
 <tr data-anchor="handoff-kind-review"><td>review</td><td>A review verdict is consumed</td><td>ticket, commit, verdict, blockers, round</td></tr>
-<tr data-anchor="handoff-kind-finding"><td>finding</td><td>A code-review, product-judge or reflection finding is consumed, one line per finding</td><td>source (code-review, qc or reflection), class, blocking, summary; a reflection finding adds question and route</td></tr>
+<tr data-anchor="handoff-kind-finding"><td>finding</td><td>A code-review, product-judge, reflection or skill-load finding is consumed, one line per finding</td><td>source (code-review, qc, reflection or skills), class, blocking, summary; a reflection finding adds question and route; a skills finding, a skill a ticket named that its worker never loaded, adds ticket and skill</td></tr>
 <tr data-anchor="handoff-kind-reflection"><td>reflection</td><td>A lane reflection ran</td><td>findings (its count), questions (the ids it answered)</td></tr>
 <tr data-anchor="handoff-kind-integration"><td>integration</td><td>The lane branch moves</td><td>commit</td></tr>
 <tr data-anchor="handoff-kind-gate"><td>gate</td><td>An owner gate is asked or answered</td><td>gate, event, answer</td></tr>
