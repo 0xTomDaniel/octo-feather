@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import sys
 from typing import TYPE_CHECKING
 
@@ -211,7 +212,9 @@ class Lane:
 
     def run(self, want: int, *args: str, tools: str = "rec", cwd: Path | None = None) -> Ran:
         """post-merge ARGS from the target repo (or CWD), exit WANT; gh only read (each logged
-        call)."""
+        call). Each run a fresh routine: the post-merge records removed first (a rerun's resume:
+        tests/gate/kit/lane_merge.py)."""
+        shutil.rmtree(self.state / "octo-feather" / "post-merge", ignore_errors=True)
         env = {"PATH": self.path[tools] + self.s.env["PATH"]} | self.homes
         r = self.s.run(
             [kit("octo-feather-lane"), *args], want=want, cwd=cwd or self.target, env=env

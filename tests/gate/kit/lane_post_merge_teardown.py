@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from typing import TYPE_CHECKING
 
@@ -173,7 +174,10 @@ class World:
         self.lane(self.lanes / "archive" / "gh12.toml", pane, pr)
 
     def run(self, want: int, **env: str) -> tuple[Ran, str]:
-        """post-merge 12 H --lane gh12 from the target repo; its run and step 7 line."""
+        """post-merge 12 H --lane gh12 from the target repo; its run and step 7 line. Each run a
+        fresh routine: the post-merge records removed first (a rerun's resume:
+        tests/gate/kit/lane_merge.py)."""
+        shutil.rmtree(self.state / "octo-feather" / "post-merge", ignore_errors=True)
         cmd = [kit("octo-feather-lane"), "post-merge", "12", self.h, "--lane", "gh12"]
         r = self.s.run([*cmd, "--repo", "o/r", "--wait", "0"], want=want, cwd=self.r, env=env)
         s5 = next((x for x in r.out.split("\n") if x.startswith("step 7 teardown: ")), "")

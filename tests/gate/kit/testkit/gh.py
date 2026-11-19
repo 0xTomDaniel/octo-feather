@@ -6,7 +6,10 @@ A store, no logic of the kit's: PR N is $FAKE_GH/pr/N.json, as `gh pr view --jso
 issue/N.json, workflow run N run/N.json, the repo repo.json, each `--json` answered the same
 way, `issue|pr|run list` every one stored (by number), `pr list` only those on --base B and in
 --state S when given (GitHub's state, OPEN for open); `pr edit N --base B` stores B as PR N's
-base and prints its URL; `repo view OWNER/NAME|URL`, for a repo other than o/r, answers
+base and prints its URL; `pr merge N --merge --match-head-commit SHA` merges PR N (its state
+MERGED, its mergeCommit {oid: its stored `merges_as`}) when it reads OPEN at head SHA, printing
+nothing (stdout not a terminal), else fails naming why, PR N unchanged (the stand-in's words, no
+recording); `repo view OWNER/NAME|URL`, for a repo other than o/r, answers
 api/repos/OWNER/NAME.json the same way (gh reads the URL itself), an unstored one GitHub's
 unresolved repository; `gh api [--paginate --slurp] PATH`, a
 GET, prints api/PATH.json (one page; slurped, a list of it; {owner}/{repo} in PATH is o/r, as gh
@@ -225,6 +228,26 @@ def edit(a: list[str]) -> None:
     sys.stdout.write(f"https://github.com/o/r/pull/{a[2]}\n")
 
 
+def merge(a: list[str]) -> None:
+    """`pr merge N --merge --match-head-commit SHA [-R O/R]` (the module docstring), exiting;
+    any other call returns."""
+    if a[:2] != ["pr", "merge"]:
+        return
+    p, sha = pr_file(a[2]), opt(a, "--match-head-commit")
+    if not p.is_file():
+        die(f"GraphQL: Could not resolve to a PullRequest with the number of {a[2]}.")
+    if "--merge" not in a or sha is None:
+        die(f"fake gh: unexpected {a}", 2)
+    d = json.loads(p.read_text())
+    if d.get("state") != "OPEN":
+        die(f"fake gh: pull request #{a[2]} is {d.get('state')}, not open: not merged")
+    if d.get("headRefOid") != sha:
+        die(f"fake gh: pull request #{a[2]}'s head is {d.get('headRefOid')}, not {sha}: not merged")
+    d |= {"state": "MERGED", "mergeCommit": {"oid": d["merges_as"]}}
+    p.write_text(json.dumps(d))
+    sys.exit(0)
+
+
 def repo_view(a: list[str]) -> None:
     """`repo view [OWNER/NAME|URL] --json F`."""
     name = re.sub(r"^https://github\.com/|\.git$", "", a[2]) if a[2:3] != ["--json"] else "o/r"
@@ -346,6 +369,7 @@ def main(a: list[str]) -> None:
         die("To get started with GitHub CLI, please run:  gh auth login", 4)
     replay(a)
     watch(a)
+    merge(a)
     issue_write(a)
     two = tuple(a[:2])
     if two in (("pr", "view"), ("issue", "view")):

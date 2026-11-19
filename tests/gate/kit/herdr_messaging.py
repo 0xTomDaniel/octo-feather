@@ -29,6 +29,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -658,7 +659,9 @@ class Tell:
 
     def run(self, want: int, pr: int, *args: str) -> tuple[str, str]:
         """post-merge PR (its head) ARGS --wait 0, exit WANT, no traceback: its step 6 line and
-        its last line."""
+        its last line. Each run a fresh routine: the post-merge records removed first (a rerun's
+        resume: tests/gate/kit/lane_merge.py)."""
+        shutil.rmtree(self.lanes.parent / "post-merge", ignore_errors=True)
         head = self.h if pr == 7 else self.h2
         cmd = [kit("octo-feather-lane"), "post-merge", str(pr), head, *args, "--wait", "0"]
         ran = self.s.run(cmd, want=want, cwd=self.r)
