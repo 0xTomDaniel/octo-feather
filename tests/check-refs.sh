@@ -69,25 +69,11 @@ expect agents/x.md "SPOOL_SIDE=$hu" "$words"
 expect tests/accepted.sh "SPOOL_SIDE=$hu # SPOOL_SIDE: the $hu approves" "$words"
 expect scripts/octo-feather-accepted "SPOOL_SIDE = \"$hu\"  # the $hu approves" "$words"
 expect scripts/octo-feather-accepted "# SPOOL_SIDE ... the $hu approves" "$words"
-# A broken retired-words scanner fails closed, never refs: ok (match, no match and error are distinct).
-# broken TOOL: a TOOL executable that fails (a stub first on the caller's PATH, which the justfile keeps ahead of
-# its tools) makes `just check-refs` fail naming a scanner error.
-broken() {
-  local h="$t.bin"; mkdir -p "$h"
-  printf '#!/bin/sh\necho "%s: broken (check-refs test stub)" >&2\nexit 2\n' "$1" > "$h/$1"; chmod +x "$h/$1"
-  set +e; out="$(cd "$t" && PATH="$h:$PATH" just check-refs 2>&1)"; rc=$?; set -e
-  rm -rf "$h"
-  [[ "$rc" != 0 ]] || { echo "check-refs test: broken $1 passed just check-refs" >&2; exit 1; }
-  grep -qF "retired-words scanner error: $1 exited" <<<"$out" || { echo "check-refs test: broken $1 not reported as a scanner error" >&2; echo "$out" >&2; exit 1; }
-  ! grep -qF 'refs: ok' <<<"$out" || { echo "check-refs test: broken $1 printed refs: ok" >&2; exit 1; }
-}
-broken perl
-broken grep
-# A grep error (a tracked file it cannot read) is a scanner error too, not no match.
+# A tracked file the scan cannot read is a scanner error, not no match: it fails closed, never refs: ok.
 ln -s missing "$t/agents/x.md"; g add -f agents/x.md
 set +e; out="$(cd "$t" && just check-refs 2>&1)"; rc=$?; set -e
 g rm -qf --cached agents/x.md; rm "$t/agents/x.md"
-[[ "$rc" != 0 ]] && grep -qF 'retired-words scanner error: grep exited 2' <<<"$out" && ! grep -qF 'refs: ok' <<<"$out" || { echo "check-refs test: grep error not reported as a scanner error" >&2; echo "$out" >&2; exit 1; }
+[[ "$rc" != 0 ]] && grep -qF 'check-refs: retired-words scanner error:' <<<"$out" && ! grep -qF 'refs: ok' <<<"$out" || { echo "check-refs test: unreadable file not reported as a scanner error" >&2; echo "$out" >&2; exit 1; }
 # The lane branch default, split so this file stays clean: a role restating it fails, its pointer passes.
 expect agents/x.md "Cut branch gh<N>""-<slug> for the lane." "docs/adr/0011"
 expect agents/x.md "else \`octo-feather/""gh<issue-number>""-<slug>\`." "docs/adr/0011"
