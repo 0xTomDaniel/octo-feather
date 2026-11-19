@@ -32,3 +32,23 @@ director_prune: ok
 ## qc demos (comms#acceptance-parent-resumed, #acceptance-result-file, #acceptance-result-missing)
 
 Smoke: .agents/skills/verify-octo-feather/ `verify-octo-feather run parent-resumed`, `run result-file`, `run result-missing`: each `run PASS`, exit 0 (cases resume, report; report, results, read; results). The qc.toml demos run these same commands.
+
+## Fixture lane-shout-results converted to an overlay (main's fixture rule, #1006)
+
+After merging main (466cc4ba) into the lane: `evals/fixtures/lane-shout-results` was a whole tree, the materialized tree of `lane-shout-wip-log` plus its one result file (`diff -r` of `check-evals --export`'s lane-shout-wip-log against it: only `notes/gh12.results`). Now `.eval-fixture.json` `{"base": "lane-shout-wip-log"}` and only `notes/gh12.results/7e4a1b63-9c5d-4fae-b3a8-4b1c2f6e7a14.md`. `scripts/check-evals --trees` for the two result-file cases, before (main's check-evals on this branch's evals/ at f607c499, the whole tree) and after (the overlay), identical:
+
+Before:
+```
+supervisor-notifications result-file-after-compaction fixture 1367b0f6cb327d835f1a57bd3210c9565d5760ce01a6c921426dfdbd1e616f96
+supervisor-notifications result-file-after-compaction head 6ca3503ed5576e64b72f6385a67d81d685c444eb4614983a4a7d93f2e948de2c
+supervisor-notifications result-file-after-resume fixture 1367b0f6cb327d835f1a57bd3210c9565d5760ce01a6c921426dfdbd1e616f96
+supervisor-notifications result-file-after-resume head 6ca3503ed5576e64b72f6385a67d81d685c444eb4614983a4a7d93f2e948de2c
+```
+
+After:
+```
+supervisor-notifications result-file-after-compaction fixture 1367b0f6cb327d835f1a57bd3210c9565d5760ce01a6c921426dfdbd1e616f96
+supervisor-notifications result-file-after-compaction head 6ca3503ed5576e64b72f6385a67d81d685c444eb4614983a4a7d93f2e948de2c
+supervisor-notifications result-file-after-resume fixture 1367b0f6cb327d835f1a57bd3210c9565d5760ce01a6c921426dfdbd1e616f96
+supervisor-notifications result-file-after-resume head 6ca3503ed5576e64b72f6385a67d81d685c444eb4614983a4a7d93f2e948de2c
+```
