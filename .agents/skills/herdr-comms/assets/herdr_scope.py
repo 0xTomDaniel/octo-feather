@@ -72,6 +72,10 @@ AGENT_FIELDS = {
     "screen_detection_skipped", "state_change_seq", "state_labels", "tab_id", "terminal_id",
     "terminal_title", "terminal_title_stripped", "title", "tokens", "workspace_id",
 }  # fmt: skip
+# Herdr 0.9.5 AgentInfo's required fields, checked on `agent list` (octo-feather-lane stale).
+AGENT_REQUIRED = {
+    "terminal_id", "agent_status", "workspace_id", "tab_id", "pane_id", "focused", "revision",
+}  # fmt: skip
 TAB_FIELDS = {
     "agent_status", "focused", "label", "number", "pane_count", "tab_id", "workspace_id",
 }  # fmt: skip
@@ -181,6 +185,31 @@ def panes(workspace: str) -> list[Pane]:
         d = record(v, at, PANE_FIELDS, PANE_REQUIRED)
         ids = (text(d, "pane_id", at), text(d, "tab_id", at), text(d, "workspace_id", at))
         out.append(Pane(*ids, text(d, "agent_status", at)))
+    return out
+
+
+@dataclass(frozen=True)
+class Agent:
+    pane_id: str
+    name: str
+
+
+def agents() -> list[Agent]:
+    """Every agent Herdr runs, from `herdr agent list` (AgentInfo each, name a string or null)."""
+    where = "herdr agent list"
+    got = result(herdr("agent", "list"), where, "agent_list", "agents", typed=False)
+    if not isinstance(got, list):
+        msg = f"{where}: result.agents not a list"
+        raise BadAnswerError(msg)
+    out: list[Agent] = []
+    for i, v in enumerate(cast("list[object]", got)):
+        at = f"{where}: result.agents[{i}]"
+        d = record(v, at, AGENT_FIELDS, AGENT_REQUIRED)
+        name = d.get("name")
+        if name is not None and not isinstance(name, str):
+            msg = f"{at}.name: not a string or null"
+            raise BadAnswerError(msg)
+        out.append(Agent(text(d, "pane_id", at), name or ""))
     return out
 
 

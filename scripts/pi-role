@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """pi-role [--json | --print-env] AGENT_FILE [extra pi args...]
+pi-role --launch-set AGENT_FILE [pi args...] | --record SESSION AGENT_FILE [pi args...]
 pi-role --set-identity NAME EMAIL
 
 Start Pi under one of this kit's role files (agents/<role>.md, docs/adr/0016):
@@ -73,8 +74,18 @@ the code reviewer and the qc judge) or editing and writing without committing
 the identity's env like any role when one is set.
   --print-env      print the environment the launch applies (KEY=VALUE lines), or refuse
   --set-identity   write NAME and EMAIL as the [identity] table, other tables kept
+
+Launch set (what it holds: spec roles#launch-set): read from the whole launch, pi-role's own args and the
+pi args given after AGENT_FILE (a pane launch's: what herdr-spawn adds, its Herdr extension among them):
+the role file, pi-role itself, web-mcp.json, each --skill folder (a trailing /) and --extension file, each
+with its sha256 (a folder's over its files' relative paths and digests, __pycache__ aside; a file gone: null).
+  --launch-set     print it as JSON {"role", "role_file", "launcher", "cwd", "args", "files": {path: digest}},
+                   from the working directory; octo-feather-qa --verdict's freshness asks it too
+  --record         write it, with "session", to $(octo-feather-state)/launch-sets/SESSION.json (herdr-spawn),
+                   which `octo-feather-lane stale` reads
 """
 import hashlib, json, os, re, shutil, subprocess, sys, tomllib
+from pathlib import Path
 from typing import Any, cast
 
 KEYS = {"name", "description", "model", "thinking", "tools", "skills", "externalSkills"}
@@ -343,6 +354,81 @@ def launch(path: str, *, to_file: bool = False):
     return args
 
 
+def digest(path: str) -> str | None:
+    """PATH's sha256: a file's content, a folder's files (relative path and digest each, __pycache__ aside); None
+    when gone."""
+    if os.path.isfile(path):
+        with open(path, "rb") as f:
+            return hashlib.sha256(f.read()).hexdigest()
+    if not Path(path).is_dir():
+        return None
+    h = hashlib.sha256()
+    for d, dirs, files in os.walk(path):
+        dirs[:] = sorted(x for x in dirs if x != "__pycache__")
+        for n in sorted(files):
+            p = os.path.join(d, n)
+            h.update(f"{os.path.relpath(p, path)}\0{digest(p) or Path(p).readlink()}\n".encode())
+    return h.hexdigest()
+
+
+def launch_set(path: str, extra: list[str]) -> dict[str, Any]:
+    """The launch set of the role at PATH launched with EXTRA pi args, from the working directory (pi-role --help,
+    Launch set)."""
+    args = launch(path) + extra
+    kit = os.path.dirname(os.path.dirname(os.path.abspath(path)))
+    me = os.path.realpath(__file__)
+    files = [os.path.abspath(path), me, os.path.join(kit, WEB_LIST)]
+    files += [args[i + 1] + ("/" if a == "--skill" else "") for i, a in enumerate(args[:-1]) if a in ("--skill", "--extension")]
+    fm, _ = parse(path)
+    return {"role": fm.get("name", ""), "role_file": os.path.abspath(path), "launcher": me, "cwd": str(Path.cwd()),
+            "args": extra, "files": {f: digest(f.rstrip("/")) for f in dict.fromkeys(files)}}
+
+
+def records_dir() -> str:
+    """Where pane launches record their launch sets: launch-sets/ in this Herdr session's state dir."""
+    state = subprocess.run([os.path.join(os.path.dirname(os.path.realpath(__file__)), "octo-feather-state")],
+                           capture_output=True, text=True, check=True).stdout.strip()
+    return os.path.join(state, "launch-sets")
+
+
+SESSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+RECORD_TEXT = ("session", "role", "role_file", "launcher", "cwd")
+
+
+def record(session: str, path: str, extra: list[str]) -> None:
+    if not SESSION.fullmatch(session):
+        sys.exit(f"pi-role: --record needs a session id, got {session!r}")
+    d = records_dir()
+    os.makedirs(d, exist_ok=True)
+    f = os.path.join(d, f"{session}.json")
+    with open(f + ".tmp", "w", encoding="utf-8") as h:
+        json.dump({"session": session, **launch_set(path, extra)}, h)
+    os.replace(f + ".tmp", f)
+
+
+def read_record(session: str) -> dict[str, Any] | str:
+    """SESSION's launch-set record as --record wrote it, or why there is none (a missing file, or one not of that
+    shape, named)."""
+    f = os.path.join(records_dir(), f"{session}.json")
+    if not SESSION.fullmatch(session) or not os.path.isfile(f):
+        return f"no launch set recorded for session {session} in {os.path.dirname(f)}"
+    try:
+        with open(f, encoding="utf-8") as h:
+            rec: object = json.load(h)
+    except (OSError, ValueError) as e:
+        return f"launch-set record {f} unreadable ({e})"
+    r = cast("dict[str, object]", rec) if isinstance(rec, dict) else {}
+    files, args = r.get("files"), r.get("args")
+    bad = [k for k in RECORD_TEXT if not isinstance(r.get(k), str)]
+    if not isinstance(args, list) or not all(isinstance(a, str) for a in cast("list[object]", args)):
+        bad.append("args")
+    if not isinstance(files, dict) or not all(isinstance(v, (str, type(None))) for v in cast("dict[str, object]", files).values()):
+        bad.append("files")
+    if bad or r.get("session") != session:
+        return f"launch-set record {f} malformed ({', '.join(bad) or 'session'})"
+    return r
+
+
 def mise_shims():
     """mise's shims dir, as mise itself reports it, when the working directory's repo has its own mise.toml
     (the kit, a repo the kit created, or one that chose mise itself); else None. Agent shells are
@@ -393,6 +479,14 @@ def main(argv: list[str]):
             return
         case ["--set-identity", *_]:
             sys.exit("usage: pi-role --set-identity NAME EMAIL")
+        case ["--launch-set", path, *extra]:
+            print(json.dumps(launch_set(path, extra)))
+            return
+        case ["--record", session, path, *extra]:
+            record(session, path, extra)
+            return
+        case ["--launch-set" | "--record", *_]:
+            sys.exit("usage: pi-role --launch-set AGENT_FILE [pi args...] | --record SESSION AGENT_FILE [pi args...]")
         case _:
             pass
     print_env = argv[:1] == ["--print-env"]
