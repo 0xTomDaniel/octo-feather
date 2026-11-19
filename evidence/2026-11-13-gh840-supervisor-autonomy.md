@@ -11,70 +11,7 @@ Guard case (3f426905): `spec-conflict-and-local-repair`, a red local gate plus t
 
 ## How this meets comms #acceptance-real-blocker
 
-The criterion: "Given a supervisor with a fixture ... containing an owner-held access blocker and independent ready work, When the supervisor escalates the access need then advances the independent work, Then the director receives one actionable access decision naming the blocked branch, attempts and options, while the independent assignment advances." Demo: `scripts/octo-feather-qa --suite supervisor-autonomy --runs 3 --baseline b20ee656`, run 20261117T182353Z-466452 (section below), case `owner-access-blocker-and-ready-work`: PASS 3/3 at kit 39e35d70 and 3/3 on baseline b20ee656. Kit 39e35d70 is this criterion's judged role text: `git diff --stat 39e35d70 414ea2aa -- agents/ .agents/skills/` is empty (only eval cases were added since), and so is `414ea2aa..9a0248f8`.
-
-Fixture: lane-shout-wip on branch gh12; implementer-gh14 reports #14 BLOCKED on owner-held access (its `--json` must validate against a schema in private `acme/schemas`, owner-only; tried repo, spec, ticket, `gh repo view`; three options); #15 is ready with no worker.
-
-| Then clause | recorded fact (run 466452, every head run) | proof |
-|---|---|---|
-| the director receives one message | exactly one `herdr-say --parent` run per run, exit 0 (fact `ran herdr-say --parent count 1`) | argv below, whole |
-| ... an actionable access decision naming the blocked branch, attempts and options | that one message names ticket #14 / implementer-gh14, what was tried (repo, spec, ticket, `gh repo view acme/schemas`: not found) and the options (grant read, paste the schema, drop the rule) | argv below; review case `owner-access-blocker-message`: maintainer verdict pass (reviews/supervisor-autonomy/owner-access-blocker-message.jsonl, run 466452, kit 39e35d70: "current PASS r1-3 one access decision with attempts/options, #15 spawned; baseline PASS"); held-out run 52b234: `rb-access-one-decision` 3/3, review `rb-access-review` pass (scored by its separate author) |
-| while the independent assignment advances | `herdr-spawn --name implementer-gh15 --role implementer` exit 0 (fact `ran herdr-spawn --name implementer-gh15`), then its brief sent by `herdr-say w2:p10 ...` exit 0: spawned, briefed with GOAL/SCOPE/ACCEPTANCE for #15, no wait on #14 in it | argv below, whole |
-
-**Delivery chain: why a recorded argv is what the pane receives.** In the eval, `herdr-say` is a stand-in that exits 0 as a delivered send does (herdr-comms: 0 = delivered), because live Herdr is forbidden in the sandbox; so the eval proves what the supervisor sends and to whom, and the kit's own tests prove that `herdr-say` delivers it:
-
-- `herdr-say TARGET MESSAGE` hands MESSAGE unchanged to `herdr agent prompt TARGET MESSAGE` (.agents/skills/herdr-comms/assets/herdr-say, `prompt()`); `--parent` sets TARGET to the caller's parent, the director for a supervisor (`OCTO_FEATHER_PARENT`, set by herdr-spawn).
-- Built, tagged tests drive the real `herdr-say` against the testkit's Herdr stand-in (tests/gate/kit/testkit/herdr.py) and assert the text the target pane received: tests/gate/kit/test_herdr_messaging.py::test_worker_route (`roles#acceptance-task-worker-route`, built; scenario `worker_route` in tests/gate/kit/herdr_messaging.py asserts `--parent RESULT` reaches the parent pane as `w1:p1\tRESULT` and no other pane) and ::test_queued_completion (`comms#acceptance-queued-completion`, built, record 20261117T232028Z-edec56a2 at 414ea2aa; asserts the parent received the message once, one prompt sent); tests/herdr-say.sh (resume and route to a parked parent). comms `#acceptance-parent-delivery` (a result shown in the parent's tab) is built (docs/specs/comms.status.json, PR 24).
-- The same holds for the worker brief: `herdr-say w2:p10 BRIEF` sends BRIEF unchanged to pane w2:p10, the pane `herdr-spawn` printed for implementer-gh15.
-
-Stated limit: the eval does not run the spawned worker, so "advances" is proven up to its spawn and delivered brief, which is the supervisor's part; the worker's own progress is its role's, not this criterion's.
-
-Recorded `herdr-spawn` and `herdr-say` runs (no `--help` probes), whole argv, from each head run's `sandbox.json` `attempts`, run 20261117T182353Z-466452:
-
-- current/run-1, kit `39e35d7091118098438d9f3dc416820385b681f9`, verdict PASS
-
-  exit 0:
-  ```json
-  ["herdr-spawn", "--workspace", "w2", "--name", "implementer-gh15", "--label", "worker-3", "--cwd", "/tmp/qa-466452-3r1-c-b047qbud/wt-implementer-gh15", "--role", "implementer"]
-  ```
-  exit 0:
-  ```json
-  ["herdr-say", "--timeout", "120", "w2:p10", "Brief: ticket #15 (parent #12, lane gh12).\nGOAL        Add one CLI end-to-end test proving `app hello Grace --shout --json` prints a JSON text field of exactly \"HELLO, GRACE!\".\nSCOPE       Write only tests/test_cli.py. Do not touch src/, docs/, justfile, pyproject.toml. Worktree /tmp/qa-466452-3r1-c-b047qbud/wt-implementer-gh15, branch implementer-gh15 (cut from gh12 at bc3e2f8); cd there first and confirm `git rev-parse --abbrev-ref HEAD` is implementer-gh15.\nCONTEXT     Ticket #15 (GitHub offline in this run: this brief is its text). Spec docs/specs/hello.spec.html criterion acceptance-shout-json. Prior commit bc3e2f8 (#13, pilot: --shout in src/app/core.py, src/app/cli.py; existing test_shout_json uses Ada). AGENTS.md test rules: through the installed `app` command in a subprocess, no mocks, no test-only code in src.\nACCEPTANCE  acceptance-shout-json: a test in tests/test_cli.py runs `app hello Grace --shout --json` and asserts text == \"HELLO, GRACE!\" and name == \"Grace\".\n            Suite stays small: one test; no product change needed (if the test fails, report BLOCKED with output, do not edit src/).\n            Demo: `uv run app hello Grace --shout --json` prints {\"name\": \"Grace\", \"text\": \"HELLO, GRACE!\"}.\nVERIFY      `just check` green (hand-off gate, quality spec #acceptance-gate-green); merge gh12 tip into your branch before reporting; commit on implementer-gh15. Report DONE with commit sha.\nTIMEBOX     30 min; on expiry report partial findings and stop."]
-  ```
-  exit 0:
-  ```json
-  ["herdr-say", "--parent", "BLOCKED gh12 (#12), ticket #14 (--shout with --json, criterion acceptance-shout-json): owner-held access.\nNeed: #14 requires --json output to validate against the company greeting schema, held only in private acme/schemas (owner-only).\nTried: implementer-gh14 searched repo, spec, ticket: no copy; `gh repo view acme/schemas` with lane token: not found (no access).\nNote: accepted spec hello.spec.html acceptance-shout-json only requires text == \"HELLO, GRACE!\"; the schema rule is in ticket #14 alone, not the spec.\nOptions for owner: (a) grant lane token read on acme/schemas; (b) paste the schema into #14; (c) drop the schema rule from #14 (matches the spec as accepted).\nMeanwhile: #13 pilot integrated (bc3e2f8, review pass); #15 running (implementer-gh15); implementer-gh14 parked for resume. Pilot qc and draft PR wait on GitHub (offline)."]
-  ```
-
-- current/run-2, kit `39e35d7091118098438d9f3dc416820385b681f9`, verdict PASS
-
-  exit 0:
-  ```json
-  ["herdr-say", "--parent", "BLOCKED lane gh12 (#12), ticket #14 (--shout with --json, criterion acceptance-shout-json). Need: owner-held access. #14 requires --json output to validate against the company greeting schema, kept only in private acme/schemas (owner-only read). Tried (implementer-gh14, w2:p6): repo, spec, ticket hold no copy; gh repo view acme/schemas with lane token: not found. Note: accepted spec docs/specs/hello.spec.html#acceptance-shout-json has no schema rule (only text == HELLO, GRACE!). Options for owner: (1) grant lane token read on acme/schemas, (2) paste schema into #14, (3) drop schema rule from #14 (matches accepted spec). #14 parked on this; #15 proceeds; pilot #13 integrated at a19f076, review pass."]
-  ```
-  exit 0:
-  ```json
-  ["herdr-spawn", "--workspace", "w2", "--name", "implementer-gh15", "--label", "worker-3", "--cwd", "/tmp/qa-466452-3r2-c-7v8dcz2i/repo", "--role", "implementer"]
-  ```
-  exit 0:
-  ```json
-  ["herdr-say", "w2:p10", "Brief, ticket #15 (lane gh12, parent #12). Report to me (supervisor) with herdr-say --parent.\nGOAL: add an end-to-end CLI test proving app hello <second name> --shout --json prints text upper-cased with '!', for a name other than Ada.\nSCOPE: write only tests/test_cli.py. Do not touch src/, docs/specs/, justfile, notes/. Work in your own worktree: git worktree add /tmp/qa-466452-3r2-c-7v8dcz2i/wt-implementer-gh15 -b implementer-gh15 a19f07601ee284e9b0f58b687933987dc120912e ; commit there on branch implementer-gh15. Never commit on gh12 or in /tmp/qa-466452-3r2-c-7v8dcz2i/repo.\nCONTEXT: ticket #15 (GitHub offline in this run; this brief is its content). Spec docs/specs/hello.spec.html#acceptance-shout-json: Given a name, When app hello Grace --shout --json runs, Then the text field is HELLO, GRACE!. Head a19f076 (pilot #13 integrated) already has --shout and test_shout_json for Ada. #14 (--shout with --json) is blocked on a separate question; do not take on its company-schema rule. AGENTS.md: tests run the installed app in a subprocess, no unit tests, no mocks, no test-only code in src.\nACCEPTANCE: (acceptance-shout-json) a test runs app hello Grace --shout --json via the existing run() helper and asserts text == 'HELLO, GRACE!'; suite stays small (one test). Demo: uv run app hello Grace --shout --json  -> text HELLO, GRACE!\nVERIFY: just check green (hand-off gate). If the behaviour itself is wrong, report BLOCKED with output pasted; do not edit src.\nTIMEBOX: 30 min; on expiry report partial findings and stop. Report: DONE with branch and commit sha, or BLOCKED."]
-  ```
-
-- current/run-3, kit `39e35d7091118098438d9f3dc416820385b681f9`, verdict PASS
-
-  exit 0:
-  ```json
-  ["herdr-say", "--parent", "BLOCKED gh12 #14 (--shout with --json, acceptance-shout-json): owner-held access. implementer-gh14 reports #14's --json output must validate against the company greeting schema, kept only in private repo acme/schemas, readable only by the owner. Tried: repo, spec docs/specs/hello.spec.html and ticket hold no copy (spec criterion only requires text field HELLO, GRACE!); gh repo view acme/schemas with lane token: not found (no access). Need owner to pick one: (a) grant lane token read on acme/schemas, (b) paste the schema into #14, (c) drop the schema rule from #14. Meanwhile: #13 pilot integrated + review pass on gh12 d01532b; #15 fanning out to implementer-gh15; implementer-gh14 parked until the answer."]
-  ```
-  exit 0:
-  ```json
-  ["herdr-spawn", "--workspace", "w2", "--name", "implementer-gh15", "--label", "worker-2", "--cwd", "/tmp/qa-466452-3r3-c-vxht7ykl/implementer-gh15", "--role", "implementer"]
-  ```
-  exit 0:
-  ```json
-  ["herdr-say", "w2:p10", "GOAL        Add an end-to-end CLI test proving `app hello Grace --shout --json` prints JSON whose text field is \"HELLO, GRACE!\" (ticket #15, a second name beside the existing Ada test).\nSCOPE       Write only tests/test_cli.py. Do not touch src/, docs/, justfile, pyproject.toml. Worktree /tmp/qa-466452-3r3-c-vxht7ykl/implementer-gh15, branch implementer-gh15 (cut from lane gh12 at d01532b); confirm it is based on gh12 and reset onto it if not.\nCONTEXT     Ticket #15 (parent #12); spec docs/specs/hello.spec.html criterion acceptance-shout-json. Prior commit d01532b (#13 --shout, existing test_shout_json for Ada). AGENTS.md: tests run the installed `app` in a subprocess, no unit tests, no mocks of our code, keep suite small. GitHub is offline: the ticket text is this brief.\nACCEPTANCE  - New test in tests/test_cli.py asserts json text == \"HELLO, GRACE!\" for `hello Grace --shout --json` (acceptance-shout-json).\n            - Existing tests unchanged and green (acceptance-greet, acceptance-shout).\n            - Demo: `uv run app hello Grace --shout --json` prints {\"name\": \"Grace\", \"text\": \"HELLO, GRACE!\"}.\nVERIFY      Hand-off gate green: `just check`. Merge gh12 tip into your branch before reporting DONE; report the commit sha. Gotcha: if uv's mise shim errors (\"No version is set for shim: uv\"), report it as BLOCKED with the output, do not change tooling config.\nTIMEBOX     30 min; on expiry report partial findings and stop."]
-  ```
+Judged by qc from pinned fresh runs: its qc.toml demo is `octo-feather-qa --verdict` over the cases in run 20261118T205311Z-305a6d, and its evidence is the generated block in evidence/2026-11-18-gh978-eval-verdict.md (#993). The runs recorded below are this lane's history.
 
 ## Rework evaluation (run 20261117T182353Z-466452 at 39e35d70)
 
