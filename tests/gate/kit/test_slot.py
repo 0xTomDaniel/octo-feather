@@ -6,6 +6,7 @@ from collections.abc import Callable
 
 import pytest
 from slot import (
+    back_to_back,
     granted,
     new_reads_old,
     old_reads_new,
@@ -77,3 +78,9 @@ def test_queued_late(case: Case) -> None:
 
 def test_two_sessions(case: Case) -> None:
     case(two_sessions)
+
+
+@pytest.mark.e2e  # waits out a real grace through two real gate runs
+@pytest.mark.criterion("quality#acceptance-gate-recipes-first")
+def test_back_to_back(case: Case) -> None:
+    case(back_to_back)
