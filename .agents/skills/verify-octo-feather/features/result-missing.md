@@ -13,7 +13,7 @@ Drive criterion: `comms#acceptance-result-missing`
 
 ## How to get to it (user POV)
 
-- A supervisor lists its outstanding workers with `octo-feather-handoff results` (`--help`, results) at each goal check-in; one shown `ended, no result file` ended without reporting (agents/supervisor.md).
+- A supervisor's outstanding-workers listing, `octo-feather-handoff results` (`--help`, results), put in its context after a start or a compaction by `extensions/results-on-wake.ts`; what a missing result file means: comms spec `#roles-goal`.
 
 ## Driving it with verify-octo-feather
 

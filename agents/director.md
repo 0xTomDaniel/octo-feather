@@ -127,7 +127,7 @@ When you fold new scope into an open lane, update its goal in the same step.
 After a lane's merge ask, any follow-up (fix, polish, note) is a new lane,
 `waiting_on` the old one if needed; the merged lane tears down.
 
-`supervisor` is always the `pane=` id, never the `name=` agent name or `tab=` id.
+`supervisor`, what it holds and who writes it: comms spec `#octo-lane-record-key-supervisor`.
 The file name is the agent name. A wrong `supervisor` shows the lane as stalled.
 
 - When work needs doing, spawn a supervisor to own it. A director that

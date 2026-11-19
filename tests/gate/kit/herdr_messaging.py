@@ -705,11 +705,13 @@ def results_listing(s: Scratch) -> None:
 
 
 def director_prune(s: Scratch) -> None:
-    """comms result file, the director's remover: the director w0:p1 spawns general workers
-    a1, a2 and a3, each reporting with `herdr-say --parent` into director.results/; a1's and
-    a2's files 8 days old, a3's fresh; a1 and a3 then gone from Herdr. `octo-feather-start
-    --director --resume` removes a1's file only (old, its worker gone), keeps a2's (live) and
-    a3's (fresh)."""
+    """comms result file, the director's remover (#notification-records: a week after the worker
+    is gone): the director w0:p1 spawns general workers a1, a2 and a3, each reporting with
+    `herdr-say --parent` into director.results/, every report 8 days old; a1 and a3 then gone
+    from Herdr, a2 live. `octo-feather-start --director --resume` removes none: a1 and a3 just
+    went (gone-since now, their `<session>.gone` beside the file), a2 is live. a1's gone-since
+    backdated 8 days, a2's a stale one (live again): `octo-feather-handoff prune-results` as the
+    director removes a1's file and marker only, clears a2's marker, keeps a3's (gone 0 days)."""
     d = herdr_world(s, {"w0:p1": agent("w0:p1", "director", "idle")})
     s.env["HERDR_SESSION"] = f"prune-{os.getpid()}"
     s.identity()
@@ -719,6 +721,7 @@ def director_prune(s: Scratch) -> None:
     (state / "director.toml").write_text('pane = "w0:p1"\n')
     hand = {"HERDR_PANE_ID": "w0:p1", "HERDR_WORKSPACE_ID": "w0"}
     files: dict[str, Path] = {}
+    old = time.time() - 8 * 86400
     for n in ("a1", "a2", "a3"):
         spawn = [str(ASSETS / "herdr-spawn"), "--workspace", "w0", "--name", f"general-worker-{n}"]
         spawn += ["--label", n, "--role", "general-worker", "--cwd", str(s.root)]
@@ -726,19 +729,33 @@ def director_prune(s: Scratch) -> None:
         worker = tab_env(d, pane)
         s.run([SAY, "--parent", REPORT], env=worker)
         files[n] = reported(s, worker, "director")
+        os.utime(files[n], (old, old))
         if n != "a2":
             drop(d, pane)
-    old = time.time() - 8 * 86400
-    for n in ("a1", "a2"):
-        os.utime(files[n], (old, old))
     stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     with (state / "director.handoffs.jsonl").open("a") as f:  # no background reflection
         f.write(json.dumps({"at": stamp, "kind": "reflection"}) + "\n")
     drop(d, "w0:p1")
     start(s, "--director", "--resume", "D1")
+    gone = {n: f.with_suffix(".gone") for n, f in files.items()}
+    assert all(f.is_file() for f in files.values()), "an old report of a just-gone worker removed"
+    assert gone["a1"].is_file(), gone
+    assert gone["a3"].is_file(), gone
+    assert not gone["a2"].exists(), gone
+    show("director start: kept every 8-day-old report (a1, a3 just gone, a2 live)")
+    for n in ("a1", "a2"):
+        gone[n].touch()
+        os.utime(gone[n], (old, old))
+    director = {"HERDR_PANE_ID": "w0:p9"}
+    s.run([kit("octo-feather-handoff"), "prune-results"], env=director)
+    assert not files["a1"].exists(), "a1 gone 8 days: its report kept"
+    assert not gone["a1"].exists(), "a1 gone 8 days: its marker kept"
+    assert files["a2"].is_file(), "a2 live: its report removed"
+    assert not gone["a2"].exists(), "a2 live: its marker kept"
+    assert files["a3"].is_file(), "a3 gone 0 days: its report removed"
+    assert gone["a3"].is_file(), "a3 gone 0 days: its marker removed"
     left = sorted(p.name for p in results_dir(s, "director").iterdir())
-    assert left == sorted([files["a2"].name, files["a3"].name]), left
-    show(f"director start: removed {files['a1'].name} (8 days, worker gone); kept {left}")
+    show(f"prune-results, a1 gone 8 days: removed {files['a1'].name}; left {left}")
 
 
 SPAWNED = (
@@ -789,8 +806,9 @@ def herdr_malformed(s: Scratch) -> None:
     """`herdr agent get` answering exit 0 with a shape that is no agent (agent null, an agent with
     no pane or status, not JSON, no result): `octo-feather-handoff results` shows that worker
     `unknown (...)` with `none yet`, never `ended` nor `live None`; a director result file 8 days
-    old whose worker gets such an answer is kept by the start's prune. Only Herdr's explicit
-    agent_not_found is absence."""
+    old whose worker gets such an answer is kept by `prune-results`, its gone-since clock not
+    started. Only Herdr's explicit agent_not_found is absence: it starts the clock, and the file
+    goes once that is 8 days old."""
     d, sup, impl = supervised(s)
     for raw in ODD_ANSWERS:
         (d / "get-answer").write_text(json.dumps({"implementer-gh7": raw}))
@@ -813,14 +831,20 @@ def herdr_malformed(s: Scratch) -> None:
     }
     with (state_dir(s) / "director.handoffs.jsonl").open("a") as f:
         f.write(json.dumps(spawn) + "\n")
+    marker = old.with_suffix(".gone")
     for raw in ODD_ANSWERS:
         (d / "get-answer").write_text(json.dumps({"general-worker-a9": raw}))
         s.run([kit("octo-feather-handoff"), "prune-results"])
         assert old.is_file(), f"pruned on {raw}"
+        assert not marker.exists(), f"gone-since started on {raw}"
     (d / "get-answer").unlink()
     s.run([kit("octo-feather-handoff"), "prune-results"])
-    assert not old.is_file(), "an agent_not_found worker's old file was kept"
-    show("prune: kept on every odd answer, removed on agent_not_found")
+    assert old.is_file(), "agent_not_found: the report removed at once"
+    assert marker.is_file(), "agent_not_found: gone-since not started"
+    os.utime(marker, (then, then))
+    s.run([kit("octo-feather-handoff"), "prune-results"])
+    assert not old.is_file(), "a worker gone 8 days: its report kept"
+    show("prune: no clock on an odd answer; agent_not_found starts it; removed 8 days on")
 
 
 def merged_repo(s: Scratch) -> tuple[Path, str]:

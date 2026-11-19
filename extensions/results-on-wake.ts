@@ -1,9 +1,10 @@
 // results-on-wake: puts the caller's outstanding-workers listing (`octo-feather-handoff results`, its
 // --help) in the agent's context once the agent may have lost what reached it: at the first run after
 // the session starts (a launch or a resume) and at the first run after each compaction (comms spec
-// #roles-goal: the parent reads its workers' results on any wake). scripts/pi-role loads it into every
-// role; a caller owning no hand-off log (the command's exit 65) or with no outstanding worker gets
-// nothing. Any other failure is named in the context instead of the listing, never silently dropped.
+// #roles-goal). scripts/pi-role loads it into each role whose `extensions:` lists it (the director and
+// the supervisor, the roles owning a hand-off log; roles spec #fm-extensions); a caller owning no
+// hand-off log (the command's exit 65) or with no outstanding worker gets nothing. Any other failure
+// is named in the context instead of the listing, never silently dropped.
 import { execFile } from "node:child_process";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

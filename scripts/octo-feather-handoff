@@ -47,10 +47,14 @@ line in that log names it, else `ended`; `unknown (...)` when that lookup fails 
 Result is its result file when one exists, else `ended, no result file` for an ended worker and
 `none yet` otherwise. Exit 65 when the caller owns no log.
 
-prune-results removes the director's result files (director.results/*.md) older than 7 days whose
-worker (named by the director log's spawn line for that session) Herdr no longer finds;
-each removal named on stderr. octo-feather-start runs it. A lane's results dir moves with the
-lane at `octo-feather-lane archive`.
+prune-results removes a director worker's result file (director.results/<session>.md) a week
+after that worker is gone (comms spec #notification-records), its worker named by the director
+log's spawn line for that session. The first run that gets Herdr's agent_not_found for it
+starts the clock: a marker `<session>.gone` beside the file, its mtime the gone-since instant;
+a run once that is over 7 days old removes file and marker; one finding the worker live again
+removes the marker. Any other answer (a failed lookup, a malformed one) and a file with no
+spawn line keep the file and change no marker. Each removal named on stderr. octo-feather-start
+runs it. A lane's results dir moves with the lane at `octo-feather-lane archive`.
 
 repoint NAME reads the line herdr-spawn printed for a resumed agent on stdin and writes its pane=
 into NAME's record in the caller's session state: lanes/NAME.toml `supervisor`, or director.toml
@@ -88,7 +92,7 @@ from handoff_log import encode, read_log
 SPAWN_KINDS = ("spawn", "worker-spawn")
 DIRECTOR_LOG = "director.handoffs.jsonl"
 WORKER_ROLES = ("implementer", "code-reviewer", "corrector", "general-worker")
-PRUNE_AGE_S = 7 * 86400  # a director result file's age before prune-results may remove it
+GONE_FOR_S = 7 * 86400  # how long a director worker is gone before prune-results removes its file
 
 
 def now() -> str:
@@ -306,7 +310,7 @@ def results(_: argparse.Namespace) -> int:
 
 
 def prune_results(_: argparse.Namespace) -> int:
-    """Remove the director's old result files of gone workers (module docstring)."""
+    """Remove the result files of director workers gone over a week (module docstring)."""
     state = state_dir()
     log, files = state / DIRECTOR_LOG, sorted((state / "director.results").glob("*.md"))
     spawns = read_log(log)[0] if files and log.is_file() else []
@@ -316,14 +320,21 @@ def prune_results(_: argparse.Namespace) -> int:
         if r.get("kind") in SPAWN_KINDS
     }
     for f in files:
-        name = names.get(f.stem, "")
-        try:
-            old = time.time() - f.stat().st_mtime > PRUNE_AGE_S
-        except OSError:
+        name, marker = names.get(f.stem, ""), f.with_suffix(".gone")
+        found = herdr_agent(name) if name else Unknown("no spawn line names its session")
+        if isinstance(found, Live):
+            marker.unlink(missing_ok=True)
+        if not isinstance(found, Absent):
             continue
-        if old and name and isinstance(herdr_agent(name), Absent):
+        try:
+            since = marker.stat().st_mtime
+        except FileNotFoundError:
+            marker.touch()
+            continue
+        if time.time() - since > GONE_FOR_S:
             f.unlink(missing_ok=True)
-            sys.stderr.write(f"octo-feather-handoff: removed {f} ({name} gone, over 7 days)\n")
+            marker.unlink(missing_ok=True)
+            sys.stderr.write(f"octo-feather-handoff: removed {f} ({name} gone over 7 days)\n")
     return 0
 
 
