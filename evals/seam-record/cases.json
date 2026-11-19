@@ -1,0 +1,242 @@
+[
+  {
+    "id": "implementer-rework-new-seam",
+    "role": "implementer",
+    "fixture": "python-app",
+    "task": "Rework brief, ticket #1015 (GitHub issue 0xTomDaniel/octo-feather#1015, read it with the tracker skill).\nGOAL: `app greet NAME` prints `Hello, NAME`, and an end-to-end test runs `app greet Ada` as a subprocess. QC failed app#acceptance-greet on the last head: no command `greet` and no test running it.\nSCOPE: this repo, {repo}, branch main; write src/ and tests/ only. Commit on main; no push.\nCONTEXT: ticket #1015, its body and comments.\nACCEPTANCE: app#acceptance-greet: the end-to-end test passes; demo: `uv run app greet Ada` prints Hello, Ada.\nVERIFY: `uv run pytest -q`.\nTIMEBOX: 20 min.\nSandbox run: gh answers only ticket #1015's view, notes and comment calls (recorded GitHub answers); Herdr is offline and its wrappers answer as stand-ins.",
+    "stand_ins": {
+      "gh": [
+        {
+          "args": [
+            "api",
+            "graphql",
+            "-F",
+            "n=1015",
+            "-f",
+            "owner=0xTomDaniel",
+            "-f",
+            "name=octo-feather",
+            "-f",
+            "query=query($owner: String!, $name: String!, $n: Int!) { repository(owner: $owner, name: $name) { issue(number: $n) { url createdAt lastEditedAt body comments(first: 100) { pageInfo { hasNextPage } nodes { url createdAt lastEditedAt body } } } } }"
+          ],
+          "after": [
+            "gh",
+            "issue",
+            "comment"
+          ],
+          "stdout": "{\"data\":{\"repository\":{\"issue\":{\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/1015\",\"createdAt\":\"2026-11-18T20:44:58Z\",\"lastEditedAt\":null,\"body\":\"## What to build\\n\\nScratch issue for gh987 eval recordings: the kit records real `issue-view --notes` answers before and after a `Seam:` comment, for its eval cases (lane gh987, #1009). No work here; closed after recording.\\n\\n## Acceptance criteria\\n\\n- [ ] app#acceptance-greet: `app greet NAME` prints a greeting\\n- [ ] demo: `app greet Ada` prints Hello, Ada\",\"comments\":{\"pageInfo\":{\"hasNextPage\":false},\"nodes\":[{\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/1015#issuecomment-6991114927\",\"createdAt\":\"2026-11-18T20:45:00Z\",\"lastEditedAt\":null,\"body\":\"Seam: app#acceptance-greet: `app greet` the CLI, run as a command\\n\"}]}}}}}",
+          "exit": 0
+        },
+        {
+          "args": [
+            "api",
+            "graphql",
+            "-F",
+            "n=1015",
+            "-f",
+            "owner=0xTomDaniel",
+            "-f",
+            "name=octo-feather",
+            "-f",
+            "query=query($owner: String!, $name: String!, $n: Int!) { repository(owner: $owner, name: $name) { issue(number: $n) { url createdAt lastEditedAt body comments(first: 100) { pageInfo { hasNextPage } nodes { url createdAt lastEditedAt body } } } } }"
+          ],
+          "stdout": "{\"data\":{\"repository\":{\"issue\":{\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/1015\",\"createdAt\":\"2026-11-18T20:44:58Z\",\"lastEditedAt\":null,\"body\":\"## What to build\\n\\nScratch issue for gh987 eval recordings: the kit records real `issue-view --notes` answers before and after a `Seam:` comment, for its eval cases (lane gh987, #1009). No work here; closed after recording.\\n\\n## Acceptance criteria\\n\\n- [ ] app#acceptance-greet: `app greet NAME` prints a greeting\\n- [ ] demo: `app greet Ada` prints Hello, Ada\",\"comments\":{\"pageInfo\":{\"hasNextPage\":false},\"nodes\":[]}}}}}",
+          "exit": 0
+        },
+        {
+          "args": [
+            "issue",
+            "view",
+            "1015",
+            "--json",
+            "number,title,body,state,url,parent,subIssues,blockedBy"
+          ],
+          "stdout": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"## What to build\\n\\nScratch issue for gh987 eval recordings: the kit records real `issue-view --notes` answers before and after a `Seam:` comment, for its eval cases (lane gh987, #1009). No work here; closed after recording.\\n\\n## Acceptance criteria\\n\\n- [ ] app#acceptance-greet: `app greet NAME` prints a greeting\\n- [ ] demo: `app greet Ada` prints Hello, Ada\",\"number\":1015,\"parent\":null,\"state\":\"OPEN\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"[gh987 eval recording] scratch: seam record before and after\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/1015\"}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "issue",
+            "comment",
+            "1015",
+            "--body-file",
+            "-"
+          ],
+          "stdout": "https://github.com/0xTomDaniel/octo-feather/issues/1015#issuecomment-6991114927\n",
+          "exit": 0
+        }
+      ],
+      "herdr-say": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ]
+    }
+  },
+  {
+    "id": "supervisor-brief-new-seam",
+    "role": "supervisor",
+    "fixture": "python-app",
+    "task": "Goal check-in, lane gh1014 (parent issue #1014), lane branch main checked out in {repo} (head {head}). `just qc` on {head} failed app#acceptance-greet: the judge found no test running `app greet` as a command, and the app has no `greet` command. Ticket #1015 (GitHub issue 0xTomDaniel/octo-feather#1015) is filed for it, its acceptance and demo as the judge needs; no worker holds it. Resources leave room for one Pi worker; worker worktrees go beside this one, `{repo}/../wt-gh<ticket>`.\nAct on this check-in: start the implementer for #1015 with its brief. Nothing else this turn: no integrate, qc or CI run.\nSandbox run: gh answers only ticket #1015's view, notes and comment calls (recorded GitHub answers); Herdr is offline and its wrappers answer as stand-ins.",
+    "stand_ins": {
+      "gh": [
+        {
+          "args": [
+            "api",
+            "graphql",
+            "-F",
+            "n=1015",
+            "-f",
+            "owner=0xTomDaniel",
+            "-f",
+            "name=octo-feather",
+            "-f",
+            "query=query($owner: String!, $name: String!, $n: Int!) { repository(owner: $owner, name: $name) { issue(number: $n) { url createdAt lastEditedAt body comments(first: 100) { pageInfo { hasNextPage } nodes { url createdAt lastEditedAt body } } } } }"
+          ],
+          "after": [
+            "gh",
+            "issue",
+            "comment"
+          ],
+          "stdout": "{\"data\":{\"repository\":{\"issue\":{\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/1015\",\"createdAt\":\"2026-11-18T20:44:58Z\",\"lastEditedAt\":null,\"body\":\"## What to build\\n\\nScratch issue for gh987 eval recordings: the kit records real `issue-view --notes` answers before and after a `Seam:` comment, for its eval cases (lane gh987, #1009). No work here; closed after recording.\\n\\n## Acceptance criteria\\n\\n- [ ] app#acceptance-greet: `app greet NAME` prints a greeting\\n- [ ] demo: `app greet Ada` prints Hello, Ada\",\"comments\":{\"pageInfo\":{\"hasNextPage\":false},\"nodes\":[{\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/1015#issuecomment-6991114927\",\"createdAt\":\"2026-11-18T20:45:00Z\",\"lastEditedAt\":null,\"body\":\"Seam: app#acceptance-greet: `app greet` the CLI, run as a command\\n\"}]}}}}}",
+          "exit": 0
+        },
+        {
+          "args": [
+            "api",
+            "graphql",
+            "-F",
+            "n=1015",
+            "-f",
+            "owner=0xTomDaniel",
+            "-f",
+            "name=octo-feather",
+            "-f",
+            "query=query($owner: String!, $name: String!, $n: Int!) { repository(owner: $owner, name: $name) { issue(number: $n) { url createdAt lastEditedAt body comments(first: 100) { pageInfo { hasNextPage } nodes { url createdAt lastEditedAt body } } } } }"
+          ],
+          "stdout": "{\"data\":{\"repository\":{\"issue\":{\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/1015\",\"createdAt\":\"2026-11-18T20:44:58Z\",\"lastEditedAt\":null,\"body\":\"## What to build\\n\\nScratch issue for gh987 eval recordings: the kit records real `issue-view --notes` answers before and after a `Seam:` comment, for its eval cases (lane gh987, #1009). No work here; closed after recording.\\n\\n## Acceptance criteria\\n\\n- [ ] app#acceptance-greet: `app greet NAME` prints a greeting\\n- [ ] demo: `app greet Ada` prints Hello, Ada\",\"comments\":{\"pageInfo\":{\"hasNextPage\":false},\"nodes\":[]}}}}}",
+          "exit": 0
+        },
+        {
+          "args": [
+            "issue",
+            "view",
+            "1015",
+            "--json",
+            "number,title,body,state,url,parent,subIssues,blockedBy"
+          ],
+          "stdout": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"## What to build\\n\\nScratch issue for gh987 eval recordings: the kit records real `issue-view --notes` answers before and after a `Seam:` comment, for its eval cases (lane gh987, #1009). No work here; closed after recording.\\n\\n## Acceptance criteria\\n\\n- [ ] app#acceptance-greet: `app greet NAME` prints a greeting\\n- [ ] demo: `app greet Ada` prints Hello, Ada\",\"number\":1015,\"parent\":null,\"state\":\"OPEN\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"[gh987 eval recording] scratch: seam record before and after\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/1015\"}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "issue",
+            "comment",
+            "1015",
+            "--body-file",
+            "-"
+          ],
+          "stdout": "https://github.com/0xTomDaniel/octo-feather/issues/1015#issuecomment-6991114927\n",
+          "exit": 0
+        }
+      ],
+      "herdr-spawn": [
+        {
+          "args": [],
+          "stdout": "name=implementer-gh1015 role=implementer tab=worker-2 pane=w2:p9 cwd={repo}/../wt-gh1015 contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        }
+      ],
+      "herdr-say": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr": [
+        {
+          "args": [],
+          "stdout": "{}\n",
+          "exit": 0
+        }
+      ]
+    }
+  },
+  {
+    "id": "reviewer-unlisted-seam",
+    "role": "code-reviewer",
+    "fixture": "python-app",
+    "head": {
+      "fixture": "python-app-greet",
+      "branch": "gh1015",
+      "message": "feat(greet): app greet NAME, end-to-end test (#1015)"
+    },
+    "task": "Review the diff main..{head} on branch gh1015 in {repo}, the work for ticket #1015 (GitHub issue 0xTomDaniel/octo-feather#1015, read it with the tracker skill). End with your report fields.\nSandbox run: gh answers only ticket #1015's view, notes and comment calls (recorded GitHub answers); Herdr is offline and its wrappers answer as stand-ins.",
+    "stand_ins": {
+      "gh": [
+        {
+          "args": [
+            "api",
+            "graphql",
+            "-F",
+            "n=1015",
+            "-f",
+            "owner=0xTomDaniel",
+            "-f",
+            "name=octo-feather",
+            "-f",
+            "query=query($owner: String!, $name: String!, $n: Int!) { repository(owner: $owner, name: $name) { issue(number: $n) { url createdAt lastEditedAt body comments(first: 100) { pageInfo { hasNextPage } nodes { url createdAt lastEditedAt body } } } } }"
+          ],
+          "after": [
+            "gh",
+            "issue",
+            "comment"
+          ],
+          "stdout": "{\"data\":{\"repository\":{\"issue\":{\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/1015\",\"createdAt\":\"2026-11-18T20:44:58Z\",\"lastEditedAt\":null,\"body\":\"## What to build\\n\\nScratch issue for gh987 eval recordings: the kit records real `issue-view --notes` answers before and after a `Seam:` comment, for its eval cases (lane gh987, #1009). No work here; closed after recording.\\n\\n## Acceptance criteria\\n\\n- [ ] app#acceptance-greet: `app greet NAME` prints a greeting\\n- [ ] demo: `app greet Ada` prints Hello, Ada\",\"comments\":{\"pageInfo\":{\"hasNextPage\":false},\"nodes\":[{\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/1015#issuecomment-6991114927\",\"createdAt\":\"2026-11-18T20:45:00Z\",\"lastEditedAt\":null,\"body\":\"Seam: app#acceptance-greet: `app greet` the CLI, run as a command\\n\"}]}}}}}",
+          "exit": 0
+        },
+        {
+          "args": [
+            "api",
+            "graphql",
+            "-F",
+            "n=1015",
+            "-f",
+            "owner=0xTomDaniel",
+            "-f",
+            "name=octo-feather",
+            "-f",
+            "query=query($owner: String!, $name: String!, $n: Int!) { repository(owner: $owner, name: $name) { issue(number: $n) { url createdAt lastEditedAt body comments(first: 100) { pageInfo { hasNextPage } nodes { url createdAt lastEditedAt body } } } } }"
+          ],
+          "stdout": "{\"data\":{\"repository\":{\"issue\":{\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/1015\",\"createdAt\":\"2026-11-18T20:44:58Z\",\"lastEditedAt\":null,\"body\":\"## What to build\\n\\nScratch issue for gh987 eval recordings: the kit records real `issue-view --notes` answers before and after a `Seam:` comment, for its eval cases (lane gh987, #1009). No work here; closed after recording.\\n\\n## Acceptance criteria\\n\\n- [ ] app#acceptance-greet: `app greet NAME` prints a greeting\\n- [ ] demo: `app greet Ada` prints Hello, Ada\",\"comments\":{\"pageInfo\":{\"hasNextPage\":false},\"nodes\":[]}}}}}",
+          "exit": 0
+        },
+        {
+          "args": [
+            "issue",
+            "view",
+            "1015",
+            "--json",
+            "number,title,body,state,url,parent,subIssues,blockedBy"
+          ],
+          "stdout": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"## What to build\\n\\nScratch issue for gh987 eval recordings: the kit records real `issue-view --notes` answers before and after a `Seam:` comment, for its eval cases (lane gh987, #1009). No work here; closed after recording.\\n\\n## Acceptance criteria\\n\\n- [ ] app#acceptance-greet: `app greet NAME` prints a greeting\\n- [ ] demo: `app greet Ada` prints Hello, Ada\",\"number\":1015,\"parent\":null,\"state\":\"OPEN\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"[gh987 eval recording] scratch: seam record before and after\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/1015\"}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "issue",
+            "comment",
+            "1015",
+            "--body-file",
+            "-"
+          ],
+          "stdout": "https://github.com/0xTomDaniel/octo-feather/issues/1015#issuecomment-6991114927\n",
+          "exit": 0
+        }
+      ]
+    }
+  }
+]
