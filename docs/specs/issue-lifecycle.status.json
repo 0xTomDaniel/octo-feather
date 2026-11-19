@@ -275,6 +275,22 @@
       "tests": [
         "tests/gate/kit/lane_stale.py"
       ]
+    },
+    "acceptance-merge-starts-routine": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-red-main-stops": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-archive-tears-down": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-refresh-waits-run": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

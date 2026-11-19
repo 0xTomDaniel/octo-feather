@@ -75,10 +75,6 @@
       "status": "built",
       "pr": 24
     },
-    "acceptance-close-report-first": {
-      "status": "planned",
-      "pr": null
-    },
     "acceptance-escalation-content": {
       "status": "built",
       "pr": 24
@@ -209,6 +205,14 @@
     "acceptance-report-reflection": {
       "status": "built",
       "pr": 279
+    },
+    "acceptance-close-message": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-shared-supervisor-kept": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
