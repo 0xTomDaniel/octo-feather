@@ -8,9 +8,9 @@ report. Also: the brief names the evidence, the snapshot is read-only inside (an
 e2e, quality spec #test-kinds), refetched per run and removed after, also from a run killed
 mid-judge; no GitHub remote skips cleanly; a failed fetch aborts before the judge (67) unless
 --no-github; PR 0 is refused before the judge; a failed status commit leaves the status file
-unmodified; the status commit carries the Owner field; a copy of the kit judges itself. One
-judged run is prepared once per gate run (build_run), the scenarios reading it or judging again
-from it."""
+unmodified; the status commit's Owner field (status_commit_owner); a copy of the kit judges
+itself. One judged run is prepared once per gate run (build_run), the scenarios reading it or
+judging again from it."""
 
 from __future__ import annotations
 
@@ -366,19 +366,14 @@ def status_commit_fails(s: Scratch) -> None:
 
 
 def status_commit_owner(s: Scratch) -> None:
-    """The prepared run's status commit carries the Owner field, `Owners: none` at column 0, as
-    `octo-feather-lane fields -` reads it (scripts/check-owner-field), under qc's unchanged
-    subject `qc: built <ids> (judged <sha>)`."""
+    """The prepared run's status commit: its Owner field line (who owes it:
+    scripts/check-owner-field --help, Who owes it) under qc's unchanged subject."""
     _, rep, _ = prepared_run(s)
     r = s.root / "repo"
     subject = s.git(r, "log", "-1", "--format=%s")
     assert subject == f"qc: built acceptance-a (judged {rep['head'][:12]})", subject
     msg = s.git(r, "log", "-1", "--format=%B")
     assert "Owners: none" in msg.splitlines(), msg
-    fields = s.run([kit("octo-feather-lane"), "fields", "-"], stdin=msg).out
-    owner = json.loads(fields)["Owner"]
-    assert owner["none"], fields
-    assert not owner["errors"], fields
 
 
 def snapshot_misses(s: Scratch) -> None:
