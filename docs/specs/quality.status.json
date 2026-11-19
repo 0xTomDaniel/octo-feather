@@ -242,6 +242,10 @@
       "commit": "748792948dea5cb809e4ce80c161aa11bc715ea7",
       "tests": []
     },
+    "acceptance-qa-evidence-block": {
+      "status": "planned",
+      "pr": null
+    },
     "acceptance-qa-review": {
       "status": "built",
       "pr": 545,
