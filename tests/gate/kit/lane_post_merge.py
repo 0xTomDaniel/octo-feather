@@ -13,9 +13,9 @@ install`, which would reach the package registries, are testkit/argv_recorder.sh
 stand-in for the registries), except where a refresh fails: the real uv fails for real (no lockfile;
 the pinned Python absent, downloads off). Step 4 (issue 1078) moves the director's checkout, the
 target repo post-merge runs in (a clone of the same origin, on main), by the rules octo-feather-lane
---help, steps 3 and 4, states; step 3 checks it before the install moves. Step 5 (issue 398,
-tests/gate/kit/herdr_messaging.py) reads a throwaway state dir (XDG_STATE_HOME) with no lane
-record, so it tells no pane; step 6
+--help, steps 3 and 4, states; step 3 checks it before the install moves. Step 5 (issue 1079)
+finds no Herdr server, names it and goes on. Step 6 (issue 398, tests/gate/kit/herdr_messaging.py)
+reads a throwaway state dir (XDG_STATE_HOME) with no lane record, so it tells no pane; step 7
 (issue 399, tests/gate/kit/lane_post_merge_teardown.py) finds no archived record, so it is pending
 and a green run exits 3.
 
@@ -59,13 +59,14 @@ JUSTFILE = (
     '>>"$ARGV_LOG"; echo >>"$ARGV_LOG"\n'
 )
 SUMMARY = "post-merge gh7 PR #7: step 1 merged {}; step 2 main CI {}; step 3 kit refresh {}; "
-LATER = "step 5 tell supervisors not run; step 6 teardown not run"
+LATER = "step 5 stale agents not run; step 6 tell supervisors not run; step 7 teardown not run"
 STOP1 = SUMMARY.format("stopped", "not run", "not run") + "step 4 checkout not run; " + LATER
 STOP2 = SUMMARY.format("ok", "stopped", "not run") + "step 4 checkout not run; " + LATER
 STOP3 = SUMMARY.format("ok", "ok", "stopped") + "step 4 checkout not run; " + LATER
 STOP4 = SUMMARY.format("ok", "ok", "ok") + "step 4 checkout stopped; " + LATER
 GREEN = SUMMARY.format("ok", "ok", "ok") + (
-    "step 4 checkout ok; step 5 tell supervisors ok; step 6 teardown pending"
+    "step 4 checkout ok; step 5 stale agents ok; step 6 tell supervisors ok; "
+    "step 7 teardown pending"
 )
 
 
@@ -276,7 +277,7 @@ def merged_step(s: Scratch) -> None:
 
 def main_ci(s: Scratch) -> None:
     """Step 2: a run in progress is watched to its end with --exit-status, a second workflow joins;
-    every run success: exit 3 (step 5 pending), one line per step and the summary; the PR's repo
+    every run success: exit 3 (step 7 pending), one line per step and the summary; the PR's repo
     not the install's leaves it unchanged; a rerun the same.
     A red run stops naming its URL; a watch failing while its run reads unfinished
     stops naming it."""
@@ -304,10 +305,13 @@ def main_ci(s: Scratch) -> None:
             f"step 2 main CI: ok: 2 push runs on {m12} concluded success: check "
             "https://github.com/o/r/actions/runs/11, lint https://github.com/o/r/actions/runs/12",
             "step 3 kit refresh: ok: kit install unchanged: PR in o/r, install is o/kit",
-            f"step 5 tell supervisors: ok: no other open lane in {lanes} to tell",
+            # no Herdr server (the testkit's herdr, no session): named, never a stop (--help, stale)
+            "step 5 stale agents: ok: stale agents: not read: herdr agent list failed "
+            "(server_not_running)",
+            f"step 6 tell supervisors: ok: no other open lane in {lanes} to tell",
             summary=GREEN,
         )
-        assert len(r.out.split("\n")) == 7, f"green prints one line per step, a summary: {r.out}"
+        assert len(r.out.split("\n")) == 8, f"green prints one line per step, a summary: {r.out}"
         assert (lane.head(), lane.calls()) == (lane.b, []), "other repo moved or refreshed"
         log = s.gh.log()
         assert "run watch 11 --exit-status -R o/r" in log, f"run not watched in o/r: {log}"

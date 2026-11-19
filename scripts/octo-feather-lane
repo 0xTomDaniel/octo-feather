@@ -421,7 +421,7 @@ Exit 0; 1 on any argument.
 
 `post-merge` is the one command the director runs after a lane merges, at the merge report and at the close
 report (owner ruling 2026-10-29 on issue 206; docs/adr/0008 Duties). Rerun it freely: each step is idempotent, and
-step 5 tells no lane twice.
+step 6 tells no lane twice.
   step 1 merged    `gh pr view PR`: the PR is MERGED, its head is HEAD (7+ hex prefix), and it has a merge commit
   step 2 main CI   `gh run list --commit <merge commit> --event push`: waits up to --wait SECONDS (default 300)
                    for a run to appear, then `gh run watch <id> --exit-status` on each run until every run gh
@@ -439,7 +439,8 @@ step 5 tells no lane twice.
                    PR in <repo>, install is <repo>`. Stops, nothing changed, on a dirty install (git status
                    --porcelain), one on a branch other than the PR's base (a detached HEAD passes, unless the
                    install is step 4's checkout) or one diverged from the merge commit, and, before the install
-                   moves, on step 4's checkout failing step 4's checks (named as step 4 names it); after `git fetch origin`, one behind it
+                   moves, on step 4's checkout failing step 4's checks (named as step 4 names it); after `git
+                   fetch origin`, one behind it
                    fast-forwards (`git merge --ff-only`, a detached HEAD stays detached), one at or past it does
                    not move. Then in the install, each failure stopping named: `octo-feather-mise-install .` (the
                    kit's own locked mise tools, never the user's global ones; only with a mise.toml there), `just vendored-fetch`, `uv sync --locked` (env UV_PYTHON_DOWNLOADS=never: a
@@ -453,7 +454,9 @@ step 5 tells no lane twice.
                    a branch other than the PR's base or a detached HEAD (`is on <branch>, not <base>`), or diverged
                    from the merge commit; one behind it on the base fast-forwards (`git merge --ff-only`), one at
                    or past it does not move. `git fetch origin` only when the merge commit is missing there
-  step 5 tell supervisors  each open lane record but --lane's, of the PR's repo (every lane when the PR is the kit
+  step 5 stale agents  `stale`'s report (below), its lines joined by `; `; always ok: it never stops the routine,
+                   and a Herdr it cannot read is named in its line (`stale agents: not read: ...`)
+  step 6 tell supervisors  each open lane record but --lane's, of the PR's repo (every lane when the PR is the kit
                    install's origin repo: every lane runs kit roles), whose supervisor pane `herdr agent get` finds
                    gets one herdr-say: "main moved to <merge sha12> (#PR <title>); rule files changed: <list or
                    none>; re-read the changed ones before your next step." Rule files: what the merge commit
@@ -475,7 +478,7 @@ step 5 tells no lane twice.
                    writes no prod line; the step goes on to the other supervisors, then stops. Its line:
                    `NOT told: ...; told: ...; already told: ...; not woken: ...; gone: director to resume or
                    archive: ...`
-  step 6 teardown  only once $(octo-feather-state)/lanes/archive/<lane>.toml exists (`octo-feather-lane archive`
+  step 7 teardown  only once $(octo-feather-state)/lanes/archive/<lane>.toml exists (`octo-feather-lane archive`
                    moves it there before the close report), else `pending: lane <lane> not archived; rerun on its
                    close report`; an archived record whose `pr` is not PR stops. In order, each stop keeping the
                    rest: the lane's own space (the archived `supervisor` pane id's prefix, when no open lane
@@ -491,10 +494,28 @@ step 5 tells no lane twice.
                    when origin has it. Gone already prints `already`; review rows, spools and records stay
 Each step prints one line as it finishes, `step <n> <name>: ok: <what>` or `step <n> <name>: stopped: <why>`;
 a stopped step runs no later step. The last line is the summary, each step's outcome (ok, stopped, not run):
-`post-merge <lane> PR #<n>: step 1 merged ok; step 2 main CI ok`, ending `; NOT told: <lane> <pane>, ... (step 5
-names each re-send)` when step 5 failed a send. Exit 0 when every step is ok, 1 when one (not merged, merged at another head, a red run named by its URL, no run within the bound, a watch that failed,
-a checkout kept, a supervisor not told, a teardown refusal), 3 when steps 1-5 are ok and step 6 is pending (the merge report run; rerun
+`post-merge <lane> PR #<n>: step 1 merged ok; step 2 main CI ok`, ending `; NOT told: <lane> <pane>, ... (step 6
+names each re-send)` when step 6 failed a send. Exit 0 when every step is ok, 1 when one (not merged, merged at another head, a red run named by its URL, no run within the bound, a watch that failed,
+a checkout kept, a supervisor not told, a teardown refusal), 3 when steps 1-6 are ok and step 7 is pending (the merge report run; rerun
 at the close report), 1 with usage on stderr for bad arguments.
+
+  octo-feather-lane stale          the live agents on a stale launch set, and those with none recorded
+
+`stale` (issue 1079; spec roles#launch-set, issue-lifecycle#gates-main-moved) lists each agent `herdr agent list`
+names whose launch set is stale, then each whose set is unknown; an agent whose set is current is not named. A
+pane launch (herdr-spawn) records the set against its Pi session (pi-role --help, Launch set); the session is the
+`--session-id` of the pane's Pi process (`herdr pane process-info`, as herdr-close --park reads it). Stale: what
+the recorded launcher lists now for the recorded role file from the recorded working directory (`pi-role
+--launch-set`) differs from the record. Lines, kit paths relative to the launcher's kit, skill folders with a
+trailing /:
+  stale: <pane> <name> role <role>: <path> changed|added|gone, ...
+  stale: <pane> <name> role <role>: <role file> launches no more from <cwd> (<why>)
+  unknown: <pane> <name> role <role|unknown>: no Pi launched with --session-id (started by hand)
+  unknown: <pane> <name> role <role|unknown>: no launch set recorded for session <id> in <dir>
+  unknown: <pane> <name>: its process not read (<Herdr's error>)
+  stale agents: <n> stale, <n> unknown, <n> current of <n> live
+It relaunches nothing. Exit 0; 1 when Herdr's agent list cannot be read, its one line `stale agents: not read:
+<why>`. post-merge step 5 prints the same report.
 
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
@@ -3926,7 +3947,7 @@ class PostMerge:
     def __init__(self, pr: int, head: str, lane: str, wait: int, repo: str | None) -> None:
         self.pr, self.head, self.lane, self.wait, self.repo = pr, head, lane, wait, repo
         self.merge, self.base = "", ""
-        self.not_told: list[str] = []   # step 5: each live supervisor whose send failed, "<lane> <pane>"
+        self.not_told: list[str] = []   # step 6: each live supervisor whose send failed, "<lane> <pane>"
 
     def r(self) -> list[str]:
         return ["-R", self.repo] if self.repo else []
@@ -4181,7 +4202,7 @@ def pm_python_missing(kit: Path) -> str | None:
     return pin if pin and p.returncode else None
 
 
-# --- post-merge step 5: tell running supervisors main moved (issue 398) ---
+# --- post-merge step 6: tell running supervisors main moved (issue 398) ---
 
 # The rule files a supervisor re-reads when main moves: role files, skills, skill patches, AGENTS.md, ADRs, specs.
 PM_RULES = re.compile(r"agents/[^/]+\.md|\.agents/skills/.+|\.skillfile/patches/.+|AGENTS\.md|docs/adr/.+|docs/specs/.+")
@@ -4263,7 +4284,7 @@ def pm_say(pane: str, msg: str) -> subprocess.CompletedProcess[str] | None:
 
 
 def pm_tell(pm: PostMerge) -> str:
-    """Step 4: tell each live supervisor of the PR's repo (every lane on a kit PR), but --lane's, that main moved and
+    """Step 6: tell each live supervisor of the PR's repo (every lane on a kit PR), but --lane's, that main moved and
     which rule files changed; one prod line per lane told in the director log, which a rerun reads to skip it. A pane
     Herdr does not find is listed, never sent to (why: herdr-comms SKILL.md, herdr-say)."""
     import datetime, tomllib
@@ -4315,7 +4336,7 @@ def pm_tell(pm: PostMerge) -> str:
             failed.append(f"{name} {sup}: {e}"); continue
         if not live:
             # Parked when the lane's latest parked line (its hand-off log, read as octo-feather-handoff parked
-            # does) names this pane; else gone, for the director to resume or archive (owner ruling #206, step 5).
+            # does) names this pane; else gone, for the director to resume or archive (owner ruling #206, step 6).
             log = lanes / f"{name}.handoffs.jsonl"
             try:
                 marks = [x for x in (read_log(log)[0] if log.exists() else []) if x.get("kind") == "parked"]
@@ -4359,7 +4380,7 @@ def pm_tell(pm: PostMerge) -> str:
     return who
 
 
-# --- post-merge step 6: tear down the closed lane (issue 399) ---
+# --- post-merge step 7: tear down the closed lane (issue 399) ---
 
 class Pending(Exception):
     """A step not due yet: its message names when to rerun; exit 3."""
@@ -4516,10 +4537,96 @@ def pm_teardown(pm: PostMerge) -> str:
     return "; ".join(done)
 
 
-# The routine's steps in order; later tickets append theirs (#397 kit refresh, #1078 checkout, #398 tell supervisors,
-# #399 teardown).
+# --- stale launch sets (issue 1079; rules: --help, stale) ---
+
+def stale_report() -> tuple[list[str], bool]:
+    """One line per live agent on a stale launch set or with none recorded, then the count line (--help, stale);
+    and whether Herdr was read."""
+    loader = importlib.machinery.SourceFileLoader("pi_role", str(KIT / "scripts" / "pi-role"))
+    pr_spec = importlib.util.spec_from_loader("pi_role", loader)
+    assert pr_spec
+    pr = importlib.util.module_from_spec(pr_spec)
+    loader.exec_module(pr)
+    at = KIT / ".agents" / "skills" / "herdr-comms" / "assets" / "herdr_scope.py"
+    spec = importlib.util.spec_from_file_location("herdr_scope", at)
+    assert spec and spec.loader
+    scope = sys.modules["herdr_scope"] = importlib.util.module_from_spec(spec)  # its dataclasses look it up there
+    spec.loader.exec_module(scope)
+    try:
+        got = scope.herdr("agent", "list")
+        agents = cast("dict[str, dict[str, object]]", got)["result"]["agents"]
+        assert isinstance(agents, list)
+    except scope.HerdrFailedError as e:
+        return [f"stale agents: not read: herdr agent list failed ({str(e)[:200]})"], False
+    except (scope.BadAnswerError, KeyError, TypeError, AssertionError) as e:
+        return [f"stale agents: not read: herdr agent list answered no agents list ({str(e)[:200]})"], False
+    except FileNotFoundError:
+        return ["stale agents: not read: herdr not on PATH"], False
+    sets = Path(pr.records_dir())
+    stale: list[str] = []
+    unknown: list[str] = []
+    current = 0
+    live = [cast("dict[str, object]", a) for a in cast("list[object]", agents) if isinstance(a, dict)]
+    for a in sorted(live, key=lambda a: str(a.get("pane_id"))):
+        pane = str(a.get("pane_id"))
+        who = f"{pane} {a.get('name') or '(no name)'}"
+        try:
+            info = scope.process_info(pane)
+        except (scope.HerdrFailedError, scope.BadAnswerError) as e:
+            unknown.append(f"unknown: {who}: its process not read ({str(e)[:200]})")
+            continue
+        found = scope.pi_session(info)
+        pid = found[0].pid if found else (info.foreground[0].pid if info.foreground else 0)
+        role = scope.environ(pid).get("OCTO_FEATHER_ROLE") if pid else None
+        if found is None:
+            unknown.append(f"unknown: {who} role {role or 'unknown'}: no Pi launched with --session-id (started by hand)")
+            continue
+        try:
+            rec = cast("dict[str, object]", json.loads((sets / f"{found[1]}.json").read_text()))
+            was = cast("dict[str, object]", rec["files"])
+            role, launcher, role_file, cwd = (str(rec[k]) for k in ("role", "launcher", "role_file", "cwd"))
+        except (OSError, ValueError, KeyError, TypeError):
+            unknown.append(f"unknown: {who} role {role or 'unknown'}: no launch set recorded for session {found[1]} in {sets}")
+            continue
+        kit = str(Path(launcher).parent.parent) + os.sep
+        def show(f: str, kit: str = kit) -> str:
+            return f.removeprefix(kit) if f.startswith(kit) else f
+        try:
+            p = subprocess.run([launcher, "--launch-set", role_file], cwd=cwd, capture_output=True, text=True,
+                               stdin=subprocess.DEVNULL)
+            now = cast("dict[str, object]", json.loads(p.stdout)["files"]) if p.returncode == 0 else None
+            why = (p.stderr.strip().splitlines() or [f"exit {p.returncode}"])[-1][:200]
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            now, why = None, str(e)[:200]
+        if now is None:
+            stale.append(f"stale: {who} role {role}: {show(role_file)} launches no more from {cwd} ({why})")
+            continue
+        diff = [f"{show(f)} changed" for f in was if f in now and was[f] != now[f]]
+        diff += [f"{show(f)} added" for f in now if f not in was] + [f"{show(f)} gone" for f in was if f not in now]
+        if diff:
+            stale.append(f"stale: {who} role {role}: {', '.join(diff)}")
+        else:
+            current += 1
+    return [*stale, *unknown, f"stale agents: {len(stale)} stale, {len(unknown)} unknown, {current} current of {len(live)} live"], True
+
+
+def cmd_stale(args: list[str]) -> int:
+    if args:
+        raise Refuse(f"usage: octo-feather-lane stale (no arguments; got {' '.join(args)})")
+    lines, read = stale_report()
+    print("\n".join(lines), flush=True)
+    return 0 if read else 1
+
+
+def pm_stale(_pm: PostMerge) -> str:
+    """Step 5: the stale report's lines, never a stop (--help, step 5)."""
+    return "; ".join(stale_report()[0])
+
+
+# The routine's steps in order; later tickets append theirs (#397 kit refresh, #1078 checkout, #1079 stale agents,
+# #398 tell supervisors, #399 teardown).
 POST_MERGE_STEPS = (("merged", pm_merged), ("main CI", pm_ci), ("kit refresh", pm_kit), ("checkout", pm_checkout),
-                    ("tell supervisors", pm_tell), ("teardown", pm_teardown))
+                    ("stale agents", pm_stale), ("tell supervisors", pm_tell), ("teardown", pm_teardown))
 
 
 def take_opt(args: list[str], flag: str) -> tuple[list[str], str | None]:
@@ -4558,7 +4665,7 @@ def cmd_post_merge(args: list[str]) -> int:
             outcomes.append(f"step {n} {name} {outcome}")
         else:
             outcomes.append(f"step {n} {name} not run")
-    told = f"; NOT told: {', '.join(pm.not_told)} (step 5 names each re-send)" if pm.not_told else ""
+    told = f"; NOT told: {', '.join(pm.not_told)} (step 6 names each re-send)" if pm.not_told else ""
     print(f"post-merge {lane} PR #{pm.pr}: {'; '.join(outcomes)}{told}", flush=True)
     if all(o.endswith((" ok", " pending")) for o in outcomes):
         return 0 if all(o.endswith(" ok") for o in outcomes) else 3
@@ -4582,6 +4689,7 @@ COMMANDS = {
     "report": cmd_report,
     "intake": cmd_intake,
     "post-merge": cmd_post_merge,
+    "stale": cmd_stale,
 }
 
 
