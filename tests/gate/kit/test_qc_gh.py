@@ -17,6 +17,7 @@ from qc_gh import (
     snapshot_read,
     snapshot_read_only,
     status_commit_fails,
+    status_commit_owner,
 )
 
 Case = Callable[..., None]
@@ -50,6 +51,10 @@ def test_no_github(case: Case) -> None:
 
 def test_status_commit_fails(case: Case) -> None:
     case(status_commit_fails)
+
+
+def test_status_commit_owner(case: Case) -> None:
+    case(status_commit_owner)
 
 
 def test_snapshot_misses(case: Case) -> None:

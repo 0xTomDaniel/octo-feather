@@ -458,7 +458,7 @@ Exit 0; 1 on any argument.
 
 `post-merge` is the one command the director runs after a lane merges, at the merge report and at the close
 report (owner ruling 2026-10-29 on issue 206; docs/adr/0008 Duties). Rerun it freely: each step is idempotent, and
-step 4 tells no lane twice.
+step 6 tells no lane twice.
   step 1 merged    `gh pr view PR`: the PR is MERGED, its head is HEAD (7+ hex prefix), and it has a merge commit
   step 2 main CI   `gh run list --commit <merge commit> --event push`: waits up to --wait SECONDS (default 300)
                    for a run to appear, then `gh run watch <id> --exit-status` on each run until every run gh
@@ -473,15 +473,27 @@ step 4 tells no lane twice.
                    ...`, with no wait. merge-ask reads the same fact at the PR head
   step 3 kit refresh  the live kit install (this script's kit dir, or env OCTO_FEATHER_KIT_INSTALL): only when
                    `gh repo view` names the PR's repo and the install's origin alike, else `kit install unchanged:
-                   PR in <repo>, install is <repo>`. Stops, nothing changed, on a dirty install (git status
-                   --porcelain) or one diverged from the merge commit; after `git fetch origin`, one behind it
+                   PR in <repo>, install is <repo>`. Stops, nothing changed, on what issue-lifecycle
+                   #gates-main-moved refuses, checked on the install and on step 4's checkout before either moves
+                   (an install that is step 4's checkout as that checkout), named `kit install|checkout <path> is
+                   dirty (...)`, `is on <branch|a detached HEAD>, not <base>` or `has diverged ...`; after `git
+                   fetch origin`, one behind it
                    fast-forwards (`git merge --ff-only`, a detached HEAD stays detached), one at or past it does
                    not move. Then in the install, each failure stopping named: `octo-feather-mise-install .` (the
                    kit's own locked mise tools, never the user's global ones; only with a mise.toml there), `just vendored-fetch`, `uv sync --locked` (env UV_PYTHON_DOWNLOADS=never: a
                    pinned Python (.python-version) not installed stops, naming `uv python install --no-bin <pin>`),
                    `pnpm install --frozen-lockfile`, `just install-check <the current repo's top>`. No service
                    restart; a rerun reruns these
-  step 4 tell supervisors  each open lane record but --lane's, of the PR's repo (every lane when the PR is the kit
+  step 4 checkout  the director's own checkout of the target: the main checkout of the repo post-merge runs in (`git
+                   worktree list`, first entry), for any target repo; when it is the kit install, step 3 is its
+                   one move (`checkout <path> is the kit install, which step 3 moves`). Step 3's rules on it, nothing
+                   changed when it stops, the line naming the checkout and why: dirty (git status --porcelain), on
+                   a branch other than the PR's base or a detached HEAD (`is on <branch>, not <base>`), or diverged
+                   from the merge commit; one behind it on the base fast-forwards (`git merge --ff-only`), one at
+                   or past it does not move. `git fetch origin` only when the merge commit is missing there
+  step 5 stale agents  `stale`'s report (below), its lines joined by `; `; always ok: it never stops the routine,
+                   and a Herdr it cannot read is named in its line (`stale agents: not read: ...`)
+  step 6 tell supervisors  each open lane record but --lane's, of the PR's repo (every lane when the PR is the kit
                    install's origin repo: every lane runs kit roles), whose supervisor pane `herdr agent get` finds
                    gets one herdr-say: "main moved to <merge sha12> (#PR <title>); rule files changed: <list or
                    none>; re-read the changed ones before your next step." Rule files: what the merge commit
@@ -503,7 +515,7 @@ step 4 tells no lane twice.
                    writes no prod line; the step goes on to the other supervisors, then stops. Its line:
                    `NOT told: ...; told: ...; already told: ...; not woken: ...; gone: director to resume or
                    archive: ...`
-  step 5 teardown  only once $(octo-feather-state)/lanes/archive/<lane>.toml exists (`octo-feather-lane archive`
+  step 7 teardown  only once $(octo-feather-state)/lanes/archive/<lane>.toml exists (`octo-feather-lane archive`
                    moves it there before the close report), else `pending: lane <lane> not archived; rerun on its
                    close report`; an archived record whose `pr` is not PR stops. In order, each stop keeping the
                    rest: the lane's own space (the archived `supervisor` pane id's prefix, when no open lane
@@ -519,10 +531,27 @@ step 4 tells no lane twice.
                    when origin has it. Gone already prints `already`; review rows, spools and records stay
 Each step prints one line as it finishes, `step <n> <name>: ok: <what>` or `step <n> <name>: stopped: <why>`;
 a stopped step runs no later step. The last line is the summary, each step's outcome (ok, stopped, not run):
-`post-merge <lane> PR #<n>: step 1 merged ok; step 2 main CI ok`, ending `; NOT told: <lane> <pane>, ... (step 4
-names each re-send)` when step 4 failed a send. Exit 0 when every step is ok, 1 when one (not merged, merged at another head, a red run named by its URL, no run within the bound, a watch that failed,
-a supervisor not told, a teardown refusal), 3 when steps 1-4 are ok and step 5 is pending (the merge report run; rerun
+`post-merge <lane> PR #<n>: step 1 merged ok; step 2 main CI ok`, ending `; NOT told: <lane> <pane>, ... (step 6
+names each re-send)` when step 6 failed a send. Exit 0 when every step is ok, 1 when one (not merged, merged at another head, a red run named by its URL, no run within the bound, a watch that failed,
+a checkout kept, a supervisor not told, a teardown refusal), 3 when steps 1-6 are ok and step 7 is pending (the merge report run; rerun
 at the close report), 1 with usage on stderr for bad arguments.
+
+  octo-feather-lane stale          the live agents on a stale launch set, and those with none recorded
+
+`stale` (issue 1079; stale and unknown: spec roles#launch-set; the record: pi-role --help, Launch set) reads
+each agent `herdr agent list` names (checked against Herdr's AgentInfo, a malformed answer named), its session from
+the `--session-id` of its Pi process (`herdr pane process-info`, as herdr-close --park reads it), and asks the
+recorded launcher for the set now with the recorded args and working directory. A current agent is not named.
+Lines, kit paths relative to the launcher's kit, skill folders with a trailing /:
+  stale: <pane> <name> role <role>: <path> changed|added|gone, ...
+  stale: <pane> <name> role <role>: <role file> launches no more from <cwd> (<why>)
+  unknown: <pane> <name> role <role|unknown>: no Pi launched with --session-id (started by hand)
+  unknown: <pane> <name> role <role|unknown>: no launch set recorded for session <id> in <dir>
+  unknown: <pane> <name> role <role|unknown>: launch-set record <file> unreadable|malformed (<what>)
+  unknown: <pane> <name>: its process not read (<Herdr's error>)
+  stale agents: <n> stale, <n> unknown, <n> current of <n> live
+It relaunches nothing. Exit 0; 1 when Herdr's agent list cannot be read or is malformed, its one line `stale
+agents: not read: <why>`. post-merge step 5 prints the same report.
 
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
@@ -4130,7 +4159,7 @@ class PostMerge:
     def __init__(self, pr: int, head: str, lane: str, wait: int, repo: str | None) -> None:
         self.pr, self.head, self.lane, self.wait, self.repo = pr, head, lane, wait, repo
         self.merge, self.base = "", ""
-        self.not_told: list[str] = []   # step 4: each live supervisor whose send failed, "<lane> <pane>"
+        self.not_told: list[str] = []   # step 6: each live supervisor whose send failed, "<lane> <pane>"
 
     def r(self) -> list[str]:
         return ["-R", self.repo] if self.repo else []
@@ -4266,12 +4295,12 @@ def kit_install() -> Path:
     return Path(os.environ.get("OCTO_FEATHER_KIT_INSTALL") or KIT)
 
 
-def pm_git(kit: Path, *args: str, ok: tuple[int, ...] = (0,)) -> tuple[int, str]:
+def pm_git(kit: Path, *args: str, ok: tuple[int, ...] = (0,), what: str = "kit install") -> tuple[int, str]:
     p = subprocess.run(["git", "-C", str(kit), *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
     if p.returncode not in ok:
         err = (p.stderr or p.stdout).strip().splitlines()
-        raise Refuse(f"git {' '.join(args[:2])} in the kit install {kit} failed ({err[-1][:200] if err else f'exit {p.returncode}'}): "
-                     "fix the install clone, then rerun")
+        raise Refuse(f"git {' '.join(args[:2])} in the {what} {kit} failed ({err[-1][:200] if err else f'exit {p.returncode}'}): "
+                     f"fix the {what} clone, then rerun")
     return p.returncode, p.stdout.strip()
 
 
@@ -4299,23 +4328,11 @@ def pm_kit(pm: PostMerge) -> str:
     top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
     if top.returncode:
         raise Refuse("the current directory is in no git repo: run post-merge in the target repo (just install-check checks it), then rerun")
-    if dirty := pm_git(kit, "status", "--porcelain")[1]:
-        lines = dirty.splitlines()
-        raise Refuse(f"kit install {kit} is dirty ({', '.join(x.strip() for x in lines[:3])}{', ...' if len(lines) > 3 else ''}): "
-                     "commit, move or drop those changes there, nothing was changed; then rerun")
-    pm_git(kit, "fetch", "origin")
-    if pm_git(kit, "cat-file", "-e", f"{pm.merge}^{{commit}}", ok=(0, 1, 128))[0]:
-        raise Refuse(f"merge commit {pm.merge[:12]} is not in the kit install {kit} after git fetch origin: "
-                     f"check its origin {origin}, then rerun")
-    head, m = pm_git(kit, "rev-parse", "HEAD")[1], pm.merge[:12]
-    if head == pm.merge or not pm_git(kit, "merge-base", "--is-ancestor", pm.merge, head, ok=(0, 1))[0]:
-        moved = f"kit install {kit} at {head[:12]}, at or past {m}: no move"
-    elif not pm_git(kit, "merge-base", "--is-ancestor", head, pm.merge, ok=(0, 1))[0]:
-        pm_git(kit, "merge", "--ff-only", pm.merge)
-        moved = f"kit install {kit} fast-forwarded {head[:12]}..{m}"
-    else:
-        raise Refuse(f"kit install {kit} at {head[:12]} has diverged from merge commit {m}: nothing was changed; "
-                     f"put the install back on {pm.base} (git -C {kit} log {m}..HEAD names the commits), then rerun")
+    checkout = pm_top()
+    same = os.path.realpath(checkout) == os.path.realpath(kit)
+    if not same:  # checked before the install moves (--help, step 3)
+        pm_follow(pm, checkout, "checkout", branch=pm.base, always_fetch=False, move=False)
+    moved = pm_follow(pm, kit, "kit install", branch=pm.base, detached_ok=not same)
     done: list[str] = []
     cmds = [c for c in PM_REFRESH if c[0] != "octo-feather-mise-install" or (kit / "mise.toml").exists()]
     for cmd in [*cmds, ("just", "install-check", top.stdout.strip())]:
@@ -4337,6 +4354,55 @@ def pm_kit(pm: PostMerge) -> str:
     return f"{moved}; {'; '.join(done)}" + ("" if cmds[0][0] == "octo-feather-mise-install" else " (no mise.toml: mise install skipped)")
 
 
+def pm_follow(pm: PostMerge, clone: Path, what: str, branch: str, detached_ok: bool = False, always_fetch: bool = True,
+              move: bool = True) -> str:
+    """Fast-forward CLONE (WHAT names it) to the merge commit by the rules of --help steps 3 and 4, or with MOVE off
+    only check it may; its line. DETACHED_OK: a detached HEAD passes the branch check."""
+    if dirty := pm_git(clone, "status", "--porcelain", what=what)[1]:
+        lines = dirty.splitlines()
+        raise Refuse(f"{what} {clone} is dirty ({', '.join(x.strip() for x in lines[:3])}{', ...' if len(lines) > 3 else ''}): "
+                     "commit, move or drop those changes there, nothing was changed; then rerun")
+    on = pm_git(clone, "symbolic-ref", "-q", "--short", "HEAD", ok=(0, 1), what=what)[1]
+    if on != branch and not (detached_ok and not on):
+        raise Refuse(f"{what} {clone} is on {on or 'a detached HEAD'}, not {branch}: nothing was changed; "
+                     f"switch it to {branch} there (git -C {clone} switch {branch}), then rerun")
+    def missing() -> int:
+        return pm_git(clone, "cat-file", "-e", f"{pm.merge}^{{commit}}", ok=(0, 1, 128), what=what)[0]
+    if always_fetch or missing():
+        pm_git(clone, "fetch", "origin", what=what)
+    if missing():
+        origin = pm_git(clone, "config", "--get", "remote.origin.url", ok=(0, 1), what=what)[1]
+        raise Refuse(f"merge commit {pm.merge[:12]} is not in the {what} {clone} after git fetch origin: "
+                     f"check its origin {origin}, then rerun")
+    head, m = pm_git(clone, "rev-parse", "HEAD", what=what)[1], pm.merge[:12]
+    if head == pm.merge or not pm_git(clone, "merge-base", "--is-ancestor", pm.merge, head, ok=(0, 1), what=what)[0]:
+        return f"{what} {clone} at {head[:12]}, at or past {m}: no move"
+    if not pm_git(clone, "merge-base", "--is-ancestor", head, pm.merge, ok=(0, 1), what=what)[0]:
+        if not move:
+            return f"{what} {clone} at {head[:12]} can fast-forward to {m}"
+        pm_git(clone, "merge", "--ff-only", pm.merge, what=what)
+        return f"{what} {clone} fast-forwarded {head[:12]}..{m}"
+    raise Refuse(f"{what} {clone} at {head[:12]} has diverged from merge commit {m}: nothing was changed; "
+                 f"put the {what.rsplit(maxsplit=1)[-1]} back on {pm.base} (git -C {clone} log {m}..HEAD names the commits), then rerun")
+
+
+def pm_top() -> Path:
+    """The director's checkout (--help, step 4)."""
+    p = pm_git_here("worktree", "list", "--porcelain")
+    if p.returncode or not p.stdout.startswith("worktree "):
+        raise Refuse("the current directory is in no git repo: run post-merge in the target repo, then rerun")
+    return Path(p.stdout.split("\n", 1)[0].removeprefix("worktree "))
+
+
+# Step 4 (issue 1078): --help, step 4.
+def pm_checkout(pm: PostMerge) -> str:
+    """Step 4 (--help, step 4); its line."""
+    top = pm_top()
+    if os.path.realpath(top) == os.path.realpath(kit_install()):
+        return f"checkout {top} is the kit install, which step 3 moves: no second move"
+    return pm_follow(pm, top, "checkout", branch=pm.base, always_fetch=False)
+
+
 def pm_python_missing(kit: Path) -> str | None:
     """The kit's .python-version pin when uv finds no such Python installed (uv sync ran with UV_PYTHON_DOWNLOADS=never)."""
     try:
@@ -4348,7 +4414,7 @@ def pm_python_missing(kit: Path) -> str | None:
     return pin if pin and p.returncode else None
 
 
-# --- post-merge step 4: tell running supervisors main moved (issue 398) ---
+# --- post-merge step 6: tell running supervisors main moved (issue 398) ---
 
 # The rule files a supervisor re-reads when main moves: role files, skills, skill patches, AGENTS.md, ADRs, specs.
 PM_RULES = re.compile(r"agents/[^/]+\.md|\.agents/skills/.+|\.skillfile/patches/.+|AGENTS\.md|docs/adr/.+|docs/specs/.+")
@@ -4430,7 +4496,7 @@ def pm_say(pane: str, msg: str) -> subprocess.CompletedProcess[str] | None:
 
 
 def pm_tell(pm: PostMerge) -> str:
-    """Step 4: tell each live supervisor of the PR's repo (every lane on a kit PR), but --lane's, that main moved and
+    """Step 6: tell each live supervisor of the PR's repo (every lane on a kit PR), but --lane's, that main moved and
     which rule files changed; one prod line per lane told in the director log, which a rerun reads to skip it. A pane
     Herdr does not find is listed, never sent to (why: herdr-comms SKILL.md, herdr-say)."""
     import datetime, tomllib
@@ -4482,7 +4548,7 @@ def pm_tell(pm: PostMerge) -> str:
             failed.append(f"{name} {sup}: {e}"); continue
         if not live:
             # Parked when the lane's latest parked line (its hand-off log, read as octo-feather-handoff parked
-            # does) names this pane; else gone, for the director to resume or archive (owner ruling #206, step 4).
+            # does) names this pane; else gone, for the director to resume or archive (owner ruling #206, step 6).
             log = lanes / f"{name}.handoffs.jsonl"
             try:
                 marks = [x for x in (read_log(log)[0] if log.exists() else []) if x.get("kind") == "parked"]
@@ -4526,7 +4592,7 @@ def pm_tell(pm: PostMerge) -> str:
     return who
 
 
-# --- post-merge step 5: tear down the closed lane (issue 399) ---
+# --- post-merge step 7: tear down the closed lane (issue 399) ---
 
 class Pending(Exception):
     """A step not due yet: its message names when to rerun; exit 3."""
@@ -4683,9 +4749,89 @@ def pm_teardown(pm: PostMerge) -> str:
     return "; ".join(done)
 
 
-# The routine's steps in order; later tickets append theirs (#397 kit refresh, #398 tell supervisors, #399 teardown).
-POST_MERGE_STEPS = (("merged", pm_merged), ("main CI", pm_ci), ("kit refresh", pm_kit),
-                    ("tell supervisors", pm_tell), ("teardown", pm_teardown))
+# --- stale launch sets (issue 1079; rules: --help, stale) ---
+
+def stale_report() -> tuple[list[str], bool]:
+    """The report's lines (--help, stale) and whether Herdr was read."""
+    loader = importlib.machinery.SourceFileLoader("pi_role", str(KIT / "scripts" / "pi-role"))
+    pr_spec = importlib.util.spec_from_loader("pi_role", loader)
+    assert pr_spec
+    pr = importlib.util.module_from_spec(pr_spec)
+    loader.exec_module(pr)
+    at = KIT / ".agents" / "skills" / "herdr-comms" / "assets" / "herdr_scope.py"
+    spec = importlib.util.spec_from_file_location("herdr_scope", at)
+    assert spec and spec.loader
+    scope = sys.modules["herdr_scope"] = importlib.util.module_from_spec(spec)  # its dataclasses look it up there
+    spec.loader.exec_module(scope)
+    try:
+        live = scope.agents()
+    except scope.HerdrFailedError as e:
+        return [f"stale agents: not read: herdr agent list failed ({str(e)[:200]})"], False
+    except scope.BadAnswerError as e:
+        return [f"stale agents: not read: malformed Herdr answer: {str(e)[:300]}"], False
+    except FileNotFoundError:
+        return ["stale agents: not read: herdr not on PATH"], False
+    stale: list[str] = []
+    unknown: list[str] = []
+    current = 0
+    for a in sorted(live, key=lambda a: a.pane_id):
+        pane = a.pane_id
+        who = f"{pane} {a.name or '(no name)'}"
+        try:
+            info = scope.process_info(pane)
+        except (scope.HerdrFailedError, scope.BadAnswerError) as e:
+            unknown.append(f"unknown: {who}: its process not read ({str(e)[:200]})")
+            continue
+        found = scope.pi_session(info)
+        pid = found[0].pid if found else (info.foreground[0].pid if info.foreground else 0)
+        role = scope.environ(pid).get("OCTO_FEATHER_ROLE") if pid else None
+        if found is None:
+            unknown.append(f"unknown: {who} role {role or 'unknown'}: no Pi launched with --session-id (started by hand)")
+            continue
+        rec = pr.read_record(found[1])
+        if isinstance(rec, str):
+            unknown.append(f"unknown: {who} role {role or 'unknown'}: {rec}")
+            continue
+        was, role, launcher, role_file, cwd = rec["files"], rec["role"], rec["launcher"], rec["role_file"], rec["cwd"]
+        kit = str(Path(launcher).parent.parent) + os.sep
+        def show(f: str, kit: str = kit) -> str:
+            return f.removeprefix(kit) if f.startswith(kit) else f
+        try:
+            p = subprocess.run([launcher, "--launch-set", role_file, *rec["args"]], cwd=cwd, capture_output=True, text=True,
+                               stdin=subprocess.DEVNULL)
+            now = cast("dict[str, object]", json.loads(p.stdout)["files"]) if p.returncode == 0 else None
+            why = (p.stderr.strip().splitlines() or [f"exit {p.returncode}"])[-1][:200]
+        except (OSError, ValueError, KeyError, TypeError) as e:
+            now, why = None, str(e)[:200]
+        if now is None:
+            stale.append(f"stale: {who} role {role}: {show(role_file)} launches no more from {cwd} ({why})")
+            continue
+        diff = [f"{show(f)} changed" for f in was if f in now and was[f] != now[f]]
+        diff += [f"{show(f)} added" for f in now if f not in was] + [f"{show(f)} gone" for f in was if f not in now]
+        if diff:
+            stale.append(f"stale: {who} role {role}: {', '.join(diff)}")
+        else:
+            current += 1
+    return [*stale, *unknown, f"stale agents: {len(stale)} stale, {len(unknown)} unknown, {current} current of {len(live)} live"], True
+
+
+def cmd_stale(args: list[str]) -> int:
+    if args:
+        raise Refuse(f"usage: octo-feather-lane stale (no arguments; got {' '.join(args)})")
+    lines, read = stale_report()
+    print("\n".join(lines), flush=True)
+    return 0 if read else 1
+
+
+def pm_stale(_pm: PostMerge) -> str:
+    """Step 5: the stale report's lines, never a stop (--help, step 5)."""
+    return "; ".join(stale_report()[0])
+
+
+# The routine's steps in order; later tickets append theirs (#397 kit refresh, #1078 checkout, #1079 stale agents,
+# #398 tell supervisors, #399 teardown).
+POST_MERGE_STEPS = (("merged", pm_merged), ("main CI", pm_ci), ("kit refresh", pm_kit), ("checkout", pm_checkout),
+                    ("stale agents", pm_stale), ("tell supervisors", pm_tell), ("teardown", pm_teardown))
 
 
 def take_opt(args: list[str], flag: str) -> tuple[list[str], str | None]:
@@ -4724,7 +4870,7 @@ def cmd_post_merge(args: list[str]) -> int:
             outcomes.append(f"step {n} {name} {outcome}")
         else:
             outcomes.append(f"step {n} {name} not run")
-    told = f"; NOT told: {', '.join(pm.not_told)} (step 4 names each re-send)" if pm.not_told else ""
+    told = f"; NOT told: {', '.join(pm.not_told)} (step 6 names each re-send)" if pm.not_told else ""
     print(f"post-merge {lane} PR #{pm.pr}: {'; '.join(outcomes)}{told}", flush=True)
     if all(o.endswith((" ok", " pending")) for o in outcomes):
         return 0 if all(o.endswith(" ok") for o in outcomes) else 3
@@ -4749,6 +4895,7 @@ COMMANDS = {
     "report": cmd_report,
     "intake": cmd_intake,
     "post-merge": cmd_post_merge,
+    "stale": cmd_stale,
 }
 
 

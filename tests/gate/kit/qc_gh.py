@@ -8,8 +8,9 @@ report. Also: the brief names the evidence, the snapshot is read-only inside (an
 e2e, quality spec #test-kinds), refetched per run and removed after, also from a run killed
 mid-judge; no GitHub remote skips cleanly; a failed fetch aborts before the judge (67) unless
 --no-github; PR 0 is refused before the judge; a failed status commit leaves the status file
-unmodified; a copy of the kit judges itself. One judged run is prepared once per gate run
-(build_run), the scenarios reading it or judging again from it."""
+unmodified; the status commit's Owner field (status_commit_owner); a copy of the kit judges
+itself. One judged run is prepared once per gate run (build_run), the scenarios reading it or
+judging again from it."""
 
 from __future__ import annotations
 
@@ -364,6 +365,17 @@ def status_commit_fails(s: Scratch) -> None:
     assert len(views) == 2, f"the snapshot was not refetched per run: {s.gh.log()}"
 
 
+def status_commit_owner(s: Scratch) -> None:
+    """The prepared run's status commit: its Owner field line (who owes it:
+    scripts/check-owner-field --help, Who owes it) under qc's unchanged subject."""
+    _, rep, _ = prepared_run(s)
+    r = s.root / "repo"
+    subject = s.git(r, "log", "-1", "--format=%s")
+    assert subject == f"qc: built acceptance-a (judged {rep['head'][:12]})", subject
+    msg = s.git(r, "log", "-1", "--format=%B")
+    assert "Owners: none" in msg.splitlines(), msg
+
+
 def snapshot_misses(s: Scratch) -> None:
     """The offline gh on --json, on the snapshot octo-feather-qc-ghsnap wrote of o/r: a field the
     snapshot does not store is refused, logged and counted, never a made-up null; a stored null
@@ -590,6 +602,7 @@ if __name__ == "__main__":
         fetch_fails,
         no_github,
         status_commit_fails,
+        status_commit_owner,
         snapshot_misses,
         diff_too_large,
         kit_on_kit,
