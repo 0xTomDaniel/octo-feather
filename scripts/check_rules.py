@@ -1,11 +1,9 @@
 #!/usr/bin/env python3
 """The kit's check rules: each a function of a repo dir and its tracked files, returning a Report.
 
-Kit modules are plain .py files in scripts/, beside the commands (correction_lanes.py's docstring):
-a command (scripts/check-dashes) imports this one by name, as Python puts the script's own
-directory, symlinks resolved, first on sys.path; tests import it by name too, scripts/ on sys.path
-(pyproject.toml, [tool.pytest.ini_options] pythonpath). Never loaded by file path. Standard library
-only (AGENTS.md Rules, kit scripts).
+A kit module, imported by name, never loaded by file path: by its command (scripts/check-dashes;
+how: correction_lanes.py's docstring) and by tests (how: pyproject.toml, [tool.pytest.ini_options]
+pythonpath). Standard library only (AGENTS.md Rules, kit scripts).
 
 Interface:
 

@@ -25,6 +25,6 @@ expect() {
   grep -qF "$1" <<<"$out" || { echo "check-dashes test: $1 not named in the output" >&2; echo "$out" >&2; exit 1; }
   grep -qF "replace the em/en dashes above" <<<"$out" || { echo "check-dashes test: the fix not named in the output" >&2; echo "$out" >&2; exit 1; }
 }
-expect agents/x.md "a $em b"
+expect docs/wiring-probe.txt "probe $em"
 [[ -z "$(g status --porcelain)" ]] || { echo "check-dashes test: cleanup left changes in the copy" >&2; g status --short >&2; exit 1; }
 echo "check-dashes: ok (clean copy passes, a planted dash fails)"

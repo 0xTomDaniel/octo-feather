@@ -1,0 +1,14 @@
+Seeded defect: a reflection-missed finding waits for a second lane like any class (issue-lifecycle #acceptance-reflection-missed-lane).
+diff --git a/scripts/correction_lanes.py b/scripts/correction_lanes.py
+index 82516854..744c2abd 100755
+--- a/scripts/correction_lanes.py
++++ b/scripts/correction_lanes.py
+@@ -170,7 +170,7 @@ def corrections(logs: dict[str, list[LogLine]], director: list[LogLine]) -> list
+                 continue
+             if d.get("route"):
+                 routed.setdefault(cls, []).append((log, d))
+-            if cls == MISSED or counts(log, d):  # reflection-missed: due at once
++            if counts(log, d):  # reflection-missed: due at once
+                 by.setdefault((cls, log if cls == MISSED else ""), []).append((log, d))
+     out: list[Due] = []
+     for (cls, _), found in by.items():

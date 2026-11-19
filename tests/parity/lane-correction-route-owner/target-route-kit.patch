@@ -1,0 +1,14 @@
+Seeded defect: a lane's `target:` route files in the kit's tracker, not its record's repository (spec comms #reflection-correction).
+diff --git a/scripts/correction_lanes.py b/scripts/correction_lanes.py
+index 82516854..b7519915 100755
+--- a/scripts/correction_lanes.py
++++ b/scripts/correction_lanes.py
+@@ -201,7 +201,7 @@ def owned(due: Due, repos: dict[str, str | None]) -> list[tuple[str | None, Due,
+     targets: dict[str | None, list[str]] = {}
+     kit = due.cls == MISSED or not due.routes
+     for log, d in due.routes:
+-        if due.cls != MISSED and repo(log) != KIT_REPO and str(d["route"]).startswith(TARGET):
++        if due.cls != MISSED and repo(log) != KIT_REPO and str(d["route"]).startswith("never"):
+             targets.setdefault(repo(log), []).append(log)
+         else:
+             kit = True
