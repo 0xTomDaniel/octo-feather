@@ -243,8 +243,13 @@
       "tests": []
     },
     "acceptance-qa-evidence-block": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1005,
+      "record": "20261119T015125Z-9a8a6c8a",
+      "commit": "e0c1134265d97c4733e7f0c44555a33fbea82dee",
+      "tests": [
+        "tests/gate/kit/test_qa_evidence.py"
+      ]
     },
     "acceptance-qa-review": {
       "status": "built",
@@ -284,8 +289,8 @@
     "acceptance-qc-eval-verdict": {
       "status": "built",
       "pr": 1005,
-      "record": "20261118T195453Z-432d3893",
-      "commit": "54d09d1cc9d0dc6bd8d568de082669745bcb1b0e",
+      "record": "20261119T015125Z-d5eb6a8a",
+      "commit": "e0c1134265d97c4733e7f0c44555a33fbea82dee",
       "tests": [
         "tests/gate/kit/test_qc_eval_verdict.py"
       ]

@@ -36,8 +36,11 @@
       "tests": []
     },
     "acceptance-real-blocker": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1005,
+      "record": "20261119T015155Z-9d5b1c6f",
+      "commit": "e0c1134265d97c4733e7f0c44555a33fbea82dee",
+      "tests": []
     },
     "acceptance-no-routine-traffic": {
       "status": "built",

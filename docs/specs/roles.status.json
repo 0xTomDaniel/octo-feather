@@ -126,9 +126,9 @@
     },
     "acceptance-general-worker-no-implementation": {
       "status": "built",
-      "pr": 882,
-      "record": "20261118T202118Z-2629b537",
-      "commit": "f28674d5a21b6594263fbfc0d65a9d9fc646eac9",
+      "pr": 1005,
+      "record": "20261119T015149Z-c2dd2fa6",
+      "commit": "e0c1134265d97c4733e7f0c44555a33fbea82dee",
       "tests": []
     },
     "acceptance-supervisor-delegates-execution": {
