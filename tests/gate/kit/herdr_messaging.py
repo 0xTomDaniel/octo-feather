@@ -761,9 +761,6 @@ def director_prune(s: Scratch) -> None:
     show(f"prune-results, a1 gone 8 days: removed {files['a1'].name}; left {left}")
 
 
-SPAWNED = (
-    "name=gh7 role=supervisor tab=w3:t4 pane=w3:p4 cwd=/x contract=pi-role provider_session_id=S\n"
-)
 RECORDS = {
     "indented": '# lane gh7\n  supervisor = "w1:p1"\nissue = 7\ngoal = "g # not a comment"\n',
     "odd": 'goal=\'g\'   # hand edit\n"supervisor"="w1:p1"\nissue=7\n',
@@ -772,34 +769,45 @@ RECORDS = {
 
 
 def repoint_record(s: Scratch) -> None:
-    """`octo-feather-handoff repoint gh7` (what octo-feather-start --resume runs) over lane
-    records a hand edit shaped: an indented `supervisor` key with a comment, a quoted key and
-    single-quoted strings with no spaces, and no `supervisor` key at all: each record parses
-    after, every key equal but `supervisor`, now the new pane w3:p4 (comments are not kept); one
-    holding a table or an array is refused, exit 65 naming the key, the record byte for byte
-    unchanged; the director's record the same through `repoint director`."""
-    lanes = state_dir(s) / "lanes"
-    lanes.mkdir(parents=True)
-    handoff, record = kit("octo-feather-handoff"), lanes / "gh7.toml"
+    """`octo-feather-start --name gh7 --resume S` (a resume repoints the record: comms
+    #octo-lane-record-key-supervisor) over lane records a hand edit shaped: an indented
+    `supervisor` key with a comment, a quoted key and single-quoted strings with no spaces, and no
+    `supervisor` key at all: each record parses after, every key equal but `supervisor`, now the
+    resumed pane (comments are not kept); one holding a table or an array: the start still runs
+    the agent, warns that the record was not repointed, naming the key, and the record is byte
+    for byte unchanged; the director's record the same through `--director --resume`."""
+    d = herdr_world(s, {"w0:p1": agent("w0:p1", "director", "idle")})
+    s.env["HERDR_SESSION"] = f"repoint-{os.getpid()}"
+    s.identity()
+    s.git(s.root, "init", "-q", "-b", "main", "target")
+    state = state_dir(s)
+    (state / "lanes").mkdir(parents=True)
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    with (state / "director.handoffs.jsonl").open("a") as f:  # no background reflection
+        f.write(json.dumps({"at": stamp, "kind": "reflection"}) + "\n")
+    record = state / "lanes" / "gh7.toml"
     for case, text in RECORDS.items():
         record.write_text(text)
-        s.run([handoff, "repoint", "gh7"], stdin=SPAWNED)
+        new = start(s, "--name", "gh7", "--resume", "S")["pane"]
+        drop(d, new)  # gone again (a restart) before the next resume
         got = tomllib.loads(record.read_text())
         want = {k: v for k, v in tomllib.loads(text).items() if k != "supervisor"}
-        assert got == {"supervisor": "w3:p4", **want}, (case, record.read_text())
-        show(f"repoint {case}: {record.read_text()!r}")
+        assert got == {"supervisor": new, **want}, (case, record.read_text())
+        show(f"resume over {case}: {record.read_text()!r}")
     for bad, key in (('supervisor = "w1:p1"\n[extra]\nx = 1\n', "extra"), ("ids = [1]\n", "ids")):
         record.write_text(bad)
-        ran = s.run([handoff, "repoint", "gh7"], want=65, stdin=SPAWNED)
-        assert key in ran.err, ran.err
+        cmd = [kit("octo-feather-start"), "--cwd", str(s.root / "target")]
+        ran = s.run([*cmd, "--name", "gh7", "--resume", "S"])
+        drop(d, dict(x.split("=", 1) for x in ran.out.split())["pane"])
+        assert "gh7's record not repointed to its new pane" in ran.err, ran.err
+        assert f"key {key!r}" in ran.err, ran.err
         assert record.read_text() == bad, record.read_text()
-        show(f"repoint refused: {ran.err.strip()}")
-    director = state_dir(s) / "director.toml"
+        show(f"resume over a record holding {key}: record untouched, {ran.err.strip()}")
+    director = state / "director.toml"
     director.write_text('    pane = "w0:p1"\nname = "d"\n')
-    s.run([handoff, "repoint", "director"], stdin=SPAWNED)
-    assert tomllib.loads(director.read_text()) == {"pane": "w3:p4", "name": "d"}, (
-        director.read_text()
-    )
+    drop(d, "w0:p1")
+    new = start(s, "--director", "--resume", "D")["pane"]
+    assert tomllib.loads(director.read_text()) == {"pane": new, "name": "d"}, director.read_text()
 
 
 ODD_ANSWERS = ('{"result": {"agent": null}}', '{"result": {"agent": {}}}', "not json", "{}")
