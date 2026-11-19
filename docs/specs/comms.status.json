@@ -58,22 +58,22 @@
     "acceptance-parent-resumed": {
       "status": "built",
       "pr": 1021,
-      "record": "20261119T000435Z-9ebed4d6",
-      "commit": "ba187d8311c5194b57b5d2fa3b4b27bdb2caf791",
+      "record": "20261119T003258Z-58ee889c",
+      "commit": "ed7206f7e44c66eb6642d1f1d1d216b8bae02642",
       "tests": []
     },
     "acceptance-result-file": {
       "status": "built",
       "pr": 1021,
-      "record": "20261119T000441Z-157b2612",
-      "commit": "ba187d8311c5194b57b5d2fa3b4b27bdb2caf791",
+      "record": "20261119T003304Z-99e46799",
+      "commit": "ed7206f7e44c66eb6642d1f1d1d216b8bae02642",
       "tests": []
     },
     "acceptance-result-missing": {
       "status": "built",
       "pr": 1021,
-      "record": "20261119T000444Z-e5a08535",
-      "commit": "ba187d8311c5194b57b5d2fa3b4b27bdb2caf791",
+      "record": "20261119T003306Z-02808405",
+      "commit": "ed7206f7e44c66eb6642d1f1d1d216b8bae02642",
       "tests": []
     },
     "acceptance-director-worker-resume": {
