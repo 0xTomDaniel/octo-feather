@@ -194,7 +194,12 @@ covers = ["scripts/octo-feather-qa", "scripts/check-evals"]
 # Reflectors stubbed, tracker faked: no model call, no tracker write.
 [demo."comms#acceptance-reflect-files-correction"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
-covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane"]
+covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane", "tests/fixtures/tracker-gh/gh"]
+
+# The route owner's tracker: the drive files a kit-routed class in the kit's and a `target:`-routed one in the target's.
+[demo."comms#acceptance-reflect-files-route-owner"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
+covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane", "tests/fixtures/tracker-gh/gh"]
 
 [demo."issue-lifecycle#acceptance-writer-route-lane"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
@@ -286,19 +291,19 @@ covers = ["agents/supervisor.md", "evals/supervisor-delegation", "evals/supervis
 [demo."comms#acceptance-autonomous-local"]
 covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11-13-gh840-supervisor-autonomy.md"]
 
-# As comms#acceptance-autonomous-local above; the message content is the review case owner-access-blocker-message. The
-# evidence's "How this meets comms #acceptance-real-blocker" maps each Then clause to recorded argv; herdr-say's delivery
-# is proven by the tagged tests in tests/gate/kit/test_herdr_messaging.py.
+# Judged from pinned stored eval runs (rule: scripts/octo-feather-qa --help, Verdict); owner-access-blocker-message is a
+# review case, its maintainer verdict recorded on the run. Which case proves which Then clause, and the generated run
+# evidence: evidence/2026-11-18-gh978-eval-verdict.md; herdr-say's delivery is proven by the tagged tests in
+# tests/gate/kit/test_herdr_messaging.py.
 [demo."comms#acceptance-real-blocker"]
-covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11-13-gh840-supervisor-autonomy.md", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/herdr_messaging.py"]
+command = "scripts/octo-feather-qa --verdict 20261119T200842Z-a58936/supervisor-autonomy/owner-access-blocker-and-ready-work 20261119T200842Z-a58936/supervisor-autonomy/owner-access-blocker-message"
+covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evals/fixtures/lane-shout-wip", "evals/fixtures/lane-shout-main", "scripts/octo-feather-qa", "evidence/2026-11-13-gh840-supervisor-autonomy.md", "evidence/2026-11-18-gh978-eval-verdict.md", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/herdr_messaging.py"]
 
-# No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-general-worker --runs 3 --baseline
-# b20ee656, runs 20261117T151829Z-60554a and, with the review step, 20261118T183536Z-f01514), which needs the eval slot,
-# a real model route and network for fixture setup: not a qc demo. The agent fallback judge reads
-# evidence/2026-11-17-gh840-supervisor-general-worker.md, section "How this meets roles
-# #acceptance-general-worker-no-implementation" (each Then clause, the review step included, and its recorded argv).
+# Judged from pinned stored eval runs (rule: scripts/octo-feather-qa --help, Verdict). Which case proves which Then
+# clause, and the generated run evidence: evidence/2026-11-18-gh978-eval-verdict.md.
 [demo."roles#acceptance-general-worker-no-implementation"]
-covers = ["agents/supervisor.md", "evals/supervisor-general-worker", "evals/fixtures/lane-shout-general-diff", "evals/fixtures/lane-shout-qc-fixed", "evidence/2026-11-17-gh840-supervisor-general-worker.md"]
+command = "scripts/octo-feather-qa --verdict 20261119T200842Z-a58936/supervisor-general-worker/diagnosis-diff-goes-to-implementer 20261119T200842Z-a58936/supervisor-general-worker/implementer-result-integrated-not-candidate 20261119T200842Z-a58936/supervisor-general-worker/reviewed-implementer-result-integrated"
+covers = ["agents/supervisor.md", "evals/supervisor-general-worker", "evals/fixtures/lane-shout-general-diff", "evals/fixtures/lane-shout-qc-fixed", "evals/fixtures/lane-shout-qc-red", "scripts/octo-feather-qa", "evidence/2026-11-17-gh840-supervisor-general-worker.md", "evidence/2026-11-18-gh978-eval-verdict.md"]
 
 # Two halves (evidence/2026-11-13-gh840-supervisor-fresh-worker.md, How this meets the criterion): the supervisor starts
 # the independent work with a new spawn, never a --resume, and a self-contained brief (model eval supervisor-fresh-worker,

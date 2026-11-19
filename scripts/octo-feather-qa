@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """octo-feather-qa [--suite NAME]... [--case ID]... [--classifier P/ID]... [--sample N] [--runs N] [--model MODEL] [--evals DIR] [--kit-ref COMMIT] [--baseline COMMIT]   factory evals (`just qa`)
-octo-feather-qa --analyze RUN_DIR   the analysis of a stored run (Analysis, below)
+octo-feather-qa --analyze RUN_DIR [--evidence]   the analysis of a stored run (Analysis, below), or its evidence block (Evidence)
 octo-feather-qa --review RUN_DIR SUITE/CASE [pass|fail NOTE]   show or record a maintainer's verdict (Review, below)
+octo-feather-qa --verdict RUN_ID/SUITE/CASE...   a qc verdict from pinned stored runs (Verdict, below)
 
 Runs the kit's eval cases (evals/<suite>/; scripts/check-evals runs first and must pass). Before that, the run takes
 the eval slot for its life (octo-feather-slot --help, hold); refused, it exits 75 with the refusal, nothing run.
@@ -115,7 +116,16 @@ model. The flags, per fact case:
   non-discriminating fact   (--baseline) in a case whose pass rate differs between the kits, a fact with the same
                             status in every run on both kits
 octo-feather-qa --analyze RUN_DIR prints the analysis of a stored run again from RUN_DIR/summary.json alone: no case,
-sandbox or model runs; no other option; an unreadable summary.json exits 64.
+sandbox or model runs; no other option but --evidence; an unreadable summary.json exits 64.
+Evidence (ticket #995; owner ruling 2026-11-18 #978: an evidence file for an eval-backed change is generated from the
+stored run, never transcribed by hand): `--analyze RUN_DIR --evidence` prints, from the stored run alone (summary.json,
+and each case run's grading.json, sandbox.json and input.json), nothing run or written, a markdown block for the
+evidence file: the run id, the current and baseline kit shas, cases passed; per fact case its lines as the run printed
+them (case line; with --baseline the baseline's line and the compare table, with --runs N its cost line), its pin
+`octo-feather-qa --verdict RUN_ID/SUITE/CASE` (the argument a qc.toml demo pins, Verdict), and each graded `ran` fact
+of each run on each kit, cited RUN_ID/SUITE/CASE/<run dir>, with its status and every sandbox.json `attempts` run
+matching it (the Run record rule) as program, argv whole as JSON, and exit; then the analysis, and the `Smoke:` and
+`Removed:` lines check-behavior-smoke reads, as stubs to fill. Deterministic: the same run prints the same bytes.
 Review (spec quality#acceptance-qa-review): a role-transcript case with `review` {question} (schema: Case) has no graded
 facts: it runs to its end like any case, its output kept in review.json in its run's dir (question, final_message,
 changed_files: the paths its branch changed, as branch_paths reads them), and its line reads REVIEW (awaiting review:
@@ -129,6 +139,34 @@ line {run_id, kit_sha, verdict, note, at} to REVIEWS/<suite>/<case>.jsonl, REVIE
 case shows the latest line. `--review RUN_DIR SUITE/CASE` alone shows the case: `REVIEWED SUITE/CASE: <verdict> (run,
 kit, at): <note>` for the latest verdict recorded on that run, else `REVIEW SUITE/CASE: awaiting review`, then its
 kept output. Exit 0; 64 when RUN_DIR holds no such review case, or the verdict is not pass or fail or the note is blank.
+Verdict (docs/adr/0022; spec quality#acceptance-qc-eval-verdict): `--verdict RUN_ID/SUITE/CASE...` judges an
+eval-backed criterion from pinned stored runs, the command a qc.toml demo declares: no case, sandbox, model or slot
+runs, no other option, and nothing is written. Run it in the judged repo: its git HEAD is the judged head, its evals/
+the cases. Each RUN_ID/SUITE/CASE is the case in the stored run <qa dir>/RUN_ID/SUITE/CASE (the qa dir as above). Its
+verdict is read from what the run stored, never judged again: each current-kit run (result.json `runs`, each `dir`
+holding the run's input.json, grading.json and result.json) passed when its result.json verdict is PASS, and the
+case is PASS when every run passed, else FAIL; a review case takes the latest maintainer verdict recorded for that
+run id (Review: REVIEWS/SUITE/CASE.jsonl), pass PASS, fail FAIL. Freshness (the rule and its file list: spec quality#qc-fallback): the run
+is stale when, between K (the run's kit_sha) and HEAD, git diff names one of those files, or the case's own entry (by
+id) in evals/SUITE/cases.json or reference/expectations.json differs, each named. The skills and extensions a role
+launches with are asked of the launcher at HEAD, `scripts/pi-role --json agents/<role>.md` (its --skill and
+--extension args), run from an empty dir, so a skill a case's fixture selects is compared as a fixture file; a path
+outside the repo (an external skill) is not compared, and a launcher that lists no launch is insufficient evidence,
+naming it. Fixture trees: for each fixture the case names at any depth (every string value of a `fixture` key; a
+history fixture {repo, commit} is pinned by its commit), its materialized tree (schema.md, Fixtures) at K and at HEAD,
+each rev's evals/ exported from git into scratch and built by this kit's materializer, hashed as `check-evals --trees`
+hashes it: a different hash is stale, `evals/fixtures/<name> tree changed`; a materializer refusal on either side is
+insufficient evidence, naming it. So a fixture rewritten onto a base or pool with the same tree stays fresh. The grader (this
+script) is not in the set: a grading change shows as an expectations change or a rerun. Prints one line per
+argument: the verdict (PASS, FAIL, or INSUFFICIENT when not fresh or not readable), SUITE/CASE, the stored verdict,
+the run id, kit sha, runs passed/total, and its freshness against HEAD, each stale file named. Insufficient
+evidence (exit 77, schemas/qc.v2.schema.json demo command: did not run to its end) when any run is missing or
+unreadable (no result.json, a run's input.json, grading.json or result.json, a kit sha the repo does not hold, a
+run made with --kit-ref, whose fixtures' commit it does not record, a review case with no verdict recorded for the
+run) or stale; the last stderr line names each. Not refused inside a `just check` run, as --analyze and --review are
+not: it calls no model, runs no eval and decides from stored data only, so the gate stays deterministic and free.
+Exit: 0 every named case PASS and fresh, 1 any FAIL (none insufficient), 77 any insufficient, 64 usage (no
+argument, one not RUN_ID/SUITE/CASE, an option, or not in a git repo).
 Exit: 0 every case passed (and every bench done), 1 any failed, 2 the shape check failed, 64 usage, 70 inside a
 `just check` run (scripts/check-gate-free --refuse; the gate never runs evals).
 
@@ -141,6 +179,7 @@ from pathlib import Path
 
 if TYPE_CHECKING:
     from collections.abc import Callable
+    from types import ModuleType
 
 KIT = Path(__file__).resolve().parent.parent
 SELF = KIT / "scripts" / "octo-feather-qa"
@@ -1073,17 +1112,23 @@ def export(repo: Path, sha: str, dest: Path) -> str | None:
     return None if a.wait() == 0 and x.returncode == 0 else (gerr or x.stderr.strip() or "git archive failed")
 
 
-def fixture_src(evals: Path, fixture: object, scratch: Path) -> Path:
-    """The tree a case's fixture names (schema.md, Case): evals/fixtures/<name>, or a history fixture's repo at its commit,
-    exported into SCRATCH/history-<sha>. Raises RuntimeError when that repo or commit cannot be exported."""
-    if not isinstance(fixture, dict):
-        return evals / "fixtures" / str(fixture)
-    fx = cast("Result", fixture)
+def check_evals() -> "ModuleType":
+    """scripts/check-evals as a module: the one fixture materializer, fixture_tree, and its tree_sha (schema.md, Fixtures)."""
     loader = importlib.machinery.SourceFileLoader("check_evals", str(KIT / "scripts" / "check-evals"))
     spec = importlib.util.spec_from_loader("check_evals", loader)
     assert spec is not None
     mod = importlib.util.module_from_spec(spec)
     loader.exec_module(mod)
+    return mod
+
+
+def fixture_src(evals: Path, fixture: object, scratch: Path) -> Path:
+    """The tree a case's fixture names (schema.md, Case): check-evals' fixture_tree (schema.md, Fixtures), or a history fixture's repo at its commit, exported into SCRATCH/history-<sha>. Raises
+    RuntimeError when a base is refused or that repo or commit cannot be exported."""
+    mod = check_evals()
+    if not isinstance(fixture, dict):
+        return cast("Path", mod.fixture_tree(evals, str(fixture), scratch))
+    fx = cast("Result", fixture)
     repo = cast("Path | None", mod.history_repo(fx.get("repo")))
     if repo is None:
         raise RuntimeError(f"history fixture: unknown repo {fx.get('repo')!r}")
@@ -1287,11 +1332,17 @@ def finish(out, suite, case, model, secs, verdict, deciding, graded, w, kits):
            "stop": (w or {}).get("stop"), "tool_calls": (w or {}).get("tool_calls"),
            **({k: case[k] for k in ("role", "should_trigger", "split", "review") if k in case}), **kits}
     (out / "result.json").write_text(json.dumps(res, indent=2) + "\n")
-    stop = (f" [stop: {res['stop']}, {res['tool_calls']} tool calls, {secs} s]" if w else f" [{secs} s]") + f" [kit {kits['kit_sha']}]"
     if "run" in kits:   # run k of N (--runs): its line indented, under its case
         print(f"  {kits['config'] + ' ' if kits['config'] else ''}run {kits['run']}/{kits['of']}: ", end="")
-    print(f"{verdict} {suite['suite']}/{case['id']}: {'; '.join(deciding)}{stop}", flush=True)
+    print(result_line(cast("Result", res), watched=bool(cast("object", w))), flush=True)
     return res
+
+
+def result_line(res: "Result", *, watched: bool) -> str:
+    """One run's result line, as printed: with its stop record when the watcher ran (WATCHED)."""
+    secs = res["seconds"]
+    stop = (f" [stop: {res['stop']}, {res['tool_calls']} tool calls, {secs} s]" if watched else f" [{secs} s]") + f" [kit {res['kit_sha']}]"
+    return f"{res['verdict']} {res['suite']}/{res['id']}: {'; '.join(cast('list[str]', res['deciding']))}{stop}"
 
 
 RUN_KEYS = ("verdict", "deciding", "model", "seconds", "stop", "tool_calls")
@@ -1358,28 +1409,29 @@ def run_runs(qc: object, evals: Path, suite: Result, case: Result, facts: list[R
             done[name].append((d, one(qc, evals, suite, case, facts, model, runid, f"{n}r{k}" + (f"-{name[0]}" if name else ""),
                                       out / d, kit, ref, sha, rep=(k, runs, name))))
     ags = {name: aggregate(done[name], out, runs) for name in done}
-
-    def said(r: Result) -> str:
-        return "; ".join(cast("list[str]", r["deciding"]))
-
-    def line(name: str, res: Result, sha: str | None) -> None:
-        at = f"  {name} " if name == "baseline" else ""
-        print(f"{at}{res['verdict']} {suite['suite']}/{case['id']}: {said(res)} [{res['seconds']} s] [kit {sha}]", flush=True)
-
-    cur = configs[-1]
-    res = ags[cur[0]]
-    if alone and runs > 1:
-        line("", res, cur[3])
-        print(f"  cost {suite['suite']}/{case['id']}: " + "; ".join(f"{lb} {show_spread(res[k], fmt)}" for lb, k, fmt in (("time s", "time", "{:.1f}"), ("tokens", "tokens", "{:.0f}"))), flush=True)
-    elif not alone:
+    res = ags[configs[-1][0]]
+    if not alone:
         base = ags["baseline"]
-        line("", res, cur[3])
-        line("baseline", base, configs[0][3])
         res = {**res, "baseline": {"kit_ref": configs[0][2], "kit_sha": configs[0][3], **{k: base[k] for k in BASE_KEYS}},
                "delta": {k: diff(res, base, k) for k in ("pass_rate", "time", "tokens", "cost_usd")}}
-        print("\n".join(compare(suite, case, base, res, configs)), flush=True)
+    if not alone or runs > 1:
+        print("\n".join(case_lines(res)), flush=True)
     (out / "result.json").write_text(json.dumps(res, indent=2) + "\n")
     return res
+
+
+def case_lines(res: Result) -> list[str]:
+    """A repeated or compared case's lines as the run prints them, from its result RES (--runs, --baseline: --help):
+    its case line, then with a baseline the baseline's line and the compare table, else its cost line."""
+    name = f"{res['suite']}/{res['id']}"
+
+    def line(at: str, r: Result) -> str:
+        return f"{at}{r['verdict']} {name}: {'; '.join(cast('list[str]', r['deciding']))} [{r['seconds']} s] [kit {r['kit_sha']}]"
+
+    b = res.get("baseline")
+    if not isinstance(b, dict):
+        return [line("", res), f"  cost {name}: " + "; ".join(f"{lb} {show_spread(res[k], fmt)}" for lb, k, fmt in (("time s", "time", "{:.1f}"), ("tokens", "tokens", "{:.0f}")))]
+    return [line("", res), line("  baseline ", cast("Result", b)), *compare(res)]
 
 
 BASE_KEYS = ("verdict", "deciding", "seconds", "runs", "runs_passed", "pass_rate", "stddev", "time", "tokens", "cost_usd")
@@ -1433,11 +1485,12 @@ def show_spread(sp: object, fmt: str = "{:.2f}") -> str:
     return f"{fmt.format(sp['mean'])} +/- {fmt.format(sp['stddev'])}"
 
 
-def compare(suite: Result, case: Result, base: Result, cur: Result, configs: list[Config]) -> list[str]:
-    """A case's `compare` table (--baseline: --help)."""
+def compare(cur: Result) -> list[str]:
+    """A case's `compare` table from its result CUR, its baseline and delta (--baseline: --help)."""
     rows = [("pass rate", "pass_rate", "{:.2f}"), ("time s", "time", "{:.1f}"), ("tokens", "tokens", "{:.0f}"), ("cost usd", "cost_usd", "{:.4f}")]
     delta = cast("Result", cur["delta"])
-    out = [f"  compare {suite['suite']}/{case['id']}: baseline kit {str(configs[0][3])[:12]} beside current kit {str(configs[-1][3])[:12]}",
+    base = cast("Result", cur["baseline"])
+    out = [f"  compare {cur['suite']}/{cur['id']}: baseline kit {str(base['kit_sha'])[:12]} beside current kit {str(cur['kit_sha'])[:12]}",
            f"    {'':<10} {'baseline':<20} {'current':<20} difference"]
 
     def shown(res: Result, k: str, fmt: str) -> str:
@@ -1943,8 +1996,9 @@ def analysis_lines(a: Result) -> list[str]:
     return out if len(out) > 1 else [*out, "  no flags"]
 
 
-def reanalyze(run_dir: str) -> int:
-    """--analyze RUN_DIR: the analysis of a stored run, from its summary.json only; no case, sandbox or model runs."""
+def reanalyze(run_dir: str, *, evidence: bool = False) -> int:
+    """--analyze RUN_DIR: the analysis of a stored run, from its summary.json only; no case, sandbox or model runs.
+    With EVIDENCE (--evidence), the run's evidence block instead."""
     p = Path(run_dir) / "summary.json"
     try:
         raw: object = json.loads(p.read_text())
@@ -1953,20 +2007,254 @@ def reanalyze(run_dir: str) -> int:
     if not isinstance(raw, dict):
         die(64, f"--analyze {run_dir}: {raw if isinstance(raw, str) else 'summary.json is not an object'}")
     sm = cast("Result", raw)
+    if evidence:
+        print(evidence_block(Path(run_dir), sm), end="", flush=True)
+        return 0
     print(f"qa: run {sm.get('run_id')} reanalyzed from {p}", flush=True)
     print("\n".join(analysis_lines(analyze(cast("list[Result]", sm.get("cases") or [])))), flush=True)
     return 0
 
 
+def fenced(lines: list[str]) -> list[str]:
+    """LINES as one markdown text block, its fence longer than any backtick run in them."""
+    fence = "`" * max([3, *(len(m) + 1 for ln in lines for m in re.findall("`+", ln))])
+    return [f"{fence}text", *lines, fence]
+
+
+def ran_cited(case_dir: Path, cite: str, runs: list[Result]) -> list[str]:
+    """Each graded `ran` fact of RUNS (stored under CASE_DIR, cited as CITE/<dir>) with every recorded run matching
+    it, its argv whole as JSON (rules: schema, Run record; --help, Evidence)."""
+    out: list[str] = []
+    for r in runs:
+        d = str(r.get("dir", "."))
+        where = cite if d == "." else f"{cite}/{d}"
+        g, sb, inp = (stored(case_dir / d / n) for n in ("grading.json", "sandbox.json", "input.json"))
+        facts = [f for f in cast("list[Result]", (g or {}).get("facts") or []) if f.get("fact") == "ran"]
+        if g is None:
+            out.append(f"{where}: no readable grading.json")
+        att = (sb or {}).get("attempts")
+        record = [cast("Result", x) for x in cast("list[object]", att) if isinstance(x, dict)] if isinstance(att, list) else None
+        head = (inp or {}).get("fixture_head")
+        for f in facts:
+            want = [str(x) for x in cast("list[object]", f.get("args") or [])]
+            name = " ".join(["ran", str(f.get("program")), *want]) + "".join(f" {k} {f[k]}" for k in ("exit", "count") if k in f)
+            out.append(f"{where}: {name}: {f.get('status')}")
+            if record is None:
+                out.append("  no whole attempt record in sandbox.json")
+                continue
+            hits = [x for x in record if x.get("kind") == "run" and x.get("program") == f.get("program")
+                    and isinstance(x.get("argv"), list) and ("exit" not in f or x.get("exit") == f["exit"])
+                    and args_match(want, [str(a) for a in cast("list[object]", x["argv"])], head if isinstance(head, str) else None)]
+            out += [f"  {x['program']} {json.dumps(x['argv'])} exit {x.get('exit')}" for x in hits] or ["  no matching recorded run"]
+    return out
+
+
+def evidence_block(run_dir: Path, sm: Result) -> str:
+    """--analyze RUN_DIR --evidence: the stored run's markdown evidence block (--help, Evidence); the same run, the
+    same bytes."""
+    rid = str(sm.get("run_id") or run_dir.name)
+    b = sm.get("baseline")
+    base = cast("Result", b) if isinstance(b, dict) else None
+    cases = [cast("Result", c) for c in cast("list[object]", sm.get("cases") or []) if isinstance(c, dict)]
+    out = [f"## Eval evidence: run {rid}", "",
+           f"Generated from the stored run alone by `octo-feather-qa --analyze <qa dir>/{rid} --evidence`; never edited by hand.", "",
+           f"- run: {rid}, {sm.get('runs', 1)} run(s) per case",
+           f"- current kit: {sm.get('kit_sha')} (kit ref {sm.get('kit_ref', 'HEAD')})",
+           f"- baseline kit: {base.get('kit_sha')} (--baseline {base.get('kit_ref')})" if base else "- baseline kit: none",
+           f"- cases passed: {sm.get('passed')}/{sm.get('total')}"]
+    for c in cases:
+        name = f"{c.get('suite')}/{c.get('id')}"
+        runs = [cast("Result", r) for r in cast("list[object]", c.get("runs") or [{"dir": "."}]) if isinstance(r, dict)]
+        bruns = [cast("Result", r) for r in cast("list[object]", cast("Result", c.get("baseline") or {}).get("runs") or [])
+                 if isinstance(r, dict)]
+        alone = "baseline" not in c and len(runs) == 1
+        shown = [result_line(c, watched=c.get("stop") is not None or c.get("tool_calls") is not None)] if alone else case_lines(c)
+        ran = ran_cited(run_dir / str(c.get("suite")) / str(c.get("id")), f"{rid}/{name}", [*bruns, *runs])
+        out += ["", f"### {name}", "", *fenced(shown), "", f"Pin: `octo-feather-qa --verdict {rid}/{name}`"]
+        if ran:
+            out += ["", "Each graded `ran` fact and every recorded run matching it (sandbox.json attempts, argv whole as JSON):", "",
+                    *fenced(ran)]
+    out += ["", "### Analysis", "", *fenced(analysis_lines(analyze(cases))), "",
+            "### To fill", "",
+            f"Smoke: <each changed role or skill path> run {rid}: <what the run exercised>",
+            "Removed: <what the change deleted, or the incident that justifies it>"]
+    return "\n".join(out) + "\n"
+
+
+# ---- --verdict: a qc verdict from pinned stored runs (rules: --help, Verdict) -----------------
+
+INSUFFICIENT = 77   # schemas/qc.v2.schema.json demo command: the demo did not run to its end
+# The keys run_case adds to the case it records in input.json: the run's, not the case's.
+RUN_INPUT_KEYS = ("suite", "model", "fixture_head", "max_tool_calls", "timeout_s", "kit_ref", "kit_sha", "run", "of", "config")
+# What a role's launch reads beside agents/<role>.md and what pi-role --json lists (scripts/pi-role --help).
+LAUNCH_PATHS = ("scripts/pi-role", "web-mcp.json")
+PIN = re.compile(r"[^-/][^/]*/[^/]+/[^/]+")   # RUN_ID/SUITE/CASE, never an option
+
+
+def fixture_names(x: object) -> list[str]:
+    """Every fixture dir case X names, at any depth: each string value of a `fixture` key."""
+    if isinstance(x, dict):
+        d = cast("Result", x)
+        return [n for k, v in d.items() for n in ([v] if k == "fixture" and isinstance(v, str) else fixture_names(v))]
+    return [n for v in cast("list[object]", x) for n in fixture_names(v)] if isinstance(x, list) else []
+
+
+def stored(p: Path) -> "Result | None":
+    """The JSON object at P, None when unreadable or not an object."""
+    try:
+        raw: object = json.loads(p.read_text())
+    except (OSError, ValueError):
+        return None
+    return cast("Result", raw) if isinstance(raw, dict) else None
+
+
+def launched(top: str, role: str) -> tuple[list[str], str | None]:
+    """The repo paths ROLE launches with, asked of the launcher at HEAD (`scripts/pi-role --json`, from an empty dir so
+    no target selects a skill): each --skill folder (a trailing /) and --extension file inside TOP; a path outside it
+    (an external skill) is not compared. (paths, None), or ([], why the launcher gave no list)."""
+    with tempfile.TemporaryDirectory(prefix="qa-verdict-") as cwd:
+        p = subprocess.run([str(Path(top) / "scripts" / "pi-role"), "--json", str(Path(top) / "agents" / f"{role}.md")],
+                           capture_output=True, text=True, cwd=cwd, check=False)
+    raw = safe_json(p.stdout) if p.returncode == 0 else None
+    args = cast("Result", raw).get("args") if isinstance(raw, dict) else None
+    if not isinstance(args, list):
+        return [], f"scripts/pi-role --json agents/{role}.md listed no launch (exit {p.returncode}: {p.stderr.strip()[-200:]})"
+    a = [str(x) for x in cast("list[object]", args)]
+    real = os.path.realpath(top)
+    out: list[str] = []
+    for flag, val in zip(a, a[1:]):
+        if flag in ("--skill", "--extension"):
+            rel = os.path.relpath(os.path.realpath(val), real)
+            if not rel.startswith(".."):
+                out.append(rel + ("/" if flag == "--skill" else ""))
+    return sorted(set(out)), None
+
+
+def entry_change(top: str, sha: str, head: str, rel: str, cid: str) -> str | None:
+    """How case CID's own entry in REL (cases.json: a list by id; expectations.json: an object by id) differs between
+    the run's kit SHA and HEAD, None when equal."""
+    def entry(rev: str) -> object:
+        p = subprocess.run(["git", "-C", top, "show", f"{rev}:{rel}"], capture_output=True, text=True, check=False)
+        x = safe_json(p.stdout) if p.returncode == 0 else None
+        if isinstance(x, list):
+            return next((c for c in cast("list[Result]", x) if isinstance(cast("object", c), dict) and c.get("id") == cid), None)
+        return cast("Result", x).get(cid) if isinstance(x, dict) else None
+    was, now = entry(sha), entry(head)
+    if was == now:
+        return None
+    return f"{rel} case {cid} " + ("added" if was is None else "deleted" if now is None else "changed")
+
+
+def trees_changed(top: str, sha: str, head: str, names: list[str]) -> tuple[list[str], list[str]]:
+    """(refusals, changes) of fixtures NAMES' materialized trees between the run's kit SHA and HEAD: each rev's evals/
+    exported from git into scratch outside the repo, each tree built by this kit's materializer (check-evals
+    fixture_tree) and hashed as `check-evals --trees` does (schema.md, Fixtures)."""
+    if not names:
+        return [], []
+    mod = check_evals()
+    bad: list[str] = []
+    seen: dict[str, dict[str, str]] = {}
+    with tempfile.TemporaryDirectory(prefix="qa-verdict-trees-") as tmp:
+        for rev in dict.fromkeys((sha, head)):
+            d = Path(tmp) / rev
+            d.mkdir()
+            err = export(Path(top), rev, d)
+            if err is not None:
+                bad.append(f"evals/ at {rev[:12]} not exported: {err}")
+                continue
+            try:
+                seen[rev] = {n: str(mod.tree_sha(mod.fixture_tree(d / "evals", n, d / "scratch"))) for n in names}
+            except mod.FixtureError as e:
+                bad.append(f"a fixture tree at {rev[:12]} refused: {e}")
+    if bad:
+        return bad, []
+    return [], [f"evals/fixtures/{n} tree changed" for n in names if seen[sha][n] != seen[head][n]]
+
+
+def pinned(root: Path, top: str, head: str, arg: str) -> tuple[str, str, list[str]]:
+    """(verdict PASS, FAIL or INSUFFICIENT, its line, what makes it insufficient) for one RUN_ID/SUITE/CASE."""
+    rid, suite, cid = arg.split("/")
+    d = root / rid / suite / cid
+    res = stored(d / "result.json")
+    if res is None:
+        why = [f"run {rid} has no readable {suite}/{cid}/result.json in {root}"]
+        return "INSUFFICIENT", f"INSUFFICIENT {suite}/{cid}: run {rid}: missing: {why[0]}", why
+    runs = [cast("Result", r) for r in cast("list[object]", res.get("runs") or [{"dir": "."}]) if isinstance(r, dict)]
+    sha = str(res.get("kit_sha"))
+    missing: list[str] = []
+    got: list[tuple[Result, Result, Result]] = []
+    for r in runs:
+        files = [stored(d / str(r.get("dir", ".")) / n) for n in ("input.json", "grading.json", "result.json")]
+        if any(f is None for f in files):
+            missing.append(f"run {rid} {suite}/{cid}/{r.get('dir', '.')}: no readable input.json, grading.json and result.json")
+        else:
+            got.append((cast("Result", files[0]), cast("Result", files[1]), cast("Result", files[2])))
+    if res.get("kit_ref", "HEAD") != "HEAD":
+        missing.append(f"run {rid} ran with --kit-ref {res.get('kit_ref')}: its fixtures' commit is not recorded")
+    if subprocess.run(["git", "-C", top, "cat-file", "-e", f"{sha}^{{commit}}"], capture_output=True).returncode:
+        missing.append(f"kit sha {sha} of run {rid} is not a commit in {top}")
+    review = isinstance(res.get("review"), dict)
+    if review:
+        mine = [x for x in review_records(root / "reviews", suite, cid) if x.get("run_id") == rid]
+        if not mine:
+            missing.append(f"no maintainer verdict recorded for review case {suite}/{cid} in run {rid} (--review)")
+        verdict, count = ({"pass": "PASS", "fail": "FAIL"}.get(str(mine[-1].get("verdict")), "FAIL") if mine else "none"), "review"
+    else:
+        ok = sum(rr.get("verdict") == "PASS" for _, _, rr in got)
+        verdict, count = ("PASS" if got and ok == len(runs) else "FAIL"), f"runs {ok}/{len(runs)} passed"
+    stale: list[str] = []
+    if not missing:
+        role = sorted({str(i.get("role")) for i, _, _ in got})
+        fx = sorted({n for i, _, _ in got for n in fixture_names({k: v for k, v in i.items() if k not in RUN_INPUT_KEYS})})
+        asked = [launched(top, r) for r in role]
+        missing += [why for _, why in asked if why]
+        paths = [*(f"agents/{r}.md" for r in role), *LAUNCH_PATHS, *sorted({p for ps, _ in asked for p in ps})]
+        bad, changed = trees_changed(top, sha, head, fx)
+        missing += bad
+        stale += changed
+        diff = subprocess.run(["git", "-C", top, "diff", "--no-renames", "--name-status", sha, head, "--", *paths],
+                              capture_output=True, text=True)
+        how = {"A": "added", "D": "deleted"}
+        stale += [f"{p} {how.get(k[:1], 'changed')}" for k, _, p in (ln.partition("\t") for ln in diff.stdout.splitlines()) if p]
+        stale += [c for rel in (f"evals/{suite}/cases.json", f"evals/{suite}/reference/expectations.json")
+                  if (c := entry_change(top, sha, head, rel, cid))]
+    fresh = (f"missing: {'; '.join(missing)}" if missing else
+             f"stale at HEAD {head[:12]}: {'; '.join(stale)}" if stale else f"fresh at HEAD {head[:12]}")
+    word = "INSUFFICIENT" if missing or stale else verdict
+    return word, f"{word} {suite}/{cid}: stored {verdict}, run {rid}, kit {sha[:12]}, {count}; {fresh}", missing + stale
+
+
+def verdicts(argv: list[str]) -> int:
+    """--verdict RUN_ID/SUITE/CASE...: each case's stored verdict and its freshness against HEAD (--help, Verdict)."""
+    bad = [a for a in argv if not PIN.fullmatch(a)]
+    if not argv or bad:
+        die(64, f"--verdict takes one or more RUN_ID/SUITE/CASE and no other option (got {' '.join(bad) or 'none'})")
+    top, head = (subprocess.run(["git", "rev-parse", a], capture_output=True, text=True).stdout.strip() for a in ("--show-toplevel", "HEAD"))
+    if not top or not head:
+        die(64, "--verdict runs in the judged repo: no git HEAD here")
+    root = Path(os.environ.get("OCTO_FEATHER_QA_DIR") or Path(subprocess.run(
+        [str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip()) / "qa")
+    done = [pinned(root, top, head, a) for a in argv]
+    for _, line, _ in done:
+        print(line, flush=True)
+    short = [f"{a}: {'; '.join(why)}" for a, (_, _, why) in zip(argv, done, strict=True) if why]
+    if short:
+        print(f"octo-feather-qa: insufficient evidence: {' | '.join(short)}", file=sys.stderr)
+        return INSUFFICIENT
+    return 1 if any(w == "FAIL" for w, _, _ in done) else 0
+
+
 def main(argv: list[str]):
     if argv[:1] == ["--watch"]:
         return watch(argv[1:])
+    if argv[:1] == ["--verdict"]:
+        return verdicts(argv[1:])
     if argv[:1] == ["--review"]:
         return review(argv[1:])
     if argv[:1] == ["--analyze"]:
-        if argv[2:] or not argv[1:]:
-            die(64, "--analyze takes one RUN_DIR and no other option")
-        return reanalyze(argv[1])
+        if argv[3:] or not argv[1:] or argv[2:] not in ([], ["--evidence"]):
+            die(64, "--analyze takes one RUN_DIR and no other option but --evidence")
+        return reanalyze(argv[1], evidence=argv[2:] == ["--evidence"])
     gate_free()
     o = parse(argv)
     eval_slot()

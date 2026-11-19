@@ -38,13 +38,14 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [lane-archive](./lane-archive.md) covers closing a lane (`octo-feather-lane archive`) and the lane reflection it runs first (`octo-feather-lane reflect`).
 - [director-reflection](./director-reflection.md) covers the director reflection (`octo-feather-lane reflect --director`), which archive and start run.
 - [correction-lane](./correction-lane.md) covers the correction lane issues the reflection files at archive.
-- [correction-intake](./correction-intake.md) covers which findings make a correction lane due and the read-only intake report of the open ones (`octo-feather-lane intake`).
+- [correction-intake](./correction-intake.md) covers which findings make a correction lane due, the tracker each files in (comms spec `#reflection-correction`), and the read-only intake report of the open ones (`octo-feather-lane intake`).
 - [factory-report](./factory-report.md) covers the factory report (`octo-feather-lane report`): its director reflection line, its owner-caught headline and a repository's full gate time against its gate-time budget.
 - [role-launch](./role-launch.md) covers each role's launch as Pi gets it (`pi-role --json`): tools, MCP and the web list.
 - [skill-loading](./skill-loading.md) covers which skills Pi loads for a role: a launch refused naming each skill Pi did not load, the listed skills offered exactly, and the gate's `check-skills` (criteria: skills#acceptance-launch-refuses-unloaded, skills#acceptance-only-listed, skills#acceptance-skill-frontmatter).
 - [shape](./shape.md) covers the owner starting the shaper with `just shape` in a target with Spec Chat linked (`just spec-chat`): Pi offered exactly the role file's skills, Spec Chat's from the target, none from home (criterion: roles#acceptance-shaper-launch).
 - [qc-capture](./qc-capture.md) covers `just qc` capturing each declared demo into the evidence store and deciding from its checks.
 - [qc-insufficient](./qc-insufficient.md) covers `just qc` giving insufficient evidence when a declared demo cannot run to its end, and `octo-feather-lane merge-ask` failing naming it.
+- [qc-eval-verdict](./qc-eval-verdict.md) covers `just qc` judging an eval-backed criterion's declared demo, `octo-feather-qa --verdict`, from pinned stored runs: the same pass at two heads, insufficient evidence naming a changed role file.
 - [qc-browser](./qc-browser.md) covers `just qc` running a declared browser demo in the qc sandbox and storing its screenshots in the record.
 - [qc-sandbox](./qc-sandbox.md) covers the qc sandbox run by hand (`scripts/octo-feather-qc-sandbox -- CMD`) on srt: its proof and its refused escapes.
 - [qc-sandbox-cost](./qc-sandbox-cost.md) covers the qc sandbox's CPU per run around a judge that does nothing, run after run.
@@ -62,6 +63,7 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [qa-runs](./qa-runs.md) covers the factory evals running each case several times (`octo-feather-qa --runs N`; criterion: quality#acceptance-qa-repeats).
 - [qa-baseline](./qa-baseline.md) covers a case's time and tokens over several runs and a baseline kit compared beside the current one (`octo-feather-qa --runs N --baseline COMMIT`; criteria: quality#acceptance-qa-cost, quality#acceptance-qa-baseline).
 - [qa-analyst](./qa-analyst.md) covers the deterministic analysis of a baseline comparison and its rerun on a stored run (`octo-feather-qa --analyze`; criterion: quality#acceptance-qa-analyst).
+- [qa-evidence](./qa-evidence.md) covers a stored run's evidence block (`octo-feather-qa --analyze --evidence`): its content, the same bytes twice, and its pin read by `--verdict`.
 - [qa-review](./qa-review.md) covers an eval case a maintainer reviews: its kept output, a recorded verdict and note, and the next run showing them (`octo-feather-qa --review`; criterion: quality#acceptance-qa-review).
 - [qa-history](./qa-history.md) covers a regression case whose fixture is a real repository at a commit (the kit's own history or a local clone; criterion: quality#acceptance-qa-history).
 - [run-slots](./run-slots.md) covers the box's heavy-run slot: a lane's `just test` over more than heavy_items items refused without its grant, the director's grant (`octo-feather-slot grant`), `octo-feather-slot status`, and the granted run holding the slot.

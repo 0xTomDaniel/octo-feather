@@ -1,5 +1,0 @@
-{"at": "2026-11-13T09:00:00Z", "kind": "spawn", "name": "implementer-gh13", "role": "implementer", "pane": "w2:p3", "cwd": "/tmp/wt/implementer-gh13", "session": "0b1e6d2a-1c3f-4a5e-8d7b-13a0c9e2f413", "ticket": "13"}
-{"at": "2026-11-13T09:40:00Z", "kind": "spawn", "name": "code-reviewer-gh13", "role": "code-reviewer", "pane": "w2:p5", "cwd": "/tmp/wt/gh12", "session": "5c2e9f41-7a3b-4d8c-b1e6-2f9a0d4c5e13", "ticket": "13"}
-{"at": "2026-11-13T09:41:00Z", "kind": "spawn", "name": "implementer-gh14", "role": "implementer", "pane": "w2:p6", "cwd": "/tmp/wt/implementer-gh14", "session": "6d3f0a52-8b4c-4e9d-a2f7-3a0b1e5d6f14", "ticket": "14"}
-{"at": "2026-11-13T09:42:00Z", "kind": "spawn", "name": "implementer-gh15", "role": "implementer", "pane": "w2:p4", "cwd": "/tmp/wt/implementer-gh15", "session": "4a1d8e30-6f2b-4c7a-9e5d-1b8c0f3a2d15", "ticket": "15"}
-{"at": "2026-11-13T10:20:00Z", "kind": "spawn", "name": "code-reviewer-gh14", "role": "code-reviewer", "pane": "w2:p7", "cwd": "/tmp/wt/gh12", "session": "7e4a1b63-9c5d-4fae-b3a8-4b1c2f6e7a14", "ticket": "14"}

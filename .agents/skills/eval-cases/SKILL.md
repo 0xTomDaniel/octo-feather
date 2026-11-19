@@ -9,7 +9,7 @@ A Pi adaptation of the eval method in Anthropic's `skill-creator` (Apache-2.0, c
 
 ## Where things live
 
-- `evals/<suite>/suite.json`, `evals/<suite>/cases.json` (what the agent sees), `evals/<suite>/reference/expectations.json` (the facts, hidden from the agent), `evals/fixtures/<name>/` (a small repo copied and committed on main per run).
+- `evals/<suite>/suite.json`, `evals/<suite>/cases.json` (what the agent sees), `evals/<suite>/reference/expectations.json` (the facts, hidden from the agent), `evals/fixtures/<name>/` (a small repo copied and committed on main per run; schema, Fixtures).
 - [`references/schema.md`](references/schema.md) (below: schema, by section) owns every eval and bench schema and policy: suite, case and setup fields, the closed fact list and how each fact is graded, judgment suites, calibration, `classifiers.json` and the bench's ranking, threshold and FAIL rule. Read it before writing or changing a case; run `scripts/check-evals` after every edit (it runs in `just check`).
 - `scripts/octo-feather-qa --help` runs cases (`just qa`), in the qc sandbox, and owns what a run shows: repeated runs (`--runs`), a baseline kit beside the current one (`--baseline`), the analysis, review cases.
 
@@ -55,4 +55,4 @@ Prove the case catches the change with repeated runs on the kit before it beside
 1. Smoke: `scripts/octo-feather-qa --case ID --runs 1 --baseline BASE` (BASE: the commit before your change), to see the case run on both kits.
 2. Proof: `scripts/octo-feather-qa --case ID --runs 3 --baseline BASE`, 3 runs per kit.
 
-Read each case's pass rate on both kits, its spread and the analysis under them (`--help`, `--baseline` and Analysis): the change is proven when the case fails on BASE and passes at your head over the 3 runs, not on one lucky run. Paste the case and compare lines with the run id into `evidence/<date>-<lane>-<topic>.md`, with its `Smoke:` and `Removed:` lines (`scripts/check-behavior-smoke`).
+Read each case's pass rate on both kits, its spread and the analysis under them (`--help`, `--baseline` and Analysis): the change is proven when the case fails on BASE and passes at your head over the 3 runs, not on one lucky run. Put the output of `scripts/octo-feather-qa --analyze RUN_DIR --evidence` (the proof run's dir; why and what it holds: `--help`, Evidence) in `evidence/<date>-<lane>-<topic>.md`, and fill its `Smoke:` and `Removed:` stubs (`scripts/check-behavior-smoke`).

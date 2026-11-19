@@ -31,7 +31,7 @@ from typing import Any, NoReturn, cast
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "pilot-pr", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "template-edge", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history", "run-slots", "queued-completion",
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-eval-verdict", "qc-stale", "gate-tiers", "merge-ask-proof", "pilot-pr", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "template-edge", "qa-runs", "qa-baseline", "qa-analyst", "qa-evidence", "qa-review", "qa-history", "run-slots", "queued-completion",
             "parent-resumed", "result-file", "result-missing")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
@@ -785,6 +785,26 @@ def drive_director_reflection(f: Feature) -> None:
     say(f"director-reflection evidence: {f.d}")
 
 
+KIT_REPO = "0xTomDaniel/octo-feather"   # the kit's tracker (scripts/octo-feather-reflect KIT_REPO)
+INTAKE_TARGET = "varelaseb/octo-lite"   # correction-intake's target: a real repository, never written (fake gh)
+# Real `gh repo view R --json nameWithOwner,createdAt` answers (gh 2.102.0, 2026-11-18), the fake gh's "repos".
+REPOS = {KIT_REPO: {"nameWithOwner": KIT_REPO, "createdAt": "2026-10-18T17:03:48Z"},
+         INTAKE_TARGET: {"nameWithOwner": INTAKE_TARGET, "createdAt": "2026-06-03T05:28:08Z"}}
+
+
+def scratch_record(name: str, repo: str) -> str:
+    """A scratch lane record of REPO, started after REPOS's creation dates."""
+    return (f'supervisor = "w9{name[-1]}:p2"\nrepository = "{repo}"\nissue = "{name}"\ngoal = "scratch lane"\n'
+            'started_at = "2026-10-19T00:00:00Z"\n')
+
+
+def seed_repos(sc: Path) -> None:
+    """The fake gh's store under SC answering `repo view` with REPOS."""
+    store = sc / "gh.json"
+    db: dict[str, Any] = json.loads(store.read_text()) if store.is_file() else {"issues": []}
+    store.write_text(json.dumps(db | {"repos": REPOS}))
+
+
 def drive_correction_lane(f: Feature) -> None:
     sc = RUN_DIR / "scratch" / "correction-lane"
     shutil.rmtree(sc, ignore_errors=True)
@@ -797,9 +817,10 @@ def drive_correction_lane(f: Feature) -> None:
                            "summary": summary}) + "\n"
     first, second = "help text restates the archive refusal rule of comms #reflection-lane", "test comment restates comms #handoff-fields"
     for name, at, summary, where in (("gh900", "2026-10-20T00:00:00Z", first, "archive/"), ("gh901", "2026-10-27T00:00:00Z", second, "archive/")):
-        (lanes / f"{where}{name}.toml").write_text(f'supervisor = "w9{name[-1]}:p2"\nrepository = "scratch/target"\nissue = "{name}"\ngoal = "scratch lane"\n')
+        (lanes / f"{where}{name}.toml").write_text(scratch_record(name, KIT_REPO))
         (lanes / f"{where}{name}.handoffs.jsonl").write_text(cr(at, summary))
-    (lanes / "gh902.toml").write_text('supervisor = "w92:p2"\nrepository = "scratch/target"\nissue = "gh902"\ngoal = "scratch lane"\n')
+    (lanes / "gh902.toml").write_text(scratch_record("gh902", KIT_REPO))
+    seed_repos(sc)
     (lanes.parent / "director.handoffs.jsonl").write_text("")
     args = " ".join(["--no-session", os.environ.get("OCTO_FEATHER_REFLECT_ARGS", "")]).strip()
     f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock"),
@@ -810,11 +831,12 @@ def drive_correction_lane(f: Feature) -> None:
     f.obs("file-live", "tracker", store.read_text() if store.is_file() else "{}")
 
     def filed(c: Case) -> bool:
-        """The archive printed the key of one issue in the lane record's repository whose title carries the class's
-        marker and whose body quotes both findings and names a route line; gh902 left lanes/."""
-        m = re.search(r"(?m)^correction lane: filed (\d+) in github-issues scratch/target for duplicated-rule ", c.out)
+        """The archive printed the key of one issue in the kit's tracker (the lanes' repository and the route owner of a
+        class no `target:` route names) whose title carries the class's marker and whose body quotes both findings and
+        names a route line; gh902 left lanes/."""
+        m = re.search(rf"(?m)^correction lane: filed (\d+) in github-issues {KIT_REPO} for duplicated-rule ", c.out)
         hits = [i for i in json.loads(c.o["tracker"]).get("issues", []) if m and str(i["number"]) == m[1]]
-        return (c.code == 0 and len(hits) == 1 and hits[0]["repo"] == "scratch/target"
+        return (c.code == 0 and len(hits) == 1 and hits[0]["repo"] == KIT_REPO
                 and "[correction-lane duplicated-rule]" in hits[0]["title"]
                 and all(x in hits[0]["body"] for x in (first, second, "Class: duplicated-rule", "Route: "))
                 and (lanes / "archive" / "gh902.toml").is_file())
@@ -855,20 +877,24 @@ def drive_correction_intake(f: Feature) -> None:
     logs = {"gh910": [fl("2026-10-20T00:00:00Z", "code-review", "stale-pointer", "gh910 pointer to a moved file"),
                       fl("2026-10-20T01:00:00Z", "reflection", "slow-gate", "gh910 gate felt slow", blocking=False),
                       fl("2026-10-20T02:00:00Z", "code-review", "one-lane", "gh910 first"),
-                      fl("2026-10-20T03:00:00Z", "code-review", "one-lane", "gh910 second")],
+                      fl("2026-10-20T03:00:00Z", "code-review", "one-lane", "gh910 second"),
+                      fl("2026-10-20T04:00:00Z", "code-review", "own-pointer", "gh910 pointer into the target's docs")],
             "gh911": [fl("2026-10-21T00:00:00Z", "qc", "stale-pointer", "gh911 demo read a moved file"),
-                      fl("2026-10-21T01:00:00Z", "reflection", "slow-gate", "gh911 gate felt slow", blocking=False)]}
+                      fl("2026-10-21T01:00:00Z", "reflection", "slow-gate", "gh911 gate felt slow", blocking=False),
+                      fl("2026-10-21T02:00:00Z", "qc", "own-pointer", "gh911 demo read the target's old docs")]}
     for name, lines in logs.items():
-        (lanes / "archive" / f"{name}.toml").write_text(f'supervisor = "w9{name[-1]}:p2"\nrepository = "scratch/target"\nissue = "{name}"\ngoal = "scratch lane"\n')
+        (lanes / "archive" / f"{name}.toml").write_text(scratch_record(name, INTAKE_TARGET))
         (lanes / "archive" / f"{name}.handoffs.jsonl").write_text("".join(lines))
-    (lanes / "gh912.toml").write_text('supervisor = "w92:p2"\nrepository = "scratch/target"\nissue = "gh912"\ngoal = "scratch lane"\n')
+    (lanes / "gh912.toml").write_text(scratch_record("gh912", INTAKE_TARGET))
+    seed_repos(sc)
     (lanes.parent / "director.handoffs.jsonl").write_text("")
     listed = json.loads((Path(f.s.repo) / "reflection" / "questions.json").read_text())["questions"]
 
     def qs(kind: str) -> str:
         return ", ".join(q["id"] for q in listed if q["kind"] == kind)
 
-    (sc / "reply.lane").write_text(f"Questions: {qs('lane')}\nFindings: none\n")
+    (sc / "reply.lane").write_text(f"Questions: {qs('lane')}\nFinding: class: own-pointer | question: undetected-rule"
+                                   " | route: target: docs/pointers.md | summary: gh912 saw the target's own docs move\n")
     (sc / "reply.director").write_text(f"Questions: {qs('director')}\nFinding: class: stale-pointer | question: writer-route"
                                        " | route: agents/implementer.md Rules | summary: blocking in gh910 and gh911\n")
     tr = fake_tracker(f.s.repo, sc)
@@ -877,16 +903,37 @@ def drive_correction_intake(f: Feature) -> None:
     f.run("file-rule", "octo-feather-lane", "archive", "gh912")
     f.obs("file-rule", "tracker", store.read_text() if store.is_file() else "{}")
 
+    def of(c: Case, repo: str, cls: str) -> list[dict[str, Any]]:
+        return [i for i in json.loads(c.o["tracker"]).get("issues", [])
+                if i["repo"] == repo and f"[correction-lane {cls}]" in i["title"]]
+
     def filed(c: Case) -> bool:
+        """stale-pointer, routed to a kit role, only in the kit's tracker naming that route, the target lanes' findings
+        by lane, date and class only; no other class there."""
         issues = json.loads(c.o["tracker"]).get("issues", [])
-        return (c.code == 0 and len(issues) == 1 and "[correction-lane stale-pointer]" in issues[0]["title"]
-                and "Route: agents/implementer.md Rules" in issues[0]["body"] and re.search(
-                    r"(?m)^correction lane: filed \d+ in github-issues scratch/target for stale-pointer \(2 findings; route: agents/implementer.md Rules\)$",
-                    c.out) is not None)
+        mine = of(c, KIT_REPO, "stale-pointer")
+        return (c.code == 0 and len(mine) == 1 and [i for i in issues if i["repo"] == KIT_REPO] == mine
+                and "Route: agents/implementer.md Rules\n" in mine[0]["body"]
+                and "\n- gh910 2026-10-20T00:00:00Z stale-pointer\n- gh911 2026-10-21T00:00:00Z stale-pointer" in mine[0]["body"]
+                and "moved file" not in mine[0]["body"] and "target" not in mine[0]["body"]
+                and re.search(rf"(?m)^correction lane: filed \d+ in github-issues {KIT_REPO} for stale-pointer \(2 findings; route: agents/implementer.md Rules\)$",
+                              c.out) is not None)
+
+    def route_owner(c: Case) -> bool:
+        """own-pointer, routed `target:` by the target lane gh912's reflection, only in the target's tracker, quoting
+        its lanes' findings and that reflection finding in full; the kit's tracker holds none of it."""
+        mine = of(c, INTAKE_TARGET, "own-pointer")
+        return (c.code == 0 and len(mine) == 1 and not of(c, KIT_REPO, "own-pointer")
+                and len(json.loads(c.o["tracker"]).get("issues", [])) == 2
+                and all(x in mine[0]["body"] for x in ("Route: target: docs/pointers.md\n", "gh910 pointer into the target's docs",
+                                                       "gh911 demo read the target's old docs", "gh912 saw the target's own docs move"))
+                and re.search(rf"(?m)^correction lane: filed \d+ in github-issues {INTAKE_TARGET} for own-pointer \(3 findings; route: target: docs/pointers.md\)$",
+                              c.out) is not None)
     f.check("file-rule", filed)
+    f.check("file-rule", route_owner)
     # Seeded beside it: an open issue backed only by reflections, and two of one class (duplicates).
     db: dict[str, list[dict[str, Any]]] = json.loads(store.read_text()) if store.is_file() else {"issues": []}
-    for n, repo, cls in ((951, "scratch/target", "slow-gate"), (952, "scratch/target", "one-lane"), (953, "0xTomDaniel/octo-feather", "one-lane")):
+    for n, repo, cls in ((951, INTAKE_TARGET, "slow-gate"), (952, INTAKE_TARGET, "one-lane"), (953, KIT_REPO, "one-lane")):
         db["issues"].append({"number": n, "repo": repo, "title": f"[correction-lane {cls}] repeated finding class: {cls}", "body": "",
                              "state": "OPEN", "closedAt": None})
     store.write_text(json.dumps(db))
@@ -1498,6 +1545,158 @@ def drive_qc_insufficient(f: Feature) -> None:
         r"[^)]*\): needs GitHub.*; qc report [0-9a-f]{40}-.*\.json\): never triaged", c.err))
     f.pre, f.env = [], {}
     say(f"qc-insufficient evidence: {f.d}")
+
+
+# A scratch target's launcher: answers `pi-role --json agents/<role>.md` with one launched skill (s) and extension
+# (e.ts) in the repo, as octo-feather-qa --verdict asks it (--help, Verdict).
+STAND_IN_PI_ROLE = """#!/bin/sh
+top=$(cd "$(dirname "$0")/.." && pwd -P)
+printf '{"args": ["--extension", "%s/extensions/e.ts", "--skill", "%s/.agents/skills/s"]}\\n' "$top" "$top"
+"""
+
+
+def drive_qc_eval_verdict(f: Feature) -> None:
+    """`just qc` on a scratch target whose declared demo is `octo-feather-qa --verdict` over a scratch stored eval run
+    pinned at the target's first commit: pass at one head and at a second head leaving the run's files unchanged,
+    insufficient evidence naming the role file at a head that changes it (octo-feather-qa --help, Verdict)."""
+    sc = RUN_DIR / "scratch" / "qc-eval-verdict"
+    r = sc / "repo"
+    shutil.rmtree(sc, ignore_errors=True)
+    (r / "docs" / "specs").mkdir(parents=True)
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(r), *args], check=True, capture_output=True, text=True).stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    for k, val in (("user.name", "verify-octo-feather"), ("user.email", "verify@octo-feather.invalid"), ("core.hooksPath", "/dev/null")):
+        git("config", k, val)
+    case = {"id": "c1", "role": "worker", "fixture": "fx", "task": "Do it."}
+    facts = [{"fact": "skill_read", "skill": "s"}]
+    run, pin = "20260101T000000Z-abc123", "20260101T000000Z-abc123/s1/c1"
+    for rel, text in (("agents/worker.md", "the worker role\n"), ("scripts/pi-role", STAND_IN_PI_ROLE), (".agents/skills/s/SKILL.md", "the skill\n"),
+                      ("evals/s1/cases.json", json.dumps([case])), ("evals/s1/reference/expectations.json", json.dumps({"c1": {"facts": facts}})),
+                      ("evals/fixtures/fx/a.txt", "fixture\n"), ("README.md", "target\n"),
+                      ("qc.toml", ('format = 2\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n[demo."demo#acceptance-a"]\n'
+                                   f'command = "{f.s.repo}/scripts/octo-feather-qa --verdict {pin}"\ncovers = ["agents"]\n'))):
+        (r / rel).parent.mkdir(parents=True, exist_ok=True)
+        (r / rel).write_text(text)
+    (r / "scripts" / "pi-role").chmod(0o755)
+    shutil.copy(f"{f.s.repo}/tests/fixtures/spec-status/good/demo.spec.html", r / "docs" / "specs")
+    git("add", "-A")
+    git("commit", "-q", "-m", "accepted")
+    kit = git("rev-parse", "HEAD")
+    init = subprocess.run([f.s.kit, "octo-feather-spec-status", "init", str(r / "docs" / "specs" / "demo.spec.html"), kit[:12]],
+                          capture_output=True, text=True, check=False)
+    if init.returncode:
+        die(f"qc-eval-verdict: scratch status file not made: {init.stderr.strip()}")
+    git("add", "-A")
+    git("commit", "-q", "-m", "status")
+    head = git("rev-parse", "HEAD")
+    # The stored run (octo-feather-qa's layout, two runs at kit KIT) in the scratch box state's qa dir, never the real one.
+    d = sc / "state" / "octo-feather" / "qa" / run / "s1" / "c1"
+    for k in (1, 2):
+        kits = {"kit_ref": "HEAD", "kit_sha": kit, "run": k, "of": 2, "config": ""}
+        (d / f"run-{k}").mkdir(parents=True)
+        (d / f"run-{k}" / "input.json").write_text(json.dumps({"suite": "s1", **case, "model": "m", "max_tool_calls": 12, "timeout_s": 600, **kits}))
+        (d / f"run-{k}" / "grading.json").write_text(json.dumps({"facts": [dict(x, status="pass", evidence="e") for x in facts], "deciding": []}))
+        (d / f"run-{k}" / "result.json").write_text(json.dumps({"suite": "s1", "id": "c1", "verdict": "PASS", **kits}))
+    (d / "result.json").write_text(json.dumps({"suite": "s1", "id": "c1", "verdict": "PASS", "role": "worker", "kit_ref": "HEAD", "kit_sha": kit,
+                                               "runs": [{"run": k, "dir": f"run-{k}", "verdict": "PASS"} for k in (1, 2)], "runs_passed": 2}))
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "OCTO_FEATHER_QC_PATH": classify_stub(f, sc)}
+    f.pre = ["env", "-C", str(r)]
+    qc = ("just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a")
+    bound = re.escape(f"qc sandbox: ok   qa runs read-only: {sc / 'state' / 'octo-feather' / 'qa'} at ")
+    fresh = r"PASS s1/c1: stored PASS, run \S+, kit \w+, runs 2/2 passed; fresh at HEAD"
+    for name, at in (("fresh", head), ("second-head", None), ("stale", "role")):
+        git("reset", "-q", "--hard", head)
+        if at is None:
+            (r / "README.md").write_text("target, changed\n")
+            git("commit", "-q", "-am", "readme")
+        elif at == "role":
+            (r / "agents" / "worker.md").write_text("the worker role, changed\n")
+            git("commit", "-q", "-am", "role")
+        judged = git("rev-parse", "HEAD")
+        f.run(name, *qc)
+        # the demo's output, as the qc report keeps it (octo-feather-qc --help, Report)
+        rep = sorted((sc / "state" / "octo-feather" / "qc").glob(f"{judged}-*.json"))
+        res = [x for x in json.loads(rep[-1].read_text())["results"] if x["id"] == "acceptance-a"] if rep else []
+        f.obs(name, "demo", f"{res[0].get('output', '') if res else 'no qc report'}\n")
+    f.check("fresh", lambda c: c.code == 0 and re.search(r"(?m)^PASS acceptance-a", c.out) and re.search(fresh, c.o["demo"])
+            and re.search(bound, c.err))
+    f.check("second-head", lambda c: c.code == 0 and re.search(r"(?m)^PASS acceptance-a", c.out) and re.search(fresh, c.o["demo"]))
+    f.check("stale", lambda c: c.code == 2 and re.search(r"(?m)^INSUFFICIENT EVIDENCE acceptance-a", c.out)
+            and "agents/worker.md changed" in c.out and not re.search(r"(?m)^FAIL ", c.out))
+    f.pre, f.env = [], {}
+    say(f"qc-eval-verdict evidence: {f.d}")
+
+
+def drive_qa_evidence(f: Feature) -> None:
+    """`octo-feather-qa --analyze RUN_DIR --evidence` on a scratch stored --baseline run (canned, octo-feather-qa's
+    layout): the block, the same bytes a second time, and its pin read by `--verdict` in a scratch target as that run
+    and case (octo-feather-qa --help, Evidence)."""
+    sc = RUN_DIR / "scratch" / "qa-evidence"
+    r = sc / "repo"
+    shutil.rmtree(sc, ignore_errors=True)
+    r.mkdir(parents=True)
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(r), *args], check=True, capture_output=True, text=True).stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    for k, val in (("user.name", "verify-octo-feather"), ("user.email", "verify@octo-feather.invalid"), ("core.hooksPath", "/dev/null")):
+        git("config", k, val)
+    case = {"id": "c1", "role": "worker", "fixture": "fx", "task": "Report."}
+    say_ = {"fact": "ran", "program": "herdr-say", "args": ["--parent"]}
+    for rel, text in (("agents/worker.md", "the worker role\n"), ("scripts/pi-role", STAND_IN_PI_ROLE), ("evals/s1/cases.json", json.dumps([case])),
+                      ("evals/s1/reference/expectations.json", json.dumps({"c1": {"facts": [say_]}})), ("evals/fixtures/fx/a.txt", "fixture\n")):
+        (r / rel).parent.mkdir(parents=True, exist_ok=True)
+        (r / rel).write_text(text)
+    (r / "scripts" / "pi-role").chmod(0o755)
+    git("add", "-A")
+    git("commit", "-q", "-m", "accepted")
+    kit, base = git("rev-parse", "HEAD"), "b" * 40
+    run = "20260102T000000Z-e1de1c"
+    msg = "done: ```x```\nnext: gh13"
+    qa = sc / "qa"
+    c = qa / run / "s1" / "c1"
+    res: dict[str, dict[str, object]] = {}
+    for side, sha, verdict, argv in (("baseline", base, "FAIL", ["w2:p9", "go"]), ("current", kit, "PASS", ["--parent", msg])):
+        rd = c / side / "run-1"
+        rd.mkdir(parents=True)
+        kits = {"kit_ref": "HEAD" if side == "current" else base, "kit_sha": sha}
+        one = {"suite": "s1", "id": "c1", "verdict": verdict, "deciding": [f"ran herdr-say --parent: {verdict.lower()}"], "seconds": 10.0}
+        st = "pass" if verdict == "PASS" else "fail"
+        (rd / "input.json").write_text(json.dumps({"suite": "s1", **case, "model": "m", "fixture_head": "f" * 40, "max_tool_calls": 12,
+                                                   "timeout_s": 600, **kits, "run": 1, "of": 1, "config": side}))
+        (rd / "grading.json").write_text(json.dumps({"facts": [dict(say_, status=st, evidence="e")], "deciding": []}))
+        (rd / "sandbox.json").write_text(json.dumps({"attempts": [{"kind": "run", "program": "herdr-say", "argv": argv, "exit": 0}]}))
+        (rd / "result.json").write_text(json.dumps({**one, **kits, "run": 1, "of": 1, "config": side}))
+        ok = float(verdict == "PASS")
+        res[side] = {**one, "role": "worker", **kits, "runs": [{"run": 1, "dir": f"{side}/run-1", "verdict": verdict, "facts": [dict(say_, status=st)]}],
+                     "runs_passed": int(ok), "pass_rate": ok, "stddev": 0.0, "time": {"mean": 10.0, "stddev": 0.0},
+                     "tokens": {"mean": 100.0, "stddev": 0.0}, "cost_usd": None}
+    b = res["baseline"]
+    top = {**res["current"], "baseline": {"kit_ref": base, "kit_sha": base, **{k: b[k] for k in (
+        "verdict", "deciding", "seconds", "runs", "runs_passed", "pass_rate", "stddev", "time", "tokens", "cost_usd")}},
+           "delta": {"pass_rate": 1.0, "time": 0.0, "tokens": 0.0, "cost_usd": None}}
+    (c / "result.json").write_text(json.dumps(top))
+    (qa / run / "summary.json").write_text(json.dumps({"run_id": run, "kit_ref": "HEAD", "kit_sha": kit, "passed": 1, "total": 1, "scores": {},
+                                                       "runs": 1, "baseline": {"kit_ref": base, "kit_sha": base}, "cases": [top]}))
+    pin = f"{run}/s1/c1"
+    f.run("block", "octo-feather-qa", "--analyze", str(qa / run), "--evidence")
+    f.run("again", "octo-feather-qa", "--analyze", str(qa / run), "--evidence")
+    f.env = {"OCTO_FEATHER_QA_DIR": str(qa)}
+    f.pre = ["env", "-C", str(r)]
+    f.run("pin", "octo-feather-qa", "--verdict", pin)
+    f.obs("again", "block", (f.d / "block.stdout").read_text())
+    f.check("block", lambda c: c.code == 0 and all(x in c.out.splitlines() for x in (
+        f"- current kit: {kit} (kit ref HEAD)", f"- baseline kit: {base} (--baseline {base})", f"Pin: `octo-feather-qa --verdict {pin}`",
+        f"{pin}/current/run-1: ran herdr-say --parent: pass", '  herdr-say ["--parent", "done: ```x```\\nnext: gh13"] exit 0',
+        f"{pin}/baseline/run-1: ran herdr-say --parent: fail", "  no matching recorded run", "````text")) and "Smoke: " in c.out and "Removed: " in c.out)
+    f.check("again", lambda c: c.code == 0 and c.out == c.o["block"])
+    f.check("pin", lambda c: c.code == 0 and f"PASS s1/c1: stored PASS, run {run}, kit {kit[:12]}, runs 1/1 passed; fresh at HEAD" in c.out)
+    f.pre, f.env = [], {}
+    say(f"qa-evidence evidence: {f.d}")
 
 
 def drive_qc_browser(f: Feature) -> None:
@@ -3370,6 +3569,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "qc-sandbox-cost": drive_qc_sandbox_cost,
     "qc-advisory": drive_qc_advisory,
     "qc-fallback": drive_qc_fallback,
+    "qc-eval-verdict": drive_qc_eval_verdict,
     "qc-stale": drive_qc_stale,
     "qc-insufficient": drive_qc_insufficient,
     "gate-tiers": drive_gate_tiers,
@@ -3383,6 +3583,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "qa-runs": drive_qa_runs,
     "qa-baseline": drive_qa_baseline,
     "qa-analyst": drive_qa_analyst,
+    "qa-evidence": drive_qa_evidence,
     "qa-review": drive_qa_review,
     "qa-history": drive_qa_history,
     "run-slots": drive_run_slots,

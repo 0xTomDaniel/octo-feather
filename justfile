@@ -56,7 +56,7 @@ default:
 
 # The recipes the gate runs, in order, each one pytest item of check-tests (tests/gate/). Only check-* recipes,
 # so check-gate-free's scan of them sees every recipe the gate runs.
-export GATE_RECIPES := "check-languages check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-spec-status check-templates check-evals check-lint check-format check-types check-ts"
+export GATE_RECIPES := "check-languages check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-owner-field check-vendored check-spec-status check-templates check-evals check-lint check-format check-types check-ts"
 
 # Every GATE_RECIPES recipe and every tests/*.sh, through check-tests (#201, #224).
 # The gate: every tracked language gated, script syntax, Pi-only references, no dashes, skill frontmatter, decision logs, vendored skills, eval case shape, kit Python lint, format and types, kit tests.
@@ -201,6 +201,8 @@ check-refs:
           # Spec Chat names the owner side of a spool (its directory and event actor) so on disk: the one SPOOL_SIDE value per file.
           "scripts/octo-feather-accepted" => [qr{^SPOOL_SIDE = "[h]uman"(?=\s)}],
           "tests/accepted.sh"             => [qr{^SPOOL_SIDE=[h]uman(?=;)}],
+          # A recorded real gh answer (#1069): a 2026-11-04 director finding, quoted word for word in issue comment 6997429551.
+          "tests/gate/kit/testkit/recordings/reflection-missed-372.json" => [qr{an unresolved [h]uman decision, and do completion}],
         ) }
         my ($f, $s) = /^(.*?):\d+:(.*)$/s;
         $s =~ s/$_//g for @{ $ok{$f} || [] };
@@ -301,7 +303,8 @@ check-templates:
 # measured on the 4-vCPU box, quiet, 105 items (#510): 2 workers 410 s, 4 269 s, 6 225-238 s, 8 213-231 s, ~730-800
 # CPU s each (the CPU floor ~190 s); no item over 60 s at 6 or 8 (CI sets 4). A gate run inside an item (a test's
 # throwaway copy running `just check`) is sequential and stops at its first failure (-n 0 -x), recipes first, so a red
-# copy fails on its recipe, never fans out a nested gate (#208).
+# copy fails on its recipe, never fans out a nested gate (#208). Every run, nested or not, runs the recipes first and
+# asks the heavy slot only once they are green; a red one ends it there (tests/gate/heavy_slot.py, #1019).
 # Every gate recipe and kit test as a pytest item, parallel, timed, one trend line per run; extra arguments go to pytest.
 check-tests *args:
     #!/usr/bin/env bash
@@ -418,6 +421,10 @@ check-roles:
 # A role path changed on this branch needs evidence/*.md and docs/owed-evals/*.md in the same diff, or Behaviour-neutral commits (docs/adr/0008, correction lane #26). Base: origin/main or the CI PR base; none: skips locally, fails in CI.
 check-behavior-smoke:
     @python3 "$root/scripts/check-behavior-smoke"
+
+# The Owner-field check of docs/adr/0008; which commits it reads: scripts/check-owner-field --help.
+check-owner-field:
+    @python3 "$root/scripts/check-owner-field"
 
 # Verify the runtime tools on this box (octo-lite's install --check equivalent), agent-browser at its pin included, and the tracker CLI of the target
 # (the invocation directory, or TARGET: `just -f KIT/justfile install-check` in it); a Linear target checks linear,

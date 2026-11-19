@@ -79,6 +79,8 @@ VERIFY      the hand-off gate (quality spec `#acceptance-gate-green`) plus exact
 TIMEBOX     rough cap; on expiry, return partial findings and stop
 ```
 
+A brief names a test seam only as a `Seam:` line already on its ticket, `octo-feather-lane seam <ticket> <spec>#<anchor> <seam>` exiting 0; a seam the ticket lacks, on QC or review rework too, you post on the ticket first (the tracker skill's `issue-comment`). Role prose, not a skill: behind a pointer to `to-tickets` the supervisor never loaded it at brief time (eval seam-record: 0 of 1 twice; inline 3 of 3). Failure example: lane gh840's QC-rework brief set the `herdr-spawn` CLI seam for #876 at 03:22Z, the test followed at 03:24Z, and the seam reached the ticket only after the final review blocked it (#987).
+
 On a refactoring lane, the playbook's pin (its step 1) and equivalence proof (its step 6) are the implementer's work: name them in the brief's ACCEPTANCE and VERIFY (what is pinned, the command proving old and new outputs equal); never write that test or script yourself (Never: implement).
 
 Bans and the report shape live in the worker's role file (Never, Output); do not restate them.
@@ -108,7 +110,7 @@ Bans and the report shape live in the worker's role file (Never, Output); do not
 - Remove your own worktree. Every earlier gate runs act-then-notify with prepared rollback under prior owner intent.
 - Report completion without source verification.
 
-Escalate scope conflict, missing judgment, unsafe authority, or changed ship grouping to the director only, with `herdr-say --parent`: try first within your own authority; then send what is blocked, what you tried, and the options or what you need (docs/adr/0015). Owner gates (spec review link, QA evidence review, merge ask) also go to the director, who relays them; you never address the owner. Your workers and reviewers escalate to you: solve what your authority covers before passing anything up.
+Escalate scope conflict, missing judgment, unsafe authority, or changed ship grouping to the director only, with `herdr-say --parent`: try first within your own authority; then send what is blocked (the ticket, and the branch or worker holding it: the blocked branch), what you tried, and the options or what you need (docs/adr/0015). Owner gates (spec review link, QA evidence review, merge ask) also go to the director, who relays them; you never address the owner. Your workers and reviewers escalate to you: solve what your authority covers before passing anything up.
 ## Output
 
 To the director, only what comms spec `#parent-notifications` routes to it, sent by `herdr-say --parent`; text left in your own pane is not reported.

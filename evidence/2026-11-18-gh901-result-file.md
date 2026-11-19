@@ -9,6 +9,8 @@ Smoke: scripts/octo-feather-handoff prune-results (comms #notification-records, 
 Smoke: agents/director.md `extensions: results-on-wake.ts` frontmatter (spec roles#fm-extensions): `tests/pi-role.sh` (director and supervisor load results-on-wake.ts, no other role does, every role's other extensions unchanged; check-roles and pi-role refuse a missing or path extension; an unknown key still refused) and `tests/results-on-wake.sh` (an implementer launch at the supervisor's pane: no listing), both ok.
 Smoke: extensions/results-on-wake.ts `tests/results-on-wake.sh` (real Pi 1.3.0 through pi-role in RPC mode, the testkit provider and Herdr; loaded by the director and supervisor role files only): the listing in the first run's request after the start and after a compaction, none in between, none at a pane owning no log or with no outstanding worker; red with the extension not loaded (go:0:0).
 Removed: agents/supervisor.md: the goal check-in's `herdr agent get <pane>` per awaited worker and its `herdr pane read` of a finished result, replaced by consuming the result files the listing names (the listing put in context by extensions/results-on-wake.ts); and the lane record lines that had the supervisor set `supervisor` itself on a resumed wake, replaced by a pointer to comms spec #octo-lane-record-key-supervisor (the resume rewrites it).
+Smoke: agents/supervisor.md escalation line (comms #acceptance-real-blocker): "what is blocked" now names the ticket and the branch or worker holding it (the blocked branch). Rerun done: run 20261119T200842Z-a58936 at kit 7793d6a1 (artifacts ~/.local/state/octo-feather/qa/20261119T200842Z-a58936), --runs 3: supervisor-autonomy/owner-access-blocker-and-ready-work PASS 3/3; owner-access-blocker-message, the review case, PASS (verdict recorded by a fresh code-reviewer, gpt-6.1-sol); supervisor-general-worker diagnosis-diff-goes-to-implementer, implementer-result-integrated-not-candidate, reviewed-implementer-result-integrated PASS 3/3 each. Pinned in qc.toml for comms#acceptance-real-blocker and roles#acceptance-general-worker-no-implementation; generated evidence: evidence/2026-11-18-gh978-eval-verdict.md.
+Removed: agents/supervisor.md: the bare "what is blocked" in the escalation line; incident: eval run 20261119T193947Z-0b2f70 at c5a60057, review case supervisor-autonomy/owner-access-blocker-message FAIL (fresh code reviewer): run 2's one herdr-say --parent named lane gh12, ticket #14, attempts and options but not the blocked branch implementer-gh14 (runs 1 and 3 named it; gh978's run 20261119T021750Z-a6f960 passed 3/3 with the same line: run variance on an under-specified rule).
 
 ## Demo: `octo-feather-handoff results` as the supervisor after its worker's `herdr-say --parent`
 
@@ -32,3 +34,23 @@ director_prune: ok
 ## qc demos (comms#acceptance-parent-resumed, #acceptance-result-file, #acceptance-result-missing)
 
 Smoke: .agents/skills/verify-octo-feather/ `verify-octo-feather run parent-resumed`, `run result-file`, `run result-missing`: each `run PASS`, exit 0 (cases resume, report; report, results, read; results). The qc.toml demos run these same commands.
+
+## Fixture lane-shout-results converted to an overlay (main's fixture rule, #1006)
+
+After merging main (466cc4ba) into the lane: `evals/fixtures/lane-shout-results` was a whole tree, the materialized tree of `lane-shout-wip-log` plus its one result file (`diff -r` of `check-evals --export`'s lane-shout-wip-log against it: only `notes/gh12.results`). Now `.eval-fixture.json` `{"base": "lane-shout-wip-log"}` and only `notes/gh12.results/7e4a1b63-9c5d-4fae-b3a8-4b1c2f6e7a14.md`. `scripts/check-evals --trees` for the two result-file cases, before (main's check-evals on this branch's evals/ at f607c499, the whole tree) and after (the overlay), identical:
+
+Before:
+```
+supervisor-notifications result-file-after-compaction fixture 1367b0f6cb327d835f1a57bd3210c9565d5760ce01a6c921426dfdbd1e616f96
+supervisor-notifications result-file-after-compaction head 6ca3503ed5576e64b72f6385a67d81d685c444eb4614983a4a7d93f2e948de2c
+supervisor-notifications result-file-after-resume fixture 1367b0f6cb327d835f1a57bd3210c9565d5760ce01a6c921426dfdbd1e616f96
+supervisor-notifications result-file-after-resume head 6ca3503ed5576e64b72f6385a67d81d685c444eb4614983a4a7d93f2e948de2c
+```
+
+After:
+```
+supervisor-notifications result-file-after-compaction fixture 1367b0f6cb327d835f1a57bd3210c9565d5760ce01a6c921426dfdbd1e616f96
+supervisor-notifications result-file-after-compaction head 6ca3503ed5576e64b72f6385a67d81d685c444eb4614983a4a7d93f2e948de2c
+supervisor-notifications result-file-after-resume fixture 1367b0f6cb327d835f1a57bd3210c9565d5760ce01a6c921426dfdbd1e616f96
+supervisor-notifications result-file-after-resume head 6ca3503ed5576e64b72f6385a67d81d685c444eb4614983a4a7d93f2e948de2c
+```

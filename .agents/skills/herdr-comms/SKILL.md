@@ -70,6 +70,17 @@ it set (unset in the caller, unset in the tab). The key comes only from the
 environment that starts the factory: never write it into a file, brief,
 message, lane record or log.
 
+Each agent runs in its own systemd user scope (#1000): before `agent start`,
+the spawn adopts the new pane's shell (`herdr pane process-info`, `shell_pid`)
+into `octo-feather-agent-PANE-N.scope` through systemd's D-Bus
+`StartTransientUnit` (`busctl --user`; `systemd-run` cannot adopt a running
+pid), so Pi and all it starts, detached or not, are that scope's members, and
+`herdr-close` ends them from it. On Linux with no reachable systemd user
+manager the spawn refuses: exit 69, tab closed, busctl's own error and the need
+named (on a server: `loginctl enable-linger $USER`, `XDG_RUNTIME_DIR=/run/user/$(id -u)`).
+macOS has no systemd: agents launch unscoped there, and `herdr-close` sweeps
+nothing of theirs (the stated limit).
+
 It wraps `herdr tab create` and `herdr agent start`, and handles three things
 those leave to the caller:
 
@@ -130,15 +141,27 @@ herdr-close PANE
 
 The teardown step. An id with a colon (`w5:t2`) is a tab, one without (`w5`) is
 a space. A pane id (`w5:p3`) is mapped to its tab through `herdr agent get`
-(as `--park` does) and closed as that tab; a pane with no Herdr agent cannot be
+and closed as that tab; a pane with no Herdr agent cannot be
 mapped and fails with exit 65 naming the `TAB|SPACE|PANE` form, nothing closed.
-Closes it, then sends TERM to every process of the caller's session
-whose environ carries `HERDR_TAB_ID=TAB` or `HERDR_WORKSPACE_ID=SPACE`, which
-catches detached children that close alone leaves running. Run it from outside
+Before closing, it finds each closed pane's agent scope from Herdr's own
+handles only (`herdr pane list --workspace`, each pane's `shell_pid` from
+`herdr pane process-info`, that pid's `/proc/PID/cgroup`); after the close it
+stops each one (`systemctl --user stop`: TERM, KILL 10 s on), which ends the
+detached children close alone leaves running, also when the agent's Pi already
+exited. It reads no other process: one elsewhere tagged with the closed tab's
+`HERDR_TAB_ID` is untouched. A pane outside any agent scope (an agent spawned
+before scopes, a hand-started director, macOS) is unowned: closed, nothing
+swept, named in the report. Only the unit spawn named for that pane
+(`octo-feather-agent-PANE-<8 hex>.scope`) is its own: a shell in any other scope
+(another agent's, one running the kit's tests) is unowned too, that scope never
+stopped (#1070). A Herdr answer that fails or breaks the shape
+Herdr states for it stops the close before anything is closed (Herdr's exit, or
+76 for a malformed one, the field named; `assets/herdr_scope.py`). Run it from outside
 what it closes: the spawner closes a tab, the director closes a finished lane's
 own space, or only its supervisor tab when the lane started in a shared space.
-Prints `tab= tab_close_rc= killed=` or `space= space_close_rc= killed=` and
-exits with the close status.
+Prints `tab= tab_close_rc= killed=` or `space= space_close_rc= killed=`
+(`killed=` the scopes' members when stopped), plus `unowned=PANE[,PANE...]`
+when any, and exits with the close status.
 
 ## Park an idle agent
 
@@ -147,14 +170,28 @@ herdr-close --park PANE >>"$lanes/<lane>.handoffs.jsonl"
 herdr-close --park PANE >>"$(octo-feather-state)/director.handoffs.jsonl"   # the director's own general worker
 ```
 
-`$lanes` is `$(octo-feather-state)/lanes`. Reads the Pi session id and role
-`herdr-spawn` exported into PANE's tab, closes its tab, or its whole space when
-that tab is the space's only one (a supervisor in its own space), and prints
-one parked line (`at kind pane name role cwd session label parent`) on stdout, even when the
-close fails; the close report goes to stderr. The parker appends the line to the
-log comms spec `#roles-park` names (the two commands above). An agent Herdr does not report
-idle is refused with exit 75, one not spawned by `herdr-spawn` with 65; nothing
-is closed.
+`$lanes` is `$(octo-feather-state)/lanes`. Reads the parked line's fields only
+from PANE's own Pi process, the foreground process `herdr pane process-info`
+names with a `--session-id` (#1001): the session from that argv, role and parent
+from that process's own environ (`OCTO_FEATHER_ROLE`, `OCTO_FEATHER_PARENT`),
+cwd from Herdr's answer. It reads no other process's environ: one elsewhere
+tagged with the pane's ids is never read.
+
+When the pane's shell is in its own agent scope (as Close an agent names it), park refuses
+while that scope holds any live member other than Pi and the pane's shell: exit
+75, nothing closed, each member listed (pid and command), so a supervisor's
+background job (a CI watch, a gate run) is never ended by park. Wait for it or
+end it, then park. With none, and for an unowned pane (no scope: spawned before
+scopes, the hand-started director), park closes PANE's tab, or its whole space
+when that tab is the space's only one (a supervisor in its own space), as
+`herdr-close` does (owned: its scope stopped; unowned: nothing swept, named
+`unowned=PANE`), and prints one parked line (`at kind pane name role cwd session
+label parent`) on stdout, even when the close fails; the close report goes to
+stderr. The parker appends the line to the log comms spec `#roles-park` names
+(the two commands above). Refused, nothing closed: not idle or done, 75; no Pi
+process with a `herdr-spawn` session (a `--session-id` and the matching
+`OCTO_FEATHER_SESSION_ID`), 65; macOS (no `/proc`), 69; a Herdr answer that
+fails or is malformed, as `herdr-close` (`assets/herdr_scope.py`, park).
 
 ## Replace a worker that ended without reporting
 

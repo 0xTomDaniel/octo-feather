@@ -46,7 +46,8 @@ writable path: the worktree is an overlay whose upper dir lives on the run's
 tmpfs, so every write (credential copies included) dies with the run; a write
 to a tracked file or an untracked non-ignored file is reported and fails it.
 Pi's auth.json and models.json: each sandbox a Pi runs in (a judge, the advisory) gets per-run copies, discarded with the
-run and never written back; a declared demo's sandbox (no Pi runs there) gets neither. If the box auth.json
+run and never written back; a declared demo's sandbox (no Pi runs there) gets neither. The qa runs dir bind of a
+declared demo's sandbox: docs/adr/0022, sandbox paragraph. If the box auth.json
 holds OAuth credentials and a sandbox with copies starts, a warning says a token refresh during the run is discarded.
 GitHub evidence: when origin is a GitHub repo, octo-feather-qc-ghsnap fetches a
 fresh snapshot with this shell's gh auth into per-run scratch before every run;
@@ -241,13 +242,13 @@ def oauth_warning():
 
 def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bool = True,
               kit: Path | None = None, browser: str | None = None,
-              shots: bool = False, pi: bool = True) -> tuple[subprocess.CompletedProcess[str] | None, dict[str, Any]]:
+              shots: bool = False, pi: bool = True, qa: bool = False) -> tuple[subprocess.CompletedProcess[str] | None, dict[str, Any]]:
     """Run JUDGE inside octo-feather-qc-sandbox (srt, its own namespaces); return (run, sandbox record), run None if it never started.
     history False: no archived lanes or director log bound in (a factory eval, octo-feather-qa); kit: the kit under
     test (default this kit; what the sandbox shows of it: docs/adr/0022, sandbox paragraph); browser: the box's
     Playwright browsers folder, bound read-only (a browser demo); shots: a $QC_SCREENSHOTS dir whose files come back as
     the record's "shots" ([name, base64] pairs); pi False: no Pi runs (a declared demo), so no copy of Pi's auth.json or
-    models.json at all."""
+    models.json at all; qa: the qa runs dir bound read-only (which dir and when: docs/adr/0022, sandbox paragraph)."""
     unshare = shutil.which("unshare")
     if not unshare and sys.platform == "darwin":
         die(69, "just qc: not on macOS (the judge's sandbox needs Linux unshare and /proc); run it on a Linux box, or say `just qc` not run (macOS) in the merge ask")
@@ -271,13 +272,15 @@ def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bo
     want = [worktree, common, KIT, state, top, Path.home(), *ro, *pre, *os.environ.get("PATH", "").split(":")]
     keep = sorted({str(Path(p).resolve()) for p in want if p and Path(p).exists()})
     keep = [p for p in keep if p.startswith("/tmp/")]
+    qa_dir = str(Path(os.environ.get("OCTO_FEATHER_QA_DIR") or state / "qa").resolve()) if qa else ""
+    keep += [qa_dir] if qa_dir.startswith("/tmp/") and Path(qa_dir).exists() else []
     env = dict(os.environ, QC_SESSION=session, QC_STATE=str(state), QC_WORKTREE=worktree, QC_KIT=str(kit or KIT),
                QC_UID=str(os.getuid()), QC_GID=str(os.getgid()),
                # inside a qc sandbox `herdr` is its shim: wrap the real binary it names
                QC_HERDR=os.environ.get("OCTO_FEATHER_QC_HERDR") or shutil.which("herdr") or "", QC_GH=shutil.which("gh") or "",
                QC_KEEP="\n".join(keep), QC_RO_BINDS="\n".join(ro), QC_PATH_PREPEND=":".join(pre),
                QC_GHSNAP=gh.get("dir", ""), QC_GHSNAP_LINE=gh.get("line", ""), QC_GHSNAP_OFF=gh.get("off", ""),
-               QC_HISTORY="" if history else "none", QC_PI="" if pi else "none", QC_BROWSER=browser or "", QC_SHOTS="1" if shots else "",
+               QC_HISTORY="" if history else "none", QC_QA=qa_dir, QC_PI="" if pi else "none", QC_BROWSER=browser or "", QC_SHOTS="1" if shots else "",
                QC_FD_PROOF=str(pipes["proof"][1]), QC_FD_POST=str(pipes["post"][1]), QC_FD_ERR=str(pipes["err"][1]))
     if pi and (w := oauth_warning()) and w not in WARNED:   # once per qc run, of the sandboxes given copies (ADR 0022)
         WARNED.add(w)
@@ -420,7 +423,7 @@ def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: d
             run, sandbox = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True), False
         else:
             run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}-d{n}", {"off": "github: none (a declared demo, no agent judge)"},
-                                     browser=br, shots=True, pi=False)
+                                     browser=br, shots=True, pi=False, qa=True)
             assert isinstance(sandbox, dict)
             upper = sandbox.pop("upper", [])
             sandbox["discarded_writes"] = len(upper)   # the demo's writes died with its overlay
@@ -1169,7 +1172,8 @@ def settle(groups: list[Named], pr: int, head: str, *, nosb: bool) -> int:
     if git("status", "--porcelain"):
         try:
             git("add", "--", *(str(g.status) for g in groups))
-            git("commit", "-q", "-m", f"qc: built {' '.join(passed) or '(none)'} (judged {head[:12]})")
+            git("commit", "-q", "-m", f"qc: built {' '.join(passed) or '(none)'} (judged {head[:12]})",
+                "-m", "Owners: none")   # who owes it: scripts/check-owner-field --help, Who owes it
         except subprocess.CalledProcessError as e:
             die(3, f"status commit failed ({(e.stderr or '').strip()[:300]}); report {' '.join(str(g.report) for g in groups)}")
     short = [i for g in groups for i in shown(g, verdicts, passed, head)]
