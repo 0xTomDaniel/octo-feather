@@ -237,12 +237,11 @@ at the current directory; on GitHub it works under the qc judge's offline gh).
 
 A ticket's skills (spec issue-lifecycle #lanes-tickets): one line at column 0, outside fences and HTML comments as
 the body is read above, `Skills: <skill>, <skill>` (a name may be backticked) or `Skills: none`, under the to-tickets
-template's `## Skills` heading; with several, the last counts. `ticket` and `tickets` read the body's line (a line
-set later as a comment is `skills`', below). Each name must be a skill agents/implementer.md is offered as pi-role
+template's `## Skills` heading; with several, the last counts. Every ticket carries one (owner ruling 2026-11-19 on
+#1099): none is class missing-skills. `ticket` reads the draft's line; `tickets` the body's, else, when the body has
+none, the latest line of its body and comments (a line set later is a comment; `issue-view KEY --notes`, as `seam`
+reads them, by each note's last change). Each name must be a skill agents/implementer.md is offered as pi-role
 resolves its skills line, {tracker} as the target's tracker skill; else class unknown-skill, one line per name.
-.octo-feather.toml (the git repo at the current directory, where pi-role reads `tracker`) `skills_line`:
-`optional`, the code default, lets a ticket omit the line; `required` fails one with none, class missing-skills.
-Any other value is exit 2. The default is the code's until the owner decides; no spec states it.
 
   octo-feather-lane seam TICKET <spec>#<anchor> SEAM [--before REV]
                                    is SEAM written down for that criterion on TICKET (before REV)
@@ -279,12 +278,14 @@ that opened <skill>/SKILL.md and did not fail, never a mention), the whole sessi
 `<ticket>: worker <name> (<pane>), Pi session <file>`, then per named skill `<ticket>: skill <skill>: loaded`, `not
 loaded` (offered, never read) or `not offered` (not in the session's offered list, never read). Each skill not
 loaded is a miss: one finding line per miss appended to that log in one write (comms spec #handoff-kind-finding):
-{at, kind: finding, source: skills, class: skill-not-loaded, blocking, summary, ticket, skill}.
-.octo-feather.toml `skill_miss`: `record`, the code default until the owner decides (no spec states it), logs
-blocking false and exits 0; `send-back` logs blocking true, prints `<ticket>: fix: send <worker> back before
-integrate: herdr-say <pane> '...'` and exits 1. Exit 0 also with no miss, with `Skills: none` or with no line
-(nothing compared). Exit 2, nothing logged: usage, a tracker or setting error, no HERDR_PANE_ID, a pane owning no
-record, no spawn line with a session for TICKET, not exactly one session file, or one it cannot read.
+{at, kind: finding, source: skills, class: skill-not-loaded, blocking, summary, ticket, skill}. A miss sends the
+worker back once (owner ruling 2026-11-19 on #1099), counted by that log alone: the first miss of a ticket and skill
+(no skills finding with blocking true for them in the log) logs blocking true, prints `<ticket>: fix: send <worker>
+back before integrate: herdr-say <pane> '...'` and exits 1; a later miss of the same ticket and skill logs blocking
+false, prints `<ticket>: skill <skill>: sent back once already; this miss stands recorded, not blocking` and, when
+no other skill is a first miss, exits 0. Exit 0 also with no miss, with `Skills: none` or with no line (nothing
+compared; `ticket` and `tickets` fail the last). Exit 2, nothing logged: usage, a tracker error, no HERDR_PANE_ID, a
+pane owning no record, no spawn line with a session for TICKET, not exactly one session file, or one it cannot read.
 The limit: it proves a load, never that the skill was applied, nor that the line named the right skills; review
 judges those.
 
@@ -2544,11 +2545,9 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
 
 
 # A ticket's Skills: line (spec issue-lifecycle #lanes-tickets): column 0, outside fences and comments (structure), as
-# `Seam:` lines are read; `Skills: none` names none. Rules and the settings' code defaults: --help (ticket, skills).
+# `Seam:` lines are read; `Skills: none` names none. Rules: --help (ticket, skills).
 SKILLS_LINE = re.compile(r"^Skills:[ \t]+(\S.*?)\s*$")
 SKILLS_FORM = "`Skills: <skill>, <skill>` or `Skills: none`, its own line at column 0 (octo-feather-lane --help (ticket))"
-# Each .octo-feather.toml setting the Skills: line reads, its code default first (the owner's choice is open: --help).
-SETTINGS = {"skills_line": ("optional", "required"), "skill_miss": ("record", "send-back")}
 
 
 def skills_named(bodies: list[str]) -> list[str] | None:
@@ -2563,21 +2562,9 @@ def skills_named(bodies: list[str]) -> list[str] | None:
     return list(dict.fromkeys(s.strip().strip("`") for s in got.split(",") if s.strip().strip("`")))
 
 
-def target_setting(key: str) -> str:
-    """KEY in the .octo-feather.toml of the git repo at the current directory (where pi-role reads `tracker`), else its
-    code default (SETTINGS). Unchecked on an unreadable file or a value SETTINGS does not list."""
-    import tomllib
-    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
-    cfg = (Path(top.stdout.strip()) if top.returncode == 0 else Path.cwd()) / ".octo-feather.toml"
-    allowed = SETTINGS[key]
-    try:
-        v = tomllib.loads(cfg.read_text(encoding="utf-8")).get(key, allowed[0]) if cfg.is_file() else allowed[0]
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
-        raise Unchecked(f"cannot read {cfg} ({e}): fix the file, then rerun") from e
-    if v not in allowed:
-        raise Unchecked(f"{cfg}: {key} = {v!r}: set it to {' or '.join(repr(a) for a in allowed)}, or drop it for the code "
-                        f"default {allowed[0]!r}")
-    return cast("str", v)
+def by_change(notes: "list[tuple[str, str | None, str, str]]") -> list[str]:
+    """The bodies of ticket_notes' NOTES, oldest change first (stable: the body first on a tie), as skills_named reads them."""
+    return [n[3] for n in sorted(notes, key=lambda n: iso_time(n[1] or n[0], "issue-view notes time"))]
 
 
 def implementer_offered() -> list[str]:
@@ -2593,16 +2580,12 @@ def implementer_offered() -> list[str]:
 
 
 def skills_fails(name: str, body: str, cache: "dict[object, object]") -> list[str]:
-    """Failures of one ticket body's Skills: line (--help, ticket), each as check_body prints them."""
-    named = skills_named([body])
+    """Failures of one ticket's Skills: line (--help, ticket), each as check_body prints them: BODY's, or the latest of
+    the ticket's notes when `tickets` read them into CACHE[("notes", NAME)]."""
+    named = skills_named(cast("list[str] | None", cache.get(("notes", name))) or [body])
     if named is None:
-        if ("skills_line",) not in cache:
-            cache[("skills_line",)] = target_setting("skills_line")
-        if cache[("skills_line",)] != "required":
-            return []
-        return [(f"{name}: class: missing-skills: no `Skills:` line, and the target's .octo-feather.toml sets skills_line = "
-                 f"\"required\"; fix: add the to-tickets issue template's `## Skills` section, {SKILLS_FORM}, naming each "
-                 "skill the ticket's worker must load, or `Skills: none`")]
+        return [(f"{name}: class: missing-skills: no `Skills:` line; fix: add the to-tickets issue template's `## Skills` "
+                 f"section, {SKILLS_FORM}, naming each skill the ticket's worker must load, or `Skills: none`")]
     if ("offered",) not in cache:
         cache[("offered",)] = implementer_offered()
     offered = cast("list[str]", cache[("offered",)])
@@ -2960,12 +2943,15 @@ def cmd_tickets(args: list[str]) -> int:
         print(f"{parent}: class: no-sub-issues: the parent lists no sub-issues; fix: file each lane ticket as a sub-issue of {parent} (to-tickets publish step, spec issue-lifecycle #acceptance-sub-issues)")
         return 1
     bodies = []   # read every ticket first: a tracker failure midway reports nothing as passed
+    cache: dict[object, object] = {}
     for k in kids:
         t = issue_view(k)
         if not isinstance(t.get("body"), str):
             raise Unchecked(f"issue-view {k} printed no body: the tracker skill's issue-view must print body, then rerun")
         bodies.append((t["key"], t["body"]))
-    cache, bad = {}, 0
+        if skills_named([cast("str", t["body"])]) is None:   # a Skills: line set later is a comment (--help, ticket)
+            cache[("notes", t["key"])] = by_change(ticket_notes(cast("str", k))[1])
+    bad = 0
     for k, body in bodies:
         fails = check_body(k, body, specs, cache)
         print("\n".join(fails) if fails else f"{k}: ok")
@@ -3683,12 +3669,10 @@ def cmd_skills(args: list[str]) -> int:
         raise Unchecked(f"usage: octo-feather-lane skills TICKET (the ticket key, e.g. 40 or ENG-123; got {' '.join(args) or 'nothing'})")
     key = args[0]
     name, notes = ticket_notes(key)
-    latest = sorted(notes, key=lambda n: iso_time(n[1] or n[0], "issue-view notes time"))   # stable: the body first on a tie
-    named = skills_named([n[3] for n in latest])
+    named = skills_named(by_change(notes))
     if not named:
         print(f"{name}: skills: " + ("none named" if named == [] else f"no `Skills:` line ({SKILLS_FORM})") + "; nothing compared")
         return 0
-    miss = target_setting("skill_miss")
     pane = os.environ.get("HERDR_PANE_ID", "")
     if not pane:
         raise Unchecked("HERDR_PANE_ID is unset: run this in the supervisor's pane, whose lane hand-off log holds the worker's spawn line")
@@ -3729,21 +3713,27 @@ def cmd_skills(args: list[str]) -> int:
             missed.append((s, said))
     if not missed:
         return 0
-    blocking = miss == "send-back"
+    # The send-back counted by the log: a blocking skill-not-loaded finding for this ticket and skill (--help, skills).
+    sent = {(str(r.get("ticket")), str(r.get("skill"))) for r in lines if r.get("kind") == "finding"
+            and r.get("source") == "skills" and r.get("class") == "skill-not-loaded" and r.get("blocking") is True}
     at = f"{dtm.datetime.now(dtm.timezone.utc):%Y-%m-%dT%H:%M:%SZ}"
-    found = [{"at": at, "kind": "finding", "source": "skills", "class": "skill-not-loaded", "blocking": blocking,
-              "summary": f"{worker} handed off without loading {s} ({said} in its Pi session), which ticket {name} names",
+    found = [{"at": at, "kind": "finding", "source": "skills", "class": "skill-not-loaded", "blocking": (name, s) not in sent,
+              "summary": f"{worker} handed off without loading {s} ({said} in its Pi session), which ticket {name} names"
+              + ("" if (name, s) not in sent else "; sent back once already, the miss stands recorded"),
               "ticket": name, "skill": s} for s, said in missed]
     try:
         with log.open("a", encoding="utf-8") as f:
             f.write("".join(encode(cast("dict[str, object]", x)) + "\n" for x in found))
     except OSError as e:
         raise Unchecked(f"cannot append to {log} ({e}): fix its permissions, then rerun") from e
-    print(f"{name}: {len(found)} finding line(s) in {log}, class skill-not-loaded, "
-          f"{'blocking' if blocking else 'not blocking'} (skill_miss = \"{miss}\")")
-    if not blocking:
+    back = [s for s, _ in missed if (name, s) not in sent]
+    for s, _ in missed:
+        if s not in back:
+            print(f"{name}: skill {s}: sent back once already; this miss stands recorded, not blocking (finding in {log})")
+    if not back:
         return 0
-    skills = ", ".join(s for s, _ in missed)
+    print(f"{name}: {len(back)} blocking finding line(s) in {log}, class skill-not-loaded: {', '.join(back)}")
+    skills = ", ".join(back)
     print(f"{name}: fix: send {worker} back before integrate: herdr-say {wpane} 'Load {skills} (read each SKILL.md by "
           f"path), apply it to ticket {name}, then hand off again'; integrate only once octo-feather-lane skills {name} exits 0")
     return 1

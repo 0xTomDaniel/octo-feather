@@ -19,9 +19,10 @@ import json
 import shutil
 from pathlib import Path
 
-from testkit import FIXTURES, Scratch, kit, main
+from testkit import FIXTURES, ROOT, Scratch, kit, main
 
 TAPE = Path(__file__).parent / "testkit" / "recordings" / "lane-skills.json"
+TICKETS = Path(__file__).parent / "testkit" / "recordings" / "lane-tickets-644.json"
 SESSION = "4fd43c0c-7119-4cb4-866f-e114e16ecdb4"
 SUP = "w1:p2"  # the supervisor's pane, the lane record's `supervisor`
 WORKER = "w1:p3"
@@ -68,64 +69,97 @@ def findings(log: Path) -> list[dict[str, object]]:
     return [x for x in map(json.loads, log.read_text().splitlines()) if x["kind"] == "finding"]
 
 
-def record(s: Scratch) -> None:
+def strip(f: dict[str, object]) -> dict[str, object]:
+    return {k: v for k, v in f.items() if k not in ("at", "summary")}
+
+
+def miss(sk: str, *, blocking: bool) -> dict[str, object]:
+    """A skills finding line for #1099 and SK, as the log holds it (comms #handoff-kind-finding)."""
+    return {
+        "kind": "finding",
+        "source": "skills",
+        "class": "skill-not-loaded",
+        "blocking": blocking,
+        "ticket": "1099",
+        "skill": sk,
+    }
+
+
+def send_back_once(s: Scratch) -> None:
     """#1094's worker loaded eval-cases: `loaded`, nothing logged, exit 0. #1099 names tdd and
-    codebase-design, which the session never loaded: a `not loaded` line each and one finding
-    line each (source skills, class skill-not-loaded, ticket, skill, blocking false), exit 0
-    under the code default skill_miss = "record"."""
+    codebase-design, which the session never loaded: a `not loaded` line each; the first miss of
+    each logs one blocking finding line (source skills, class skill-not-loaded, ticket, skill),
+    prints the fix sending the worker back by its pane and exits 1. Run again, the log holding
+    that send-back: one non-blocking line each, `sent back once already`, exit 0. A send-back
+    already logged for tdd alone: tdd recorded not blocking, codebase-design sent back, exit 1."""
     log = world(s)
     before = log.read_text()
     out = skills(s, "1094")
     assert out.splitlines()[1:] == ["1094: skill eval-cases: loaded"], out
     assert f"worker implementer-1094 ({WORKER}), Pi session " in out, out
     assert log.read_text() == before, "a loaded skill logged a finding"
-    out = skills(s, "1099")
+    out = skills(s, "1099", want=1)
     lines = out.splitlines()
     assert lines[1:3] == [
         "1099: skill tdd: not loaded",
         "1099: skill codebase-design: not loaded",
     ], out
-    assert 'not blocking (skill_miss = "record")' in lines[3], out
-    assert "fix:" not in out, out
-    got = [{k: v for k, v in f.items() if k not in ("at", "summary")} for f in findings(log)]
-    want = [
-        {
-            "kind": "finding",
-            "source": "skills",
-            "class": "skill-not-loaded",
-            "blocking": False,
-            "ticket": "1099",
-            "skill": sk,
-        }
-        for sk in ("tdd", "codebase-design")
-    ]
-    assert got == want, got
-    assert all("implementer-1099" in str(f["summary"]) for f in findings(log)), findings(log)
-
-
-def send_back(s: Scratch) -> None:
-    """Under skill_miss = "send-back" the misses log blocking true and the command exits 1,
-    printing the fix that sends the worker back by its pane; a loaded skill still exits 0. A
-    setting off the list, no caller pane and a pane owning no lane: exit 2, nothing logged."""
-    log = world(s)
-    (s.root / "t" / ".octo-feather.toml").write_text('skill_miss = "send-back"\n')
-    skills(s, "1094")
-    out = skills(s, "1099", want=1)
-    assert [f["blocking"] for f in findings(log)] == [True, True], findings(log)
     fix = (
         "1099: fix: send implementer-1099 back before integrate: "
         f"herdr-say {WORKER} 'Load tdd, codebase-design"
     )
     assert fix in out, out
-    assert "integrate only once octo-feather-lane skills 1099 exits 0" in out, out
+    assert "sent back once already" not in out, out
+    assert [strip(f) for f in findings(log)] == [
+        miss("tdd", blocking=True),
+        miss("codebase-design", blocking=True),
+    ]
+    assert all("implementer-1099" in str(f["summary"]) for f in findings(log)), findings(log)
+    out = skills(s, "1099")
+    for sk in ("tdd", "codebase-design"):
+        said = f"1099: skill {sk}: sent back once already; this miss stands recorded, not blocking"
+        assert said in out, out
+    assert "fix:" not in out, out
+    got = [strip(f) for f in findings(log)][2:]
+    assert got == [miss("tdd", blocking=False), miss("codebase-design", blocking=False)], got
+    log.write_text(
+        before + json.dumps(miss("tdd", blocking=True) | {"at": "x", "summary": "x"}) + "\n"
+    )
+    out = skills(s, "1099", want=1)
+    assert "1099: skill tdd: sent back once already" in out, out
+    assert f"herdr-say {WORKER} 'Load codebase-design (" in out, out
+    got = [strip(f) for f in findings(log)][1:]
+    assert got == [miss("tdd", blocking=False), miss("codebase-design", blocking=True)], got
+
+
+def refusals(s: Scratch) -> None:
+    """No caller pane and a pane owning no lane: exit 2, nothing logged."""
+    log = world(s)
     n = len(log.read_text())
-    (s.root / "t" / ".octo-feather.toml").write_text('skill_miss = "warn"\n')
-    assert "skill_miss = 'warn': set it to 'record' or 'send-back'" in skills(s, "1099", want=2)
-    (s.root / "t" / ".octo-feather.toml").unlink()
     assert "HERDR_PANE_ID is unset" in skills(s, "1099", want=2, HERDR_PANE_ID="")
     assert "pane w9:p9 owns no lane record" in skills(s, "1099", want=2, HERDR_PANE_ID="w9:p9")
     assert len(log.read_text()) == n, "a refused run wrote to the log"
 
 
+def tickets_comment(s: Scratch) -> None:
+    """`tickets 644` (lane gh644's parent) on real gh's answers, unmodified
+    (testkit/recordings/lane-tickets-644.json, 2026-11-19): #1094's body has no `Skills:` line,
+    its comment does, so `tickets` reads its notes and passes it; #1099's body line passes with no
+    notes read. The target is a scratch repo with the kit's specs and its scripts/ demos tracked."""
+    s.gh.store("tape.json", json.loads(TICKETS.read_text()))
+    t = s.root / "t"
+    shutil.copytree(ROOT / "docs" / "specs", t / "docs" / "specs")
+    for p in ("octo-feather-lane", "octo-feather-qa"):
+        (t / "scripts").mkdir(exist_ok=True)
+        (t / "scripts" / p).write_text("#!/bin/sh\n")
+        (t / "scripts" / p).chmod(0o755)
+    s.git(s.root, "init", "-q", "-b", "main", "t")
+    s.git(t, "add", "-A")
+    r = s.run([kit("octo-feather-lane"), "tickets", "644"], cwd=t)
+    assert r.out == "1094: ok\n1099: ok\n644: 2 of 2 tickets pass", r.out
+    asked = [x.split(" ", 3)[:3] for x in s.gh.log()]
+    assert asked.count(["api", "graphql", "-F"]) == 1, s.gh.log()
+
+
 if __name__ == "__main__":
-    main(record, send_back)
+    main(send_back_once, refusals, tickets_comment)
