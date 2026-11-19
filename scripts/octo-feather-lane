@@ -235,6 +235,28 @@ build describes is review's and the qc judge's (docs/adr/0008, #118). Each failu
 `children`, then each body; GitHub Issues or Linear, from the .octo-feather.toml of the git repo
 at the current directory; on GitHub it works under the qc judge's offline gh).
 
+  octo-feather-lane seam TICKET <spec>#<anchor> SEAM [--before REV]
+                                   is SEAM written down for that criterion on TICKET (before REV)
+
+`seam` checks the `Seam:` record contract (skills spec #skill-tdd, #skill-to-tickets; AGENTS.md Rules,
+integration test seam; correction lane #987). It reads TICKET through the tracker skill's `issue-view KEY --notes`
+(skills spec #tracker-script-issue-view). A record is a line at column 0, outside fences and HTML comments as
+`ticket` reads them, `Seam: <spec>#<anchor>: `<seam>`` (the colon after the id optional), then any note; the seam
+is its first code span, compared exactly (`herdr-spawn` is not `scripts/herdr-spawn`). Anything else naming a
+seam (a table, prose) is no record: whether it agreed a seam stays with review. <spec>#<anchor> must be an item of
+the body's `## Acceptance criteria`, else class seam-off-criteria, exit 1. Without --before: exit 0 when a note
+holds the record, printing `<ticket>: seam <id> `<seam>` recorded at <time> (<url>)`. With --before REV (the
+commit adding the test, in the git repo here; its author time, git %aI, kept through rebase and cherry-pick), per
+note holding the record: before when it was written and last changed (null: never) strictly before REV; formed
+after REV when it was written at or after REV; unknown when it was written before REV and its text changed at or
+after: the record may or may not have been there at REV. Exit 0 when one note is before (printed as above, `,
+before commit <sha>`); else 2, printing `<ticket>: unchecked: ...`, when one is unknown; else 1, class
+unlisted-test-seam, printed as `ticket` prints its failures: no record, or every record formed after REV. A
+writer runs it before the first test at a seam, and with --before on the commit adding one. Exit 2, unchecked,
+also when nothing could be read: usage, git, or issue-view's error (a tracker that cannot give a time exits
+non-zero naming it); never reported as late. Whether SEAM is the seam the test drives stays with review
+(docs/adr/0008 rung 3).
+
   octo-feather-lane done PARENT    the lane's close (spec issue-lifecycle #gates-pr-line): move
                                    every ticket of PARENT, then PARENT, to done
 
@@ -2892,6 +2914,99 @@ def cmd_ticket(args: list[str]) -> int:
     return 1 if fails else 0
 
 
+# A seam record: column 0, outside fences and comments (structure), `Seam: <spec>#<anchor>: `<seam>``, then any note.
+SEAM_LINE = re.compile(r"^Seam:[ \t]+([a-z0-9][a-z0-9._-]*#[A-Za-z0-9][A-Za-z0-9_-]*):?[ \t]+`([^`]+)`")
+SEAM_FORM = "`Seam: <spec>#<anchor>: `<seam>``, its own line at column 0 (octo-feather-lane --help (seam))"
+
+
+def iso_time(s: str, what: str) -> "dtm.datetime":
+    try:
+        t = dtm.datetime.fromisoformat(s[:-1] + "+00:00" if s.endswith("Z") else s)
+    except (TypeError, ValueError) as e:
+        raise Unchecked(f"{what} {s!r} is no ISO 8601 time ({e})") from e
+    return t if t.tzinfo else t.replace(tzinfo=dtm.timezone.utc)
+
+
+def cmd_seam(args: list[str]) -> int:
+    """Is SEAM written down for CRITERION on TICKET, before REV's test when --before names one (AGENTS.md Rules,
+    integration test seam; correction lane #987)."""
+    rev = None
+    if len(args) == 5 and args[3] == "--before":
+        rev, args = args[4], args[:3]
+    if len(args) != 3 or not all(a.strip() for a in args) or not CRITERION.fullmatch(args[1]):
+        raise Unchecked("usage: octo-feather-lane seam TICKET <spec>#<anchor> SEAM [--before REV] (got "
+                        f"{' '.join(args) or 'nothing'})")
+    key, crit, seam = args
+    before = None
+    if rev is not None:
+        try:
+            p = subprocess.run(["git", "log", "-1", "--format=%H %aI", rev, "--"], capture_output=True, text=True, timeout=60)
+        except (OSError, subprocess.TimeoutExpired) as e:
+            raise Unchecked(f"git did not run ({e})") from e
+        if p.returncode or not p.stdout.strip():
+            raise Unchecked(f"--before {rev}: no commit in the git repo here ({' '.join(p.stderr.split())[:200]}): "
+                            "name the commit that adds the test, from the repo that holds it")
+        sha, at = p.stdout.split()
+        before = (sha[:8], iso_time(at, f"{rev}'s author time"))
+    out = tracker("issue-view", key, "--notes")
+    notes: list[tuple[str, str | None, str, str]] = []   # shape: skills spec #tracker-script-issue-view
+    try:
+        d = cast("object", json.loads(out))
+        raw = cast("dict[str, object]", d).get("notes") if isinstance(d, dict) else None
+        for item in cast("list[object]", raw) if isinstance(raw, list) else []:
+            n = cast("dict[str, object]", item) if isinstance(item, dict) else {}
+            at, edited, url, body = n.get("at"), n.get("edited_at"), n.get("url"), n.get("body")
+            if not (isinstance(at, str) and isinstance(url, str) and isinstance(body, str) and (edited is None or isinstance(edited, str))):
+                raise ValueError(f"a note off skills spec #tracker-script-issue-view: {n!r:.200}")
+            notes.append((at, edited, url, body))
+        if not notes:
+            raise ValueError("no notes list, or an empty one")
+        name = str(cast("dict[str, object]", d).get("key") or key)
+    except ValueError as e:
+        raise Unchecked(f"issue-view {key} --notes printed no readable notes ({e}): fix the tracker skill's issue-view "
+                        "to skills spec #tracker-script-issue-view, then rerun") from e
+
+    def fail(cls: str, problem: str, fix: str) -> int:
+        print(f"{name}: class: {cls}: {problem}; fix: {fix}")
+        return 1
+
+    criteria = {"#".join(m.groups()) for m in (CRITERION.match(i) for i in criteria_items(notes[0][3]) or []) if m}
+    if crit not in criteria:
+        return fail("seam-off-criteria", f"{crit} is not an acceptance item of {name} ({', '.join(sorted(criteria)) or 'none'})",
+                    "name a criterion the ticket's `## Acceptance criteria` lists, or ask your supervisor to add it to the ticket")
+    held = [(iso_time(w, "issue-view notes time"), None if c is None else iso_time(c, "issue-view notes time"), u)
+            for w, c, u, body in notes for l in structure(body) if (m := SEAM_LINE.match(l)) and m.groups() == (crit, seam)]
+
+    def utc(t: "dtm.datetime") -> str:
+        return f"{t.astimezone(dtm.timezone.utc):%Y-%m-%dT%H:%M:%SZ}"
+
+    if not held:
+        return fail("unlisted-test-seam", f"no `Seam:` record for {crit} `{seam}` on {name} (form {SEAM_FORM})",
+                    f"post `Seam: {crit}: `{seam}`` on {name} with the tracker skill's issue-comment, then rerun this "
+                    "before writing the test" + ("; a test already written: tell your supervisor" if before else ""))
+    if before is None:
+        w, c, u = min(held, key=lambda h: h[1] or h[0])
+        print(f"{name}: seam {crit} `{seam}` recorded at {utc(c or w)} ({u})")
+        return 0
+    sha, rev_at = before
+    ok = [h for h in held if h[0] < rev_at and (h[1] is None or h[1] < rev_at)]
+    if ok:
+        w, c, u = min(ok, key=lambda h: h[1] or h[0])
+        print(f"{name}: seam {crit} `{seam}` recorded at {utc(c or w)} ({u}), before commit {sha}")
+        return 0
+    unknown = [h for h in held if h[0] < rev_at]
+    if unknown:
+        w, c, u = unknown[0]
+        print(f"{name}: unchecked: `Seam:` record for {crit} `{seam}` written at {utc(w)} ({u}) but its text changed at "
+              f"{utc(cast('dtm.datetime', c))}, not before commit {sha} at {utc(rev_at)}: the tracker cannot say whether "
+              "the record was there at the commit; review judges it")
+        return 2
+    w, _, u = min(held)
+    return fail("unlisted-test-seam", f"`Seam:` record for {crit} `{seam}` on {name} written at {utc(w)} ({u}), after "
+                f"commit {sha} at {utc(rev_at)}", "record each seam before its first test; this one is late: tell your "
+                "supervisor, who asks the owner")
+
+
 # --- spend (spec spend, issue #185) ---
 
 SPEND_INT = ("input_tokens", "output_tokens")
@@ -4415,6 +4530,7 @@ COMMANDS = {
     "tickets": cmd_tickets,
     "done": cmd_done,
     "ticket": cmd_ticket,
+    "seam": cmd_seam,
     "spend": cmd_spend,
     "report": cmd_report,
     "intake": cmd_intake,
