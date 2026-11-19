@@ -165,6 +165,8 @@ def grep(path: str, text: bytes, pattern: re.Pattern[str]) -> tuple[list[Hit], b
     """TEXT's lines PATTERN matches, as grep prints them in C.UTF-8; and whether grep calls TEXT
     binary there: a NUL byte in it (no line printed) or a matching line not UTF-8 (that line not
     printed)."""
+    if not pattern.search(text.decode("utf-8", "replace")):
+        return [], False  # no line can match: most files, read once
     rows = text.split(b"\n")
     if rows[-1] == b"":
         rows.pop()  # the final newline ends the last line, it is not a line
