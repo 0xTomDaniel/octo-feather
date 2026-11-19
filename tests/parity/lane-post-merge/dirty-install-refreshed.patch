@@ -1,14 +1,13 @@
 Seeded defect: a dirty kit install is fast-forwarded and refreshed instead of stopping (octo-feather-lane --help, post-merge step 3).
 diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
-index 29b0852d..cc04d69e 100755
 --- a/scripts/octo-feather-lane
 +++ b/scripts/octo-feather-lane
-@@ -3775,7 +3775,7 @@ def pm_kit(pm: PostMerge) -> str:
-     top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
-     if top.returncode:
-         raise Refuse("the current directory is in no git repo: run post-merge in the target repo (just install-check checks it), then rerun")
--    if dirty := pm_git(kit, "status", "--porcelain")[1]:
-+    if (dirty := pm_git(kit, "status", "--porcelain")[1]) and not dirty:
+@@ -4004,7 +4004,7 @@
+     """Fast-forward CLONE (WHAT names it) to the merge commit, the rules of --help steps 3 and 4: a dirty or
+     diverged one, or one not on BRANCH when given, stops, nothing changed; one at or past it does not move. It
+     fetches origin first, or with ALWAYS_FETCH off only when the merge commit is missing. Its line."""
+-    if dirty := pm_git(clone, "status", "--porcelain", what=what)[1]:
++    if (dirty := pm_git(clone, "status", "--porcelain", what=what)[1]) and not dirty:
          lines = dirty.splitlines()
-         raise Refuse(f"kit install {kit} is dirty ({', '.join(x.strip() for x in lines[:3])}{', ...' if len(lines) > 3 else ''}): "
+         raise Refuse(f"{what} {clone} is dirty ({', '.join(x.strip() for x in lines[:3])}{', ...' if len(lines) > 3 else ''}): "
                       "commit, move or drop those changes there, nothing was changed; then rerun")

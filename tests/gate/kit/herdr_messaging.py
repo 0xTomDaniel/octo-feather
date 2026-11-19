@@ -7,7 +7,7 @@ never reports, or whose integration install fails, fails closed naming it, withi
 bound for the report and the idle wait together; a herdr-say whose
 `herdr agent get` lookup fails names that lookup (not the up-chain refusal, 77); a prompt Herdr
 reports stalled exits non-zero naming the pane and its state; and `octo-feather-lane post-merge`
-step 4 to a busy (working) supervisor returns within its bound, its step 4 line naming the
+step 5 to a busy (working) supervisor returns within its bound, its step 5 line naming the
 supervisor NOT told (lane, pane, timeout, the re-send command) and going on to tell the others
 (director rule #619). A general worker routes like every worker (roles
 spec #acceptance-task-worker-route): its parent reached, a peer lane refused (77); and a worker
@@ -17,11 +17,11 @@ drives comms spec #acceptance-director-worker-resume (its docstring names each s
 fresh_worker_session drives the provider-session half of roles spec
 #acceptance-fresh-independent-worker (its docstring names each step).
 
-post-merge step 4 (owner ruling on issue 206; issues 398, 458): live supervisors of the PR's repo
+post-merge step 5 (owner ruling on issue 206; issues 398, 458): live supervisors of the PR's repo
 (every lane on a kit PR) told once, by the kit's own herdr-say with its bound, with the merge, PR,
 title and rule files, one prod line each, a rerun telling nothing new; parked and gone lanes
 listed, never sent to; a failed send named, no prod line, exit 1; any other herdr failure stops
-the step; step 5 reached, the kit's own herdr-close run and Herdr's workspace_not_found read as
+the step; step 6 reached, the kit's own herdr-close run and Herdr's workspace_not_found read as
 already closed. Space ids `zt*`, which no real Herdr gives."""
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ from pathlib import Path
 from testkit import HERE, ROOT, Scratch, kit, main
 
 ASSETS = ROOT / ".agents" / "skills" / "herdr-comms" / "assets"
-TELL_BOUND = 20  # post-merge step 4's bound on one send, seconds (octo-feather-lane --help)
+TELL_BOUND = 20  # post-merge step 5's bound on one send, seconds (octo-feather-lane --help)
 
 
 def herdr_world(s: Scratch, agents: dict[str, dict[str, object]] | None = None) -> Path:
@@ -473,7 +473,7 @@ def merged_repo(s: Scratch) -> tuple[Path, str]:
 
 def post_merge_busy(s: Scratch) -> None:
     """post-merge after PR 7 merged, lane live1's supervisor w1:p1 busy (working the whole run),
-    lane live2's w2:p1 idle: step 4 returns within its bound; live2 told (its prod line), live1
+    lane live2's w2:p1 idle: step 5 returns within its bound; live2 told (its prod line), live1
     NOT told, named with its pane, the timeout, its state and the herdr-say that re-sends it by
     hand, no prod line; the summary names live1 NOT told; exit 1."""
     busy = agent("w1:p1", "live1", "working")
@@ -535,15 +535,15 @@ def post_merge_busy(s: Scratch) -> None:
     said = f"exit {p.returncode} after {took:.0f}s\n{p.stdout}\n{p.stderr}"
     assert p.returncode == 1, said
     assert took < TELL_BOUND + 20, said
-    tell = next((x for x in p.stdout.splitlines() if x.startswith("step 4 ")), "")
-    assert tell.startswith("step 4 tell supervisors: stopped: NOT told: live1 w1:p1: "), said
+    tell = next((x for x in p.stdout.splitlines() if x.startswith("step 5 ")), "")
+    assert tell.startswith("step 5 tell supervisors: stopped: NOT told: live1 w1:p1: "), said
     assert f"send timed out after {TELL_BOUND}s" in tell, said
     assert f"w1:p1 (pane w1:p1) still working after {TELL_BOUND}s" in tell, said
     assert "re-send by hand: herdr-say w1:p1 'main moved to " in tell, said
     assert "; NOT told: live1 w1:p1; told: live2 w2:p1;" in tell, said
     last = p.stdout.splitlines()[-1]
-    want = "step 5 teardown not run; NOT told: live1 w1:p1 (step 4 names each re-send)"
-    assert last.endswith(f"step 4 tell supervisors stopped; {want}"), said
+    want = "step 6 teardown not run; NOT told: live1 w1:p1 (step 5 names each re-send)"
+    assert last.endswith(f"step 5 tell supervisors stopped; {want}"), said
     assert [x.split("\t")[0] for x in lines(d / "prompts")] == ["w1:p1", "w2:p1"], said
     prods = [json.loads(x) for x in lines(lanes.parent / "director.handoffs.jsonl")]
     assert [x["issue"] for x in prods] == [12], said
@@ -657,7 +657,7 @@ class Tell:
         (self.d / "agents.json").write_text(json.dumps(live))
 
     def run(self, want: int, pr: int, *args: str) -> tuple[str, str]:
-        """post-merge PR (its head) ARGS --wait 0, exit WANT, no traceback: its step 4 line and
+        """post-merge PR (its head) ARGS --wait 0, exit WANT, no traceback: its step 5 line and
         its last line."""
         head = self.h if pr == 7 else self.h2
         cmd = [kit("octo-feather-lane"), "post-merge", str(pr), head, *args, "--wait", "0"]
@@ -705,7 +705,7 @@ def told_live(t: Tell) -> None:
     assert "told: live1 zt1:p1" in tell, tell
     gone = "gone: director to resume or archive: none"
     assert tell.endswith(f"not woken: parked zt2:p1; {gone}"), tell
-    assert last.endswith("tell supervisors ok; step 5 teardown pending"), last
+    assert last.endswith("tell supervisors ok; step 6 teardown pending"), last
     assert "agent get zt3:p1" not in lines(t.d / "log"), lines(t.d / "log")
     prods = t.prods()
     assert len(prods) == 2, prods
@@ -771,11 +771,11 @@ def told_gone(t: Tell) -> None:
     tell, _ = t.run(3, 7, "--lane", "gh1", "--repo", "o/r")
     assert t.said() == ["zt1:p1"], t.said()
     want = "told: live1 zt1:p1; already told: none; not woken: parked zt2:p1; " + gone
-    assert tell.startswith("step 4 tell supervisors: ok: "), tell
+    assert tell.startswith("step 5 tell supervisors: ok: "), tell
     assert tell.endswith(want), tell
-    pending = "step 5 teardown: pending: lane gh1 not archived; rerun on its close report"
+    pending = "step 6 teardown: pending: lane gh1 not archived; rerun on its close report"
     assert pending in t.out.splitlines(), t.out
-    # Archived: step 5 runs the kit's herdr-close on space zt9, which Herdr has not: its close
+    # Archived: step 6 runs the kit's herdr-close on space zt9, which Herdr has not: its close
     # fails, and Herdr's workspace_not_found (stderr) reads as already closed.
     (t.lanes / "archive").mkdir()
     (t.lanes.parent / "director.toml").write_text('pane = "zt0:p9"\n')
@@ -786,7 +786,7 @@ def told_gone(t: Tell) -> None:
     )
     t.run(0, 7, "--lane", "gh1", "--repo", "o/r")
     down = (
-        "step 5 teardown: ok: space zt9 already closed; worktree of gh1 already removed; no open "
+        "step 6 teardown: ok: space zt9 already closed; worktree of gh1 already removed; no open "
         "PR based on gh1; local branch gh1 already deleted; remote branch gh1 already deleted "
         "from origin"
     )
@@ -794,12 +794,12 @@ def told_gone(t: Tell) -> None:
     log = lines(t.d / "log")
     assert "workspace close zt9" in log, f"herdr-close asked no close: {log}"
     assert "workspace get zt9" in log, f"teardown asked no workspace get: {log}"
-    # Any other herdr failure still stops step 4, named; the other lanes are still handled.
+    # Any other herdr failure still stops step 5, named; the other lanes are still handled.
     (t.lanes / "archive" / "gh1.toml").unlink()
     (t.d / "get-down").write_text("zt2:p1\n")
     tell, _ = t.run(1, 7, "--lane", "gh1", "--repo", "o/r")
     stop = (
-        "step 4 tell supervisors: stopped: parked zt2:p1: herdr agent get zt2:p1 failed (herdr: "
+        "step 5 tell supervisors: stopped: parked zt2:p1: herdr agent get zt2:p1 failed (herdr: "
         "server not reachable)"
     )
     assert tell.startswith(stop), tell
@@ -810,18 +810,18 @@ def tell_supervisors(s: Scratch) -> None:
     """Only a live supervisor of the PR's repo gets one message naming the merge commit, PR,
     title and changed rule files, by the kit's herdr-say bounded by post-merge's bound; the --lane
     lane, a parked one (its latest parked line names its pane) and another repo's lane (never
-    looked up) none; one canonical prod line per lane told, after the director's own; step 4 ok,
-    step 5 pending, exit 3. A rerun sends and logs nothing new (already told). A merge touching no
+    looked up) none; one canonical prod line per lane told, after the director's own; step 5 ok,
+    step 6 pending, exit 3. A rerun sends and logs nothing new (already told). A merge touching no
     rule file says none, and is told again. A kit PR (o/kit, the install's own repo): every lane
     runs kit roles, so another repo's live lane is told too, one prod line each (step 3 refreshes
     the install first: its recipes no-ops by the real just, uv and pnpm argv_recorder.sh). A send
     that fails (its supervisor blocked on a dialog, herdr-say's 75): named, no prod line for it,
     the others still tried and told, the step stopped, exit 1; a rerun tells only that one. Issue
     458: --lane gh1 with a live, a parked and two gone lanes (one never parked, one whose latest
-    parked line names an older pane): only the live one told, the rest listed, step 4 ok, step 5
-    pending (not archived). Archived: step 5 runs, the kit's herdr-close failing and Herdr's
+    parked line names an older pane): only the live one told, the rest listed, step 5 ok, step 6
+    pending (not archived). Archived: step 6 runs, the kit's herdr-close failing and Herdr's
     workspace_not_found read as already closed. Any other herdr failure (Herdr unreachable on the
-    parked lane's lookup) stops step 4, named, the other lanes still handled. One
+    parked lane's lookup) stops step 5, named, the other lanes still handled. One
     world, the old test's order: each phase resets only what it names."""
     t = Tell(s)
     told_live(t)

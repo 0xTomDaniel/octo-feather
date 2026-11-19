@@ -421,7 +421,7 @@ Exit 0; 1 on any argument.
 
 `post-merge` is the one command the director runs after a lane merges, at the merge report and at the close
 report (owner ruling 2026-10-29 on issue 206; docs/adr/0008 Duties). Rerun it freely: each step is idempotent, and
-step 4 tells no lane twice.
+step 5 tells no lane twice.
   step 1 merged    `gh pr view PR`: the PR is MERGED, its head is HEAD (7+ hex prefix), and it has a merge commit
   step 2 main CI   `gh run list --commit <merge commit> --event push`: waits up to --wait SECONDS (default 300)
                    for a run to appear, then `gh run watch <id> --exit-status` on each run until every run gh
@@ -444,7 +444,14 @@ step 4 tells no lane twice.
                    pinned Python (.python-version) not installed stops, naming `uv python install --no-bin <pin>`),
                    `pnpm install --frozen-lockfile`, `just install-check <the current repo's top>`. No service
                    restart; a rerun reruns these
-  step 4 tell supervisors  each open lane record but --lane's, of the PR's repo (every lane when the PR is the kit
+  step 4 checkout  the director's own checkout of the target: the main checkout of the repo post-merge runs in (`git
+                   worktree list`, first entry), for any target repo; when it is the kit install, step 3 is its
+                   one move (`checkout <path> is the kit install, which step 3 moves`). Step 3's rules on it, nothing
+                   changed when it stops, the line naming the checkout and why: dirty (git status --porcelain), on
+                   a branch other than the PR's base or a detached HEAD (`is on <branch>, not <base>`), or diverged
+                   from the merge commit; one behind it on the base fast-forwards (`git merge --ff-only`), one at
+                   or past it does not move. `git fetch origin` only when the merge commit is missing there
+  step 5 tell supervisors  each open lane record but --lane's, of the PR's repo (every lane when the PR is the kit
                    install's origin repo: every lane runs kit roles), whose supervisor pane `herdr agent get` finds
                    gets one herdr-say: "main moved to <merge sha12> (#PR <title>); rule files changed: <list or
                    none>; re-read the changed ones before your next step." Rule files: what the merge commit
@@ -466,7 +473,7 @@ step 4 tells no lane twice.
                    writes no prod line; the step goes on to the other supervisors, then stops. Its line:
                    `NOT told: ...; told: ...; already told: ...; not woken: ...; gone: director to resume or
                    archive: ...`
-  step 5 teardown  only once $(octo-feather-state)/lanes/archive/<lane>.toml exists (`octo-feather-lane archive`
+  step 6 teardown  only once $(octo-feather-state)/lanes/archive/<lane>.toml exists (`octo-feather-lane archive`
                    moves it there before the close report), else `pending: lane <lane> not archived; rerun on its
                    close report`; an archived record whose `pr` is not PR stops. In order, each stop keeping the
                    rest: the lane's own space (the archived `supervisor` pane id's prefix, when no open lane
@@ -482,9 +489,9 @@ step 4 tells no lane twice.
                    when origin has it. Gone already prints `already`; review rows, spools and records stay
 Each step prints one line as it finishes, `step <n> <name>: ok: <what>` or `step <n> <name>: stopped: <why>`;
 a stopped step runs no later step. The last line is the summary, each step's outcome (ok, stopped, not run):
-`post-merge <lane> PR #<n>: step 1 merged ok; step 2 main CI ok`, ending `; NOT told: <lane> <pane>, ... (step 4
-names each re-send)` when step 4 failed a send. Exit 0 when every step is ok, 1 when one (not merged, merged at another head, a red run named by its URL, no run within the bound, a watch that failed,
-a supervisor not told, a teardown refusal), 3 when steps 1-4 are ok and step 5 is pending (the merge report run; rerun
+`post-merge <lane> PR #<n>: step 1 merged ok; step 2 main CI ok`, ending `; NOT told: <lane> <pane>, ... (step 5
+names each re-send)` when step 5 failed a send. Exit 0 when every step is ok, 1 when one (not merged, merged at another head, a red run named by its URL, no run within the bound, a watch that failed,
+a checkout kept, a supervisor not told, a teardown refusal), 3 when steps 1-5 are ok and step 6 is pending (the merge report run; rerun
 at the close report), 1 with usage on stderr for bad arguments.
 
 One subcommand per function, listed in COMMANDS; add a subcommand there.
@@ -3917,7 +3924,7 @@ class PostMerge:
     def __init__(self, pr: int, head: str, lane: str, wait: int, repo: str | None) -> None:
         self.pr, self.head, self.lane, self.wait, self.repo = pr, head, lane, wait, repo
         self.merge, self.base = "", ""
-        self.not_told: list[str] = []   # step 4: each live supervisor whose send failed, "<lane> <pane>"
+        self.not_told: list[str] = []   # step 5: each live supervisor whose send failed, "<lane> <pane>"
 
     def r(self) -> list[str]:
         return ["-R", self.repo] if self.repo else []
@@ -4053,12 +4060,12 @@ def kit_install() -> Path:
     return Path(os.environ.get("OCTO_FEATHER_KIT_INSTALL") or KIT)
 
 
-def pm_git(kit: Path, *args: str, ok: tuple[int, ...] = (0,)) -> tuple[int, str]:
+def pm_git(kit: Path, *args: str, ok: tuple[int, ...] = (0,), what: str = "kit install") -> tuple[int, str]:
     p = subprocess.run(["git", "-C", str(kit), *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
     if p.returncode not in ok:
         err = (p.stderr or p.stdout).strip().splitlines()
-        raise Refuse(f"git {' '.join(args[:2])} in the kit install {kit} failed ({err[-1][:200] if err else f'exit {p.returncode}'}): "
-                     "fix the install clone, then rerun")
+        raise Refuse(f"git {' '.join(args[:2])} in the {what} {kit} failed ({err[-1][:200] if err else f'exit {p.returncode}'}): "
+                     f"fix the {what} clone, then rerun")
     return p.returncode, p.stdout.strip()
 
 
@@ -4086,23 +4093,7 @@ def pm_kit(pm: PostMerge) -> str:
     top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
     if top.returncode:
         raise Refuse("the current directory is in no git repo: run post-merge in the target repo (just install-check checks it), then rerun")
-    if dirty := pm_git(kit, "status", "--porcelain")[1]:
-        lines = dirty.splitlines()
-        raise Refuse(f"kit install {kit} is dirty ({', '.join(x.strip() for x in lines[:3])}{', ...' if len(lines) > 3 else ''}): "
-                     "commit, move or drop those changes there, nothing was changed; then rerun")
-    pm_git(kit, "fetch", "origin")
-    if pm_git(kit, "cat-file", "-e", f"{pm.merge}^{{commit}}", ok=(0, 1, 128))[0]:
-        raise Refuse(f"merge commit {pm.merge[:12]} is not in the kit install {kit} after git fetch origin: "
-                     f"check its origin {origin}, then rerun")
-    head, m = pm_git(kit, "rev-parse", "HEAD")[1], pm.merge[:12]
-    if head == pm.merge or not pm_git(kit, "merge-base", "--is-ancestor", pm.merge, head, ok=(0, 1))[0]:
-        moved = f"kit install {kit} at {head[:12]}, at or past {m}: no move"
-    elif not pm_git(kit, "merge-base", "--is-ancestor", head, pm.merge, ok=(0, 1))[0]:
-        pm_git(kit, "merge", "--ff-only", pm.merge)
-        moved = f"kit install {kit} fast-forwarded {head[:12]}..{m}"
-    else:
-        raise Refuse(f"kit install {kit} at {head[:12]} has diverged from merge commit {m}: nothing was changed; "
-                     f"put the install back on {pm.base} (git -C {kit} log {m}..HEAD names the commits), then rerun")
+    moved = pm_follow(pm, kit, "kit install")
     done: list[str] = []
     cmds = [c for c in PM_REFRESH if c[0] != "octo-feather-mise-install" or (kit / "mise.toml").exists()]
     for cmd in [*cmds, ("just", "install-check", top.stdout.strip())]:
@@ -4124,6 +4115,48 @@ def pm_kit(pm: PostMerge) -> str:
     return f"{moved}; {'; '.join(done)}" + ("" if cmds[0][0] == "octo-feather-mise-install" else " (no mise.toml: mise install skipped)")
 
 
+def pm_follow(pm: PostMerge, clone: Path, what: str, branch: str | None = None, always_fetch: bool = True) -> str:
+    """Fast-forward CLONE (WHAT names it) to the merge commit, the rules of --help steps 3 and 4: a dirty or
+    diverged one, or one not on BRANCH when given, stops, nothing changed; one at or past it does not move. It
+    fetches origin first, or with ALWAYS_FETCH off only when the merge commit is missing. Its line."""
+    if dirty := pm_git(clone, "status", "--porcelain", what=what)[1]:
+        lines = dirty.splitlines()
+        raise Refuse(f"{what} {clone} is dirty ({', '.join(x.strip() for x in lines[:3])}{', ...' if len(lines) > 3 else ''}): "
+                     "commit, move or drop those changes there, nothing was changed; then rerun")
+    if branch is not None and (on := pm_git(clone, "symbolic-ref", "-q", "--short", "HEAD", ok=(0, 1), what=what)[1]) != branch:
+        raise Refuse(f"{what} {clone} is on {on or 'a detached HEAD'}, not {branch}: nothing was changed; "
+                     f"switch it to {branch} there (git -C {clone} switch {branch}), then rerun")
+    def missing() -> int:
+        return pm_git(clone, "cat-file", "-e", f"{pm.merge}^{{commit}}", ok=(0, 1, 128), what=what)[0]
+    if always_fetch or missing():
+        pm_git(clone, "fetch", "origin", what=what)
+    if missing():
+        origin = pm_git(clone, "config", "--get", "remote.origin.url", ok=(0, 1), what=what)[1]
+        raise Refuse(f"merge commit {pm.merge[:12]} is not in the {what} {clone} after git fetch origin: "
+                     f"check its origin {origin}, then rerun")
+    head, m = pm_git(clone, "rev-parse", "HEAD", what=what)[1], pm.merge[:12]
+    if head == pm.merge or not pm_git(clone, "merge-base", "--is-ancestor", pm.merge, head, ok=(0, 1), what=what)[0]:
+        return f"{what} {clone} at {head[:12]}, at or past {m}: no move"
+    if not pm_git(clone, "merge-base", "--is-ancestor", head, pm.merge, ok=(0, 1), what=what)[0]:
+        pm_git(clone, "merge", "--ff-only", pm.merge, what=what)
+        return f"{what} {clone} fast-forwarded {head[:12]}..{m}"
+    raise Refuse(f"{what} {clone} at {head[:12]} has diverged from merge commit {m}: nothing was changed; "
+                 f"put the {what.rsplit(maxsplit=1)[-1]} back on {pm.base} (git -C {clone} log {m}..HEAD names the commits), then rerun")
+
+
+# Step 4 (issue 1078): the director's checkout, the main checkout of the repo post-merge runs in (git worktree list,
+# first entry), any target's: step 3's rules, on the PR's base branch; the kit install itself moves in step 3 only.
+def pm_checkout(pm: PostMerge) -> str:
+    """Step 4: fast-forward the director's checkout to the merge commit, or stop naming it and why."""
+    p = pm_git_here("worktree", "list", "--porcelain")
+    if p.returncode or not p.stdout.startswith("worktree "):
+        raise Refuse("the current directory is in no git repo: run post-merge in the target repo, then rerun")
+    top = Path(p.stdout.split("\n", 1)[0].removeprefix("worktree "))
+    if os.path.realpath(top) == os.path.realpath(kit_install()):
+        return f"checkout {top} is the kit install, which step 3 moves: no second move"
+    return pm_follow(pm, top, "checkout", branch=pm.base, always_fetch=False)
+
+
 def pm_python_missing(kit: Path) -> str | None:
     """The kit's .python-version pin when uv finds no such Python installed (uv sync ran with UV_PYTHON_DOWNLOADS=never)."""
     try:
@@ -4135,7 +4168,7 @@ def pm_python_missing(kit: Path) -> str | None:
     return pin if pin and p.returncode else None
 
 
-# --- post-merge step 4: tell running supervisors main moved (issue 398) ---
+# --- post-merge step 5: tell running supervisors main moved (issue 398) ---
 
 # The rule files a supervisor re-reads when main moves: role files, skills, skill patches, AGENTS.md, ADRs, specs.
 PM_RULES = re.compile(r"agents/[^/]+\.md|\.agents/skills/.+|\.skillfile/patches/.+|AGENTS\.md|docs/adr/.+|docs/specs/.+")
@@ -4269,7 +4302,7 @@ def pm_tell(pm: PostMerge) -> str:
             failed.append(f"{name} {sup}: {e}"); continue
         if not live:
             # Parked when the lane's latest parked line (its hand-off log, read as octo-feather-handoff parked
-            # does) names this pane; else gone, for the director to resume or archive (owner ruling #206, step 4).
+            # does) names this pane; else gone, for the director to resume or archive (owner ruling #206, step 5).
             log = lanes / f"{name}.handoffs.jsonl"
             try:
                 marks = [x for x in (read_log(log)[0] if log.exists() else []) if x.get("kind") == "parked"]
@@ -4313,7 +4346,7 @@ def pm_tell(pm: PostMerge) -> str:
     return who
 
 
-# --- post-merge step 5: tear down the closed lane (issue 399) ---
+# --- post-merge step 6: tear down the closed lane (issue 399) ---
 
 class Pending(Exception):
     """A step not due yet: its message names when to rerun; exit 3."""
@@ -4470,8 +4503,9 @@ def pm_teardown(pm: PostMerge) -> str:
     return "; ".join(done)
 
 
-# The routine's steps in order; later tickets append theirs (#397 kit refresh, #398 tell supervisors, #399 teardown).
-POST_MERGE_STEPS = (("merged", pm_merged), ("main CI", pm_ci), ("kit refresh", pm_kit),
+# The routine's steps in order; later tickets append theirs (#397 kit refresh, #1078 checkout, #398 tell supervisors,
+# #399 teardown).
+POST_MERGE_STEPS = (("merged", pm_merged), ("main CI", pm_ci), ("kit refresh", pm_kit), ("checkout", pm_checkout),
                     ("tell supervisors", pm_tell), ("teardown", pm_teardown))
 
 
@@ -4511,7 +4545,7 @@ def cmd_post_merge(args: list[str]) -> int:
             outcomes.append(f"step {n} {name} {outcome}")
         else:
             outcomes.append(f"step {n} {name} not run")
-    told = f"; NOT told: {', '.join(pm.not_told)} (step 4 names each re-send)" if pm.not_told else ""
+    told = f"; NOT told: {', '.join(pm.not_told)} (step 5 names each re-send)" if pm.not_told else ""
     print(f"post-merge {lane} PR #{pm.pr}: {'; '.join(outcomes)}{told}", flush=True)
     if all(o.endswith((" ok", " pending")) for o in outcomes):
         return 0 if all(o.endswith(" ok") for o in outcomes) else 3
