@@ -35,7 +35,6 @@ from __future__ import annotations
 import hashlib
 import importlib.machinery
 import importlib.util
-import itertools
 import json
 import os
 import queue
@@ -2147,9 +2146,6 @@ RUN_INPUT_KEYS = (
     "of",
     "config",
 )
-# What a role's launch reads beside agents/<role>.md and what pi-role --json lists (scripts/pi-role
-# --help).
-LAUNCH_PATHS = ("scripts/pi-role", "web-mcp.json")
 PIN = re.compile(r"[^-/][^/]*/[^/]+/[^/]+")  # RUN_ID/SUITE/CASE, never an option
 
 
@@ -2179,15 +2175,15 @@ def stored(p: Path) -> Result | None:
 
 
 def launched(top: str, role: str) -> tuple[list[str], str | None]:
-    """The repo paths ROLE launches with, asked of the launcher at HEAD (`scripts/pi-role --json`,
-    from an empty dir so no target selects a skill): each --skill folder (a trailing /) and
-    --extension file inside TOP; a path outside it (an external skill) is not compared. (paths,
-    None), or ([], why the launcher gave no list)."""
+    """The repo paths ROLE launches with: its launch set, asked of the launcher at HEAD
+    (`scripts/pi-role --launch-set`, spec roles#launch-set; from an empty dir so no target selects a
+    skill), each path inside TOP (a skill folder with a trailing /); a path outside it (an external
+    skill) is not compared. (paths, None), or ([], why the launcher gave no list)."""
     with tempfile.TemporaryDirectory(prefix="qa-verdict-") as cwd:
         p = subprocess.run(
             [
                 str(Path(top) / "scripts" / "pi-role"),
-                "--json",
+                "--launch-set",
                 str(Path(top) / "agents" / f"{role}.md"),
             ],
             capture_output=True,
@@ -2196,23 +2192,21 @@ def launched(top: str, role: str) -> tuple[list[str], str | None]:
             check=False,
         )
     raw = safe_json(p.stdout) if p.returncode == 0 else None
-    args = raw.get("args") if isinstance(raw, dict) else None
-    if not isinstance(args, list):
+    files = raw.get("files") if isinstance(raw, dict) else None
+    if not isinstance(files, dict):
         return (
             [],
             (
-                f"scripts/pi-role --json agents/{role}.md listed no launch (exit "
+                f"scripts/pi-role --launch-set agents/{role}.md listed no launch (exit "
                 f"{p.returncode}: {p.stderr.strip()[-200:]})"
             ),
         )
-    a = [str(x) for x in cast("list[object]", args)]
     real = os.path.realpath(top)
     out: list[str] = []
-    for flag, val in itertools.pairwise(a):
-        if flag in ("--skill", "--extension"):
-            rel = os.path.relpath(os.path.realpath(val), real)
-            if not rel.startswith(".."):
-                out.append(rel + ("/" if flag == "--skill" else ""))
+    for f in cast("dict[str, object]", files):
+        rel = os.path.relpath(os.path.realpath(f.rstrip("/")), real)
+        if not rel.startswith(".."):
+            out.append(rel + ("/" if f.endswith("/") else ""))
     return sorted(set(out)), None
 
 
@@ -2346,7 +2340,6 @@ def pinned(root: Path, top: str, head: str, arg: str) -> tuple[str, str, list[st
         missing += [why for _, why in asked if why]
         paths = [
             *(f"agents/{r}.md" for r in role),
-            *LAUNCH_PATHS,
             *sorted({p for ps, _ in asked for p in ps}),
         ]
         bad, changed = trees_changed(top, sha, head, fx)
