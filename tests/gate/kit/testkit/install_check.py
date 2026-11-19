@@ -172,8 +172,12 @@ class Box:
         self.s.run(["git", *ident, *args])
 
     def stub(self, name: str, body: str, where: Path | None = None) -> Path:
-        """A host probe NAME in WHERE (default the stubs dir): a shell script running BODY."""
+        """A host probe NAME in WHERE (default the stubs dir): a shell script running BODY. It
+        replaces any NAME there, never writing through it: Scratch.bin's fakes are links into the
+        kit (testkit FAKES), so a write would rewrite the kit's own stand-in for every later
+        item."""
         p = (where or self.bin) / name
+        p.unlink(missing_ok=True)
         p.write_text(f"#!/bin/sh\n{body}\n")
         p.chmod(0o755)
         return p
