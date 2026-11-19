@@ -3938,12 +3938,12 @@ def kit_install() -> Path:
     return Path(os.environ.get("OCTO_FEATHER_KIT_INSTALL") or KIT)
 
 
-def pm_git(kit: Path, *args: str, ok: tuple[int, ...] = (0,)) -> tuple[int, str]:
+def pm_git(kit: Path, *args: str, ok: tuple[int, ...] = (0,), what: str = "kit install") -> tuple[int, str]:
     p = subprocess.run(["git", "-C", str(kit), *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
     if p.returncode not in ok:
         err = (p.stderr or p.stdout).strip().splitlines()
-        raise Refuse(f"git {' '.join(args[:2])} in the kit install {kit} failed ({err[-1][:200] if err else f'exit {p.returncode}'}): "
-                     "fix the install clone, then rerun")
+        raise Refuse(f"git {' '.join(args[:2])} in the {what} {kit} failed ({err[-1][:200] if err else f'exit {p.returncode}'}): "
+                     f"fix the {what} clone, then rerun")
     return p.returncode, p.stdout.strip()
 
 
@@ -3971,23 +3971,7 @@ def pm_kit(pm: PostMerge) -> str:
     top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
     if top.returncode:
         raise Refuse("the current directory is in no git repo: run post-merge in the target repo (just install-check checks it), then rerun")
-    if dirty := pm_git(kit, "status", "--porcelain")[1]:
-        lines = dirty.splitlines()
-        raise Refuse(f"kit install {kit} is dirty ({', '.join(x.strip() for x in lines[:3])}{', ...' if len(lines) > 3 else ''}): "
-                     "commit, move or drop those changes there, nothing was changed; then rerun")
-    pm_git(kit, "fetch", "origin")
-    if pm_git(kit, "cat-file", "-e", f"{pm.merge}^{{commit}}", ok=(0, 1, 128))[0]:
-        raise Refuse(f"merge commit {pm.merge[:12]} is not in the kit install {kit} after git fetch origin: "
-                     f"check its origin {origin}, then rerun")
-    head, m = pm_git(kit, "rev-parse", "HEAD")[1], pm.merge[:12]
-    if head == pm.merge or not pm_git(kit, "merge-base", "--is-ancestor", pm.merge, head, ok=(0, 1))[0]:
-        moved = f"kit install {kit} at {head[:12]}, at or past {m}: no move"
-    elif not pm_git(kit, "merge-base", "--is-ancestor", head, pm.merge, ok=(0, 1))[0]:
-        pm_git(kit, "merge", "--ff-only", pm.merge)
-        moved = f"kit install {kit} fast-forwarded {head[:12]}..{m}"
-    else:
-        raise Refuse(f"kit install {kit} at {head[:12]} has diverged from merge commit {m}: nothing was changed; "
-                     f"put the install back on {pm.base} (git -C {kit} log {m}..HEAD names the commits), then rerun")
+    moved = pm_follow(pm, kit, "kit install")
     done: list[str] = []
     cmds = [c for c in PM_REFRESH if c[0] != "octo-feather-mise-install" or (kit / "mise.toml").exists()]
     for cmd in [*cmds, ("just", "install-check", top.stdout.strip())]:
@@ -4007,6 +3991,28 @@ def pm_kit(pm: PostMerge) -> str:
                          f"fix it in {kit}, then rerun")
         done.append(f"{shown} ok")
     return f"{moved}; {'; '.join(done)}" + ("" if cmds[0][0] == "octo-feather-mise-install" else " (no mise.toml: mise install skipped)")
+
+
+def pm_follow(pm: PostMerge, clone: Path, what: str) -> str:
+    """Fast-forward CLONE (WHAT names it) to the merge commit, the rules of --help step 3: a dirty or diverged one
+    stops, nothing changed; one at or past it does not move. Its line."""
+    if dirty := pm_git(clone, "status", "--porcelain", what=what)[1]:
+        lines = dirty.splitlines()
+        raise Refuse(f"{what} {clone} is dirty ({', '.join(x.strip() for x in lines[:3])}{', ...' if len(lines) > 3 else ''}): "
+                     "commit, move or drop those changes there, nothing was changed; then rerun")
+    pm_git(clone, "fetch", "origin", what=what)
+    if pm_git(clone, "cat-file", "-e", f"{pm.merge}^{{commit}}", ok=(0, 1, 128), what=what)[0]:
+        origin = pm_git(clone, "config", "--get", "remote.origin.url", ok=(0, 1), what=what)[1]
+        raise Refuse(f"merge commit {pm.merge[:12]} is not in the {what} {clone} after git fetch origin: "
+                     f"check its origin {origin}, then rerun")
+    head, m = pm_git(clone, "rev-parse", "HEAD", what=what)[1], pm.merge[:12]
+    if head == pm.merge or not pm_git(clone, "merge-base", "--is-ancestor", pm.merge, head, ok=(0, 1), what=what)[0]:
+        return f"{what} {clone} at {head[:12]}, at or past {m}: no move"
+    if not pm_git(clone, "merge-base", "--is-ancestor", head, pm.merge, ok=(0, 1), what=what)[0]:
+        pm_git(clone, "merge", "--ff-only", pm.merge, what=what)
+        return f"{what} {clone} fast-forwarded {head[:12]}..{m}"
+    raise Refuse(f"{what} {clone} at {head[:12]} has diverged from merge commit {m}: nothing was changed; "
+                 f"put the {what.split()[-1]} back on {pm.base} (git -C {clone} log {m}..HEAD names the commits), then rerun")
 
 
 def pm_python_missing(kit: Path) -> str | None:
