@@ -11,13 +11,8 @@ killed=N` and the job is gone, while a process outside any scope tagged HERDR_TA
 the same session lives on: herdr-close reads no environ. Each scope a scenario makes is stopped
 when it ends, pass or fail.
 
-`herdr-close --park w1:p1` (#1001) reads the parked line's session, role, parent and cwd only
-from the Pi process Herdr names for the pane (a foreign process tagged with that pane and its own
-session is never read). An owned idle agent whose scope runs a background job is refused, exit 75,
-the job listed, nothing closed; once the job ended it parks: the line printed, its tab closed,
-its scope stopped, and `herdr-say` to its name resumes it with that session. An unowned pane
-parks the same way, nothing swept, named unowned=. Not idle: 75; a Pi without --session-id:
-65; nothing closed."""
+`herdr-close --park w1:p1` (#1001), the rule herdr-comms SKILL.md, Park an idle agent, states:
+park_owned (the demo), park_unowned, park_refused and park_malformed drive it."""
 
 from __future__ import annotations
 
@@ -228,8 +223,7 @@ def parked_ok(line: str, wt: Path) -> dict[str, str]:
 
 def park_owned(s: Scratch) -> None:
     """The demo: `herdr-close --park w1:p1` over an owned idle agent with a background job in
-    its scope exits 75 listing the job; once the job ended it prints the parked line, closes the
-    tab, stops the scope; herdr-say to its name resumes it."""
+    its scope, then again once the job ended, then herdr-say to its name."""
     unit = f"octo-feather-agent-w1:p1-{os.getpid()}-{time.time_ns()}.scope"
     wt = s.root / "wt"
     wt.mkdir()
@@ -296,7 +290,7 @@ def resume(s: Scratch, d: Path, line: dict[str, str]) -> str:
 
 
 def park_unowned(s: Scratch) -> None:
-    """An unowned pane parks from its Pi process: line printed, unowned=, nothing swept."""
+    """`herdr-close --park w1:p1` over an unowned pane, a job and a foreign process beside it."""
     wt = s.root / "wt"
     wt.mkdir()
     world(s, {})
@@ -320,7 +314,7 @@ def park_unowned(s: Scratch) -> None:
 
 
 def park_refused(s: Scratch) -> None:
-    """Not idle: 75; a Pi process without --session-id: 65; nothing closed either way."""
+    """`herdr-close --park w1:p1` over a working agent, and over a Pi without --session-id."""
     world(s, {})
     env = s.env | TAB_ENV | {"OCTO_FEATHER_SESSION_ID": "S1"}
     pi = subprocess.Popen([*PI, "--session-id", "S1"], env=env, start_new_session=True)
@@ -338,7 +332,35 @@ def park_refused(s: Scratch) -> None:
         bare.kill()
 
 
-PARK = (park_owned, park_unowned, park_refused)
+def park_malformed(s: Scratch) -> None:
+    """`herdr-close --park w1:p1` with Herdr's foreground cwd false, then argv 0 (malformed,
+    falsey, not null)."""
+    world(s, {})
+    env = s.env | TAB_ENV | {"OCTO_FEATHER_SESSION_ID": "S1"}
+    pi = subprocess.Popen([*PI, "--session-id", "S1"], env=env, start_new_session=True)
+    try:
+        for field, bad in (("cwd", "false"), ("argv", "0")):
+            (s.root / field).mkdir()
+            sub = Scratch(s.root / field)
+            agent = PANE | {"agent_status": "idle", "pi_pid": pi.pid}
+            d = world(sub, {"w1:p1": agent})
+            fake = (sub.bin / "herdr").resolve()
+            (sub.bin / "herdr").unlink()
+            patch = f".result.process_info.foreground_processes[0].{field} = {bad}"
+            wrap = f'if [ "$1 $2" = "pane process-info" ]; then "{fake}" "$@" | jq -c \'{patch}\''
+            wrap += f'; else exec "{fake}" "$@"; fi\n'
+            (sub.bin / "herdr").write_text("#!/bin/sh\n" + wrap)
+            (sub.bin / "herdr").chmod(0o755)
+            ran = sub.run([str(ASSETS / "herdr-close"), "--park", "w1:p1"], want=76)
+            assert f"].{field}: not " in ran.err, ran.err
+            assert not ran.out, ran.out
+            assert not any("close" in x for x in (d / "log").read_text().splitlines()), ran.err
+            show(f"herdr-close --park w1:p1 ({field} {bad}): exit 76: {ran.err.strip()}")
+    finally:
+        pi.kill()
+
+
+PARK = (park_owned, park_unowned, park_refused, park_malformed)
 
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).parent))

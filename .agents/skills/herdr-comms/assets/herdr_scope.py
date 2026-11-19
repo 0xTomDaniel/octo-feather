@@ -16,9 +16,8 @@ close TAB|SPACE (herdr-close's plain close): prints `tab=|space=ID ..._close_rc=
 shape below stops it before anything is closed: Herdr's exit, or 76 for a malformed one.
 
 park PANE (herdr-close --park): prints the parked line on stdout and close's report on stderr,
-and exits close's status; refused, nothing closed: 69 on macOS, 65 when Herdr names no Pi
-process with a herdr-spawn session, 75 when not idle or done, or when its scope runs other live
-processes (each listed, pid and command), Herdr's exit or 76 as close.
+and exits close's status; what it reads and its refusals: herdr-comms SKILL.md, Park an idle
+agent.
 
 Herdr's answers are checked here by hand against the shape Herdr 0.9.5 states for them
 (`herdr api schema --json`, protocol 22: PaneInfo, PaneProcessInfo): every field named,
@@ -210,16 +209,18 @@ def process_info(pane: str) -> ProcessInfo:
     for i, v in enumerate(cast("list[object]", fg)):
         at = f"{where}: result.process_info.foreground_processes[{i}]"
         p = record(v, at, FG_FIELDS, FG_REQUIRED)
-        raw: object = p.get("argv") or []
+        # argv: array of string, or null; cwd: string or null. Only absent or null become empty.
+        raw = p.get("argv")
         items = cast("list[object]", raw) if isinstance(raw, list) else None
-        if items is None or not all(isinstance(x, str) for x in items):
-            msg = f"{at}.argv: not a list of strings"
+        if raw is not None and (items is None or not all(isinstance(x, str) for x in items)):
+            msg = f"{at}.argv: not a list of strings or null"
             raise BadAnswerError(msg)
-        argv = cast("list[str]", items)
-        cwd = p.get("cwd") or ""
-        if not isinstance(cwd, str):
-            msg = f"{at}.cwd: not a string"
+        argv = cast("list[str]", items or [])
+        cwd = p.get("cwd")
+        if cwd is not None and not isinstance(cwd, str):
+            msg = f"{at}.cwd: not a string or null"
             raise BadAnswerError(msg)
+        cwd = cwd or ""
         procs.append(Process(pid_of(p["pid"], f"{at}.pid"), tuple(argv), cwd))
     return ProcessInfo(pid, tuple(procs))
 
