@@ -784,7 +784,7 @@ def drive_director_reflection(f: Feature) -> None:
     say(f"director-reflection evidence: {f.d}")
 
 
-KIT_REPO = "0xTomDaniel/octo-feather"   # the kit's tracker (scripts/octo-feather-reflect KIT_REPO)
+KIT_REPO = "0xTomDaniel/octo-feather"   # the kit's tracker (scripts/correction_lanes.py KIT_REPO)
 INTAKE_TARGET = "varelaseb/octo-lite"   # correction-intake's target: a real repository, never written (fake gh)
 # Real `gh repo view R --json nameWithOwner,createdAt` answers (gh 2.102.0, 2026-11-18), the fake gh's "repos".
 REPOS = {KIT_REPO: {"nameWithOwner": KIT_REPO, "createdAt": "2026-10-18T17:03:48Z"},
