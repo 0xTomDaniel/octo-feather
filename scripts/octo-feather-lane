@@ -55,7 +55,7 @@ moves) file the correction lanes due (spec comms #reflection-correction; the rul
 through the tracker skill's `issue-create`, each in the tracker spec comms #reflection-correction names (a target's
 through the current directory's tracker skill, GH_REPO its lane record's `repository`, refused naming the record that
 spec section says is unfit); each issue's title carries the marker of
-scripts/octo-feather-reflect `MARK`, by which `gh issue list` finds the ones already filed. Prints
+scripts/correction_lanes.py `MARK`, by which `gh issue list` finds the ones already filed. Prints
 `correction lane: filed <key> in <tracker> for <class> (...)` or `correction lane: commented <url> on <key> ...` and
 the comment per write (which write: spec comms #reflection-correction), else `correction lanes: none filed or commented`;
 a tracker other than github-issues gets `correction lane: due, not filed: ...` naming the title to file by hand.
@@ -303,7 +303,7 @@ as `reflect`; an issue filed in another tracker (Linear) is not found (gh only).
 `class <class>: due yes|no; blocking <n> in <m> lane(s) (<lanes>); findings <k>`, under it each open issue
 (`issue <repo>#<n>: <title>`), `duplicates: <n> open issues of class <class>` when two or more, and each finding
 line of the class in the lane logs and the director log (`finding <lane|director> <at> <source> blocking|not
-blocking: <summary>`). Due and what counts: scripts/octo-feather-reflect `corrections`, `counts`. Exit 0; 1 when
+blocking: <summary>`). Due and what counts: scripts/correction_lanes.py `corrections`, `counts`. Exit 0; 1 when
 gh cannot list a tracker.
 
   octo-feather-lane report         every open lane of this session, then the owner queue and owner-caught
@@ -496,12 +496,14 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import cast
 
-# Kit modules beside this script: Python puts the script's own directory (symlinks resolved) first on sys.path, so
-# these resolve from any cwd; correction_lanes is the correction filer (its docstring: interface and contract).
+# Kit modules, .py files beside this script, found through its own directory (symlinks resolved) on sys.path: from any
+# cwd and through a symlink (scripts/correction_lanes.py docstring). correction_lanes is the correction filer.
+import tracker_calls
 from correction_lanes import (DIRECTOR, DIRECTOR_LOG, KIT_REPO, MARK_WORD, Refused, correction_issues, corrections, counts,
-                              lane_logs, tracker, utc)
+                              lane_logs)
 from correction_lanes import file_corrections as correction_filer
 from handoff_log import read_log
+from tracker_calls import tracker, utc
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 KIT = Path(__file__).resolve().parent.parent
@@ -509,6 +511,9 @@ KIT = Path(__file__).resolve().parent.parent
 
 class Refuse(Exception):
     """A refusal: message names the fix, exit 1, nothing moved."""
+
+
+gh = functools.partial(tracker_calls.gh, err=Refuse)   # the lane's gh calls raise its own Refuse
 
 
 def lanes_dir() -> Path:
@@ -977,17 +982,6 @@ def cmd_fields(args: list[str]) -> int:
     print(json.dumps({"Check": {"lines": checks, "none": cls == ["Checks: none"] and not cwhy, "errors": cwhy},
                       "Owner": {"lines": owners, "none": onone and not owhy, "errors": owhy}, "fields": other}))
     return 0
-
-
-def gh(args: list[str], fix: str) -> str:
-    try:
-        p = subprocess.run(["gh", *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
-    except FileNotFoundError:
-        raise Refuse("gh not on PATH: install the GitHub CLI and log in (just install-check)")
-    if p.returncode:
-        err = (p.stderr or p.stdout).strip().splitlines()
-        raise Refuse(f"gh {' '.join(args[:3])} failed ({err[-1][:300] if err else f'exit {p.returncode}'}): {fix}")
-    return p.stdout
 
 
 def pr_view(pr: int, fields: str, repo: str | None) -> dict:

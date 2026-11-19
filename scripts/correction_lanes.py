@@ -5,9 +5,10 @@ The rule: issue-lifecycle spec #lanes-correction; what files where: comms spec
 #reflection-correction. Imported by scripts/octo-feather-lane (`archive`, `reflect NAME`,
 `reflect --director` file through `file_corrections`; `intake` reads `corrections`, `counts`,
 `correction_issues`) and scripts/octo-feather-reflect (`TARGET`, the route mark its parser checks).
-How they find it: Python puts a script's own directory, symlinks resolved, first on sys.path, so
-`import correction_lanes` in a script beside this file resolves here from any cwd, as `from
-handoff_log import ...` already does. Standard library only (AGENTS.md Rules, kit scripts).
+Kit modules (this one, handoff_log.py, tracker_calls.py) are plain .py files in scripts/, beside
+the commands; a command finds them because Python puts the script's own directory, symlinks
+resolved, first on sys.path, so its imports resolve from any cwd and through a symlink to it.
+Standard library only (AGENTS.md Rules, kit scripts).
 
 Interface:
 
@@ -26,13 +27,24 @@ the github-issues skill's scripts, a target's through the current directory's tr
 GH_REPO; read through `gh issue list` and `gh repo view`.
 """
 
+__all__ = [  # file_corrections' interface, then the names intake (and the reflector) read
+    "DIRECTOR",
+    "DIRECTOR_LOG",
+    "KIT_REPO",
+    "MARK_WORD",
+    "TARGET",
+    "Outcome",
+    "Refused",
+    "correction_issues",
+    "corrections",
+    "counts",
+    "file_corrections",
+    "lane_logs",
+]
+
 import datetime as dt
-import importlib.machinery
-import importlib.util
 import json
-import os
 import re
-import subprocess
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -40,8 +52,8 @@ from typing import Any, Literal, cast
 
 import tomllib  # stdlib since 3.11; ruff, at the 3.10 floor, sorts it as third-party
 from handoff_log import read_log
+from tracker_calls import gh, tracker, tracker_skill, utc
 
-KIT = Path(__file__).resolve().parent.parent
 LogLine = dict[str, object]  # one parsed hand-off log line
 
 DIRECTOR_LOG = "director.handoffs.jsonl"
@@ -442,7 +454,7 @@ def repo_view(repo: str, fix: str) -> RepoView:
     """REPO's RepoView. A hand-written check, not a schema library: kit scripts stay
     standard-library-only (quality spec #edge-validation-kit). Exactly the two fields asked, each
     typed; Refused naming the field it rejects."""
-    out = _gh(["repo", "view", repo, "--json", "nameWithOwner,createdAt"], fix)
+    out = gh(["repo", "view", repo, "--json", "nameWithOwner,createdAt"], fix, err=Refused)
     try:
         got: object = json.loads(out)
     except ValueError as e:
@@ -504,7 +516,7 @@ def correction_issues(repo: str | None, *, full: bool = False) -> list[dict[str,
     fields: number (int), title, state (str), closedAt (str or null), and when FULL body (str) and
     comments ([{body: str}]); Refused on any other JSON, naming the issue and the fix."""
     fields = ["number", "title", "state", "closedAt", *(["body", "comments"] if full else [])]
-    out = _gh(
+    out = gh(
         [
             "issue",
             "list",
@@ -519,6 +531,7 @@ def correction_issues(repo: str | None, *, full: bool = False) -> list[dict[str,
             ",".join(fields),
         ],
         "check gh auth and network, then rerun",
+        err=Refused,
     )
     try:
         got = json.loads(out)
@@ -567,96 +580,3 @@ def correction_issues(repo: str | None, *, full: bool = False) -> list[dict[str,
             ]
         issues.append(rec)
     return issues
-
-
-def _gh(args: list[str], fix: str) -> str:
-    """gh ARGS' stdout; Refused naming FIX when it fails. octo-feather-lane's own `gh`, which
-    refuses with that command's Refuse, word for word."""
-    try:
-        p = subprocess.run(
-            ["gh", *args],  # noqa: S607 (gh from PATH, as the command runs it)
-            capture_output=True,
-            text=True,
-            stdin=subprocess.DEVNULL,
-            check=False,
-        )
-    except FileNotFoundError as e:
-        msg = "gh not on PATH: install the GitHub CLI and log in (just install-check)"
-        raise Refused(msg) from e
-    if p.returncode:
-        err = (p.stderr or p.stdout).strip().splitlines()
-        why = err[-1][:300] if err else f"exit {p.returncode}"
-        msg = f"gh {' '.join(args[:3])} failed ({why}): {fix}"
-        raise Refused(msg)
-    return p.stdout
-
-
-def tracker_skill(err: type[Exception]) -> str:
-    """The target's tracker skill: scripts/pi-role's tracker_skill resolves it from the
-    .octo-feather.toml of the git repo at the current directory, docs/adr/0004."""
-    loader = importlib.machinery.SourceFileLoader("pi_role", str(KIT / "scripts" / "pi-role"))
-    spec = importlib.util.spec_from_loader("pi_role", loader)
-    assert spec is not None, "a SourceFileLoader always yields a spec"
-    pr = importlib.util.module_from_spec(spec)
-    loader.exec_module(pr)
-    try:
-        return str(pr.tracker_skill(str(KIT / ".agents" / "skills")))
-    except SystemExit as e:
-        msg = (
-            f"{e.code}: set `tracker` in the target's .octo-feather.toml to a tracker the kit has,"
-            " then rerun"
-        )
-        raise err(msg) from e
-
-
-def tracker(
-    script: str,
-    *args: str,
-    err: type[Exception],
-    skill: str | None = None,
-    env: dict[str, str] | None = None,
-    stdin: str | None = None,
-) -> str:
-    """Run SCRIPT of SKILL, by default the target's tracker skill (tracker_skill); its stdout. ENV
-    is added to the script's environment, STDIN its input. A failure raises ERR naming the script
-    and its reason."""
-    skill = skill or tracker_skill(err)
-    path = KIT / ".agents" / "skills" / skill / "scripts" / script
-    try:
-        p = subprocess.run(
-            [str(path), *args],
-            capture_output=True,
-            text=True,
-            timeout=120,
-            env={**os.environ, **(env or {})},
-            input=stdin,
-            stdin=subprocess.DEVNULL if stdin is None else None,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired) as e:
-        msg = (
-            f"tracker script {skill}/{script} {' '.join(args)} did not run ({e}): check the"
-            " tracker CLI and network, then rerun"
-        )
-        raise err(msg) from e
-    if p.returncode:
-        why = " ".join((p.stderr or p.stdout).split())[:400] or f"exit {p.returncode}"
-        msg = (
-            f"tracker script {skill}/{script} {' '.join(args)} failed ({why}): fix the cause it"
-            " names, then rerun"
-        )
-        raise err(msg)
-    return p.stdout
-
-
-def utc(s: object) -> dt.datetime | None:
-    """S as a UTC instant: an ISO 8601 date and time with Z or an offset, fractional seconds
-    allowed (2026-10-29T14:06:08Z, 2026-10-29T14:06:08.770516+00:00); None for anything else, a
-    time with no zone included."""
-    if not isinstance(s, str) or "T" not in s:
-        return None
-    try:
-        t = dt.datetime.fromisoformat(s[:-1] + "+00:00" if s.endswith("Z") else s)
-    except ValueError:
-        return None
-    return None if t.tzinfo is None else t.astimezone(dt.timezone.utc)
