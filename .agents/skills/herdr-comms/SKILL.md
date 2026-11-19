@@ -150,7 +150,10 @@ detached children close alone leaves running, also when the agent's Pi already
 exited. It reads no other process: one elsewhere tagged with the closed tab's
 `HERDR_TAB_ID` is untouched. A pane outside any agent scope (an agent spawned
 before scopes, a hand-started director, macOS) is unowned: closed, nothing
-swept, named in the report. A Herdr answer that fails or breaks the shape
+swept, named in the report. Only the unit spawn named for that pane
+(`octo-feather-agent-PANE-<8 hex>.scope`) is its own: a shell in any other scope
+(another agent's, one running the kit's tests) is unowned too, that scope never
+stopped (#1070). A Herdr answer that fails or breaks the shape
 Herdr states for it stops the close before anything is closed (Herdr's exit, or
 76 for a malformed one, the field named; `assets/herdr_scope.py`). Run it from outside
 what it closes: the spawner closes a tab, the director closes a finished lane's
@@ -173,7 +176,7 @@ from that process's own environ (`OCTO_FEATHER_ROLE`, `OCTO_FEATHER_PARENT`),
 cwd from Herdr's answer. It reads no other process's environ: one elsewhere
 tagged with the pane's ids is never read.
 
-When the pane's shell is in an agent scope (see Spawn an agent), park refuses
+When the pane's shell is in its own agent scope (as Close an agent names it), park refuses
 while that scope holds any live member other than Pi and the pane's shell: exit
 75, nothing closed, each member listed (pid and command), so a supervisor's
 background job (a CI watch, a gate run) is never ended by park. Wait for it or

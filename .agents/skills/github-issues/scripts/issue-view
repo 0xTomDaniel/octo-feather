@@ -1,12 +1,26 @@
 #!/usr/bin/env bash
-# issue-view KEY: one issue as JSON {key, title, body, state, url, parent, children, blocked_by}; keys are strings,
+# issue-view KEY [--notes]: one issue as JSON {key, title, body, state, url, parent, children, blocked_by}; keys are strings,
 # state open or done (closed is done), parent null when it has none, children its sub-issues' keys. Wraps `gh issue view`.
+# --notes: skills spec #tracker-script-issue-view; one more call, `gh api graphql` (gh issue view --json has no edit times).
 set -euo pipefail
-[[ $# == 1 ]] || { echo "usage: issue-view KEY" >&2; exit 64; }
+notes=0; [[ $# == 2 && "$2" == --notes ]] && { notes=1; set -- "$1"; }
+[[ $# == 1 ]] || { echo "usage: issue-view KEY [--notes]" >&2; exit 64; }
 [[ "$1" =~ ^#?([0-9]+)$ ]] || { echo "issue-view: $1 is not a GitHub issue key" >&2; exit 1; }
+n="${BASH_REMATCH[1]}"
 out="$(gh issue view "${BASH_REMATCH[1]}" --json number,title,body,state,url,parent,subIssues,blockedBy 2>&1)" || { echo "issue-view: $out" >&2; exit 1; }
 # A partial sub-issue list would read as the whole: refuse it.
 jq -e '(.subIssues.totalCount // 0) == ((.subIssues.nodes // []) | length)' <<<"$out" >/dev/null 2>&1 \
   || { echo "issue-view: #${BASH_REMATCH[1]}: gh returned a partial or unreadable sub-issue list: $(head -c 300 <<<"$out")" >&2; exit 1; }
-jq -c '{key: (.number | tostring), title, body, state: (if .state == "CLOSED" then "done" else "open" end), url, parent: (.parent.number // null | if . == null then null else tostring end),
-        children: [(.subIssues.nodes // [])[].number | tostring], blocked_by: [(.blockedBy.nodes // [])[].number | tostring]}' <<<"$out"
+view="$(jq -c '{key: (.number | tostring), title, body, state: (if .state == "CLOSED" then "done" else "open" end), url, parent: (.parent.number // null | if . == null then null else tostring end),
+        children: [(.subIssues.nodes // [])[].number | tostring], blocked_by: [(.blockedBy.nodes // [])[].number | tostring]}' <<<"$out")"
+((notes)) || { printf '%s\n' "$view"; exit 0; }
+# The issue's repository from its URL: gh api fills {owner}/{repo} only in an endpoint, never in a graphql variable.
+[[ "$(jq -r .url <<<"$view")" =~ ^https://[^/]+/([^/]+)/([^/]+)/issues/[0-9]+$ ]] \
+  || { echo "issue-view: #$n: no issue URL to read notes by: $(jq -r .url <<<"$view")" >&2; exit 1; }
+q='query($owner: String!, $name: String!, $n: Int!) { repository(owner: $owner, name: $name) { issue(number: $n) { url createdAt lastEditedAt body comments(first: 100) { pageInfo { hasNextPage } nodes { url createdAt lastEditedAt body } } } } }'
+out="$(gh api graphql -F n="$n" -f owner="${BASH_REMATCH[1]}" -f name="${BASH_REMATCH[2]}" -f query="$q" 2>&1)" || { echo "issue-view: #$n notes: $out" >&2; exit 1; }
+# A partial comment list would read as the whole: refuse it, as the sub-issue list above.
+jq -e '.data.repository.issue.comments.pageInfo.hasNextPage == false' <<<"$out" >/dev/null 2>&1 \
+  || { echo "issue-view: #$n: gh returned no issue or a partial comment list: $(head -c 300 <<<"$out")" >&2; exit 1; }
+jq -c --argjson v "$view" '.data.repository.issue as $i | $v + {notes: ([$i | {at: .createdAt, edited_at: .lastEditedAt, url, body}]
+  + [$i.comments.nodes[] | {at: .createdAt, edited_at: .lastEditedAt, url, body}])}' <<<"$out"
