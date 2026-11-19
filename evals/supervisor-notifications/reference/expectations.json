@@ -53,5 +53,75 @@
         "count": 0
       }
     ]
+  },
+  "result-file-after-compaction": {
+    "facts": [
+      {
+        "fact": "declared",
+        "field": "gh14_review",
+        "in": [
+          "blocking"
+        ]
+      },
+      {
+        "fact": "declared",
+        "field": "gh14_blocker",
+        "in": [
+          "tests/test_cli.py::test_shout_json_second_name"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "herdr",
+        "args": [
+          "pane",
+          "read"
+        ],
+        "count": 0
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 0
+      }
+    ]
+  },
+  "result-file-after-resume": {
+    "facts": [
+      {
+        "fact": "declared",
+        "field": "gh14_review",
+        "in": [
+          "blocking"
+        ]
+      },
+      {
+        "fact": "declared",
+        "field": "gh14_blocker",
+        "in": [
+          "tests/test_cli.py::test_shout_json_second_name"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "herdr",
+        "args": [
+          "pane",
+          "read"
+        ],
+        "count": 0
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 0
+      }
+    ]
   }
 }
