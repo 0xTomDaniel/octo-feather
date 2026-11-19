@@ -250,12 +250,22 @@
       ]
     },
     "acceptance-checkout-follows-main": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1086,
+      "record": "20261119T193902Z-5570e8c5",
+      "commit": "873d02a24c5acf8980b94b910c3dbc8f30b37ec4",
+      "tests": [
+        "tests/gate/kit/lane_post_merge.py"
+      ]
     },
     "acceptance-checkout-kept": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1086,
+      "record": "20261119T193902Z-4a5926e3",
+      "commit": "873d02a24c5acf8980b94b910c3dbc8f30b37ec4",
+      "tests": [
+        "tests/gate/kit/lane_post_merge.py"
+      ]
     },
     "acceptance-stale-agents": {
       "status": "planned",
