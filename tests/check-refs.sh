@@ -74,6 +74,19 @@ ln -s missing "$t/agents/x.md"; g add -f agents/x.md
 set +e; out="$(cd "$t" && just check-refs 2>&1)"; rc=$?; set -e
 g rm -qf --cached agents/x.md; rm "$t/agents/x.md"
 [[ "$rc" != 0 ]] && grep -qF 'check-refs: retired-words scanner error:' <<<"$out" && ! grep -qF 'refs: ok' <<<"$out" || { echo "check-refs test: unreadable file not reported as a scanner error" >&2; echo "$out" >&2; exit 1; }
+# A word character before the word is no word boundary (grep's in C.UTF-8): no retired word.
+allow docs/x.md $'caf\xc3\xa9'"$op"
+# Pinned, not fixed (#1117): a tracked binary file (a NUL byte, or invalid UTF-8 on the line) is not scanned for
+# retired words; a lane branch default in one still fails, naming the file.
+allow docs/x.md $'caf\xff: the '"$op"
+printf 'the %s\0\n' "$op" > "$t/docs/x.md"; g add -f docs/x.md
+set +e; out="$(cd "$t" && just check-refs 2>&1)"; rc=$?; set -e
+g rm -qf --cached docs/x.md; rm "$t/docs/x.md"
+[[ "$rc" == 0 ]] && grep -qF 'refs: ok' <<<"$out" || { echo "check-refs test: a NUL file's retired word failed check-refs" >&2; echo "$out" >&2; exit 1; }
+printf 'Cut branch gh<N>%s\0\n' "-<slug>" > "$t/agents/x.md"; g add -f agents/x.md
+set +e; out="$(cd "$t" && just check-refs 2>&1)"; rc=$?; set -e
+g rm -qf --cached agents/x.md; rm "$t/agents/x.md"
+[[ "$rc" != 0 ]] && grep -qF 'docs/adr/0011' <<<"$out" && grep -qF agents/x.md <<<"$out" || { echo "check-refs test: a NUL file's lane branch default not reported" >&2; echo "$out" >&2; exit 1; }
 # The lane branch default, split so this file stays clean: a role restating it fails, its pointer passes.
 expect agents/x.md "Cut branch gh<N>""-<slug> for the lane." "docs/adr/0011"
 expect agents/x.md "else \`octo-feather/""gh<issue-number>""-<slug>\`." "docs/adr/0011"
