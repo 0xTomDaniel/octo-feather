@@ -81,8 +81,11 @@ def record(s: Scratch) -> None:
     assert log.read_text() == before, "a loaded skill logged a finding"
     out = skills(s, "1099")
     lines = out.splitlines()
-    assert lines[1:3] == ["1099: skill tdd: not loaded", "1099: skill codebase-design: not loaded"], out
-    assert "not blocking (skill_miss = \"record\")" in lines[3], out
+    assert lines[1:3] == [
+        "1099: skill tdd: not loaded",
+        "1099: skill codebase-design: not loaded",
+    ], out
+    assert 'not blocking (skill_miss = "record")' in lines[3], out
     assert "fix:" not in out, out
     got = [{k: v for k, v in f.items() if k not in ("at", "summary")} for f in findings(log)]
     want = [
@@ -109,7 +112,10 @@ def send_back(s: Scratch) -> None:
     skills(s, "1094")
     out = skills(s, "1099", want=1)
     assert [f["blocking"] for f in findings(log)] == [True, True], findings(log)
-    fix = f"1099: fix: send implementer-1099 back before integrate: herdr-say {WORKER} 'Load tdd, codebase-design"
+    fix = (
+        "1099: fix: send implementer-1099 back before integrate: "
+        f"herdr-say {WORKER} 'Load tdd, codebase-design"
+    )
     assert fix in out, out
     assert "integrate only once octo-feather-lane skills 1099 exits 0" in out, out
     n = len(log.read_text())

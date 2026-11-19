@@ -2467,7 +2467,7 @@ def structure(body: str) -> list[str]:
 
 def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
     """Failures of one ticket body, each `<name>: class: <class>: <problem>; fix: <fix>`."""
-    out = skills_fails(name, body, cache)
+    out = skills_fails(name, body, cast("dict[object, object]", cache))
     fail = lambda cls, problem, fix: out.append(f"{name}: class: {cls}: {problem}; fix: {fix}")
     items = criteria_items(body); section = items is not None
     if not section:
@@ -2577,20 +2577,22 @@ def target_setting(key: str) -> str:
     if v not in allowed:
         raise Unchecked(f"{cfg}: {key} = {v!r}: set it to {' or '.join(repr(a) for a in allowed)}, or drop it for the code "
                         f"default {allowed[0]!r}")
-    return cast(str, v)
+    return cast("str", v)
 
 
 def implementer_offered() -> list[str]:
     """The skills agents/implementer.md is offered as scripts/pi-role resolves its skills line: {tracker} the target's
     tracker skill (tracker_skill)."""
     loader = importlib.machinery.SourceFileLoader("pi_role", str(KIT / "scripts" / "pi-role"))
-    pr = importlib.util.module_from_spec(importlib.util.spec_from_loader("pi_role", loader))
+    spec = importlib.util.spec_from_loader("pi_role", loader)
+    assert spec is not None, "a SourceFileLoader always yields a spec"
+    pr = importlib.util.module_from_spec(spec)
     loader.exec_module(pr)
     fm, _ = pr.parse(str(KIT / "agents" / "implementer.md"))
     return [tracker_skill() if s == pr.TRACKER_SLOT else s for s in fm.get("skills", [])]
 
 
-def skills_fails(name: str, body: str, cache: dict) -> list[str]:
+def skills_fails(name: str, body: str, cache: "dict[object, object]") -> list[str]:
     """Failures of one ticket body's Skills: line (--help, ticket), each as check_body prints them."""
     named = skills_named([body])
     if named is None:
@@ -2598,15 +2600,15 @@ def skills_fails(name: str, body: str, cache: dict) -> list[str]:
             cache[("skills_line",)] = target_setting("skills_line")
         if cache[("skills_line",)] != "required":
             return []
-        return [f"{name}: class: missing-skills: no `Skills:` line, and the target's .octo-feather.toml sets skills_line = "
-                f"\"required\"; fix: add the to-tickets issue template's `## Skills` section, {SKILLS_FORM}, naming each "
-                "skill the ticket's worker must load, or `Skills: none`"]
+        return [(f"{name}: class: missing-skills: no `Skills:` line, and the target's .octo-feather.toml sets skills_line = "
+                 f"\"required\"; fix: add the to-tickets issue template's `## Skills` section, {SKILLS_FORM}, naming each "
+                 "skill the ticket's worker must load, or `Skills: none`")]
     if ("offered",) not in cache:
         cache[("offered",)] = implementer_offered()
-    offered = cache[("offered",)]
-    return [f"{name}: class: unknown-skill: `Skills:` names `{s}`, a skill the implementer role is not offered "
-            f"(agents/implementer.md skills, as pi-role resolves them); fix: name only skills it is offered "
-            f"({', '.join(offered)}), or get the role's skills line changed first" for s in named if s not in offered]
+    offered = cast("list[str]", cache[("offered",)])
+    return [(f"{name}: class: unknown-skill: `Skills:` names `{s}`, a skill the implementer role is not offered "
+             f"(agents/implementer.md skills, as pi-role resolves them); fix: name only skills it is offered "
+             f"({', '.join(offered)}), or get the role's skills line changed first") for s in named if s not in offered]
 
 
 def q(v: str) -> str:
@@ -3668,7 +3670,9 @@ def skill_reach(now: dtm.datetime, unread: list[str]) -> list[str]:
 def handoff_module():
     """scripts/octo-feather-handoff: how a caller's hand-off log is found (owned_log) and the spawn kinds."""
     loader = importlib.machinery.SourceFileLoader("octo_feather_handoff", str(KIT / "scripts" / "octo-feather-handoff"))
-    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("octo_feather_handoff", loader))
+    spec = importlib.util.spec_from_loader("octo_feather_handoff", loader)
+    assert spec is not None, "a SourceFileLoader always yields a spec"
+    mod = importlib.util.module_from_spec(spec)
     loader.exec_module(mod)
     return mod
 
@@ -3717,7 +3721,7 @@ def cmd_skills(args: list[str]) -> int:
         raise Unchecked(f"cannot read Pi session {files[0]} ({e})") from e
     reach = reach or SessionReach("no role", {}, set())
     print(f"{name}: worker {worker} ({wpane}), Pi session {files[0]}")
-    missed = []
+    missed: list[tuple[str, str]] = []
     for s in named:
         said = "loaded" if s in reach.read else "not loaded" if s in reach.offered else "not offered"
         print(f"{name}: skill {s}: {said}")

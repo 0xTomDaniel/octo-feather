@@ -1091,11 +1091,21 @@ def skills_lines(s: Scratch) -> None:
     for line in ("Skills: tdd, github-issues", "Skills: none", "Skills: `tdd`"):
         assert lt.lane(0, "ticket", "-", stdin=sk(line)) == "stdin: ok", line
     out = lt.lane(1, "ticket", "-", stdin=sk("Skills: tdd, linear, nope"))
-    unknown = "stdin: class: unknown-skill: `Skills:` names `{}`, a skill the implementer role is not offered"
-    has(out, unknown.format("linear"), unknown.format("nope"), "fix: name only skills it is offered (")
+    unknown = (
+        "stdin: class: unknown-skill: `Skills:` names `{}`, a skill the implementer role is not "
+        "offered"
+    )
+    has(
+        out,
+        unknown.format("linear"),
+        unknown.format("nope"),
+        "fix: name only skills it is offered (",
+    )
     hasnt(out, unknown.format("tdd"))
     assert len(out.splitlines()) == 2, out
-    out = lt.lane(1, "ticket", "-", stdin=sk("Skills: nope\n\n```\nSkills: none\n```\n<!-- Skills: none -->"))
+    out = lt.lane(
+        1, "ticket", "-", stdin=sk("Skills: nope\n\n```\nSkills: none\n```\n<!-- Skills: none -->")
+    )
     has(out, unknown.format("nope"))
     assert lt.lane(0, "ticket", "-", stdin=body("101.md")) == "stdin: ok"
     toml.write_text('skills_line = "required"\n')
@@ -1109,11 +1119,15 @@ def skills_lines(s: Scratch) -> None:
     assert lt.lane(0, "ticket", "-", stdin=sk("Skills: none")) == "stdin: ok"
     toml.write_text('tracker = "linear"\nskills_line = "required"\n')
     assert lt.lane(0, "ticket", "-", stdin=sk("Skills: linear, tdd")) == "stdin: ok"
-    has(lt.lane(1, "ticket", "-", stdin=sk("Skills: github-issues")), unknown.format("github-issues"))
+    has(
+        lt.lane(1, "ticket", "-", stdin=sk("Skills: github-issues")),
+        unknown.format("github-issues"),
+    )
     toml.write_text('skills_line = "maybe"\n')
     has(
         lt.lane(2, "ticket", "-", stdin=body("101.md")),
-        "skills_line = 'maybe': set it to 'optional' or 'required', or drop it for the code default",
+        "skills_line = 'maybe': set it to 'optional' or 'required', or drop it for the code "
+        "default",
     )
     toml.unlink()
     lt.read_only()
