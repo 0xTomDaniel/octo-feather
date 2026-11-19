@@ -251,6 +251,15 @@
       "commit": "748792948dea5cb809e4ce80c161aa11bc715ea7",
       "tests": []
     },
+    "acceptance-qa-evidence-block": {
+      "status": "built",
+      "pr": 1005,
+      "record": "20261119T025648Z-739e6568",
+      "commit": "5ca5009828f1b648c26b6abb5b64ebdeca57d7e8",
+      "tests": [
+        "tests/gate/kit/test_qa_evidence.py"
+      ]
+    },
     "acceptance-qa-review": {
       "status": "built",
       "pr": 545,
@@ -285,6 +294,15 @@
     "acceptance-prior-art-extends": {
       "status": "planned",
       "pr": null
+    },
+    "acceptance-qc-eval-verdict": {
+      "status": "built",
+      "pr": 1005,
+      "record": "20261119T025648Z-d8949158",
+      "commit": "5ca5009828f1b648c26b6abb5b64ebdeca57d7e8",
+      "tests": [
+        "tests/gate/kit/test_qc_eval_verdict.py"
+      ]
     },
     "acceptance-qc-sandbox-maintained": {
       "status": "built",
