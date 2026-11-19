@@ -1,0 +1,14 @@
+Seeded defect: a run's end is recorded against its lane's grant live at the end, a later grant of its lane included, not the grant it started under (--help, the queue; #977).
+diff --git a/scripts/slot_queue.py b/scripts/slot_queue.py
+index d81143a1..99442d28 100755
+--- a/scripts/slot_queue.py
++++ b/scripts/slot_queue.py
+@@ -648,7 +648,7 @@ class SlotQueue:
+             t = self.clock()
+             live = {(g.lane, g.since) for g in self._grants(t)}
+             ends = {k: v for k, v in self._run_ends().items() if k in live}
+-            if (under.lane, under.since) in live:
++            for under in [g for g in self._grants(t) if g.lane == under.lane]:
+                 ends[under.lane, under.since] = _precise(t)
+             self._write_run_ends(ends)
+         taken.rec.unlink(missing_ok=True)
