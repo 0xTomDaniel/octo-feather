@@ -148,9 +148,9 @@ holding the run's input.json, grading.json and result.json) passed when its resu
 case is PASS when every run passed, else FAIL; a review case takes the latest maintainer verdict recorded for that
 run id (Review: REVIEWS/SUITE/CASE.jsonl), pass PASS, fail FAIL. Freshness (the rule and its file list: spec quality#qc-fallback): the run
 is stale when, between K (the run's kit_sha) and HEAD, git diff names one of those files, or the case's own entry (by
-id) in evals/SUITE/cases.json or reference/expectations.json differs, each named. The skills and extensions a role
-launches with are asked of the launcher at HEAD, `scripts/pi-role --json agents/<role>.md` (its --skill and
---extension args), run from an empty dir, so a skill a case's fixture selects is compared as a fixture file; a path
+id) in evals/SUITE/cases.json or reference/expectations.json differs, each named. The files a role launches with
+are asked of the launcher at HEAD, `scripts/pi-role --launch-set agents/<role>.md` (its launch set's files: spec
+roles#launch-set), run from an empty dir, so a skill a case's fixture selects is compared as a fixture file; a path
 outside the repo (an external skill) is not compared, and a launcher that lists no launch is insufficient evidence,
 naming it. Fixture trees: for each fixture the case names at any depth (every string value of a `fixture` key; a
 history fixture {repo, commit} is pinned by its commit), its materialized tree (schema.md, Fixtures) at K and at HEAD,
