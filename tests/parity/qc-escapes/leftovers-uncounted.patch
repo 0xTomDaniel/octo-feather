@@ -1,0 +1,14 @@
+Seeded defect: the sandbox kills a judge's leftover processes but records none of them (killed).
+diff --git a/scripts/octo-feather-qc-sandbox b/scripts/octo-feather-qc-sandbox
+index 97ef12ba..5b821d0e 100755
+--- a/scripts/octo-feather-qc-sandbox
++++ b/scripts/octo-feather-qc-sandbox
+@@ -2081,7 +2081,7 @@ def reap(base: set[str], herdr: str, session: str) -> list[str]:
+         except OSError:
+             continue
+         if cl:
+-            killed.append(f"{p} {cl[:80]}")
++            pass
+         with contextlib.suppress(OSError):
+             os.kill(int(p), 9)
+     time.sleep(0.3)

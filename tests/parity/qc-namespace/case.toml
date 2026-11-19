@@ -1,0 +1,14 @@
+# The parity lever's case for tests/qc-namespace.sh, split from tests/qc.sh (#997): the old tests/qc.sh at old_at held
+# its facts (nested sandbox proof, the judge's pane in its PID namespace) beside the rest; its setup moved from
+# tests/lib/qc.sh's bash, its assertions into typed Python on the testkit's stand-ins (tests/parity/lever.py --help).
+old = "tests/qc.sh"
+old_at = "6af9ea37"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
+needs = ["tests/lib/qc.sh", "tests/fixtures/spec-status/good/demo.spec.html"]
+# The new script, as its gate item.
+new = "tests/gate/test_gate.py::test_script[tests/qc-namespace.sh]"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: the qc sandbox script, which
+# octo-feather-qc runs as its program inside the item's own namespace, where coverage.py does not reach.
+[ran]
+"scripts/octo-feather-qc-sandbox" = "exec scripts/octo-feather-qc-sandbox"

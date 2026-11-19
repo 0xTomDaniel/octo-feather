@@ -1,0 +1,14 @@
+Seeded defect: install-check-models no longer names trailing terminal characters in a rejected key (the REJECTED line: names them, then the fix).
+diff --git a/justfile b/justfile
+index c7058f09..195ef1b9 100644
+--- a/justfile
++++ b/justfile
+@@ -858,7 +858,7 @@ install-check-models:
+         if got == "ok": print(f"model  {model} ok ({who})"); continue
+         bad = 1
+         if got == "REJECTED":
+-            junk = " (the key there ends in or holds whitespace or terminal characters)" if isinstance(key, str) and re.search(r"\s|[\x00-\x1f\x7f]|\[20[01]~", key) else ""
++            junk = " (the key there ends in or holds whitespace or terminal characters)" if isinstance(key, str) and re.search(r"\x00", key) else ""
+             print(f"model  {model} REJECTED key ({why}) for {who}{junk}; put the key the model proxy issued for provider {prov} in {where} or its environment, exactly, no trailing characters, then rerun just install-check-models")
+         elif got == "UNREACHABLE":
+             url = p.get("baseUrl")

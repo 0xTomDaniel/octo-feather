@@ -1,0 +1,14 @@
+Seeded defect: the qc judge launches from agents/code-reviewer.md, not its own role file agents/qc-judge.md.
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+index ce0774ba..221ad766 100755
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -1029,7 +1029,7 @@ def fallback(i: str, n: int, head: str, spec: Path, text: dict[str, str], stem:
+     cid = f"{stem}#{i}"
+     brief = BRIEF.format(repo=os.getcwd(), head=head, spec=spec, github=evidence(gh), criteria=f"- {i}: {text[i]}")
+     cmd = ["timeout", "--foreground", "-k", "10", str(FALLBACK_CAP_S),   # --foreground: a killed qc's group signal reaches the judge
+-           str(KIT / "scripts" / "pi-role"), str(KIT / "agents" / "qc-judge.md"), "--model", model, *shlex.split(os.environ.get("OCTO_FEATHER_QC_ARGS", "")), "-p", brief]
++           str(KIT / "scripts" / "pi-role"), str(KIT / "agents" / "code-reviewer.md"), "--model", model, *shlex.split(os.environ.get("OCTO_FEATHER_QC_ARGS", "")), "-p", brief]
+     print(f"qc: agent fallback {cid}: a fresh qc judge, time cap {FALLBACK_CAP_S} s", file=sys.stderr)
+     t0 = time.time()
+     if nosb:
