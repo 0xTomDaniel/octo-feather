@@ -27,6 +27,7 @@ def test_refused_args(case: Case) -> None:
     case(refused_args)
 
 
+@pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)
 def test_snapshot_read(case: Case) -> None:
     case(snapshot_read)
 
@@ -36,6 +37,7 @@ def test_snapshot_read_only(case: Case) -> None:
     case(snapshot_read_only)
 
 
+@pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)
 def test_killed(case: Case) -> None:
     case(killed)
 
@@ -44,14 +46,17 @@ def test_fetch_fails(case: Case) -> None:
     case(fetch_fails)
 
 
+@pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)
 def test_no_github(case: Case) -> None:
     case(no_github)
 
 
+@pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)
 def test_status_commit_fails(case: Case) -> None:
     case(status_commit_fails)
 
 
+@pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)
 def test_status_commit_owner(case: Case) -> None:
     case(status_commit_owner)
 
@@ -64,5 +69,6 @@ def test_diff_too_large(case: Case) -> None:
     case(diff_too_large)
 
 
+@pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)
 def test_kit_on_kit(case: Case) -> None:
     case(kit_on_kit)

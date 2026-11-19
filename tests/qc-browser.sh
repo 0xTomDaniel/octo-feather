@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Integration test for a browser demo's capture (quality spec #qc-capture, #qc-contract, #acceptance-qc-capture-browser),
 # through `just qc` / octo-feather-qc and octo-feather-evidence read, with no model: a scratch target's qc.toml pins
 # Playwright ([browser] playwright) and declares a demo with browser = true that screenshots a page in Playwright's
