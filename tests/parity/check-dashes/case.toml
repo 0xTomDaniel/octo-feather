@@ -1,0 +1,13 @@
+# The parity lever's case for tests/check-dashes.sh's 13 planted cases, moved in-process to check_dashes in
+# tests/gate/kit/test_check_dashes.py (#1114; tests/parity/lever.py --help). old_at: the deepen commit, the old test
+# unmodified and green on the moved code.
+old = "tests/check-dashes.sh"
+old_at = "a477f3ab"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none.
+needs = []
+new = "tests/gate/kit/test_check_dashes.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): open: scripts/check-dashes, run by
+# the copy's justfile under python3, imports it.
+[ran]
+"scripts/check_rules.py" = "open scripts/check_rules.py"
