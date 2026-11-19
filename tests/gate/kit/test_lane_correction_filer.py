@@ -30,8 +30,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from collections.abc import Iterator
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 import pytest
 from correction_lanes import Outcome, Refused, file_corrections
@@ -68,6 +67,9 @@ from lane_correction import (
     two,
 )
 from testkit import Scratch
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 NOW = "2026-11-19T12:00:00Z"  # a reflection's findings' at: the run's clock in the commands
 
@@ -112,7 +114,7 @@ def said(outcomes: list[Outcome]) -> list[str]:
 
 
 @pytest.fixture
-def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[World]:
+def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> World:
     """A World whose scratch environment (the testkit's gh first on PATH, its store) and
     directory are this process's while the test runs."""
     s = Scratch(tmp_path)
@@ -121,7 +123,7 @@ def world(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[World]:
     for k, v in s.env.items():
         monkeypatch.setenv(k, v)
     monkeypatch.chdir(s.root)
-    yield World(s)
+    return World(s)
 
 
 @pytest.mark.criterion("comms#acceptance-reflect-files-route-owner")
