@@ -36,6 +36,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 from testkit import FIXTURES, HERE, ROOT, Scratch, asked
+from testkit.jsonwalk import at, seq
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping
@@ -52,27 +53,16 @@ def pinned(name: str) -> str:
 
 
 def field(raw: str, where: str, *keys: str | int) -> str:
-    """The string at KEYS in RAW, a JSON text WHERE names; else fail naming the path."""
-    v: object = json.loads(raw)
-    for i, k in enumerate(keys):
-        at = f"{where}: {'.'.join(map(str, keys[: i + 1]))}"
-        if isinstance(k, int):
-            assert isinstance(v, list), f"{at}: not in a JSON list"
-            items = cast("list[object]", v)
-            assert len(items) > k, f"{at}: no item"
-            v = items[k]
-        else:
-            assert isinstance(v, dict), f"{at}: not in a JSON object"
-            v = cast("dict[str, object]", v).get(k)
+    """The string at KEYS in RAW, a JSON text WHERE names (the testkit's walk, jsonwalk.at); else
+    fail naming the path."""
+    v = at(json.loads(raw), *keys, where=where)
     assert isinstance(v, str), f"{where}: {'.'.join(map(str, keys))} is no string: {v!r}"
     return v
 
 
 def argv(line: str, where: str) -> list[str]:
     """LINE, a JSON list of strings WHERE names (a stub's logged argv)."""
-    v: object = json.loads(line)
-    assert isinstance(v, list), f"{where}: no JSON list: {line}"
-    items = cast("list[object]", v)
+    items = seq(json.loads(line))
     assert all(isinstance(x, str) for x in items), f"{where}: not all strings: {line}"
     return cast("list[str]", items)
 

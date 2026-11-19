@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Stub `pi --mode json` at the agent boundary (an eval case's role run, scripts/octo-feather-qa),
-the kit tests' one: tests/gate/kit and tests/lib/qa.sh each put a copy first on PATH as `pi`.
+the kit tests' one: tests/gate/kit and testkit/qa_box.py each put a copy first on PATH as `pi`.
 The canned event stream Pi prints, chosen by tokens in the -p prompt; its own argv first, as a
 `stub_argv` record, then session and agent_start.
 

@@ -1,0 +1,14 @@
+Seeded defect: the max_tool_calls bound is taken two calls late, so a read after the batch that crossed it is credited.
+diff --git a/scripts/octo-feather-qa b/scripts/octo-feather-qa
+index 6e1952e9..5b104fc3 100755
+--- a/scripts/octo-feather-qa
++++ b/scripts/octo-feather-qa
+@@ -932,7 +932,7 @@ class Bound:
+                 self.cap.add(cid)
+         elif ev.get("type") == "tool_execution_end":
+             self.flight.discard(cid)
+-        if self.cap is None and len(calls) >= self.maxc:
++        if self.cap is None and len(calls) > self.maxc + 1:
+             self.cap = set(self.flight)
+         return self.cap is not None and not self.flight
+ 
