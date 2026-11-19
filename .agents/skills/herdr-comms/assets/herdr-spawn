@@ -88,6 +88,9 @@ mapfile -t role_env <<<"$role_env_out"; [[ -n "$role_env_out" ]] || role_env=()
 # and a resume passes it back.
 session="$resume"
 [[ -n "$session" ]] || session="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen | tr "[:upper:]" "[:lower:]")"
+# The launch set recorded against the session (pi-role --help, Launch set); without it the agent lists as unknown.
+(cd "$cwd" && "$root/scripts/pi-role" --record "$session" "$contract_file") ||
+  echo "herdr-spawn: launch set not recorded (reason above); octo-feather-lane stale lists this agent unknown" >&2
 
 # pi-role --json puts the role prompt in a file, so every arg is one line.
 mapfile -t launch_argv < <(jq -r '.args[]' <<<"$role_json")

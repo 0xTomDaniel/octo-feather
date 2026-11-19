@@ -2,10 +2,9 @@ Seeded defect: a dirty kit install is fast-forwarded and refreshed instead of st
 diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
 --- a/scripts/octo-feather-lane
 +++ b/scripts/octo-feather-lane
-@@ -4004,7 +4004,7 @@
-     """Fast-forward CLONE (WHAT names it) to the merge commit, the rules of --help steps 3 and 4: a dirty or
-     diverged one, or one not on BRANCH when given, stops, nothing changed; one at or past it does not move. It
-     fetches origin first, or with ALWAYS_FETCH off only when the merge commit is missing. Its line."""
+@@ -4004,6 +4004,6 @@
+     """Fast-forward CLONE (WHAT names it) to the merge commit by the rules of --help steps 3 and 4, or with MOVE off
+     only check it may; its line. DETACHED_OK: a detached HEAD passes the branch check."""
 -    if dirty := pm_git(clone, "status", "--porcelain", what=what)[1]:
 +    if (dirty := pm_git(clone, "status", "--porcelain", what=what)[1]) and not dirty:
          lines = dirty.splitlines()
