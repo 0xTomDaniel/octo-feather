@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """The decision-log rule: a function of a repo dir and its tracked files, returning a Report.
 
-How a command and a test import it: scripts/check_rules.py's docstring. Imports the kit's pinned
-jsonschema at its top, so it is its own module (check_rules runs on bare python3); the command,
-scripts/check-decision-log, re-execs itself in the kit's environment when jsonschema is missing.
+Imported by name, never by path (pyproject.toml, [tool.pytest.ini_options] pythonpath). Imports
+the kit's pinned jsonschema at its top, so it is its own module (check_rules runs on bare python3);
+the command, scripts/check-decision-log, re-execs itself in the kit's environment without it.
 
 Interface:
 

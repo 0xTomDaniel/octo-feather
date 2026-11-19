@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """check-decision-log: the decision-log rule over the kit's tracked files; `just check` runs it.
 
-The rule: check_decision_logs in scripts/decision_log.py, imported by name (Python puts this
-script's own directory, symlinks resolved, first on sys.path; never a load by file path). It needs
-the kit's locked jsonschema: missing, this command re-execs itself once under `uv run --locked
---offline` in the kit's environment. This command lists the files (`git ls-files -z`), prints the
-Report's lines, each to its stream, and exits with its code: 0 ok, 1 a bad or unreadable log, 2 an
-unusable schema, node, git or an internal error (fails closed, never ok).
+The rule: check_decision_logs in scripts/decision_log.py, imported by name, never by path
+(pyproject.toml, [tool.pytest.ini_options] pythonpath). It needs the kit's locked jsonschema:
+missing, this command re-execs itself once under `uv run --locked --offline` in the kit's
+environment. This command lists the files (`git ls-files -z`), prints the Report's lines, each to
+its stream, and exits with its code: 0 ok, 1 a bad or unreadable log, 2 an unusable schema, node,
+git or an internal error (fails closed, never ok).
 """
 
 import os
