@@ -296,13 +296,13 @@ covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11
 # evidence: evidence/2026-11-18-gh978-eval-verdict.md; herdr-say's delivery is proven by the tagged tests in
 # tests/gate/kit/test_herdr_messaging.py.
 [demo."comms#acceptance-real-blocker"]
-command = "scripts/octo-feather-qa --verdict 20261119T021750Z-a6f960/supervisor-autonomy/owner-access-blocker-and-ready-work 20261119T021750Z-a6f960/supervisor-autonomy/owner-access-blocker-message"
+command = "scripts/octo-feather-qa --verdict 20261119T200842Z-a58936/supervisor-autonomy/owner-access-blocker-and-ready-work 20261119T200842Z-a58936/supervisor-autonomy/owner-access-blocker-message"
 covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evals/fixtures/lane-shout-wip", "evals/fixtures/lane-shout-main", "scripts/octo-feather-qa", "evidence/2026-11-13-gh840-supervisor-autonomy.md", "evidence/2026-11-18-gh978-eval-verdict.md", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/herdr_messaging.py"]
 
 # Judged from pinned stored eval runs (rule: scripts/octo-feather-qa --help, Verdict). Which case proves which Then
 # clause, and the generated run evidence: evidence/2026-11-18-gh978-eval-verdict.md.
 [demo."roles#acceptance-general-worker-no-implementation"]
-command = "scripts/octo-feather-qa --verdict 20261119T021750Z-a6f960/supervisor-general-worker/diagnosis-diff-goes-to-implementer 20261119T021750Z-a6f960/supervisor-general-worker/implementer-result-integrated-not-candidate 20261119T021750Z-a6f960/supervisor-general-worker/reviewed-implementer-result-integrated"
+command = "scripts/octo-feather-qa --verdict 20261119T200842Z-a58936/supervisor-general-worker/diagnosis-diff-goes-to-implementer 20261119T200842Z-a58936/supervisor-general-worker/implementer-result-integrated-not-candidate 20261119T200842Z-a58936/supervisor-general-worker/reviewed-implementer-result-integrated"
 covers = ["agents/supervisor.md", "evals/supervisor-general-worker", "evals/fixtures/lane-shout-general-diff", "evals/fixtures/lane-shout-qc-fixed", "evals/fixtures/lane-shout-qc-red", "scripts/octo-feather-qa", "evidence/2026-11-17-gh840-supervisor-general-worker.md", "evidence/2026-11-18-gh978-eval-verdict.md"]
 
 # Two halves (evidence/2026-11-13-gh840-supervisor-fresh-worker.md, How this meets the criterion): the supervisor starts
