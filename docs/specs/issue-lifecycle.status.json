@@ -248,6 +248,18 @@
       "tests": [
         "tests/lane-correction.sh"
       ]
+    },
+    "acceptance-checkout-follows-main": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-checkout-kept": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-stale-agents": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
