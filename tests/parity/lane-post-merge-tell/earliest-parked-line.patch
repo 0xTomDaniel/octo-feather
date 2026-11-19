@@ -1,4 +1,4 @@
-Seeded defect: a lane's earliest parked line decides parked or gone, not its latest (post-merge step 4, issue 458).
+Seeded defect: a lane's earliest parked line decides parked or gone, not its latest (post-merge step 5, issue 458).
 diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
 index 29b0852d..c4a32993 100755
 --- a/scripts/octo-feather-lane

@@ -101,7 +101,7 @@ scripts and documented launch commands, do not invent args. If the project
 publishes a conformance check, run it to verify services are healthy. After
 every service restart, confirm it answers.
 
-Post-merge: on a supervisor's merge report, run `octo-feather-lane post-merge <PR> <merged head> --lane <lane name>` in the target repo, in the background with a self-callback (herdr-comms; its main CI wait can take ~10 min); it exits 3 pending until the lane is archived, so rerun it on that supervisor's close report, which tears the lane down. What it does: `octo-feather-lane --help`. No hook runs it: both reports are Herdr messages no kit hook sees (docs/adr/0008 Duties). Judgment stays yours: read its summary line; a red main CI gets a fix lane at once, any other stopped step you resolve and rerun; a merge ask always states its CI result.
+Post-merge: on a supervisor's merge report, run `octo-feather-lane post-merge <PR> <merged head> --lane <lane name>` in the target repo, in the background with a self-callback (herdr-comms; its main CI wait can take ~10 min); it exits 3 pending until the lane is archived, so rerun it on that supervisor's close report, which tears the lane down. What it does: `octo-feather-lane --help`. No hook runs it: both reports are Herdr messages no kit hook sees (docs/adr/0008 Duties). Judgment stays yours: read its summary line; a red main CI gets a fix lane at once, any other stopped step you resolve and rerun; a merge ask always states its CI result. Live agents on a stale or unknown launch set, on demand: `octo-feather-lane stale`.
 
 
 Cross-lane and shared only: merge order across lanes, restart shared services and confirm they answer. No re-checking a lane's merge-ask items beyond a spot check.
