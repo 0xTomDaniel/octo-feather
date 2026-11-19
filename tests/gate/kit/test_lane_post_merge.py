@@ -7,6 +7,7 @@ import pytest
 from lane_post_merge import (
     checkout_follows,
     checkout_kept,
+    install_kept,
     install_stops,
     kit_refresh,
     late_run,
@@ -60,3 +61,10 @@ def test_lane_post_merge_checkout_follows(case: Case) -> None:
 )
 def test_lane_post_merge_checkout_kept(case: Case) -> None:
     case(checkout_kept)
+
+
+@pytest.mark.criterion(
+    "issue-lifecycle#acceptance-checkout-kept", source="tests/gate/kit/lane_post_merge.py"
+)
+def test_lane_post_merge_install_kept(case: Case) -> None:
+    case(install_kept)
