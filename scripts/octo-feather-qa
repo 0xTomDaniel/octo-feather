@@ -174,8 +174,19 @@ Internal, the in-sandbox stop rule (not for callers):
   octo-feather-qa --watch FACTS_JSON MAX_CALLS TIMEOUT_S SETUP_JSON -- CMD...
 """
 from typing import TYPE_CHECKING, cast
-import hashlib, importlib.machinery, importlib.util, json, os, queue, random, re, secrets, shutil, signal, statistics, subprocess, sys, tempfile, threading, time
+import importlib.machinery, importlib.util, json, os, random, re, secrets, shutil, subprocess, sys, tempfile, time
 from pathlib import Path
+
+# The grading logic, scripts/eval_grading.py beside this script (how it is found: its docstring). Run as a command,
+# this script's own dir is already first on sys.path; loaded by path from another script or a recipe
+# (octo-feather-lane, octo-feather-qc, `just install-check-models`) it may not be, so it is added here. In the sandbox
+# of a run on another kit (--kit-ref, --baseline) the head kit is masked but for this script, so run_case binds a copy
+# of the module in read-only and names its dir in OCTO_FEATHER_QA_GRADING, found there.
+if str(Path(__file__).resolve().parent) not in sys.path:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+if os.environ.get("OCTO_FEATHER_QA_GRADING"):
+    sys.path.append(os.environ["OCTO_FEATHER_QA_GRADING"])
+import eval_grading as grading
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -184,496 +195,16 @@ if TYPE_CHECKING:
 KIT = Path(__file__).resolve().parent.parent
 SELF = KIT / "scripts" / "octo-feather-qa"
 GH_OFF = "github: none (factory eval: no GitHub evidence)"
-DEFAULT_MAX_CALLS, DEFAULT_TIMEOUT = 12, 600
 SAMPLE_SEED = "octo-feather-qa"
-# kit_contract_edit's paths, repo-root relative (rule: schema, Before targets).
-CONTRACT_PATH = re.compile(r"^(?:agents/[^/]+\.md|\.agents/skills/.+|\.skillfile/patches/.+)$")
+Result = grading.Result
 
 
 def die(code, msg):
     print(f"octo-feather-qa: {msg}", file=sys.stderr); sys.exit(code)
 
 
-# ---- facts from the transcript --------------------------------------------------------------
+# ---- the in-sandbox stop rule's command side (the watcher itself: eval_grading.watch) ----------
 
-def tool_calls(lines):
-    """(toolName, args) of every tool_execution_start event, in order."""
-    calls = []
-    for line in lines:
-        try:
-            e = json.loads(line)
-        except ValueError:
-            continue
-        if isinstance(e, dict) and e.get("type") == "tool_execution_start":
-            calls.append((str(e.get("toolName", "")), e.get("args") if isinstance(e.get("args"), dict) else {}))
-    return calls
-
-
-# attempt_blocked: the qc sandbox's own attempt record (scripts/octo-feather-qc-sandbox), one {kind, attempt, refused,
-# what, result} per line (what it reads: .agents/skills/eval-cases/references/schema.md, Attempt record). Live, in the sandbox: the recorder's read-only view as it grows; after the run: the sandbox's post
-# record (the recorder's line; none: attempts_error, read as no record; what that does: .agents/skills/eval-cases/references/schema.md, Attempt record).
-def attempt_record(path=None):
-    """The record's lines so far (the watcher, in the sandbox); [] when there is none."""
-    path = path or os.environ.get("OCTO_FEATHER_QC_ATTEMPTS", "")
-    out = []
-    try:
-        for l in open(path):
-            r = safe_json(l)
-            if isinstance(r, dict):
-                out.append(r)
-    except OSError:
-        pass
-    return out
-
-
-def show(call):
-    n, a = call
-    return f"{n} {str(a.get('path') or a.get('command') or '')[:120]}".strip()
-
-
-# Pi's truncation notices (rule: schema, Skill load).
-TRUNCATED = re.compile(r"\[(?:Showing lines \d+-\d+ of \d+|\d+ more lines in file\.|Output truncated\.)")
-_SKILL_TEXT = {}
-
-
-def norm(text):
-    return text.replace("\r\n", "\n")
-
-
-def skill_text(path):
-    """The SKILL.md at PATH (the kit under test's or the case repo's), normalized (rule: schema, Skill load)."""
-    if path not in _SKILL_TEXT:
-        try:
-            _SKILL_TEXT[path] = norm(Path(path).read_text(encoding="utf-8")).rstrip("\n")
-        except OSError:
-            _SKILL_TEXT[path] = None
-    return _SKILL_TEXT[path]
-
-
-def result_texts(lines):
-    """The text each tool call put in the agent's context, in start order: its tool_execution_end content text,
-    None while it has none or when Pi truncated it (rule: schema, Skill load)."""
-    order, texts = [], {}
-    for line in lines:
-        e = safe_json(line)
-        if not isinstance(e, dict):
-            continue
-        if e.get("type") == "tool_execution_start":
-            order.append(str(e.get("toolCallId", "")))
-        elif e.get("type") == "tool_execution_end":
-            r = e.get("result") if isinstance(e.get("result"), dict) else {}
-            sc = r.get("structuredContent") if isinstance(r.get("structuredContent"), dict) else {}
-            text = "".join(str(c.get("text", "")) for c in r.get("content", []) if isinstance(c, dict) and c.get("type") == "text")
-            texts[str(e.get("toolCallId", ""))] = None if sc.get("truncated") or TRUNCATED.search(text) else norm(text)
-    return [texts.get(i) for i in order]
-
-
-def loads(fact, text):
-    """skill_read on one tool result's TEXT (rule: schema, Skill load): the fact's SKILL.md text (skill_source),
-    found whole in TEXT."""
-    want = fact["_skill_text"] if "_skill_text" in fact else skill_text(fact.get("_skill_md", ""))
-    return bool(want) and text is not None and want in text
-
-
-def fs_marks(lines):
-    """{target: index of the first tool call after which the watcher saw it}: test_write, edit, git_commit, git_push,
-    gh_call, kit_contract_edit, from its qa_fs events (rule: schema, Before targets)."""
-    order, marks = {}, {}
-    for line in lines:
-        e = safe_json(line)
-        if not isinstance(e, dict):
-            continue
-        if e.get("type") == "tool_execution_start":
-            order.setdefault(str(e.get("toolCallId", "")), len(order))
-        elif e.get("type") == "qa_fs" and str(e.get("toolCallId")) in order:
-            for m in e.get("marks", []):
-                marks.setdefault(m, order[str(e["toolCallId"])])
-    return marks
-
-
-JSON_FENCE = re.compile(r"^[ \t]*```[ \t]*json[ \t]*$", re.M | re.I)
-FENCE_END = re.compile(r"^[ \t]*```[ \t]*$", re.M)
-
-
-def final_json(head, final, last):
-    """(status, text, obj): the block Final JSON reads (schema, Final JSON) as an object, status None when there is one.
-    last: (stop, text): the watcher's stop reason and the last assistant message's text (None: no message)."""
-    if not final:
-        return "open", f"{head}: read from the final message only", None
-    stop, text = last or (None, None)
-    if stop not in (None, "exit"):
-        return "fail", f"{head}: run stopped ({stop}) before its final message", None
-    if text is None:
-        return "fail", f"{head}: no final assistant message", None
-    opens = list(JSON_FENCE.finditer(text))
-    if len(opens) != 1:
-        return "fail", f"{head}: final message holds {len(opens)} ```json blocks, want exactly 1", None
-    end = FENCE_END.search(text, opens[0].end())
-    if end is None:
-        return "fail", f"{head}: the ```json block is never closed", None
-    try:
-        obj = json.loads(text[opens[0].end():end.start()])
-    except ValueError as e:
-        return "fail", f"{head}: invalid JSON in the ```json block ({e})", None
-    if not isinstance(obj, dict):
-        return "fail", f"{head}: the ```json block is not an object", None
-    return None, "", obj
-
-
-def judge_declared(fact, final, last):
-    """declared (schema, Final JSON)."""
-    f, labels = fact["field"], fact["in"]
-    head = f"declared {f}"
-    st, txt, obj = final_json(head, final, last)
-    if st:
-        return st, txt
-    if f not in obj:
-        return "fail", f"{head}: no top-level {f!r} in the ```json block"
-    if not isinstance(obj[f], str) or obj[f] not in labels:
-        return "fail", f"{head}: {json.dumps(obj[f])[:80]} is not one of {json.dumps(labels)}"
-    return "pass", f"{head}: {json.dumps(obj[f])}, one of {json.dumps(labels)}"
-
-
-def judge_includes(fact, final, last):
-    """declared_includes (schema, Final JSON)."""
-    f, items = fact["field"], fact["items"]
-    head = f"declared_includes {f}"
-    st, txt, obj = final_json(head, final, last)
-    if st:
-        return st, txt
-    got = obj.get(f)
-    if not isinstance(got, list):
-        return "fail", f"{head}: top-level {f!r} is {json.dumps(got)[:80] if f in obj else 'missing'}, want a list"
-    has = lambda it: any(isinstance(x, dict) and all(k in x and x[k] == v for k, v in it.items()) for x in got)
-    missing = [it for it in items if not has(it)]
-    if missing:
-        return "fail", f"{head}: no entry with {'; '.join(json.dumps(m) for m in missing)} in {json.dumps(got)[:300]}"
-    return "pass", f"{head}: holds {'; '.join(json.dumps(it) for it in items)}"
-
-
-def final_text(head, final, last):
-    """(status, text): the final assistant message's text, status None; open before the run's end."""
-    if not final:
-        return "open", f"{head}: read once pi ends"
-    stop, text = last or (None, None)
-    if stop not in (None, "exit"):
-        return "fail", f"{head}: run stopped ({stop}) before its final message"
-    if text is None:
-        return "fail", f"{head}: no final assistant message"
-    return None, text
-
-
-def holds(line, item):
-    return all(v in line.get(k, ()) if isinstance(line.get(k), list) else line.get(k) == v for k, v in item.items())
-
-
-def judge_fields(fact, final, last):
-    """The final message's field F, parsed by `octo-feather-lane fields` (one parser, verdict's; form and scope:
-    .agents/skills/code-review/SKILL.md step 4, Report fields): present and well formed, then none, includes and
-    every (schema: .agents/skills/eval-cases/references/schema.md, Field lines)."""
-    f = fact["field"]
-    head = f"field_lines {f}"
-    st, text = final_text(head, final, last)
-    if st:
-        return st, text
-    p = subprocess.run([str(KIT / "scripts" / "octo-feather-lane"), "fields", "-"], input=text, capture_output=True, text=True)
-    try:
-        got = json.loads(p.stdout)
-    except ValueError:
-        return "fail", f"{head}: octo-feather-lane fields exited {p.returncode}: {p.stderr.strip()[:200]}"
-    if f in ("Check", "Owner"):
-        rec = got[f]
-        if rec["errors"]:
-            return "fail", f"{head}: {'; '.join(rec['errors'])}"
-        lines = rec["lines"]
-    else:
-        lines = [{"text": v} for v in got["fields"].get(f, []) if v]
-        if not lines:
-            return "fail", f"{head}: no column-0 `{f}:` line with a value outside code blocks"
-    show_ = lambda ls: json.dumps(ls)[:300]
-    if fact.get("none"):
-        if not rec["none"]:
-            return "fail", f"{head}: {len(lines)} {f} line(s) {show_(lines)}, want `{f}s: none`"
-        return "pass", f"{head}: `{f}s: none`"
-    missing = [it for it in fact.get("includes", []) if not any(holds(l, it) for l in lines)]
-    if missing:
-        return "fail", f"{head}: no line with {'; '.join(json.dumps(m) for m in missing)} in {show_(lines)}"
-    every = fact.get("every", {})
-    off = [l for l in lines if not all(all(x in v for x in l.get(k, [])) if isinstance(l.get(k), list) else l.get(k) in v
-                                       for k, v in every.items())]
-    if off:
-        return "fail", f"{head}: {show_(off)} outside {json.dumps(every)}"
-    said = f"`{f}s: none`" if f in ("Check", "Owner") and not lines else f"{len(lines)} line(s) {show_(lines)}"
-    return "pass", f"{head}: {said}" + (f"; holds {'; '.join(json.dumps(i) for i in fact['includes'])}" if fact.get("includes") else "") \
-        + (f"; every line in {json.dumps(every)}" if every else "")
-
-
-def under(path, p):
-    return path.startswith(p) if p.endswith("/") else path == p
-
-
-def judge_branch(fact, final, last, lines):
-    """branch_paths (schema, Branch paths), read from the watcher's qa_branch event."""
-    head = "branch_paths"
-    if not final:
-        return "open", f"{head}: read once pi ends"
-    stop = (last or (None, None))[0]
-    if stop not in (None, "exit"):
-        return "fail", f"{head}: run stopped ({stop}) before it ended"
-    ev = next((e for e in (safe_json(l) for l in reversed(lines or [])) if isinstance(e, dict) and e.get("type") == "qa_branch"), None)
-    if ev is None:
-        return "fail", f"{head}: no qa_branch record from the watcher"
-    paths = ev["paths"]
-    hit = [p for p in paths if any(under(p, u) for u in fact.get("untouched", []))]
-    if hit:
-        return "fail", f"{head}: changed {', '.join(hit)} (untouched: {', '.join(fact['untouched'])})"
-    lack = [t for t in fact.get("touched", []) if not any(under(p, t) for p in paths)]
-    if lack:
-        return "fail", f"{head}: nothing changed under {', '.join(lack)} (changed: {', '.join(paths) or 'nothing'})"
-    return "pass", f"{head}: changed {', '.join(paths) or 'nothing'}" + (
-        f"; none under {', '.join(fact['untouched'])}" if fact.get("untouched") else "") + (
-        f"; each of {', '.join(fact['touched'])} changed" if fact.get("touched") else "")
-
-
-def judge(fact, calls, final, record=(), last=None, marks=None, lines=None):
-    """(status, text): status pass, fail, or open (undecided so far; only when not final).
-    marks: fs_marks of the run (the first tool call index of each filesystem target); lines: the event stream
-    (skill loads: schema, Skill load); record: the sandbox's attempt record (attempt_blocked)."""
-    if fact["fact"] == "declared":
-        return judge_declared(fact, final, last)
-    if fact["fact"] == "declared_includes":
-        return judge_includes(fact, final, last)
-    if fact["fact"] == "field_lines":
-        return judge_fields(fact, final, last)
-    if fact["fact"] == "branch_paths":
-        return judge_branch(fact, final, last, lines)
-    if fact["fact"] == "tool_called_before":
-        return judge_tool_before(cast("Fact", fact), cast("list[tuple[str, dict[str, object]]]", calls), final=cast("bool", final),
-                                 last=cast("tuple[object, str | None] | None", last), marks=cast("dict[str, int] | None", marks))
-    if fact["fact"] == "tool_called":
-        return judge_tool(cast("list[str]", fact["tools"]), cast("list[str] | None", lines), final=cast("bool", final))
-    if fact["fact"] == "attempt_blocked":
-        return judge_attempt(fact["kind"], None if record is None else list(record), final)
-    if fact["fact"] == "ran":
-        rec = None if record is None else cast("list[dict[str, object]]", list(cast("list[object]", record)))
-        return judge_ran(cast("dict[str, object]", fact), rec, final=cast("bool", final))
-    t, s, n = fact["fact"], fact["skill"], len(calls)
-    texts = result_texts(lines) if lines is not None else []
-    r = next((i for i, x in enumerate(texts[:n]) if loads(fact, x)), None)
-    at = lambda i: f"tool call {i + 1} of {n} ({show(calls[i])})"
-    none = f"no load of {s}/SKILL.md (its full content in a tool result) in {n} tool calls"
-    if t == "skill_read":
-        if r is not None:
-            return "pass", f"skill_read {s}: loaded at {at(r)}"
-        return ("fail" if final else "open"), f"skill_read {s}: {none}"
-    if t == "skill_not_read":
-        if r is not None:
-            return "fail", f"skill_not_read {s}: loaded at {at(r)}"
-        return ("pass" if final else "open"), f"skill_not_read {s}: {none}"
-    if t == "skill_read_before":
-        b = target_name(cast("object", fact["before"]))
-        stop, text = last or (None, None)
-        if b == "final_message":   # never a mark (rule: schema, Before targets)
-            w = n if final and stop in (None, "exit") and text is not None else None
-            gone = "no final assistant message" if stop in (None, "exit") else f"run stopped ({stop}) before its final message"
-        else:
-            w = (marks or {}).get(b)
-            w = w if w is not None and w < n else None
-            gone = f"no {b} in {n} tool calls" + (f", run stopped ({stop})" if stop not in (None, "exit") else "")
-        tgt = "the final message" if b == "final_message" else f"first {b} at {at(w)}" if w is not None else ""
-        if w is not None and r is not None and r < w:
-            return "pass", f"skill_read_before {s} {b}: loaded at {at(r)}, before {tgt}"
-        if w is not None:
-            return "fail", f"skill_read_before {s} {b}: {'reached ' if b == 'final_message' else ''}{tgt}, " + (f"loaded only at {at(r)}" if r is not None else none)
-        if not final:
-            return "open", f"skill_read_before {s} {b}: no {b} yet"
-        return "fail", f"skill_read_before {s} {b}: target never reached ({gone}); " + (f"loaded at {at(r)}" if r is not None else none)
-    raise ValueError(f"unknown fact {t!r}")
-
-
-Fact = dict[str, object]
-
-
-def target_name(before: object) -> str:
-    """A before target's name, as marks and evidence name it: the target, or `edit_under P...` (schema, Before targets)."""
-    if isinstance(before, dict):
-        return " ".join(["edit_under", *(str(p) for p in cast("list[object]", cast("Fact", before).get("edit_under") or []))])
-    return str(before)
-
-
-def under_targets(facts: list[Fact]) -> dict[str, list[str]]:
-    """{name: paths} of every edit_under target the facts name."""
-    return {target_name(f["before"]): [str(p) for p in cast("list[object]", cast("Fact", f["before"])["edit_under"])]
-            for f in facts if isinstance(f.get("before"), dict)}
-
-
-def under_marks(old: Fact, new: Fact, targets: dict[str, list[str]]) -> list[str]:
-    """The edit_under targets reached between two snapshots: a file under one of a target's paths created or changed."""
-    a, b = cast("dict[str, object]", old["files"]), cast("dict[str, object]", new["files"])
-    hit = [f for f, h in b.items() if f not in a or a[f] != h]
-    return [name for name, ps in targets.items() if any(under(f, p) for f in hit for p in ps)]
-
-
-def judge_tool_before(fact: Fact, calls: list[tuple[str, dict[str, object]]], *, final: bool, last: tuple[object, str | None] | None,
-                      marks: dict[str, int] | None) -> tuple[str, str]:
-    """tool_called_before N T (schema, Facts): a call to one of N started before the first tool call that reached T."""
-    names, b, n = [str(x) for x in cast("list[object]", fact["tools"])], target_name(fact["before"]), len(calls)
-    head = f"tool_called_before {' | '.join(names)} {b}"
-    r = next((i for i, (nm, _) in enumerate(calls) if nm in names), None)
-
-    def at(i: int) -> str:
-        return f"tool call {i + 1} of {n} ({show(calls[i])})"
-
-    stop, text = last or (None, None)
-    if b == "final_message":   # never a mark (rule: schema, Before targets)
-        w = n if final and stop in (None, "exit") and text is not None else None
-    else:
-        w = (marks or {}).get(b)
-        w = w if w is not None and w < n else None
-    if w is not None and r is not None and r < w:
-        return "pass", f"{head}: called at {at(r)}, before " + ("the final message" if b == "final_message" else f"first {b} at {at(w)}")
-    if w is not None:
-        return "fail", (f"{head}: " + ("reached the final message" if b == "final_message" else f"first {b} at {at(w)}")
-                        + (f", called only at {at(r)}" if r is not None else ", no call to any of them before it"))
-    if not final:
-        return "open", f"{head}: no {b} yet"
-    return "fail", f"{head}: target never reached" + (f" (run stopped ({stop}))" if stop not in (None, "exit") else "") \
-        + (f"; called at {at(r)}" if r is not None else "")
-
-
-def judge_tool(names: list[str], lines: list[str] | list[bytes] | None, *, final: bool) -> tuple[str, str]:
-    """tool_called NAMES (schema, Tool call): a call to one of them ended, not an error, with text in its result."""
-    head = f"tool_called {' | '.join(names)}"
-    starts: dict[str, tuple[int, str, str]] = {}
-    seen: list[str] = []
-    for line in lines or []:
-        e: object = safe_json(line)
-        if not isinstance(e, dict):
-            continue
-        ev = cast("dict[str, object]", e)
-        cid = str(ev.get("toolCallId", ""))
-        if ev.get("type") == "tool_execution_start":
-            starts[cid] = (len(starts), str(ev.get("toolName", "")), json.dumps(ev.get("args"))[:120])
-        elif ev.get("type") == "tool_execution_end" and cid in starts:
-            i, n, a = starts[cid]
-            if n not in names:
-                continue
-            r = ev.get("result")
-            content = cast("dict[str, object]", r).get("content") if isinstance(r, dict) else None
-            parts = cast("list[object]", content) if isinstance(content, list) else []
-            text = "".join(str(cast("dict[str, object]", c).get("text", "")) for c in parts
-                           if isinstance(c, dict) and cast("dict[str, object]", c).get("type") == "text")
-            if ev.get("isError") is not True and text.strip():
-                return "pass", f"{head}: tool call {i + 1} {n} {a} returned {len(text)} characters"
-            seen.append(f"call {i + 1} {n}: " + ("error" if ev.get("isError") is True else "empty result"))
-    if not final:
-        return "open", f"{head}: no result yet"
-    return "fail", f"{head}: " + ("; ".join(seen) if seen else f"no call to any of them in {len(starts)} tool calls")
-
-
-def judge_attempt(kind, record, final):
-    """attempt_blocked KIND over the sandbox's RECORD (rule: schema, Attempt record)."""
-    if record is None:   # sandbox.json attempts_error, or a record not whole (schema, Attempt record)
-        return "fail", f"attempt_blocked {kind}: the sandbox sent no whole attempt record"
-    tried = [r for r in record if r.get("kind") == kind and r.get("attempt") is True]
-    show_ = lambda r: f"{str(r.get('what', ''))[:120]} ({str(r.get('result', ''))[:160]})"
-    bad = next((r for r in tried if r.get("refused") is not True), None)
-    if bad is not None:
-        return "fail", f"attempt_blocked {kind}: recorded attempt NOT refused: {show_(bad)}"
-    if not final:
-        return "open", f"attempt_blocked {kind}: {len(tried)} recorded, refused so far"
-    if not tried:
-        return "fail", f"attempt_blocked {kind}: no recorded attempt in the sandbox's record ({len(record)} entries)"
-    return "pass", f"attempt_blocked {kind}: {len(tried)} recorded, each refused: " + "; ".join(map(show_, tried))
-
-
-def arg_matches(want: str, got: str, head: str | None) -> bool:
-    """Whether a ran fact's argument WANT matches a recorded one GOT, HEAD the case's sha (rule: schema, Run record)."""
-    if "{head}" not in want or not head:
-        return want == got
-    m = re.fullmatch("([0-9a-f]{7,40})".join(map(re.escape, want.split("{head}"))), got)
-    return m is not None and all(head.startswith(g) for g in m.groups())
-
-
-def args_match(want: list[str], got: list[str], head: str | None) -> bool:
-    """Whether a recorded argv GOT holds a ran fact's arguments WANT, HEAD the case's sha (rule: schema, Run record)."""
-    k = next((i for i, w in enumerate(want) if w.startswith("-")), len(want))
-    if len(got) < k or not all(arg_matches(w, g, head) for w, g in zip(want[:k], got)):
-        return False
-    groups: list[list[str]] = []
-    for w in want[k:]:
-        if groups and not w.startswith("-") and len(groups[-1]) == 1:
-            groups[-1].append(w)
-        else:
-            groups.append([w])
-    rest = got[k:]
-    return all(any(all(arg_matches(w, g, head) for w, g in zip(gr, rest[i:i + len(gr)])) for i in range(len(rest) - len(gr) + 1))
-               for gr in groups)
-
-
-def judge_ran(fact: dict[str, object], record: list[dict[str, object]] | None, *, final: bool) -> tuple[str, str]:
-    """ran PROGRAM ARGS over the sandbox's RECORD (rule: schema, Run record)."""
-    p, want, head = str(fact["program"]), [str(x) for x in cast("list[object]", fact["args"])], fact.get("_head")
-    name = f"ran {' '.join([p, *want])}" + (f" exit {fact['exit']}" if "exit" in fact else "")
-    if record is None:   # sandbox.json attempts_error, or a record not whole (schema, Attempt record)
-        return "fail", f"{name}: the sandbox sent no whole attempt record"
-    runs = [(r, [str(x) for x in cast("list[object]", r["argv"])]) for r in record
-            if r.get("kind") == "run" and r.get("program") == p and isinstance(r.get("argv"), list)]
-    def show_(r: dict[str, object]) -> str:
-        return f"{str(r.get('what', ''))[:120]} ({str(r.get('result', ''))[:80]})"
-    hits = [r for r, a in runs if args_match(want, a, head if isinstance(head, str) else None)
-            and ("exit" not in fact or r.get("exit") == fact["exit"])]
-    hit = hits[0] if hits else None
-    if "count" in fact:   # rule: schema, Run record
-        n, name = cast("int", fact["count"]), f"{name} count {fact['count']}"
-        seen = f"{len(hits)} matching runs" + (f": {'; '.join(show_(r) for r in hits)}" if hits else "")
-        if len(hits) > n:
-            return "fail", f"{name}: {seen}"
-        if not final:
-            return "open", f"{name}: {seen} so far"
-        return ("pass" if len(hits) == n else "fail"), f"{name}: {seen} ({len(record)} entries in the record)"
-    if hit is not None:
-        return "pass", f"{name}: recorded run {show_(hit)}"
-    if not final:
-        return "open", f"{name}: no matching run recorded yet"
-    return "fail", (f"{name}: no run of {p} with these arguments in the sandbox's record ({len(record)} entries; "
-                     + (f"runs of {p}: {'; '.join(show_(r) for r, _ in runs)})" if runs else f"no run of {p} recorded)"))
-
-
-def ran_setup(facts: list[dict[str, object]], head: str) -> tuple[list[dict[str, object]], str]:
-    """FACTS with each ran fact's _head (the case HEAD), and the sandbox's QC_RECORD value, one program per line
-    (schema.md, Run record)."""
-    ran = [f for f in facts if f.get("fact") == "ran"]
-    return [dict(f, _head=head) if f.get("fact") == "ran" else f for f in facts], "\n".join(sorted({str(f["program"]) for f in ran}))
-
-
-# ---- the in-sandbox stop rule ---------------------------------------------------------------
-
-FAKE_GH = r'''#!/bin/sh
-# octo-feather-qa fake GitHub (a case's fake_gh): logs argv, answers the few calls a lane start needs.
-echo "gh $*" >> "$FAKE_GH_LOG"
-case "$1 $2" in
-  "auth status") echo "github.com: logged in as probe";;
-  "repo view") echo '{"nameWithOwner":"probe/app"}';;
-  "issue create") echo "https://github.com/probe/app/issues/12";;
-  "pr create") echo "https://github.com/probe/app/pull/13";;
-  "issue view"|"pr view"|"issue list"|"pr list") echo '[]';;
-  *) echo "fake gh: $*" >&2;;
-esac
-'''
-# A case's stand_ins (rule: schema, Case). $QA_STAND_LOG: the calls answered so far. @NAME@, @ANSWERS@: the program
-# and the case's list for it.
-STAND_IN = r'''#!/usr/bin/env python3
-import json, os, sys
-log, me = os.environ["QA_STAND_LOG"], ["@NAME@", *sys.argv[1:]]
-seen = [json.loads(l) for l in open(log)] if os.path.exists(log) else []
-for a in @ANSWERS@:
-    if me[1:1 + len(a["args"])] == a["args"] and a.get("argc", len(me) - 1) == len(me) - 1 \
-            and ("after" not in a or any(c[:len(a["after"])] == a["after"] for c in seen)):
-        open(log, "a").write(json.dumps(me) + "\n")
-        sys.stdout.write(a["stdout"]); sys.exit(a["exit"])
-sys.exit(print("stand-in: no answer for " + " ".join(me), file=sys.stderr) or 1)
-'''
 # A case's fake_qa (schema, Case): octo-feather-qa answering in this script's own output form (its --help, header,
 # run, case, compare and summary lines), canned and plausible, with no case, sandbox or model run. @DOC@: this
 # script's docstring.
@@ -807,211 +338,6 @@ sys.exit(0 if passed == len(results) else 1)
 QA_TMP = "/tmp/qa-case"   # inside the sandbox: its private /tmp
 
 
-def git_out(*a, cwd=None):
-    return subprocess.run(["git", *a], cwd=cwd, capture_output=True, text=True).stdout.strip()
-
-
-def prep(setup):
-    """In the sandbox, after its proof: the case's fake gh (first on PATH, logging argv) and bare origin.
-    Returns (env for the role, origin dir or None, gh log or None)."""
-    env, origin, log = dict(os.environ), None, None
-    on = cast("dict[str, object]", setup)
-    stands = cast("dict[str, list[dict[str, object]]]", on.get("stand_ins") or {})
-    fakes = bool(on.get("fake_gh") or on.get("fake_qa") or stands)   # fakes behind the run shims (schema, Case)
-    if setup.get("fake_gh") or setup.get("origin") or stands:
-        os.makedirs(f"{QA_TMP}/bin", exist_ok=True)
-    if setup.get("fake_gh"):
-        log = f"{QA_TMP}/gh.log"; open(log, "w").close()
-        Path(f"{QA_TMP}/bin/gh").write_text(FAKE_GH); os.chmod(f"{QA_TMP}/bin/gh", 0o755)
-        env["FAKE_GH_LOG"] = log
-    if on.get("fake_qa"):
-        os.makedirs(f"{QA_TMP}/bin", exist_ok=True)
-        Path(f"{QA_TMP}/bin/octo-feather-qa").write_text(FAKE_QA.replace("@DOC@", repr(__doc__))); os.chmod(f"{QA_TMP}/bin/octo-feather-qa", 0o755)
-    if stands:   # rule: schema, Case (stand_ins)
-        env["QA_STAND_LOG"] = f"{QA_TMP}/stand-ins.log"
-        here, head = os.getcwd(), subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
-        for p, answers in stands.items():
-            fill = [dict(a, stdout=re.sub(r"\{head:(\d+)\}", lambda m: head[:int(m.group(1))],
-                                          str(a["stdout"]).replace("{repo}", here).replace("{head}", head))) for a in answers]
-            Path(f"{QA_TMP}/bin/{p}").write_text(STAND_IN.replace("@NAME@", p).replace("@ANSWERS@", repr(fill)))
-            os.chmod(f"{QA_TMP}/bin/{p}", 0o755)
-    if fakes:
-        ps = env.get("PATH", "").split(":")
-        at = 1 if ps[0] == env.get("OCTO_FEATHER_QC_RUN_SHIMS") else 0   # behind the run shims: a ran fake records it
-        env["PATH"] = ":".join([*ps[:at], f"{QA_TMP}/bin", *ps[at:]])
-    if setup.get("origin"):
-        origin = f"{QA_TMP}/origin.git"
-        for a in (["init", "-q", "--bare", "-b", "main", origin], ["push", "-q", origin, "main"], ["remote", "add", "origin", origin]):
-            subprocess.run(["git", *a], check=True, capture_output=True)
-    return env, origin, log
-
-
-def snapshot(origin, log, keep=False):
-    """The case repo as data, a snapshot (what it holds: schema, Before targets);
-    keep: also those files' bytes as read ("data"), for declared_tests to collect from that same state."""
-    files, data = {}, {}
-    for f in subprocess.run(["git", "ls-files", "-z", "-co", "--exclude-standard"], capture_output=True, text=True).stdout.split("\0"):
-        if f:
-            try:
-                b = ("link", os.readlink(f)) if os.path.islink(f) else ("file", Path(f).read_bytes())
-                files[f] = hashlib.sha1(b[1].encode() if b[0] == "link" else b[1]).hexdigest()
-                if keep:
-                    data[f] = b
-            except OSError:
-                files[f] = None
-    gh = Path(log).read_text(errors="replace").splitlines() if log and os.path.exists(log) else []
-    return {"files": files, "head": git_out("rev-parse", "-q", "--verify", "HEAD"),
-            "refs": git_out("--git-dir", origin, "for-each-ref") if origin else "", "gh": gh, **({"data": data} if keep else {})}
-
-
-# Records each file pytest collects (a File node), answering an empty collection so no test module is imported.
-COLLECT_PLUGIN = '''import json, os, pytest
-seen = []
-@pytest.hookimpl(tryfirst=True)
-def pytest_make_collect_report(collector):
-    if isinstance(collector, pytest.File):
-        seen.append(os.path.relpath(collector.path))
-        return pytest.CollectReport(collector.nodeid, "passed", None, [])
-def pytest_sessionfinish(session):
-    with open(os.environ["QA_COLLECTED"], "w") as f:
-        json.dump(seen, f)
-'''
-
-
-def declared_tests(snap):
-    """{path: content hash} of every file test_write's runner collects (rule: schema, Before targets): run in the
-    repo's synced env, collect only, no test module imported, no bytecode or cache written, in a tree from snap's
-    "data" (#170).
-    Raises RuntimeError when pytest gives no list."""
-    files, tree = snap["files"], f"{QA_TMP}/collect/tree"
-    shutil.rmtree(tree, ignore_errors=True)
-    for f, (kind, b) in snap["data"].items():
-        os.makedirs(os.path.dirname(f"{tree}/{f}"), exist_ok=True)
-        os.symlink(b, f"{tree}/{f}") if kind == "link" else Path(f"{tree}/{f}").write_bytes(b)
-    os.makedirs(f"{QA_TMP}/collect", exist_ok=True)
-    Path(f"{QA_TMP}/collect/qa_collect.py").write_text(COLLECT_PLUGIN)
-    out = f"{QA_TMP}/collect/collected.json"
-    if os.path.exists(out):
-        os.remove(out)
-    env = dict(os.environ, PYTHONPATH=f"{QA_TMP}/collect", PYTHONDONTWRITEBYTECODE="1", QA_COLLECTED=out)
-    r = subprocess.run(["uv", "run", "--project", os.getcwd(), "--no-sync", "--offline", "--no-cache", "python", "-m", "pytest",
-                        "--collect-only", "-q", "-p", "no:cacheprovider", "-p", "qa_collect"], env=env, cwd=tree, capture_output=True, text=True)
-    if r.returncode not in (0, 5) or not os.path.exists(out):
-        raise RuntimeError(f"test_write: pytest --collect-only exited {r.returncode}: {(r.stdout + r.stderr).strip()[-300:]}")
-    return {p: files.get(p) for p in json.loads(Path(out).read_text())}
-
-
-def changed(old, new, known):
-    """The filesystem targets reached between two snapshots; known: commits that existed before the run."""
-    contract = lambda s: {k: v for k, v in s["files"].items() if CONTRACT_PATH.match(k)}
-    return [m for m, hit in (("edit", old["files"] != new["files"]), ("test_write", old.get("tests") != new.get("tests")),
-                             ("git_commit", new["head"] != old["head"] and new["head"] not in known),
-                             ("git_push", new["refs"] != old["refs"]), ("gh_call", len(new["gh"]) > len(old["gh"])),
-                             ("kit_contract_edit", contract(old) != contract(new))) if hit]
-
-
-class Bound:
-    """The max_tool_calls stop rule (--help): the calls in flight when the count reaches the bound, and the calls
-    nested in them, finish and are graded; any other call started after it stops the run."""
-
-    def __init__(self, maxc: int) -> None:
-        self.maxc = maxc
-        self.flight: set[str] = set()   # started, not ended
-        self.cap: set[str] | None = None   # in flight when the bound was reached
-
-    def stops(self, raw: bytes, calls: list[object]) -> bool:
-        """After event RAW, CALLS the tool calls started so far: whether the run stops at the bound now."""
-        e = safe_json(raw)
-        ev = cast("dict[str, object]", e) if isinstance(e, dict) else {}
-        cid = str(ev.get("toolCallId", ""))
-        if ev.get("type") == "tool_execution_start":
-            if self.cap is not None and not any(cid.startswith(c + "/") for c in self.cap):
-                return True   # a call outside the calls in flight at the bound: never credited
-            self.flight.add(cid)
-            if self.cap is not None:
-                self.cap.add(cid)
-        elif ev.get("type") == "tool_execution_end":
-            self.flight.discard(cid)
-        if self.cap is None and len(calls) >= self.maxc:
-            self.cap = set(self.flight)
-        return self.cap is not None and not self.flight
-
-
-def watch(argv):
-    """Run CMD, pass its stdout through, stop its process group once every fact is decided or at a bound.
-    After each tool_execution_end, snapshot the case repo and print a qa_fs event naming the targets that call reached."""
-    facts, maxc, tmo, setup = json.loads(argv[0]), int(argv[1]), float(argv[2]), json.loads(argv[3])
-    if not facts:   # a review case (no facts: --help, Review) runs to its end, this one fact open until then
-        facts = [{"fact": "skill_not_read", "skill": "", "_skill_text": ""}]
-    cmd = argv[argv.index("--") + 1:]
-    env, origin, log = prep(setup)
-    known = set(git_out("rev-list", "--all").split())
-    main0 = git_out("rev-parse", "-q", "--verify", "main")   # branch_paths' base (schema, Branch paths)
-    tests = any(isinstance(f, dict) and f.get("before") == "test_write" for f in facts)   # only a case graded on it
-    unders = under_targets(cast("list[Fact]", facts))
-    snap = snapshot(origin, log, tests)
-    if tests:
-        try:
-            snap["tests"] = declared_tests(snap)
-        except RuntimeError as e:
-            print(json.dumps({"type": "qa_watch", "stop": "test_runner", "exit": None, "tool_calls": 0, "error": str(e)}), flush=True)
-            return 1
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, start_new_session=True, env=env)
-    why, err = [], {}
-
-    def stop(reason):
-        if not why:
-            why.append(reason)
-        for sig, wait in ((signal.SIGTERM, 5), (signal.SIGKILL, 0)):
-            try:
-                os.killpg(p.pid, sig)
-            except OSError:
-                return
-            try:
-                p.wait(timeout=wait or None); return
-            except subprocess.TimeoutExpired:
-                pass
-    timer = threading.Timer(tmo, stop, args=("timeout",)); timer.daemon = True; timer.start()
-    seen, raws, lines = [], [], queue.Queue()
-    bound = Bound(maxc)
-
-    def pump():   # the snapshot per end event, off the deciding loop (why: schema, Before targets, stated limit; #170)
-        for raw in p.stdout:
-            end = safe_json(raw) if b'"tool_execution_end"' in raw else None
-            end = end if isinstance(end, dict) and end.get("type") == "tool_execution_end" else None
-            lines.put((raw, end, snapshot(origin, log, tests) if end else None))
-        lines.put(None)
-    threading.Thread(target=pump, daemon=True).start()
-    for raw, end, now in iter(lines.get, None):
-        sys.stdout.buffer.write(raw); sys.stdout.buffer.flush()
-        new = tool_calls([raw])
-        if not new and not end:
-            continue
-        seen += new; raws.append(raw)
-        if end:
-            if tests:
-                try:
-                    now["tests"] = snap["tests"] if now["files"] == snap["files"] else declared_tests(now)
-                except RuntimeError as e:
-                    err["error"] = str(e); stop("test_runner"); break
-            marks = changed(snap, now, known)
-            marks += under_marks(*cast("tuple[Fact, Fact, dict[str, list[str]]]", (snap, now, unders)))
-            if marks:
-                ev = {"type": "qa_fs", "toolCallId": end.get("toolCallId"), "marks": marks, "gh": now["gh"][len(snap["gh"]):]}
-                line = (json.dumps(ev) + "\n").encode()
-                sys.stdout.buffer.write(line); sys.stdout.buffer.flush(); raws.append(line)
-            snap = now
-        if all(judge(f, seen, False, attempt_record(), marks=fs_marks(raws), lines=raws)[0] != "open" for f in facts):
-            stop("decided"); break
-        if bound.stops(cast("bytes", raw), cast("list[object]", seen)):
-            stop("max_tool_calls"); break
-    rc = p.wait(); timer.cancel()
-    paths = (git_out("diff", "-z", "--name-only", "--no-renames", main0) + "\0" + git_out("ls-files", "-z", "-o", "--exclude-standard")).split("\0")
-    print(json.dumps({"type": "qa_branch", "base": main0, "paths": sorted(set(p for p in paths if p))}), flush=True)
-    print(json.dumps({"type": "qa_watch", "stop": why[0] if why else "exit", "exit": rc, "tool_calls": len(seen), **err}), flush=True)
-    return 0 if why else rc
-
-
 # ---- one case -------------------------------------------------------------------------------
 
 def qc_sandbox():
@@ -1075,15 +401,6 @@ def fixture_copy(src, scratch, case=None, evals=None):
     return repo, head
 
 
-def skill_source(fact, kit, repo):
-    """FACT with the SKILL.md it grades (rule: schema, Facts): the kit's (_skill_md, read when graded), else the case repo's
-    as set up, before the agent runs (_skill_text: its text now, as the agent first sees it)."""
-    p = kit / ".agents" / "skills" / str(fact.get("skill")) / "SKILL.md"
-    if p.is_file():
-        return dict(fact, _skill_md=str(p))
-    p = repo / ".agents" / "skills" / str(fact.get("skill")) / "SKILL.md"
-    return dict(fact, _skill_md=str(p), _skill_text=skill_text(str(p)))
-
 
 def kit_at(ref, opt: str = "--kit-ref"):
     """(kit dir, full sha): the head kit for ref None, else COMMIT's tree archived into scratch (caller removes it)."""
@@ -1094,38 +411,18 @@ def kit_at(ref, opt: str = "--kit-ref"):
     if not sha:
         die(64, f"{opt} {ref}: no such commit in the kit repo {KIT}")
     d = Path(tempfile.mkdtemp(prefix=f"qa-kit-{sha[:12]}-"))
-    err = export(KIT, sha, d)
+    err = grading.export(KIT, sha, d)
     if err is not None:
         shutil.rmtree(d, ignore_errors=True)
         die(1, f"{opt} {ref}: could not materialize {sha}: {err}")
     return d, sha
 
 
-def export(repo: Path, sha: str, dest: Path) -> str | None:
-    """REPO's tree at SHA written into DEST by `git archive` (the one export path: --kit-ref's kit, a history fixture);
-    None when done, else why not."""
-    a = subprocess.Popen(["git", "-C", str(repo), "archive", "--format=tar", sha], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    x = subprocess.run(["tar", "-x", "-C", str(dest)], stdin=a.stdout, capture_output=True, text=True)
-    if a.stdout:
-        a.stdout.close()
-    gerr = a.stderr.read().decode(errors="replace").strip() if a.stderr else ""
-    return None if a.wait() == 0 and x.returncode == 0 else (gerr or x.stderr.strip() or "git archive failed")
-
-
-def check_evals() -> "ModuleType":
-    """scripts/check-evals as a module: the one fixture materializer, fixture_tree, and its tree_sha (schema.md, Fixtures)."""
-    loader = importlib.machinery.SourceFileLoader("check_evals", str(KIT / "scripts" / "check-evals"))
-    spec = importlib.util.spec_from_loader("check_evals", loader)
-    assert spec is not None
-    mod = importlib.util.module_from_spec(spec)
-    loader.exec_module(mod)
-    return mod
-
 
 def fixture_src(evals: Path, fixture: object, scratch: Path) -> Path:
     """The tree a case's fixture names (schema.md, Case): check-evals' fixture_tree (schema.md, Fixtures), or a history fixture's repo at its commit, exported into SCRATCH/history-<sha>. Raises
     RuntimeError when a base is refused or that repo or commit cannot be exported."""
-    mod = check_evals()
+    mod = grading.check_evals()
     if not isinstance(fixture, dict):
         return cast("Path", mod.fixture_tree(evals, str(fixture), scratch))
     fx = cast("Result", fixture)
@@ -1134,58 +431,65 @@ def fixture_src(evals: Path, fixture: object, scratch: Path) -> Path:
         raise RuntimeError(f"history fixture: unknown repo {fx.get('repo')!r}")
     dest = scratch / f"history-{str(fx.get('commit'))[:12]}"
     dest.mkdir()
-    err = export(repo, str(fx.get("commit")), dest)
+    err = grading.export(repo, str(fx.get("commit")), dest)
     if err is not None:
         raise RuntimeError(f"history fixture: {repo} at {fx.get('commit')}: {err}")
     return dest
 
 
-def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_ref=None, kit_sha=None, rep: tuple[int, int, str] | None = None):
+
+
+def run_case(qc: "ModuleType", evals: Path, suite: Result, case: Result, facts: list[Result], model: str | None, runid: str,
+             n: int | str, out: Path, reviews: Path, kit: Path = KIT, kit_ref: str | None = None, kit_sha: str | None = None,
+             rep: tuple[int, int, str] | None = None) -> Result:
     """One run of a case; rep: (k, N, config), run k of N (--runs) on config ("" alone, else --baseline's baseline or
-    current), recorded in its input.json and result.json."""
-    out.mkdir(parents=True, exist_ok=True)
+    current), recorded in its input.json and result.json; reviews: the reviews dir (--help, Review)."""
     kits = {"kit_ref": kit_ref or "HEAD", "kit_sha": kit_sha, **({"run": rep[0], "of": rep[1], "config": rep[2]} if rep else {})}
+
+    slot = grading.Slot(out, suite, case, kits, reviews)
+
+    def recorded(run: grading.Run, inputs: Result, secs: float = 0.0, prompt: str | None = None) -> Result:
+        res, lines = grading.record(slot, run, inputs=inputs, secs=secs, prompt=prompt)
+        print("\n".join(lines), flush=True)
+        return res
+
     missing = [p for p in (f"agents/{case['role']}.md", "scripts/pi-role") if not (kit / p).is_file()]
     if missing:
-        (out / "input.json").write_text(json.dumps({"suite": suite["suite"], **case, **kits}, indent=2) + "\n")
-        return finish(out, suite, case, model, 0.0, "FAIL", [f"kit {kit_sha}: no {' '.join(missing)} at that commit; case not run"],
-                      [], None, kits)
-    maxc = int(suite.get("max_tool_calls", DEFAULT_MAX_CALLS)); tmo = int(suite.get("timeout_s", DEFAULT_TIMEOUT))
+        return recorded(grading.Run("FAIL", [f"kit {kit_sha}: no {' '.join(missing)} at that commit; case not run"], model),
+                        {"suite": suite["suite"], **case, **kits})
     scratch = Path(tempfile.mkdtemp(prefix=f"qa-{runid}-{n}-"))
     t0 = time.time()
     role_model = model or front(kit, case["role"], "model")
     try:
         try:
             src = fixture_src(*cast("tuple[Path, object, Path]", (evals, case["fixture"], scratch)))
-            repo, head = cast("tuple[Path, str]", fixture_copy(*cast("tuple[Path, Path, Result, Path]", (src, scratch, case, evals))))
+            repo, head = cast("tuple[Path, str]", fixture_copy(src, scratch, case, evals))
         except (RuntimeError, subprocess.CalledProcessError, OSError) as e:
-            (out / "input.json").write_text(json.dumps({"suite": suite["suite"], **case, **kits}, indent=2) + "\n")
             why = e.stderr.strip()[-200:] if isinstance(e, subprocess.CalledProcessError) and e.stderr else str(e)
-            return finish(out, suite, case, role_model, 0.0, "FAIL", [f"fixture: {why}; case not run"], [], None, kits)
+            return recorded(grading.Run("FAIL", [f"fixture: {why}; case not run"], role_model), {"suite": suite["suite"], **case, **kits})
         task = case["task"].replace("{repo}", str(repo)).replace("{head}", head)
-        facts = [skill_source(f, kit, repo) if "skill" in f else f for f in facts]
-        facts, shims = ran_setup(cast("list[dict[str, object]]", facts), head)
-        (out / "prompt.md").write_text(task + "\n", encoding="utf-8")
-        (out / "input.json").write_text(json.dumps({"suite": suite["suite"], **case, "model": role_model, "fixture_head": head,
-                                                    "max_tool_calls": maxc, "timeout_s": tmo, **kits}, indent=2) + "\n")
-        on = cast("dict[str, object]", case)
-        setup: dict[str, object] = {k: bool(on.get(k)) for k in ("fake_gh", "origin", "fake_qa")}
-        setup["stand_ins"] = on.get("stand_ins") or {}
-        cmd = [str(SELF), "--watch", json.dumps(facts), str(maxc), str(tmo), json.dumps(setup), "--",
+        planned = grading.plan(suite, case, facts, (repo, head), kit=kit)
+        inputs = {"suite": suite["suite"], **case, "model": role_model, "fixture_head": head,
+                  "max_tool_calls": planned.max_tool_calls, "timeout_s": planned.timeout_s, **kits}
+        cmd = [str(SELF), *planned.watch_args, "--",
                str(kit / "scripts" / "pi-role"), str(kit / "agents" / f"{case['role']}.md"),
                *(["--model", model] if model else []), "--mode", "json", "--session-dir", "/tmp/qa-session", "-p", task]
         here = os.getcwd(); os.chdir(repo)
         ro = os.environ.get("OCTO_FEATHER_QC_RO_BINDS")
-        if kit != KIT:   # the older kit read-only in the sandbox, as the head kit is
-            os.environ["OCTO_FEATHER_QC_RO_BINDS"] = ":".join(p for p in (ro, str(kit)) if p)
+        if kit != KIT:   # the older kit read-only in the sandbox, as the head kit is, and the grading module's copy
+            grader = scratch / "grading"
+            grader.mkdir()
+            shutil.copy2(grading.__file__, grader / "eval_grading.py")
+            os.environ["OCTO_FEATHER_QC_RO_BINDS"] = ":".join(p for p in (ro, str(kit), str(grader)) if p)
+            os.environ["OCTO_FEATHER_QA_GRADING"] = str(grader)
         # the sandbox's run shims: only the programs this case's ran facts name (schema, Run record)
-        os.environ["QC_RECORD"] = shims
+        os.environ["QC_RECORD"] = planned.shims
         try:
             run, rec = qc.sandboxed(cmd, f"qa-{runid}-{n}", {"off": GH_OFF}, history=False, kit=kit)
         except SystemExit as e:   # unshare missing or unusable: never run unsandboxed
             run, rec = None, {"error": f"sandbox unavailable (exit {e.code})"}
         finally:
-            os.chdir(here); os.environ.pop("QC_RECORD", None)
+            os.chdir(here); os.environ.pop("QC_RECORD", None); os.environ.pop("OCTO_FEATHER_QA_GRADING", None)
             if ro is None:
                 os.environ.pop("OCTO_FEATHER_QC_RO_BINDS", None)
             else:
@@ -1193,209 +497,25 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
     secs = round(time.time() - t0, 1)
-    (out / "sandbox.json").write_text(json.dumps(rec, indent=2) + "\n")
-    if run is None:
-        bad = [l for l in rec.get("proof", []) if "FAIL" in l] or [rec.get("error", "sandbox did not start")]
-        return finish(out, suite, case, role_model, secs, "FAIL", [f"sandbox: proof failed, case not run: {'; '.join(bad)}"], [], None, kits)
-    (out / "transcript.jsonl").write_text(run.stdout)
-    (out / "stderr.txt").write_text(run.stderr)
-    lines = run.stdout.splitlines()
-    calls = tool_calls(lines)
-    events = [e for e in (safe_json(l) for l in lines) if isinstance(e, dict)]
-    w = next((e for e in reversed(events) if e.get("type") == "qa_watch"), None)
-    asst = [e["message"] for e in events if e.get("type") == "message_end" and isinstance(e.get("message"), dict)
-            and e["message"].get("role") == "assistant"]
-    used = next((f"{m.get('provider')}/{m.get('model')}" for m in asst if m.get("model")), role_model)
-    last = ((w or {}).get("stop"), "".join(str(c.get("text", "")) for c in asst[-1].get("content", [])
-                                            if isinstance(c, dict) and c.get("type") == "text") if asst else None)
-    marks = fs_marks(lines)
-    att, short = rec.get("attempts"), None
-    if att is not None and (not isinstance(att, list) or rec.get("recorded") != len(att)):   # schema.md, Attempt record
-        short, att = (f"sandbox: attempt record not whole: {len(att) if isinstance(att, list) else 'no list of'} entries"
-                      f" of {rec.get('recorded')} recorded; a partial record is never graded"), None
-    graded = [dict({k: v for k, v in f.items() if not k.startswith("_")}, status=s, evidence=txt) for f in facts
-              for s, txt in [judge(f, calls, True, att, last, marks, lines)]]
-    problems = [short] if short else []
-    if w is None:
-        problems.append(f"run: no stop record (exit {run.returncode})")
-    elif w["stop"] == "exit" and w["exit"] != 0:
-        problems.append(f"run: pi exited {w['exit']} on its own")
-    if w and w.get("error"):
-        problems.append(f"run: {w['error']}")
-    if not asst:
-        problems.append("run: no assistant message in the transcript")
-    errs = [m.get("errorMessage") or m.get("stopReason") for m in asst if m.get("stopReason") == "error"]
-    if errs and not calls:
-        problems.append(f"run: model error: {str(errs[0])[:200]}")
-    ok = not problems and all(g["status"] == "pass" for g in graded)
-    deciding = problems + [g["evidence"] for g in graded if ok or g["status"] != "pass" or problems]
-    rv = cast("ReviewRun", (out, suite, case, used, secs, problems, deciding, graded, w, kits, events, last))
-    if "review" in rv[2]:   # a review case (--help, Review): its output kept, never a pass
-        return review_end(rv)
-    return finish(out, suite, case, used, secs, "PASS" if ok else "FAIL", deciding, graded, w, kits)
+    return recorded(grading.grade(planned, run, rec, model=role_model), inputs, secs, task)
 
 
-ReviewRun = tuple[Path, "Result", "Result", str, float, list[str], list[str], list["Result"], "Result | None", "Result", list["Result"],
-                  tuple[object, "str | None"]]   # run_case's state at its end, for review_end
-
-
-def review_end(rv: ReviewRun) -> "Result":
-    """A review case's run end (--help, Review): its output kept in review.json, REVIEW unless the run failed on its own."""
-    out, suite, case, used, secs, problems, deciding, graded, w, kits, events, last = rv
-    br = next((e for e in reversed(events) if e.get("type") == "qa_branch"), None)
-    q = cast("Result", case["review"])["question"]
-    kept: Result = {"question": q, "final_message": last[1], "changed_files": (br or {}).get("paths", [])}
-    (out / "review.json").write_text(json.dumps(kept, indent=2) + "\n")
-    if not problems:
-        deciding = [f"awaiting review: {q}", f"changed files: {', '.join(cast('list[str]', kept['changed_files'])) or 'none'}"]
-    fin = cast("Callable[..., Result]", finish)
-    res = fin(out, suite, case, used, secs, "FAIL" if problems else "REVIEW", deciding, graded, w, kits)
-    print("\n".join(review_lines(kept, out / "review.json", latest_review(str(suite["suite"]), str(case["id"])))), flush=True)
-    return res
-
-
-REVIEWS: list[Path] = []
-REVIEW_ARGS = (2, 4)   # --review RUN_DIR SUITE/CASE [VERDICT NOTE]   # the qa artifacts root's reviews dir, set by run_all (--help, Review)
-
-
-def review_file(reviews: Path, suite: str, case: str) -> Path:
-    return reviews / suite / f"{case}.jsonl"
-
-
-def review_records(reviews: Path, suite: str, case: str) -> "list[Result]":
-    """The case's recorded verdicts, oldest first (--help, Review)."""
-    f = review_file(reviews, suite, case)
-    raw = [safe_json(ln) for ln in f.read_text().splitlines()] if f.is_file() else []
-    return [cast("Result", r) for r in raw if isinstance(r, dict)]
-
-
-def latest_review(suite: str, case: str) -> "Result | None":
-    recs = review_records(REVIEWS[0], suite, case) if REVIEWS else []
-    return recs[-1] if recs else None
-
-
-def show_review(r: "Result") -> str:
-    return f"{r.get('verdict')} (run {r.get('run_id')}, kit {str(r.get('kit_sha'))[:12]}, {r.get('at')}): {r.get('note')}"
-
-
-def review_lines(kept: "Result", where: Path, latest: "Result | None") -> list[str]:
-    """A review case's output and its latest recorded verdict, as printed under its line."""
-    msg = " / ".join(str(kept.get("final_message") or "(no final message)").splitlines())
-    return [f"  output: final message: {msg[:400]}", f"  output: kept in {where}",
-            f"  latest review: {show_review(latest) if latest else 'none'}"]
+REVIEW_ARGS = (2, 4)   # --review RUN_DIR SUITE/CASE [VERDICT NOTE]
 
 
 def review(argv: list[str]) -> int:
     """--review RUN_DIR SUITE/CASE [pass|fail NOTE]: show a stored run's review case, or record a verdict on it (--help, Review)."""
     if len(argv) not in REVIEW_ARGS:
         die(64, "--review takes RUN_DIR SUITE/CASE, then optionally pass|fail and a NOTE")
-    run_dir, key = Path(argv[0]), argv[1]
-    suite, _, cid = key.partition("/")
-    sm: Result = {}
-    res: Result = {}
-    try:
-        sm = cast("Result", json.loads((run_dir / "summary.json").read_text()))
-        res = cast("Result", json.loads((run_dir / suite / cid / "result.json").read_text()))
-    except (OSError, ValueError) as e:
-        die(64, f"--review {run_dir} {key}: no stored run case ({e})")
-    if not isinstance(res.get("review"), dict):
-        die(64, f"--review {key}: not a review case in run {sm.get('run_id')}")
-    reviews = run_dir.parent / "reviews"
-    if argv[2:]:
-        verdict, note = argv[2], argv[3]
-        if verdict not in ("pass", "fail") or not note.strip():
-            die(64, "--review: the verdict is pass or fail, and the note is not blank")
-        rec = {"run_id": sm.get("run_id"), "kit_sha": res.get("kit_sha"), "verdict": verdict, "note": note,
-               "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
-        review_file(reviews, suite, cid).parent.mkdir(parents=True, exist_ok=True)
-        with review_file(reviews, suite, cid).open("a") as fh:
-            fh.write(json.dumps(rec) + "\n")
-    mine = [r for r in review_records(reviews, suite, cid) if r.get("run_id") == sm.get("run_id")]
-    head = f"REVIEWED {key}: {show_review(mine[-1])}" if mine else f"REVIEW {key}: awaiting review (run {sm.get('run_id')})"
-    print(head, flush=True)
-    for f in sorted((run_dir / suite / cid).glob("**/review.json")):
-        kept = cast("Result", json.loads(f.read_text()))
-        print("\n".join(review_lines(kept, f, None)[:2]), flush=True)
+    print("\n".join(grading.review(Path(argv[0]), argv[1], *argv[2:])), flush=True)
     return 0
 
 
-def safe_json(line):
-    try:
-        return json.loads(line)
-    except ValueError:
-        return None
-
-
-def finish(out, suite, case, model, secs, verdict, deciding, graded, w, kits):
-    (out / "grading.json").write_text(json.dumps({"facts": graded, "deciding": deciding}, indent=2) + "\n")
-    res = {"suite": suite["suite"], "id": case["id"], "verdict": verdict, "deciding": deciding, "model": model, "seconds": secs,
-           "stop": (w or {}).get("stop"), "tool_calls": (w or {}).get("tool_calls"),
-           **({k: case[k] for k in ("role", "should_trigger", "split", "review") if k in case}), **kits}
-    (out / "result.json").write_text(json.dumps(res, indent=2) + "\n")
-    if "run" in kits:   # run k of N (--runs): its line indented, under its case
-        print(f"  {kits['config'] + ' ' if kits['config'] else ''}run {kits['run']}/{kits['of']}: ", end="")
-    print(result_line(cast("Result", res), watched=bool(cast("object", w))), flush=True)
-    return res
-
-
-def result_line(res: "Result", *, watched: bool) -> str:
-    """One run's result line, as printed: with its stop record when the watcher ran (WATCHED)."""
-    secs = res["seconds"]
-    stop = (f" [stop: {res['stop']}, {res['tool_calls']} tool calls, {secs} s]" if watched else f" [{secs} s]") + f" [kit {res['kit_sha']}]"
-    return f"{res['verdict']} {res['suite']}/{res['id']}: {'; '.join(cast('list[str]', res['deciding']))}{stop}"
-
-
-RUN_KEYS = ("verdict", "deciding", "model", "seconds", "stop", "tool_calls")
-Result = dict[str, object]
-
-
 Config = tuple[str, Path, "str | None", "str | None"]   # (name: "" alone, else baseline or current; kit dir, ref, sha)
-USAGE_KEYS = (("input", "input"), ("output", "output"), ("cache_read", "cacheRead"), ("cache_write", "cacheWrite"))
-
-
-def run_usage(transcript: Path) -> Result:
-    """The tokens a run's assistant messages used (summed message_end usage, as Pi reports it) and their cost
-    (cost_usd None when Pi reported none); every count 0 for a run with no transcript."""
-    tot: dict[str, float] = {k: 0 for k, _ in USAGE_KEYS}
-    total, cost = 0, None
-    lines = transcript.read_text().splitlines() if transcript.is_file() else []
-    for raw in (safe_json(ln) for ln in lines):
-        e = cast("Result", raw) if isinstance(raw, dict) else {}
-        msg = e.get("message") if e.get("type") == "message_end" else None
-        m = cast("Result", msg) if isinstance(msg, dict) else {}
-        u = m.get("usage") if m.get("role") == "assistant" else None
-        if not isinstance(u, dict):
-            continue
-        u = cast("Result", u)
-        part = {k: v if isinstance(v := u.get(pi), int | float) else 0 for k, pi in USAGE_KEYS}
-        for k, v in part.items():
-            tot[k] += v
-        t = u.get("totalTokens")
-        total += t if isinstance(t, int | float) else sum(part.values())
-        c = u.get("cost")
-        c = cast("Result", c).get("total") if isinstance(c, dict) else None
-        if isinstance(c, int | float):
-            cost = (cost or 0) + c
-    return {**tot, "total": total, "cost_usd": None if cost is None else round(cost, 6)}
-
-
-def spread(values: list[float]) -> Result:
-    """Mean and sample standard deviation (0 for one value), as --help says; None for no values."""
-    if not values:
-        return {"mean": None, "stddev": None}
-    return {"mean": round(statistics.fmean(values), 4), "stddev": round(statistics.stdev(values), 4) if len(values) > 1 else 0.0}
-
-
-def run_facts(grading: Path) -> list[Result]:
-    """A run's graded facts, each its parameters and status (grading.json without the evidence text)."""
-    raw = safe_json(grading.read_text()) if grading.is_file() else None
-    g = cast("Result", raw) if isinstance(raw, dict) else {}
-    fs = cast("list[Result]", g.get("facts", []))
-    return [{k: v for k, v in f.items() if k != "evidence"} for f in fs]
 
 
 def run_runs(qc: object, evals: Path, suite: Result, case: Result, facts: list[Result], model: str | None, runid: str, n: int,
-             out: Path, runs: int, configs: list[Config]) -> Result:
+             out: Path, runs: int, configs: list[Config], reviews: Path) -> Result:
     """A case run RUNS times on each config, interleaved, and its result (--runs, --baseline and the result fields: --help)."""
     one = cast("Callable[..., Result]", run_case)
     alone = len(configs) == 1
@@ -1403,104 +523,15 @@ def run_runs(qc: object, evals: Path, suite: Result, case: Result, facts: list[R
     for k in range(1, runs + 1):
         for name, kit, ref, sha in configs:   # run k on each config before run k + 1
             if alone and runs == 1:
-                done[name].append((".", one(qc, evals, suite, case, facts, model, runid, n, out, kit, ref, sha)))
+                done[name].append((".", one(qc, evals, suite, case, facts, model, runid, n, out, reviews, kit, ref, sha)))
                 continue
             d = f"{name}/run-{k}" if name else f"run-{k}"
             done[name].append((d, one(qc, evals, suite, case, facts, model, runid, f"{n}r{k}" + (f"-{name[0]}" if name else ""),
-                                      out / d, kit, ref, sha, rep=(k, runs, name))))
-    ags = {name: aggregate(done[name], out, runs) for name in done}
-    res = ags[configs[-1][0]]
-    if not alone:
-        base = ags["baseline"]
-        res = {**res, "baseline": {"kit_ref": configs[0][2], "kit_sha": configs[0][3], **{k: base[k] for k in BASE_KEYS}},
-               "delta": {k: diff(res, base, k) for k in ("pass_rate", "time", "tokens", "cost_usd")}}
-    if not alone or runs > 1:
-        print("\n".join(case_lines(res)), flush=True)
-    (out / "result.json").write_text(json.dumps(res, indent=2) + "\n")
+                                      out / d, reviews, kit, ref, sha, rep=(k, runs, name))))
+    res, lines = grading.combine(out, done, runs=runs, baseline=None if alone else (configs[0][2], configs[0][3]))
+    if lines:
+        print("\n".join(lines), flush=True)
     return res
-
-
-def case_lines(res: Result) -> list[str]:
-    """A repeated or compared case's lines as the run prints them, from its result RES (--runs, --baseline: --help):
-    its case line, then with a baseline the baseline's line and the compare table, else its cost line."""
-    name = f"{res['suite']}/{res['id']}"
-
-    def line(at: str, r: Result) -> str:
-        return f"{at}{r['verdict']} {name}: {'; '.join(cast('list[str]', r['deciding']))} [{r['seconds']} s] [kit {r['kit_sha']}]"
-
-    b = res.get("baseline")
-    if not isinstance(b, dict):
-        return [line("", res), f"  cost {name}: " + "; ".join(f"{lb} {show_spread(res[k], fmt)}" for lb, k, fmt in (("time s", "time", "{:.1f}"), ("tokens", "tokens", "{:.0f}")))]
-    return [line("", res), line("  baseline ", cast("Result", b)), *compare(res)]
-
-
-BASE_KEYS = ("verdict", "deciding", "seconds", "runs", "runs_passed", "pass_rate", "stddev", "time", "tokens", "cost_usd")
-
-
-def mean(res: Result, k: str) -> float | None:
-    """Config result RES's mean of K: pass_rate itself, else K's spread mean (None when not measured)."""
-    v = res.get(k)
-    v = cast("Result", v).get("mean") if isinstance(v, dict) else v
-    return float(v) if isinstance(v, int | float) else None
-
-
-def diff(cur: Result, base: Result, k: str) -> float | None:
-    """Current minus baseline mean of K (skill-creator's delta), None when either side has none."""
-    c, b = mean(cur, k), mean(base, k)
-    return None if c is None or b is None else round(c - b, 4)
-
-
-def aggregate(done: list[tuple[str, Result]], out: Path, runs: int) -> Result:
-    """One config's runs of a case as its result: one run's own, else the first failed run's (or run 1's) with the
-    case's verdict and deciding; with runs, runs_passed, pass_rate, stddev, time, tokens and cost_usd."""
-    rs = [r for _, r in done]
-    ok = [float(r["verdict"] == "PASS") for r in rs]
-    use = [run_usage(out / d / "transcript.jsonl") for d, _ in done]
-    costs = [cast("float", u["cost_usd"]) for u in use if u["cost_usd"] is not None]
-    agg: Result = {"runs": [{"run": k, "dir": d, **{x: r.get(x) for x in RUN_KEYS}, "usage": u, "facts": run_facts(out / d / "grading.json")}
-                            for k, ((d, r), u) in enumerate(zip(done, use), 1)],
-                   "runs_passed": int(sum(ok)), "pass_rate": round(statistics.fmean(ok), 4),
-                   "stddev": round(statistics.stdev(ok), 4) if len(ok) > 1 else 0.0,
-                   "time": spread([cast("float", r["seconds"]) for r in rs]),
-                   "tokens": spread([cast("float", u["total"]) for u in use]),
-                   "cost_usd": spread(costs) if len(costs) == len(use) else None}
-    if len(rs) == 1 and done[0][0] == ".":
-        return {**rs[0], **agg}
-
-    def said(r: Result) -> str:
-        return "; ".join(cast("list[str]", r["deciding"]))
-
-    lead = next((r for r in rs if r["verdict"] == "FAIL"), None) or next((r for r in rs if r["verdict"] != "PASS"), rs[0])   # the first failed run, else run 1
-    head = f"{agg['runs_passed']}/{runs} runs passed (pass rate {agg['pass_rate']:.2f}, stddev {agg['stddev']:.2f})"
-    why = [f"run {k}: {said(r)}" for k, r in enumerate(rs, 1) if r["verdict"] != "PASS"] or [f"run 1: {said(rs[0])}"]
-    secs = round(sum(cast("float", r["seconds"]) for r in rs), 1)
-    return {**{k: v for k, v in lead.items() if k not in ("run", "of", "config")}, "verdict": next((v for v in ("FAIL", "REVIEW") if v in {r["verdict"] for r in rs}), "PASS"),
-            "deciding": [head, *why], "seconds": secs, **agg}
-
-
-def show_spread(sp: object, fmt: str = "{:.2f}") -> str:
-    if not isinstance(sp, dict) or cast("Result", sp).get("mean") is None:
-        return "n/a"
-    sp = cast("Result", sp)
-    return f"{fmt.format(sp['mean'])} +/- {fmt.format(sp['stddev'])}"
-
-
-def compare(cur: Result) -> list[str]:
-    """A case's `compare` table from its result CUR, its baseline and delta (--baseline: --help)."""
-    rows = [("pass rate", "pass_rate", "{:.2f}"), ("time s", "time", "{:.1f}"), ("tokens", "tokens", "{:.0f}"), ("cost usd", "cost_usd", "{:.4f}")]
-    delta = cast("Result", cur["delta"])
-    base = cast("Result", cur["baseline"])
-    out = [f"  compare {cur['suite']}/{cur['id']}: baseline kit {str(base['kit_sha'])[:12]} beside current kit {str(cur['kit_sha'])[:12]}",
-           f"    {'':<10} {'baseline':<20} {'current':<20} difference"]
-
-    def shown(res: Result, k: str, fmt: str) -> str:
-        return show_spread({"mean": res["pass_rate"], "stddev": res["stddev"]} if k == "pass_rate" else res[k], fmt)
-
-    for lb, k, fmt in rows:
-        d = delta[k]
-        out.append(f"    {lb:<10} {shown(base, k, fmt):<20} {shown(cur, k, fmt):<20} "
-                   + ("n/a" if d is None else ("+" if cast("float", d) >= 0 else "") + fmt.format(d)))
-    return out
 
 
 # ---- a judgment bench -----------------------------------------------------------------------
@@ -1576,10 +607,10 @@ export default function (pi) {
 """
 
 
-def bench_output(stdout):
+def bench_output(stdout: str):
     """(bench, problem): the command's one {"bench": ...} stdout line; problem names why there is none."""
     for t in stdout.splitlines():
-        o = safe_json(t)
+        o = grading.safe_json(t)
         if isinstance(o, dict) and isinstance(o.get("bench"), dict):
             return o["bench"], None
     return None, "the bench command printed no bench result: " + stdout[-300:].replace("\n", " ")
@@ -1766,7 +797,7 @@ def run_bench(qc, d, suite, picked, requested, runid, out, kit_model):
     available classifier answers each picked case's state; graded here against reference/expectations.json, never shown to it."""
     out.mkdir(parents=True, exist_ok=True)
     q = json.loads((d / "question.json").read_text())
-    tmo = int(suite.get("timeout_s", DEFAULT_TIMEOUT))
+    tmo = int(cast("Result", suite).get("timeout_s", grading.DEFAULT_TIMEOUT))
     t0 = time.time()
     res = {"suite": suite["suite"], "kind": "judgment", "question": q["id"], "cases": len(picked)}
     ruled = classifier_lists(d.parent)
@@ -1938,323 +969,49 @@ def scores(results):
                  "total": sum(r.get("split") == sp for r in results)} for sp in ("train", "held-out")}
 
 
-TRADEOFF = 0.5   # a cost tradeoff's growth over the baseline mean (rule: --help, --analyze)
-
-
-def analyze(cases: list[Result]) -> Result:
-    """The deterministic analysis of a run's fact cases (rules: --help, --analyze); no model."""
-    nd_cases: list[Result] = []
-    nd_facts: list[Result] = []
-    hv: list[Result] = []
-    cost: list[Result] = []
-    for r in cases:
-        if "runs" not in r or "review" in r:
-            continue
-        name = f"{r['suite']}/{r['id']}"
-        b = r.get("baseline")
-        base = cast("Result", b) if isinstance(b, dict) else None
-        for kit, x in ([("baseline", base), ("current", r)] if base else [("", r)]):
-            if 0 < cast("float", x["pass_rate"]) < 1:
-                hv.append({"case": name, "kit": kit or None, "pass_rate": x["pass_rate"], "stddev": x["stddev"]})
-        if base is None:
-            continue
-        same = r["pass_rate"] == base["pass_rate"]
-        grew: Result = {}
-        for k in ("time", "tokens"):
-            c, bm = mean(r, k), mean(base, k)
-            if c is not None and bm is not None and c > bm * (1 + TRADEOFF):
-                grew[k] = {"baseline": bm, "current": c}
-        if same and grew:
-            cost.append({"case": name, "pass_rate": r["pass_rate"], **grew})
-        elif same and r["pass_rate"] in (0.0, 1.0):
-            nd_cases.append({"case": name, "pass_rate": r["pass_rate"]})
-        if not same:
-            fl = [cast("list[Result]", cast("Result", x).get("facts") or []) for x in cast("list[object]", base["runs"]) + cast("list[object]", r["runs"])]
-            for i in range(min(len(f) for f in fl) if fl else 0):
-                st = {f[i].get("status") for f in fl}
-                if len(st) == 1:
-                    nd_facts.append({"case": name, "fact": {k: v for k, v in fl[0][i].items() if k != "status"}, "status": st.pop()})
-    return {"threshold": TRADEOFF, "non_discriminating_cases": nd_cases, "non_discriminating_facts": nd_facts,
-            "high_variance": hv, "cost_tradeoffs": cost}
-
-
-def analysis_lines(a: Result) -> list[str]:
-    """The analysis as printed: one line per flag, or `no flags`."""
-    def fact(f: Result) -> str:
-        return " ".join([str(f.get("fact")), *(json.dumps(v) if isinstance(v, list | dict) else str(v) for k, v in f.items() if k != "fact")])
-
-    out = ["qa: analysis (deterministic, no model; rules: octo-feather-qa --help, --analyze):"]
-    out += [f"  non-discriminating case {x['case']}: every run on both kits {'passed' if x['pass_rate'] == 1.0 else 'failed'}"
-            for x in cast("list[Result]", a["non_discriminating_cases"])]
-    out += [f"  non-discriminating fact {x['case']}: {fact(cast('Result', x['fact']))}: {x['status']} in every run on both kits"
-            for x in cast("list[Result]", a["non_discriminating_facts"])]
-    out += [f"  high variance {x['case']}: " + (f"{x['kit']} kit " if x["kit"] else "") + f"pass rate {x['pass_rate']:.2f} +/- {x['stddev']:.2f}"
-            for x in cast("list[Result]", a["high_variance"])]
-    out += [f"  cost tradeoff {x['case']}: pass rate {x['pass_rate']:.2f} on both kits; " + "; ".join(
-            f"{k} mean {cast('Result', x[k])['baseline']:.1f} to {cast('Result', x[k])['current']:.1f}" for k in ("time", "tokens") if k in x)
-            for x in cast("list[Result]", a["cost_tradeoffs"])]
-    return out if len(out) > 1 else [*out, "  no flags"]
-
-
 def reanalyze(run_dir: str, *, evidence: bool = False) -> int:
     """--analyze RUN_DIR: the analysis of a stored run, from its summary.json only; no case, sandbox or model runs.
     With EVIDENCE (--evidence), the run's evidence block instead."""
-    p = Path(run_dir) / "summary.json"
-    try:
-        raw: object = json.loads(p.read_text())
-    except (OSError, ValueError) as e:
-        raw = f"no readable summary.json ({e})"
-    if not isinstance(raw, dict):
-        die(64, f"--analyze {run_dir}: {raw if isinstance(raw, str) else 'summary.json is not an object'}")
-    sm = cast("Result", raw)
     if evidence:
-        print(evidence_block(Path(run_dir), sm), end="", flush=True)
+        print(grading.evidence(run_dir), end="", flush=True)
         return 0
-    print(f"qa: run {sm.get('run_id')} reanalyzed from {p}", flush=True)
-    print("\n".join(analysis_lines(analyze(cast("list[Result]", sm.get("cases") or [])))), flush=True)
+    print("\n".join(grading.reanalysis(run_dir)), flush=True)
     return 0
 
 
-def fenced(lines: list[str]) -> list[str]:
-    """LINES as one markdown text block, its fence longer than any backtick run in them."""
-    fence = "`" * max([3, *(len(m) + 1 for ln in lines for m in re.findall("`+", ln))])
-    return [f"{fence}text", *lines, fence]
-
-
-def ran_cited(case_dir: Path, cite: str, runs: list[Result]) -> list[str]:
-    """Each graded `ran` fact of RUNS (stored under CASE_DIR, cited as CITE/<dir>) with every recorded run matching
-    it, its argv whole as JSON (rules: schema, Run record; --help, Evidence)."""
-    out: list[str] = []
-    for r in runs:
-        d = str(r.get("dir", "."))
-        where = cite if d == "." else f"{cite}/{d}"
-        g, sb, inp = (stored(case_dir / d / n) for n in ("grading.json", "sandbox.json", "input.json"))
-        facts = [f for f in cast("list[Result]", (g or {}).get("facts") or []) if f.get("fact") == "ran"]
-        if g is None:
-            out.append(f"{where}: no readable grading.json")
-        att = (sb or {}).get("attempts")
-        record = [cast("Result", x) for x in cast("list[object]", att) if isinstance(x, dict)] if isinstance(att, list) else None
-        head = (inp or {}).get("fixture_head")
-        for f in facts:
-            want = [str(x) for x in cast("list[object]", f.get("args") or [])]
-            name = " ".join(["ran", str(f.get("program")), *want]) + "".join(f" {k} {f[k]}" for k in ("exit", "count") if k in f)
-            out.append(f"{where}: {name}: {f.get('status')}")
-            if record is None:
-                out.append("  no whole attempt record in sandbox.json")
-                continue
-            hits = [x for x in record if x.get("kind") == "run" and x.get("program") == f.get("program")
-                    and isinstance(x.get("argv"), list) and ("exit" not in f or x.get("exit") == f["exit"])
-                    and args_match(want, [str(a) for a in cast("list[object]", x["argv"])], head if isinstance(head, str) else None)]
-            out += [f"  {x['program']} {json.dumps(x['argv'])} exit {x.get('exit')}" for x in hits] or ["  no matching recorded run"]
-    return out
-
-
-def evidence_block(run_dir: Path, sm: Result) -> str:
-    """--analyze RUN_DIR --evidence: the stored run's markdown evidence block (--help, Evidence); the same run, the
-    same bytes."""
-    rid = str(sm.get("run_id") or run_dir.name)
-    b = sm.get("baseline")
-    base = cast("Result", b) if isinstance(b, dict) else None
-    cases = [cast("Result", c) for c in cast("list[object]", sm.get("cases") or []) if isinstance(c, dict)]
-    out = [f"## Eval evidence: run {rid}", "",
-           f"Generated from the stored run alone by `octo-feather-qa --analyze <qa dir>/{rid} --evidence`; never edited by hand.", "",
-           f"- run: {rid}, {sm.get('runs', 1)} run(s) per case",
-           f"- current kit: {sm.get('kit_sha')} (kit ref {sm.get('kit_ref', 'HEAD')})",
-           f"- baseline kit: {base.get('kit_sha')} (--baseline {base.get('kit_ref')})" if base else "- baseline kit: none",
-           f"- cases passed: {sm.get('passed')}/{sm.get('total')}"]
-    for c in cases:
-        name = f"{c.get('suite')}/{c.get('id')}"
-        runs = [cast("Result", r) for r in cast("list[object]", c.get("runs") or [{"dir": "."}]) if isinstance(r, dict)]
-        bruns = [cast("Result", r) for r in cast("list[object]", cast("Result", c.get("baseline") or {}).get("runs") or [])
-                 if isinstance(r, dict)]
-        alone = "baseline" not in c and len(runs) == 1
-        shown = [result_line(c, watched=c.get("stop") is not None or c.get("tool_calls") is not None)] if alone else case_lines(c)
-        ran = ran_cited(run_dir / str(c.get("suite")) / str(c.get("id")), f"{rid}/{name}", [*bruns, *runs])
-        out += ["", f"### {name}", "", *fenced(shown), "", f"Pin: `octo-feather-qa --verdict {rid}/{name}`"]
-        if ran:
-            out += ["", "Each graded `ran` fact and every recorded run matching it (sandbox.json attempts, argv whole as JSON):", "",
-                    *fenced(ran)]
-    out += ["", "### Analysis", "", *fenced(analysis_lines(analyze(cases))), "",
-            "### To fill", "",
-            f"Smoke: <each changed role or skill path> run {rid}: <what the run exercised>",
-            "Removed: <what the change deleted, or the incident that justifies it>"]
-    return "\n".join(out) + "\n"
-
-
-# ---- --verdict: a qc verdict from pinned stored runs (rules: --help, Verdict) -----------------
-
-INSUFFICIENT = 77   # schemas/qc.v2.schema.json demo command: the demo did not run to its end
-# The keys run_case adds to the case it records in input.json: the run's, not the case's.
-RUN_INPUT_KEYS = ("suite", "model", "fixture_head", "max_tool_calls", "timeout_s", "kit_ref", "kit_sha", "run", "of", "config")
-# What a role's launch reads beside agents/<role>.md and what pi-role --json lists (scripts/pi-role --help).
-LAUNCH_PATHS = ("scripts/pi-role", "web-mcp.json")
-PIN = re.compile(r"[^-/][^/]*/[^/]+/[^/]+")   # RUN_ID/SUITE/CASE, never an option
-
-
-def fixture_names(x: object) -> list[str]:
-    """Every fixture dir case X names, at any depth: each string value of a `fixture` key."""
-    if isinstance(x, dict):
-        d = cast("Result", x)
-        return [n for k, v in d.items() for n in ([v] if k == "fixture" and isinstance(v, str) else fixture_names(v))]
-    return [n for v in cast("list[object]", x) for n in fixture_names(v)] if isinstance(x, list) else []
-
-
-def stored(p: Path) -> "Result | None":
-    """The JSON object at P, None when unreadable or not an object."""
-    try:
-        raw: object = json.loads(p.read_text())
-    except (OSError, ValueError):
-        return None
-    return cast("Result", raw) if isinstance(raw, dict) else None
-
-
-def launched(top: str, role: str) -> tuple[list[str], str | None]:
-    """The repo paths ROLE launches with, asked of the launcher at HEAD (`scripts/pi-role --json`, from an empty dir so
-    no target selects a skill): each --skill folder (a trailing /) and --extension file inside TOP; a path outside it
-    (an external skill) is not compared. (paths, None), or ([], why the launcher gave no list)."""
-    with tempfile.TemporaryDirectory(prefix="qa-verdict-") as cwd:
-        p = subprocess.run([str(Path(top) / "scripts" / "pi-role"), "--json", str(Path(top) / "agents" / f"{role}.md")],
-                           capture_output=True, text=True, cwd=cwd, check=False)
-    raw = safe_json(p.stdout) if p.returncode == 0 else None
-    args = cast("Result", raw).get("args") if isinstance(raw, dict) else None
-    if not isinstance(args, list):
-        return [], f"scripts/pi-role --json agents/{role}.md listed no launch (exit {p.returncode}: {p.stderr.strip()[-200:]})"
-    a = [str(x) for x in cast("list[object]", args)]
-    real = os.path.realpath(top)
-    out: list[str] = []
-    for flag, val in zip(a, a[1:]):
-        if flag in ("--skill", "--extension"):
-            rel = os.path.relpath(os.path.realpath(val), real)
-            if not rel.startswith(".."):
-                out.append(rel + ("/" if flag == "--skill" else ""))
-    return sorted(set(out)), None
-
-
-def entry_change(top: str, sha: str, head: str, rel: str, cid: str) -> str | None:
-    """How case CID's own entry in REL (cases.json: a list by id; expectations.json: an object by id) differs between
-    the run's kit SHA and HEAD, None when equal."""
-    def entry(rev: str) -> object:
-        p = subprocess.run(["git", "-C", top, "show", f"{rev}:{rel}"], capture_output=True, text=True, check=False)
-        x = safe_json(p.stdout) if p.returncode == 0 else None
-        if isinstance(x, list):
-            return next((c for c in cast("list[Result]", x) if isinstance(cast("object", c), dict) and c.get("id") == cid), None)
-        return cast("Result", x).get(cid) if isinstance(x, dict) else None
-    was, now = entry(sha), entry(head)
-    if was == now:
-        return None
-    return f"{rel} case {cid} " + ("added" if was is None else "deleted" if now is None else "changed")
-
-
-def trees_changed(top: str, sha: str, head: str, names: list[str]) -> tuple[list[str], list[str]]:
-    """(refusals, changes) of fixtures NAMES' materialized trees between the run's kit SHA and HEAD: each rev's evals/
-    exported from git into scratch outside the repo, each tree built by this kit's materializer (check-evals
-    fixture_tree) and hashed as `check-evals --trees` does (schema.md, Fixtures)."""
-    if not names:
-        return [], []
-    mod = check_evals()
-    bad: list[str] = []
-    seen: dict[str, dict[str, str]] = {}
-    with tempfile.TemporaryDirectory(prefix="qa-verdict-trees-") as tmp:
-        for rev in dict.fromkeys((sha, head)):
-            d = Path(tmp) / rev
-            d.mkdir()
-            err = export(Path(top), rev, d)
-            if err is not None:
-                bad.append(f"evals/ at {rev[:12]} not exported: {err}")
-                continue
-            try:
-                seen[rev] = {n: str(mod.tree_sha(mod.fixture_tree(d / "evals", n, d / "scratch"))) for n in names}
-            except mod.FixtureError as e:
-                bad.append(f"a fixture tree at {rev[:12]} refused: {e}")
-    if bad:
-        return bad, []
-    return [], [f"evals/fixtures/{n} tree changed" for n in names if seen[sha][n] != seen[head][n]]
-
-
-def pinned(root: Path, top: str, head: str, arg: str) -> tuple[str, str, list[str]]:
-    """(verdict PASS, FAIL or INSUFFICIENT, its line, what makes it insufficient) for one RUN_ID/SUITE/CASE."""
-    rid, suite, cid = arg.split("/")
-    d = root / rid / suite / cid
-    res = stored(d / "result.json")
-    if res is None:
-        why = [f"run {rid} has no readable {suite}/{cid}/result.json in {root}"]
-        return "INSUFFICIENT", f"INSUFFICIENT {suite}/{cid}: run {rid}: missing: {why[0]}", why
-    runs = [cast("Result", r) for r in cast("list[object]", res.get("runs") or [{"dir": "."}]) if isinstance(r, dict)]
-    sha = str(res.get("kit_sha"))
-    missing: list[str] = []
-    got: list[tuple[Result, Result, Result]] = []
-    for r in runs:
-        files = [stored(d / str(r.get("dir", ".")) / n) for n in ("input.json", "grading.json", "result.json")]
-        if any(f is None for f in files):
-            missing.append(f"run {rid} {suite}/{cid}/{r.get('dir', '.')}: no readable input.json, grading.json and result.json")
-        else:
-            got.append((cast("Result", files[0]), cast("Result", files[1]), cast("Result", files[2])))
-    if res.get("kit_ref", "HEAD") != "HEAD":
-        missing.append(f"run {rid} ran with --kit-ref {res.get('kit_ref')}: its fixtures' commit is not recorded")
-    if subprocess.run(["git", "-C", top, "cat-file", "-e", f"{sha}^{{commit}}"], capture_output=True).returncode:
-        missing.append(f"kit sha {sha} of run {rid} is not a commit in {top}")
-    review = isinstance(res.get("review"), dict)
-    if review:
-        mine = [x for x in review_records(root / "reviews", suite, cid) if x.get("run_id") == rid]
-        if not mine:
-            missing.append(f"no maintainer verdict recorded for review case {suite}/{cid} in run {rid} (--review)")
-        verdict, count = ({"pass": "PASS", "fail": "FAIL"}.get(str(mine[-1].get("verdict")), "FAIL") if mine else "none"), "review"
-    else:
-        ok = sum(rr.get("verdict") == "PASS" for _, _, rr in got)
-        verdict, count = ("PASS" if got and ok == len(runs) else "FAIL"), f"runs {ok}/{len(runs)} passed"
-    stale: list[str] = []
-    if not missing:
-        role = sorted({str(i.get("role")) for i, _, _ in got})
-        fx = sorted({n for i, _, _ in got for n in fixture_names({k: v for k, v in i.items() if k not in RUN_INPUT_KEYS})})
-        asked = [launched(top, r) for r in role]
-        missing += [why for _, why in asked if why]
-        paths = [*(f"agents/{r}.md" for r in role), *LAUNCH_PATHS, *sorted({p for ps, _ in asked for p in ps})]
-        bad, changed = trees_changed(top, sha, head, fx)
-        missing += bad
-        stale += changed
-        diff = subprocess.run(["git", "-C", top, "diff", "--no-renames", "--name-status", sha, head, "--", *paths],
-                              capture_output=True, text=True)
-        how = {"A": "added", "D": "deleted"}
-        stale += [f"{p} {how.get(k[:1], 'changed')}" for k, _, p in (ln.partition("\t") for ln in diff.stdout.splitlines()) if p]
-        stale += [c for rel in (f"evals/{suite}/cases.json", f"evals/{suite}/reference/expectations.json")
-                  if (c := entry_change(top, sha, head, rel, cid))]
-    fresh = (f"missing: {'; '.join(missing)}" if missing else
-             f"stale at HEAD {head[:12]}: {'; '.join(stale)}" if stale else f"fresh at HEAD {head[:12]}")
-    word = "INSUFFICIENT" if missing or stale else verdict
-    return word, f"{word} {suite}/{cid}: stored {verdict}, run {rid}, kit {sha[:12]}, {count}; {fresh}", missing + stale
+def qa_root() -> Path:
+    """The qa artifacts root: $OCTO_FEATHER_QA_DIR, else $(octo-feather-state)/qa (--help)."""
+    return Path(os.environ.get("OCTO_FEATHER_QA_DIR") or Path(subprocess.run(
+        [str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip()) / "qa")
 
 
 def verdicts(argv: list[str]) -> int:
     """--verdict RUN_ID/SUITE/CASE...: each case's stored verdict and its freshness against HEAD (--help, Verdict)."""
-    bad = [a for a in argv if not PIN.fullmatch(a)]
-    if not argv or bad:
-        die(64, f"--verdict takes one or more RUN_ID/SUITE/CASE and no other option (got {' '.join(bad) or 'none'})")
-    top, head = (subprocess.run(["git", "rev-parse", a], capture_output=True, text=True).stdout.strip() for a in ("--show-toplevel", "HEAD"))
-    if not top or not head:
-        die(64, "--verdict runs in the judged repo: no git HEAD here")
-    root = Path(os.environ.get("OCTO_FEATHER_QA_DIR") or Path(subprocess.run(
-        [str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip()) / "qa")
-    done = [pinned(root, top, head, a) for a in argv]
-    for _, line, _ in done:
+    judged = grading.verdict(argv, cwd=os.getcwd(), qa_dir=qa_root())
+    for line in judged.lines:
         print(line, flush=True)
-    short = [f"{a}: {'; '.join(why)}" for a, (_, _, why) in zip(argv, done, strict=True) if why]
-    if short:
-        print(f"octo-feather-qa: insufficient evidence: {' | '.join(short)}", file=sys.stderr)
-        return INSUFFICIENT
-    return 1 if any(w == "FAIL" for w, _, _ in done) else 0
+    if judged.insufficient:
+        print(judged.insufficient, file=sys.stderr)
+    return judged.code
 
 
 def main(argv: list[str]):
-    if argv[:1] == ["--watch"]:
-        return watch(argv[1:])
-    if argv[:1] == ["--verdict"]:
-        return verdicts(argv[1:])
-    if argv[:1] == ["--review"]:
-        return review(argv[1:])
-    if argv[:1] == ["--analyze"]:
-        if argv[3:] or not argv[1:] or argv[2:] not in ([], ["--evidence"]):
-            die(64, "--analyze takes one RUN_DIR and no other option but --evidence")
-        return reanalyze(argv[1], evidence=argv[2:] == ["--evidence"])
+    if argv[:1] == ["--watch"]:   # in the sandbox: today's cwd (the case repo), env and private /tmp
+        args = argv[1:]
+        planned = grading.Plan.parse(args, fake_qa=FAKE_QA.replace("@DOC@", repr(__doc__)))
+        where = grading.Where(os.getcwd(), dict(os.environ), QA_TMP)
+        return grading.watch(planned, args[args.index("--") + 1:], where=where, out=sys.stdout.buffer)
+    try:
+        if argv[:1] == ["--verdict"]:
+            return verdicts(argv[1:])
+        if argv[:1] == ["--review"]:
+            return review(argv[1:])
+        if argv[:1] == ["--analyze"]:
+            if argv[3:] or not argv[1:] or argv[2:] not in ([], ["--evidence"]):
+                die(64, "--analyze takes one RUN_DIR and no other option but --evidence")
+            return reanalyze(argv[1], evidence=argv[2:] == ["--evidence"])
+    except grading.UsageError as e:
+        die(64, str(e))
     gate_free()
     o = parse(argv)
     eval_slot()
@@ -2301,10 +1058,8 @@ def main(argv: list[str]):
 
 def run_all(o, evals, picked, kit, sha, base: "tuple[Path, str | None] | None" = None):
     runid = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{secrets.token_hex(3)}"
-    root = Path(os.environ.get("OCTO_FEATHER_QA_DIR") or Path(subprocess.run(
-        [str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip()) / "qa")
+    root = qa_root()
     run_dir = root / runid; run_dir.mkdir(parents=True)
-    REVIEWS[:] = [root / "reviews"]
     runs = int(cast("str | None", o["runs"]) or "1")
     print(f"qa: run {runid}: {len(picked)} case(s)" + (f", {runs} runs each" if runs > 1 else "") + f"; kit {sha}" + (f" (--kit-ref {o['kit-ref']})" if o["kit-ref"] else "")
           + (f"; baseline kit {base[1]} (--baseline {o['baseline']}), runs interleaved" if base else "") + f"; artifacts {run_dir}", flush=True)
@@ -2312,7 +1067,7 @@ def run_all(o, evals, picked, kit, sha, base: "tuple[Path, str | None] | None" =
     t0 = time.time()
     results = [run_runs(qc, evals, s, c, f, o["model"], runid.split("-")[-1], n, run_dir / s["suite"] / c["id"], runs,
                         [*([("baseline", base[0], o["baseline"], base[1])] if base else []),
-                         ("current" if base else "", kit, o["kit-ref"], sha)])
+                         ("current" if base else "", kit, o["kit-ref"], sha)], root / "reviews")
                for n, (s, c, f) in enumerate(picked, 1) if s["kind"] != "judgment"]
     benches = []
     for name in dict.fromkeys(s["suite"] for s, _, _ in picked if s["kind"] == "judgment"):
@@ -2321,9 +1076,9 @@ def run_all(o, evals, picked, kit, sha, base: "tuple[Path, str | None] | None" =
                                  runid.split("-")[-1], run_dir / name, judgment_model(evals)))
     passed = sum(r["verdict"] == "PASS" for r in results)
     sc = scores(results)
-    an = analyze(results)
+    an, flags = grading.analysis(results)
     if results and (base or runs > 1):
-        print("\n".join(analysis_lines(an)), flush=True)
+        print("\n".join(flags), flush=True)
     for sp, v in sc.items():
         print(f"qa: {sp} score {v['passed']}/{v['total']} passed")
     (run_dir / "summary.json").write_text(json.dumps({"run_id": runid, "kit_ref": o["kit-ref"] or "HEAD", "kit_sha": sha,
