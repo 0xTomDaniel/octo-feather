@@ -201,6 +201,8 @@ check-refs:
           # Spec Chat names the owner side of a spool (its directory and event actor) so on disk: the one SPOOL_SIDE value per file.
           "scripts/octo-feather-accepted" => [qr{^SPOOL_SIDE = "[h]uman"(?=\s)}],
           "tests/accepted.sh"             => [qr{^SPOOL_SIDE=[h]uman(?=;)}],
+          # A recorded real gh answer (#1069): a 2026-11-04 director finding, quoted word for word in issue comment 6997429551.
+          "tests/gate/kit/testkit/recordings/reflection-missed-372.json" => [qr{an unresolved [h]uman decision, and do completion}],
         ) }
         my ($f, $s) = /^(.*?):\d+:(.*)$/s;
         $s =~ s/$_//g for @{ $ok{$f} || [] };
