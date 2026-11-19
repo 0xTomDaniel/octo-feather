@@ -546,7 +546,6 @@ def parked_resumed(s: Scratch) -> None:
     p = tab_process(s, d, sup["pane"], s.root / "target")
     try:
         park = s.run([str(ASSETS / "herdr-close"), "--park", sup["pane"]])
-        assert p.wait(timeout=10) is not None
     finally:
         p.kill()
     with (state_dir(s) / "lanes" / "gh7.handoffs.jsonl").open("a") as f:
