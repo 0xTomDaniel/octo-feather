@@ -9,6 +9,8 @@
 # Everything else here exists because those two have real failure modes: a
 # freshly created pane is not yet at a shell prompt, and the agent may open a
 # trust dialog that traps the session. Both are handled and verified.
+# Between them, the pane's shell is adopted into the agent's own systemd user
+# scope (herdr_scope.py adopt; rule: herdr-comms SKILL.md, Spawn an agent).
 #
 # The role is this kit's agents/<role>.md. pi-role turns its frontmatter into
 # Pi flags (model, thinking, tool allowlist, skills, system prompt); every agent
@@ -128,6 +130,11 @@ pane="$(jq -r '.result.root_pane.pane_id // empty' <<<"$out")"
 [[ -n "$tab" && -n "$pane" ]] || { echo "herdr-spawn: tab create returned no tab or pane" >&2; exit 1; }
 
 close_orphan_tab() { herdr tab close "$tab" >/dev/null 2>&1 || true; }
+
+# The agent's own user scope, adopted before Pi starts (rule: herdr-comms SKILL.md, Spawn an agent;
+# how: herdr_scope.py beside this script). Any failure closes the tab.
+rc=0; "$(dirname "$(readlink -f "$0")")/herdr_scope.py" adopt "$pane" || rc=$?
+if ((rc)); then echo "herdr-spawn: closing tab $tab" >&2; close_orphan_tab; exit "$rc"; fi
 
 # A new root pane may not have reached its shell prompt yet; herdr reports that
 # as the structured error agent_pane_busy. Only that code retries. Any other

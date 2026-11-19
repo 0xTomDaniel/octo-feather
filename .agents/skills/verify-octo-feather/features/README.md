@@ -45,6 +45,7 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [shape](./shape.md) covers the owner starting the shaper with `just shape` in a target with Spec Chat linked (`just spec-chat`): Pi offered exactly the role file's skills, Spec Chat's from the target, none from home (criterion: roles#acceptance-shaper-launch).
 - [qc-capture](./qc-capture.md) covers `just qc` capturing each declared demo into the evidence store and deciding from its checks.
 - [qc-insufficient](./qc-insufficient.md) covers `just qc` giving insufficient evidence when a declared demo cannot run to its end, and `octo-feather-lane merge-ask` failing naming it.
+- [qc-eval-verdict](./qc-eval-verdict.md) covers `just qc` judging an eval-backed criterion's declared demo, `octo-feather-qa --verdict`, from pinned stored runs: the same pass at two heads, insufficient evidence naming a changed role file.
 - [qc-browser](./qc-browser.md) covers `just qc` running a declared browser demo in the qc sandbox and storing its screenshots in the record.
 - [qc-sandbox](./qc-sandbox.md) covers the qc sandbox run by hand (`scripts/octo-feather-qc-sandbox -- CMD`) on srt: its proof and its refused escapes.
 - [qc-sandbox-cost](./qc-sandbox-cost.md) covers the qc sandbox's CPU per run around a judge that does nothing, run after run.
@@ -62,6 +63,7 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [qa-runs](./qa-runs.md) covers the factory evals running each case several times (`octo-feather-qa --runs N`; criterion: quality#acceptance-qa-repeats).
 - [qa-baseline](./qa-baseline.md) covers a case's time and tokens over several runs and a baseline kit compared beside the current one (`octo-feather-qa --runs N --baseline COMMIT`; criteria: quality#acceptance-qa-cost, quality#acceptance-qa-baseline).
 - [qa-analyst](./qa-analyst.md) covers the deterministic analysis of a baseline comparison and its rerun on a stored run (`octo-feather-qa --analyze`; criterion: quality#acceptance-qa-analyst).
+- [qa-evidence](./qa-evidence.md) covers a stored run's evidence block (`octo-feather-qa --analyze --evidence`): its content, the same bytes twice, and its pin read by `--verdict`.
 - [qa-review](./qa-review.md) covers an eval case a maintainer reviews: its kept output, a recorded verdict and note, and the next run showing them (`octo-feather-qa --review`; criterion: quality#acceptance-qa-review).
 - [qa-history](./qa-history.md) covers a regression case whose fixture is a real repository at a commit (the kit's own history or a local clone; criterion: quality#acceptance-qa-history).
 - [run-slots](./run-slots.md) covers the box's heavy-run slot: a lane's `just test` over more than heavy_items items refused without its grant, the director's grant (`octo-feather-slot grant`), `octo-feather-slot status`, and the granted run holding the slot.
