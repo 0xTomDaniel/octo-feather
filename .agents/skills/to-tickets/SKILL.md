@@ -102,6 +102,10 @@ The end-to-end behaviour this ticket makes work, from the user's perspective, no
 
 For one step of a wide refactor, replace the demo item with the line `Expand-contract: expand`, `migrate` or `contract`.
 
+## Seams
+
+Seam: <spec slug>#<anchor>: `<seam>` one line per seam a criterion's tests go at, set before any test (form and check: `octo-feather-lane --help`, seam); a seam set later: agents/supervisor.md, Briefs
+
 ## Blocked by
 
 - A reference to each blocking ticket, or "None (can start immediately)". Omit this section when blockers were set as native edges.
