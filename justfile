@@ -225,17 +225,9 @@ check-refs:
     [[ "$bad" == 0 ]] && echo "refs: ok (${#files[@]} files)"
     exit "$bad"
 
-# Dash rule and its upstream carve-outs: #121 D7. Scans tracked files minus docs/specs/.viz/, docs/specs/.style/,
-# LICENSE, the Skillfile's github entries in .agents/skills/ and .skillfile/.
+# Dash rule and its upstream carve-outs: #121 D7 (check_dashes in scripts/check_rules.py).
 check-dashes:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd "$root"
-    vend="$(awk '$1 == "github" {printf "%s|", $3}' Skillfile)"
-    mapfile -t files < <(git ls-files | grep -vE "^(docs/specs/\.(viz|style)/|\.agents/skills/(${vend%|})/|\.skillfile/|LICENSE\$)")
-    if grep -nHF -e "$(printf '\xe2\x80\x93')" -e "$(printf '\xe2\x80\x94')" "${files[@]}"; then
-      echo "check-dashes: replace the em/en dashes above with a colon, comma or parentheses" >&2; exit 1; fi
-    echo "dashes: ok (${#files[@]} files)"
+    @python3 "$root/scripts/check-dashes"
 
 # The gate's side of skills spec #loading-refuse (scripts/check-skills); every role file exists.
 check-skills:
