@@ -350,8 +350,9 @@ def kept(s: Scratch) -> None:
     r = w.s.run([*cmd, "--wait", "0"], want=1, cwd=w.r)
     want = f"step 4 checkout: stopped: checkout {w.r} is on gh12, not main: nothing was changed"
     assert want in r.out, f"main worktree: {r.out}"
-    assert w.last(r).endswith("step 4 checkout stopped; step 5 tell supervisors not run; "
-                              "step 6 teardown not run"), f"main worktree: {r.out}"
+    assert w.last(r).endswith(
+        "step 4 checkout stopped; step 5 tell supervisors not run; step 6 teardown not run"
+    ), f"main worktree: {r.out}"
     w.kept("main worktree")
     w = World(s, "unmerged")
     w.archived()

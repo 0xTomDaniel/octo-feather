@@ -4141,7 +4141,7 @@ def pm_follow(pm: PostMerge, clone: Path, what: str, branch: str | None = None, 
         pm_git(clone, "merge", "--ff-only", pm.merge, what=what)
         return f"{what} {clone} fast-forwarded {head[:12]}..{m}"
     raise Refuse(f"{what} {clone} at {head[:12]} has diverged from merge commit {m}: nothing was changed; "
-                 f"put the {what.split()[-1]} back on {pm.base} (git -C {clone} log {m}..HEAD names the commits), then rerun")
+                 f"put the {what.rsplit(maxsplit=1)[-1]} back on {pm.base} (git -C {clone} log {m}..HEAD names the commits), then rerun")
 
 
 # Step 4 (issue 1078): the director's checkout, the main checkout of the repo post-merge runs in (git worktree list,
