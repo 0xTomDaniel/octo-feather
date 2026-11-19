@@ -1,255 +1,67 @@
 #!/usr/bin/env python3
-"""Every tracked file named decisions.jsonl, anywhere in the repo, holds one JSON
-object per line that satisfies schemas/decision-log.schema.json (quality spec
-#acceptance-decision-log-schema, #decision-log, docs/adr/0010). Each failure names
-FILE:LINE and the field. The schema file is the one source for the field list.
+"""check-decision-log: the decision-log rule over the kit's tracked files; `just check` runs it.
 
-jsonschema enforces structure, with a compatibility metaschema restricting the
-accepted schema vocabulary so previously unusable schemas still fail closed.
-Patterns run in node's RegExp (Unicode mode), one node call for every line.
-Fails closed: a git error, an unreadable log or schema, a missing or failing node,
-or an internal error fails the gate, never reads as ok. Run by `just check`.
+The rule: check_decision_logs in scripts/decision_log.py, imported by name (Python puts this
+script's own directory, symlinks resolved, first on sys.path; never a load by file path). It needs
+the kit's locked jsonschema: missing, this command re-execs itself once under `uv run --locked
+--offline` in the kit's environment. This command lists the files (`git ls-files -z`), prints the
+Report's lines, each to its stream, and exits with its code: 0 ok, 1 a bad or unreadable log, 2 an
+unusable schema, node, git or an internal error (fails closed, never ok).
 """
-import json, os, shutil, subprocess, sys
-from collections.abc import Callable, Iterator
-from typing import Any, cast
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCHEMA = "schemas/decision-log.schema.json"
-NAME = "decisions.jsonl"
-TOP_KEYS = {"$schema", "$id", "title", "description", "type", "required", "properties", "additionalProperties"}
-FIELD_KEYS = {"description", "type", "minLength", "pattern"}
-PROPERTY_PATH_DEPTH = 2
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # noqa: PTH100, PTH120
 REEXEC = "OCTO_FEATHER_DECISION_LOG_KIT_ENV"
+
+
+def say(stream: str, line: bytes) -> None:
+    """LINE to stdout (STREAM out) or stderr, flushed: in order when both go to one place."""
+    out = sys.stdout.buffer if stream == "out" else sys.stderr.buffer
+    out.write(line + b"\n")
+    out.flush()
+
+
 try:
-    import jsonschema
-    from jsonschema import validators
-    from jsonschema.protocols import Validator
-    # jsonschema's extension factory has no typed signature; confine that boundary.
-    extension_api: Any = validators
+    from decision_log import check_decision_logs
 except ImportError:
+    sync = f"uv sync --locked --project {ROOT}"
     if os.environ.get(REEXEC):
-        print("check-decision-log: jsonschema is not importable in the kit's environment; sync it once, with network: uv sync --locked --project " + ROOT, file=sys.stderr)
+        why = "jsonschema is not importable in the kit's environment"
+        why = f"{why}; sync it once, with network: {sync}"
+        say("err", f"check-decision-log: {why}".encode())
         sys.exit(2)
     env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
     env[REEXEC] = "1"
+    uv = ["uv", "run", "--project", ROOT, "--locked", "--offline", "--no-dev", "--quiet", "python"]
     try:
-        sys.exit(subprocess.run(["uv", "run", "--project", ROOT, "--locked", "--offline", "--no-dev", "--quiet", "python", os.path.abspath(__file__), *sys.argv[1:]], env=env, check=False).returncode)
+        script = os.path.abspath(__file__)  # noqa: PTH100
+        sys.exit(subprocess.run([*uv, script, *sys.argv[1:]], env=env, check=False).returncode)
     except OSError as e:
-        print(f"check-decision-log: cannot run uv for the kit's locked jsonschema ({e}); install uv, then: uv sync --locked --project {ROOT}", file=sys.stderr)
+        why = f"cannot run uv for the kit's locked jsonschema ({e}); install uv, then: {sync}"
+        say("err", f"check-decision-log: {why}".encode())
         sys.exit(2)
 
-# This is the existing CLI's schema vocabulary, not another instance validator.
-# jsonschema validates both this contract and each decision object.
-SCHEMA_CONTRACT = {
-    "type": "object", "additionalProperties": False,
-    "properties": {**{k: {} for k in TOP_KEYS},
-        "type": {"const": "object"},
-        "required": {"type": "array", "items": {"type": "string"}, "uniqueItems": True},
-        "additionalProperties": {"type": "boolean"},
-        "properties": {"type": "object", "additionalProperties": {
-            "type": "object", "additionalProperties": False,
-            "properties": {"description": {}, "type": {"const": "string"},
-                "minLength": {"type": "integer", "minimum": 0}, "pattern": {"type": "string"}}
-        }}},
-    "required": ["type"]
-}
-# Each pattern compiled with new RegExp(p, "u"), its error kept; each value tested, in order.
-# Property names are schema data: pairs and Maps only, never a plain object keyed by them.
-NODE_JS = r"""
-const q = JSON.parse(require("fs").readFileSync(0, "utf8")), rx = new Map(), bad = new Map();
-for (const [k, p] of q.patterns) { try { rx.set(k, new RegExp(p, "u")); } catch (e) { bad.set(k, e.message); } }
-process.stdout.write(JSON.stringify({bad: [...bad], test: bad.size ? [] : q.values.map(([k, v]) => rx.get(k).test(v))}));
-"""
 
-
-class SchemaError(Exception):
-    pass
-
-
-def load_schema():
-    with open(os.path.join(ROOT, SCHEMA), encoding="utf-8") as fh:
-        s = json.load(fh, object_pairs_hook=no_duplicates)
-    # The old schema boundary rejects 1.0 as a minLength, unlike JSON Schema's
-    # mathematical integer type. Keep that spelling constraint at this boundary.
-    def integer(_checker: object, value: object) -> bool:
-        return type(value) is int
-    contract_validator: type[Validator] = extension_api.extend(jsonschema.Draft202012Validator,
-        type_checker=jsonschema.Draft202012Validator.TYPE_CHECKER.redefine("integer", integer))
-    def order(error: jsonschema.ValidationError) -> tuple[int, int, int]:
-        path = [str(part) for part in error.absolute_path]
-        if not path:
-            return (0 if error.validator in ("type", "additionalProperties") else 1, 0, 0)
-        rank = {"type": 1, "required": 2, "properties": 3, "additionalProperties": 4}[path[0]]
-        if len(path) < PROPERTY_PATH_DEPTH:
-            return (rank, 0, 0)
-        return (5, list(s["properties"]).index(path[1]),
-                {"type": 1, "minLength": 2, "pattern": 3}.get(path[2], 0) if len(path) > PROPERTY_PATH_DEPTH else 0)
-    for e in sorted(contract_validator(SCHEMA_CONTRACT).iter_errors(s), key=order):
-        path = [str(part) for part in e.absolute_path]
-        if not path:
-            if e.validator == "type":
-                raise SchemaError("not a JSON object")
-            if e.validator == "additionalProperties":
-                raise SchemaError(f"unsupported keyword {sorted(set(s) - TOP_KEYS)[0]}")
-            raise SchemaError('type must be "object"')
-        if path[0] == "type":
-            raise SchemaError('type must be "object"')
-        if path[0] == "required":
-            raise SchemaError("required must be a list of distinct names")
-        if path[0] == "additionalProperties":
-            raise SchemaError("additionalProperties must be true or false")
-        if len(path) == 1:
-            raise SchemaError("properties must be an object")
-        name = path[1]
-        prefix = f"property {name}: "
-        if len(path) == PROPERTY_PATH_DEPTH:
-            detail = "form" if e.validator == "type" else "keyword " + sorted(set(s["properties"][name]) - FIELD_KEYS)[0]
-            raise SchemaError(prefix + "unsupported " + detail)
-        key = path[2]
-        detail = {"type": f"unsupported type {e.instance!r}", "minLength": "minLength must be a non-negative integer", "pattern": "pattern must be a string"}[key]
-        raise SchemaError(prefix + detail)
-    return s
-
-
-def no_duplicates(pairs):
-    seen = {}
-    for k, v in pairs:
-        if k in seen:
-            raise ValueError(f"duplicate key {k}")
-        seen[k] = v
-    return seen
-
-
-def no_constant(name):
-    raise ValueError(f"{name} is not JSON")
-
-
-def line_problems(raw, schema: dict[str, Any], match: Callable[[str, str], bool]):
-    """Problems of one log line; MATCH(name, value) says whether value matches property name's pattern."""
-    try:
-        obj = json.loads(raw.decode("utf-8"), object_pairs_hook=no_duplicates, parse_constant=no_constant)
-    except UnicodeDecodeError:
-        return ["not UTF-8"]
-    except ValueError as e:  # json.JSONDecodeError is a ValueError
-        return [f"invalid JSON: {e}"]
-    props: dict[str, dict[str, Any]] = schema.get("properties", {})
-    # Python re differs on whitespace, classes, unmatched backreferences and ECMA
-    # syntax. Keep Node's real Unicode RegExp, including compilation without logs.
-    def pattern(_validator: Validator, regex: str, value: object, field_schema: dict[str, Any]) -> Iterator[jsonschema.ValidationError]:
-        length_validator = cast("Validator", jsonschema.Draft202012Validator({"minLength": field_schema.get("minLength", 0)}))
-        if isinstance(value, str) and not list(length_validator.iter_errors(value)):
-            name = next(k for k, p in props.items() if p is field_schema)
-            if not match(name, value):
-                yield jsonschema.ValidationError(f"{name} does not match {regex}")
-    validator: type[Validator] = extension_api.extend(jsonschema.Draft202012Validator, {"pattern": pattern})
-    errors = list(validator(schema).iter_errors(obj))
-    if any(e.validator == "type" and not e.path for e in errors):
-        return [f"not a JSON object (a {type(obj).__name__})"]
-    out = [f"missing {name}" for name in schema.get("required", [])
-           if any(e.validator == "required" for e in errors) and name not in obj]
-    for name in props:
-        for e in errors:
-            if list(e.path) != [name]:
-                continue
-            if e.validator == "type":
-                out.append(f"{name} must be a {e.validator_value}")
-            elif e.validator == "minLength":
-                out.append(f"empty {name}")
-            elif e.validator == "pattern":
-                out.append(e.message)
-    if any(e.validator == "additionalProperties" for e in errors):
-        out += [f"unknown field {k}" for k in sorted(set(obj) - set(props))]
-    return out
-
-
-class NodeError(Exception):
-    pass
-
-
-def node_tests(patterns, values):
-    """Node's verdict on PATTERNS {property: pattern} and VALUES [(property, value)]: the list of
-    match results, SchemaError naming an invalid pattern, or NodeError when node cannot answer."""
-    node = shutil.which("node")
-    if not node:
-        raise NodeError("node not found on PATH: install node (Pi needs it too)")
-    run = subprocess.run([node, "-e", NODE_JS], input=json.dumps({"patterns": list(patterns.items()), "values": values}).encode(), capture_output=True)
-    if run.returncode != 0:
-        sys.stderr.write(run.stderr.decode("utf-8", "replace"))
-        raise NodeError(f"node exited {run.returncode}")
-    try:
-        res = json.loads(run.stdout)
-        bad, test = dict(res["bad"]), res["test"]
-    except (ValueError, KeyError, TypeError) as e:
-        raise NodeError(f"node gave no usable answer: {e}") from None
-    if bad:
-        name = sorted(bad)[0]
-        raise SchemaError(f"property {name}: pattern {patterns[name]!r}: {bad[name]}")
-    if not isinstance(test, list) or len(test) != len(values) or not all(isinstance(t, bool) for t in test):
-        raise NodeError("node gave no usable answer: wrong result count")
-    return test
-
-
-def unusable(e):
-    print(f"check-decision-log: {SCHEMA}: unusable schema: {e}; fix the schema, the check cannot pass", file=sys.stderr)
-    return 2
-
-
-def main():
-    try:
-        schema = load_schema()
-    except (OSError, ValueError, SchemaError) as e:
-        return unusable(e)
-    git = subprocess.run(["git", "-C", ROOT, "ls-files", "-z"], capture_output=True)
+def main() -> int:
+    git = subprocess.run(["git", "-C", ROOT, "ls-files", "-z"], capture_output=True, check=False)  # noqa: S607
     if git.returncode != 0:
-        sys.stderr.write(git.stderr.decode("utf-8", "replace"))
-        print(f"check-decision-log: git ls-files exited {git.returncode}; the check cannot pass", file=sys.stderr)
+        sys.stderr.buffer.write(git.stderr)
+        why = f"git ls-files exited {git.returncode}; the check cannot pass"
+        say("err", f"check-decision-log: {why}".encode())
         return 2
-    logs = sorted(p for p in git.stdout.decode("utf-8", "surrogateescape").split("\0") if p and os.path.basename(p) == NAME)
-    fields = ", ".join(schema.get("required", []))
-    read = []  # (path, lines) or (path, OSError)
-    for path in logs:
-        try:
-            with open(os.path.join(ROOT, path), "rb") as fh:
-                lines = fh.read().split(b"\n")
-        except OSError as e:
-            read.append((path, e))
-            continue
-        if lines[-1] == b"":
-            lines.pop()  # the final newline ends the last line, it is not a line
-        read.append((path, lines))
-    # Two passes over the same lines: the first collects the values a pattern tests, node tests them in one call.
-    values = []
-    for _, lines in read:
-        for raw in lines if isinstance(lines, list) else []:
-            line_problems(raw, schema, lambda name, v: values.append((name, v)) or True)
-    patterns = {name: p["pattern"] for name, p in schema.get("properties", {}).items() if "pattern" in p}
-    try:
-        results = iter(node_tests(patterns, values) if patterns else [])
-    except SchemaError as e:
-        return unusable(e)
-    except (OSError, NodeError) as e:
-        print(f"check-decision-log: {e}; the check cannot pass", file=sys.stderr)
-        return 2
-    bad = 0
-    for path, lines in read:
-        if not isinstance(lines, list):
-            print(f"check-decision-log: {path}: cannot read: {lines}", file=sys.stderr)
-            bad += 1
-            continue
-        for n, raw in enumerate(lines, 1):
-            for p in line_problems(raw, schema, lambda name, v: next(results)):
-                print(f"check-decision-log: {path}:{n}: {p} (each line is one JSON object with string fields {fields}; {SCHEMA})", file=sys.stderr)
-                bad += 1
-    if bad:
-        return 1
-    print(f"decision-log: ok ({len(logs)} files)")
-    return 0
+    report = check_decision_logs(Path(ROOT), [os.fsdecode(p) for p in git.stdout.split(b"\0") if p])
+    for stream, line in report.lines:
+        say(stream, line)
+    return report.code
 
 
 if __name__ == "__main__":
     try:
         sys.exit(main())
-    except Exception as e:  # fail closed: an internal error is never ok
-        print(f"check-decision-log: error: {type(e).__name__}: {e}", file=sys.stderr)
+    except Exception as e:  # noqa: BLE001  fail closed: an internal error is never ok
+        say("err", f"check-decision-log: error: {type(e).__name__}: {e}".encode())
         sys.exit(2)
