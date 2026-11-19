@@ -1640,7 +1640,7 @@ def repos(q: Qa, kq: str, c2: str) -> None:
     tmp, kd = t / "tmp", f"{h}/src/kit"
     proof = (
         f"qc sandbox: ok   other repos hidden: 2 git repos under {h} .*: src/kit \\[.agents scripts\\], src/sib; "
-        f"visible: kit under test {tmp}/qa-kit-.*, worktree .*; bound back read-only: {kd}/scripts/octo-feather-qc-sandbox, "
+        f"visible: kit under test {tmp}/qa-kit-.*, worktree .*; bound back read-only: {kd}/scripts/eval_grading.py, {kd}/scripts/octo-feather-qc-sandbox, "
         f"{kd}/scripts/octo-feather-state, {kd}/scripts/octo-feather-mise-install, {kd}/.agents/skills/github-pr/scripts, "
         f"{kd}/scripts/octo-feather-qa$"
     )
