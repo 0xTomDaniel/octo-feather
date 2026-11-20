@@ -542,7 +542,10 @@ before its end) and `director told: <each>`; exit 0, 1 with no or an unreadable 
                    rest: the lane's own space (the archived `supervisor` pane id's prefix, when no open lane
                    record's supervisor and not director.toml's `pane` has it) closed with `herdr-close <space>`,
                    else only its tab with `herdr-close <supervisor pane>`; one Herdr no longer finds is `already
-                   closed`. The worktree on branch `lane-key <record issue>` (tracker skill), from `git worktree
+                   closed`. Neither closed, nothing in another record changed, when an open lane record but
+                   <lane>'s names that very pane as its `supervisor` (`kept: supervisor <pane> still supervises
+                   <lane>, ...`) or director.toml's `pane` is it (`... is the director`) (#892). The worktree
+                   on branch `lane-key <record issue>` (tracker skill), from `git worktree
                    list --porcelain` in the current repo, removed with `git worktree remove` (a dirty one refused in
                    git's words), then the user's mise tracked-configs and trusted-configs links whose target is that
                    worktree or under it pruned (MISE_STATE_DIR, else mise's default; the count named); kept, named, when it is the kit install, the main worktree, or the root of a Spec
@@ -4351,8 +4354,8 @@ def pm_mise_prune(path: str) -> int:
 
 
 def pm_teardown(pm: PostMerge) -> str:
-    """Step 5: once the lane's record is archived for this PR (its close report), close its own space (or only its
-    supervisor tab in a shared one), remove its worktree, retarget PRs based on its branch, delete the branch locally
+    """Step 7: once the lane's record is archived for this PR (its close report), close its own space (or only its
+    supervisor tab in a shared one; neither while another open lane or the director names that pane), remove its worktree, retarget PRs based on its branch, delete the branch locally
     (merged only) and on origin. Any refusal stops the step, what ran before named."""
     import tomllib
     lanes = lanes_dir()
@@ -4370,16 +4373,28 @@ def pm_teardown(pm: PostMerge) -> str:
         raise Refuse(f"archived lane {pm.lane}'s supervisor {sup!r} is no pane id: nothing torn down")
     space = sup.split(":", 1)[0]
     others: list[object] = []
+    holders: list[str] = []   # the open lanes still naming the supervisor pane (#892)
+    director = False          # director.toml's pane is it
     for p in [*sorted(lanes.glob("*.toml")), lanes.parent / "director.toml"]:
+        if p.name == f"{pm.lane}.toml":
+            continue
         try:
             d = tomllib.loads(p.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
             raise Refuse(f"cannot read {p} ({e}): fix it, then rerun (it may share space {space}); nothing torn down")
         others.append(d.get("pane" if p.name == "director.toml" else "supervisor"))
+        if others[-1] == sup and p.name == "director.toml":
+            director = True
+        elif others[-1] == sup:
+            holders.append(p.stem)
     shared = any(isinstance(x, str) and x.split(":", 1)[0] == space for x in others)
     done: list[str] = []
     try:
-        done.append(pm_close(sup if shared else space, space, shared))
+        if holders or director:
+            why = [f"still supervises {', '.join(holders)}"] * bool(holders) + ["is the director"] * director
+            done.append(f"kept: supervisor {sup} {' and '.join(why)}")
+        else:
+            done.append(pm_close(sup if shared else space, space, shared))
         branch = tracker("lane-key", str(rec.get("issue")), err=Refuse).strip()
         done.append(pm_worktree(branch))
         out = gh(["pr", "list", "--base", branch, "--state", "open", "--json", "number", *pm.r()],
