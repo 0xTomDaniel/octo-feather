@@ -13,29 +13,29 @@
     "acceptance-revision-preserve": {
       "status": "built",
       "pr": 1190,
-      "record": "20261120T104631Z-67916c35",
-      "commit": "0da84a14b585d8b8825133d2faa5cfc21a288d66",
+      "record": "20261120T110717Z-f90528f4",
+      "commit": "67b7c3fa10235195d071f96e6a1d1294814834bf",
       "tests": []
     },
     "acceptance-revision-remove": {
       "status": "built",
       "pr": 1190,
-      "record": "20261120T104634Z-963db9c5",
-      "commit": "0da84a14b585d8b8825133d2faa5cfc21a288d66",
+      "record": "20261120T110720Z-682cc676",
+      "commit": "67b7c3fa10235195d071f96e6a1d1294814834bf",
       "tests": []
     },
     "acceptance-revision-repeat": {
       "status": "built",
       "pr": 1190,
-      "record": "20261120T104638Z-de3caf59",
-      "commit": "0da84a14b585d8b8825133d2faa5cfc21a288d66",
+      "record": "20261120T110724Z-c124c6aa",
+      "commit": "67b7c3fa10235195d071f96e6a1d1294814834bf",
       "tests": []
     },
     "acceptance-revision-invalid": {
       "status": "built",
       "pr": 1190,
-      "record": "20261120T104642Z-d3b1a222",
-      "commit": "0da84a14b585d8b8825133d2faa5cfc21a288d66",
+      "record": "20261120T110728Z-69f7ac5d",
+      "commit": "67b7c3fa10235195d071f96e6a1d1294814834bf",
       "tests": []
     },
     "acceptance-chat-not-acceptance": {
