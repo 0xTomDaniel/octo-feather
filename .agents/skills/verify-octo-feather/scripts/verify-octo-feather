@@ -3636,8 +3636,68 @@ def drive_lane_start(f: Feature) -> None:
         return (c.code == 0 and len(prods) == 1 and prods[0]["issue"] == "gh905" and set(prods[0]) == {"at", "kind", "issue", "note"}
                 and [(x["name"], x["pane"]) for x in spawns] == [("gh905", pane)])
     f.check("director-log", log_ok)
+    lane_start_exists(f, w, str(checkout), str(brief))
+    lane_start_rerun(f, w, store, str(checkout), str(brief))
     f.env, f.pre = {}, []
     say(f"lane-start evidence: {f.d}")
+
+
+LANE_START = 'cd "$1" && exec octo-feather-lane start "$2" --goal "$3" --outcome "$4" --brief-file "$5"'
+
+
+def lane_start_exists(f: Feature, w: CommsWorld, checkout: str, brief: str) -> None:
+    """issue-lifecycle#acceptance-lane-start-exists: the same start again on the finished lane gh905 is refused,
+    naming its record, worktree, branch and workspace; each as it was, no supervisor started."""
+    world, record, wt = w.world, w.state / "lanes" / "gh905.toml", Path(checkout).with_name("target-gh905")
+    was = {"record": record.read_text(), "prompts": (world / "prompts").read_text(),
+           "head": output(["git", "-C", str(wt), "rev-parse", "HEAD"])[1], "agents": (world / "agents.json").read_text()}
+    calls = len((world / "log").read_text().splitlines())
+    f.run("exists", "sh", "-c", LANE_START, "sh", checkout, "905", LANE_TITLE, "a scratch proof", brief)
+    now = {"record": record.read_text(), "prompts": (world / "prompts").read_text(),
+           "head": output(["git", "-C", str(wt), "rev-parse", "HEAD"])[1], "agents": (world / "agents.json").read_text()}
+    f.obs("exists", "unchanged", " ".join(k for k in was if was[k] == now[k]))
+    made = [x for x in (world / "log").read_text().splitlines()[calls:] if x.startswith(("workspace create", "tab create", "agent start"))]
+    f.obs("exists", "made", "\n".join(made))
+    f.check("exists", lambda c: c.code == 1 and c.out == "" and (
+        f"lane gh905 exists: lane record {record}, worktree {wt}, branch gh905, Herdr workspace gh905 (") in c.err
+        and c.o["unchanged"] == "record prompts head agents" and c.o["made"] == "")
+
+
+def lane_start_rerun(f: Feature, w: CommsWorld, store: Path, checkout: str, brief: str) -> None:
+    """issue-lifecycle#acceptance-lane-start-rerun: lane gh906, the testkit Herdr failing the goal's delivery once
+    (its file prompt-down): the first start stops naming step goal, the same start again finishes on the same pane,
+    one worktree, supervisor, record, goal then brief once each, one spawn and one prod line; a third is refused."""
+    issue = json.loads((store / "issue" / "905.json").read_text()) | {"number": 906, "url": "https://github.com/o/r/issues/906"}
+    (store / "issue" / "906.json").write_text(json.dumps(issue))
+    (w.world / "prompt-down").write_text("")
+    argv = ("sh", "-c", LANE_START, "sh", checkout, "906", LANE_TITLE, "a scratch proof", brief)
+    f.run("rerun-stopped", *argv)
+    f.check("rerun-stopped", lambda c: c.code == 1 and "step goal (made so far: " in c.err
+            and "herdr: server not reachable" in c.err)
+    f.run("rerun", *argv)
+    out = (f.d / "rerun.stdout").read_text()
+    pane = next((x.removeprefix("pane=") for x in out.split() if x.startswith("pane=")), "")
+    wt = Path(checkout).with_name("target-gh906")
+    trees = output(["git", "-C", checkout, "worktree", "list", "--porcelain"])[1].splitlines()
+    f.obs("rerun", "worktrees", "\n".join(x for x in trees if x.startswith("worktree ") and "gh906" in x))
+    agents = json.loads((w.world / "agents.json").read_text())
+    f.obs("rerun", "supervisors", " ".join(p for p, g in agents.items() if g["name"] == "gh906"))
+    f.obs("rerun", "lanes", " ".join(sorted(p.name for p in (w.state / "lanes").iterdir() if "gh906" in p.name)))
+    f.obs("rerun", "prompts", (w.world / "prompts").read_text())
+    log = [json.loads(x) for x in (w.state / "director.handoffs.jsonl").read_text().splitlines()]
+    f.obs("rerun", "log", " ".join(x["kind"] for x in log if "gh906" in (x.get("name"), x.get("issue"))))
+    main = output(["git", "-C", str(wt), "rev-parse", "HEAD"])[1].strip()
+    head = (f"Lane facts (octo-feather-lane start):\nLane key: gh906\nParent issue: 906 {LANE_TITLE} "
+            f"(https://github.com/o/r/issues/906)\nDirector pane: w0:p1\nWorktree: {wt}\nBranch: gh906\n"
+            f"Main commit: {main}\n\n")
+    goal = LANE_GOAL.replace("gh905", "gh906")
+    f.check("rerun", lambda c: c.code == 0 and c.out == f"key=gh906 pane={pane} issue=906\n" and pane.startswith("w")
+            and c.o["worktrees"] == f"worktree {wt}" and c.o["supervisors"] == pane and c.o["lanes"] == "gh906.toml"
+            and c.o["prompts"].endswith(f"{pane}\t{goal}\n{pane}\t{head}{LANE_BRIEF}\n")
+            and c.o["prompts"].count(f"{pane}\t") == 2 and c.o["log"] == "spawn prod")
+    f.run("rerun-refused", *argv)
+    f.check("rerun-refused", lambda c: c.code == 1
+            and f"lane gh906 exists: lane record {w.state / 'lanes' / 'gh906.toml'}, " in c.err)
 
 
 DRIVES: dict[str, Callable[[Feature], None]] = {
