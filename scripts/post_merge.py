@@ -1,13 +1,27 @@
 #!/usr/bin/env python3
-"""The post-merge routine's run order, its per-lane step record and its per-lane lock.
+"""The post-merge routine: its steps in order, its per-lane step record and its per-lane lock.
 
 The routine and its steps: `octo-feather-lane --help`, post-merge (the rule: issue-lifecycle spec
-#gates-main-moved). Imported by scripts/octo-feather-lane (`merge`, `post-merge`), which passes
-the steps in: this module never imports the command. How a command finds it: the docstring of
+#gates-main-moved). Imported by scripts/octo-feather-lane (`merge`, `post-merge`, `archive`,
+`stale`); this module never imports the command. How a command finds it: the docstring of
 scripts/correction_lanes.py. Standard library only (AGENTS.md Rules, kit scripts).
 
 Interface:
 
+    post_merge(pm, show) -> Ran(record, code)
+        The routine for PM (PostMerge: pr, head, lane, wait, repo, and LANES the state dir's
+        lanes/) through run: steps 1-7 (STEPS) under the lane's lock in records(LANES), each
+        step's line to SHOW as it finishes; a step's Refused is its stop, Pending its pending,
+        gh's unexpected data a stop. Then the director told once (tell_director): every step ok
+        on a record the archive recorded its part in, the end's message; a stop, the stop's. Then
+        the summary line. CODE: 0 every step ok, 3 the rest ok and one pending, 1 a stop or the
+        director not told. Refused (Unreadable) when the record cannot be read, nothing run.
+    archived(lanes, name, rec, printed), unit_end(lanes, lane, result, status, show) -> code
+        The archive's part of the director's message recorded; the teardown unit's end recorded,
+        then the end or the stop told (octo-feather-lane --help, archive).
+    stale_report() -> (lines, read): step 5's report, `stale`'s output.
+    kit_install(), top(), git_here(*args), records(lanes), now(): the install step 3 moves, the
+        director's checkout, git in the current directory, the records' dir, a record's time.
     run(lane, pm, steps, show, records) -> Record
         STEPS the routine's (name, function) pairs in order; each function takes PM (its pr, head,
         merge and base) and returns its outcome (ok, stopped or pending) and its line. Under the
@@ -40,8 +54,9 @@ a stop). Written whole each time (a temp file renamed over it), so a reader neve
 """
 
 __all__ = [
-    "Body", "Close", "Merge", "Outcome", "Record", "Step", "Unit", "Unreadable", "read", "run",
-    "tell", "update",
+    "STEPS", "Body", "Close", "Merge", "Outcome", "PostMerge", "Ran", "Record", "Refused", "Step",
+    "Unit", "Unreadable", "archived", "git_here", "kit_install", "now", "post_merge", "read",
+    "records", "run", "stale_report", "tell", "tell_director", "top", "unit_end", "update",
 ]  # fmt: skip
 
 import contextlib
