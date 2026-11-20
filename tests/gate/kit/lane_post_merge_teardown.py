@@ -138,9 +138,10 @@ class World:
             },
         )
 
-    def agents(self, panes: list[str]) -> None:
-        """Herdr's agents: one per pane, each in its own tab, idle."""
-        world = {}
+    def agents(self, panes: list[str], cwd: dict[str, str] | None = None) -> None:
+        """Herdr's agents: one per pane, each in its own tab, idle; CWD a pane's working
+        directory, as Herdr's AgentInfo names it."""
+        world: dict[str, dict[str, str]] = {}
         for p in panes:
             space, n = p.split(":p")
             world[p] = {
@@ -149,7 +150,7 @@ class World:
                 "workspace_id": space,
                 "tab_id": f"{space}:t{n}",
                 "agent_status": "idle",
-            }
+            } | ({"cwd": cwd[p]} if cwd and p in cwd else {})
         (self.herdr / "agents.json").write_text(json.dumps(world))
 
     def spaces(self) -> set[str]:
@@ -318,9 +319,9 @@ def shared_supervisor(s: Scratch) -> None:
     r, s5 = w.run(0)
     assert not w.closes(), f"shared supervisor: closed {w.closes()}"
     assert s5 == (
-        f"step 7 teardown: ok: kept: supervisor zt5:p1 still supervises gh8; worktree {w.wt} "
-        "removed (0 mise config links into it pruned); PR #13 retargeted from gh12 to main; local "
-        "branch gh12 deleted; remote branch gh12 deleted from origin"
+        f"step 7 teardown: ok: kept: supervisor zt5:p1 (tab zt5:t1) still supervises gh8; "
+        f"worktree {w.wt} removed (0 mise config links into it pruned); PR #13 retargeted from "
+        "gh12 to main; local branch gh12 deleted; remote branch gh12 deleted from origin"
     ), f"shared supervisor: {s5}"
     assert w.last(r) == f"{S4}; step 7 teardown ok", f"shared supervisor: {r.out}"
     after = {p.name: p.read_bytes() for p in w.lanes.glob("*.toml")}
@@ -328,17 +329,51 @@ def shared_supervisor(s: Scratch) -> None:
     assert not w.wt.is_dir(), "worktree kept"
     assert not w.branch_on(w.origin, bare=True), "remote branch kept"
     _, s5 = w.run(0)
-    assert s5 == f"step 7 teardown: ok: kept: supervisor zt5:p1 still supervises gh8; {ALREADY}", s5
+    kept = "step 7 teardown: ok: kept: supervisor zt5:p1 (tab zt5:t1) still supervises gh8"
+    assert s5 == f"{kept}; {ALREADY}", s5
     assert not w.closes(), f"shared supervisor rerun: closed {w.closes()}"
     w = World(s, "director-pane")
     w.archived("zt1:p1")
     _, s5 = w.run(0)
     assert not w.closes(), f"director's pane: closed {w.closes()}"
-    assert s5.startswith("step 7 teardown: ok: kept: supervisor zt1:p1 is the director; "), s5
+    want = "step 7 teardown: ok: kept: supervisor zt1:p1 (tab zt1:t1) is the director; "
+    assert s5.startswith(want), s5
+
+
+def worktree_in_use(s: Scratch) -> None:
+    """comms#transport-close-space: a live agent outside what the teardown closed works in the
+    worktree (Herdr's agent cwd, at it or under it): the worktree and its local branch kept,
+    named with that pane; an agent inside the closed space does not keep it; PRs retargeted and
+    the remote branch deleted as before. Herdr's agent list unreadable: the worktree kept, never
+    removed blind, the line saying why."""
+    w = World(s, "in-use")
+    w.archived()
+    w.agents(["zt1:p1", "zt5:p1", "zt6:p1"], {"zt5:p1": str(w.wt), "zt6:p1": f"{w.wt}/sub"})
+    _, s5 = w.run(0)
+    assert w.closes() == ["workspace close zt5"], f"in use: closed {w.closes()}"
+    assert s5 == (
+        f"step 7 teardown: ok: space zt5 closed; kept: worktree {w.wt}: zt6:p1 works in it; PR "
+        f"#13 retargeted from gh12 to main; kept: local branch gh12: checked out in kept worktree "
+        f"{w.wt}; remote branch gh12 deleted from origin"
+    ), f"in use: {s5}"
+    assert w.wt.is_dir(), "worktree removed under zt6:p1"
+    assert w.branch_on(w.r), "local branch deleted"
+    w = World(s, "in-use-unread")
+    w.archived()
+    w.lane(w.lanes / "gh8.toml", "zt5:p1", 8)
+    (w.herdr / "list-answer").write_text("not json")
+    _, s5 = w.run(0)
+    assert not w.closes(), f"unread: closed {w.closes()}"
+    assert s5.startswith(
+        "step 7 teardown: ok: kept: supervisor zt5:p1 (tab unknown: herdr agent list "
+    ), f"unread: {s5}"
+    assert f"; kept: worktree {w.wt}: who works in it unknown (herdr agent list " in s5, s5
+    assert w.wt.is_dir(), "worktree removed blind"
 
 
 def kept(s: Scratch) -> None:
-    """Refused and kept, exit 1, nothing retargeted: a dirty worktree (git's words), a review
+    """Refused and kept, exit 1, nothing retargeted: a dirty worktree (git's words; the
+    director told, the rerun keeping --wait), a review
     row's root, the kit install, the main worktree (step 4 stops first); a local branch past the
     merge commit."""
 
@@ -359,6 +394,10 @@ def kept(s: Scratch) -> None:
         f"worktree {w.wt} not removed (fatal: '{w.wt}' contains modified or untracked files, use "
         "--force to delete it)",
     )
+    # the director told the stop once, its rerun keeping the run's --repo and --wait (#1135)
+    told = (w.herdr / "prompts").read_text().splitlines()
+    rerun = f"rerun `octo-feather-lane post-merge 12 {w.h} --lane gh12 --repo o/r --wait 0`"
+    assert [(x.split("\t")[0], rerun in x) for x in told] == [("zt1:p1", True)], told
     w = World(s, "review")
     w.archived()
     (w.reg / "registry.toml").write_text(
@@ -406,4 +445,4 @@ def kept(s: Scratch) -> None:
 
 
 if __name__ == "__main__":
-    main(not_archived, own_space, no_ci, shared_space, shared_supervisor, kept)
+    main(not_archived, own_space, no_ci, shared_space, shared_supervisor, worktree_in_use, kept)

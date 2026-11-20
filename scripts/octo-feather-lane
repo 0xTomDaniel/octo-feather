@@ -520,7 +520,7 @@ with `post-merge PR HEAD --lane <name>`.
 `post-merge` is the routine after a lane merges (owner ruling 2026-10-29 on issue 206; docs/adr/0008 Duties): `merge`
 (above) runs it; `archive` (above) runs it for step 7 in its teardown unit; the director reruns it after a stop. The
 director's message (issue 1134): a run that stops tells the director's pane (director.toml) the stop, `post-merge
-<lane> PR #<n> stopped: step <n> <name> stopped: <line>; fix it, then rerun ...` (the run's --repo kept); a run whose steps are
+<lane> PR #<n> stopped: step <n> <name> stopped: <line>; fix it, then rerun ...` (the run's --repo kept, and its --wait when not 300); a run whose steps are
 all ok, on a record the archive recorded its part in, sends the one message for the merge: the summary, tickets done, left open,
 reflection findings, correction lanes, left on disk on purpose (the teardown's kept items) and the teardown line,
 ` | ` between them; a teardown unit that ended before its routine finished (killed, timed out) tells that. Each
@@ -593,7 +593,9 @@ before its end) and `director told: <each>`; exit 0, 1 with no or an unreadable 
                    herdr-comms SKILL.md, herdr-say) and never stops the step: listed `not woken: <lane> <pane>`
                    (parked) when the lane's latest parked line in <lane>.handoffs.jsonl beside its record names
                    that pane, else `gone: director to resume or archive: <lane> <pane>`; any other herdr failure
-                   stops the step, named. Each lane told gets one line in
+                   stops the step, named. A lane whose supervisor is the merging lane's (its record, open or
+                   archived: that supervisor runs this routine, mid-turn) is never sent to, listed `told: <lane>
+                   <pane> (the merging supervisor)`. Each lane told gets one line in
                    $(octo-feather-state)/director.handoffs.jsonl, {"at", "kind": "prod", "issue", "note":
                    "post-merge <merge sha> #PR: main moved, told <lane> to re-read <files|none>"} (spec comms
                    #handoff-director-prod); a rerun skips a lane whose prod line names that merge (`already told`).
@@ -615,13 +617,19 @@ before its end) and `director told: <each>`; exit 0, 1 with no or an unreadable 
                    record's supervisor and not director.toml's `pane` has it) closed with `herdr-close <space>`,
                    else only its tab with `herdr-close <supervisor pane>`; one Herdr no longer finds is `already
                    closed`. Neither closed, nothing in another record changed, when an open lane record but
-                   <lane>'s names that very pane as its `supervisor` (`kept: supervisor <pane> still supervises
-                   <lane>, ...`) or director.toml's `pane` is it (`... is the director`) (#892). The worktree
+                   <lane>'s names that very pane as its `supervisor` (`kept: supervisor <pane> (tab <tab>) still
+                   supervises <lane>, ...`, the tab as `herdr agent list` names it, else `(tab unknown: <why>)`)
+                   or director.toml's `pane` is it (`... is the director`) (#892). The worktree
                    on branch `lane-key <record issue>` (tracker skill), from `git worktree
                    list --porcelain` in the current repo, removed with `git worktree remove` (a dirty one refused in
                    git's words), then the user's mise tracked-configs and trusted-configs links whose target is that
                    worktree or under it pruned (MISE_STATE_DIR, else mise's default; the count named); kept, named, when it is the kit install, the main worktree, or the root of a Spec
-                   Chat review row (${XDG_STATE_HOME:-~/.local/state}/spec-chat/hosting/*/registry.toml). Each open PR
+                   Chat review row (${XDG_STATE_HOME:-~/.local/state}/spec-chat/hosting/*/registry.toml); kept, the
+                   local branch with it (`kept: local branch <branch>: checked out in kept worktree <path>`), when
+                   a live agent outside the space or tab closed works in it or under it (an AgentInfo `cwd` or
+                   `foreground_cwd` of `herdr agent list`, read before the close): `kept: worktree <path>: <pane>
+                   works in it`; that list not read, `kept: worktree <path>: who works in it unknown (<why>)`,
+                   never removed blind (comms #transport-close-space). Each open PR
                    based on the branch retargeted to the merged PR's base (`gh pr edit N --base`); the local branch
                    deleted only when it is an ancestor of the merge commit; then `git push origin --delete <branch>`
                    when origin has it. Gone already prints `already`; review rows, spools and records stay

@@ -10,6 +10,7 @@ from lane_post_merge_teardown import (
     own_space,
     shared_space,
     shared_supervisor,
+    worktree_in_use,
 )
 
 Case = Callable[..., None]
@@ -33,6 +34,10 @@ def test_lane_post_merge_teardown_shared_space(case: Case) -> None:
 
 def test_lane_post_merge_teardown_shared_supervisor(case: Case) -> None:
     case(shared_supervisor)
+
+
+def test_lane_post_merge_teardown_worktree_in_use(case: Case) -> None:
+    case(worktree_in_use)
 
 
 def test_lane_post_merge_teardown_kept(case: Case) -> None:
