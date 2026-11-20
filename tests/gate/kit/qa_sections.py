@@ -326,33 +326,20 @@ def kit_repo(q: Qa, *, c0: bool) -> tuple[Path, list[str]]:
 
 
 def baseline(s: Scratch) -> None:
-    """tests/qa-baseline.sh."""
+    """tests/qa-baseline.sh: the command's wiring of --baseline (a case on both kits, its cost and
+    the table: test_qa_stored.py, test_qa_baseline)."""
     q, t = Qa(s), s.root
     k, (c1, c2) = kit_repo(q, c0=False)
     kq, ev = str(k), str(t / "evals")
     want = data.baseline(c1, c2)
-    q.run(0, kq, "--evals", ev, "--case", "reads", "--runs", "2")
-    q.check(want["cost"])
-    d = q.last()
-    r = load(d / "trig" / "reads" / "result.json")
-    assert [at(x, "usage", "total") for x in seq(at(r, "runs"))] == [220, 240], r
-    assert at(r, "tokens") == {"mean": 230, "stddev": 14.1421}, r
-    assert at(r, "cost_usd") == {"mean": 0.002, "stddev": 0.0}, r
-    assert keys(at(r, "time")) == {"mean", "stddev"}, r
-    f0 = at(r, "runs", 0, "facts", 0)
-    assert at(f0, "status") == "pass", at(r, "runs", 0)
-    assert "evidence" not in keys(f0), at(r, "runs", 0)
-    assert at(load(d / "summary.json"), "cases", 0, "tokens", "mean") == 230
-    # Baseline c1 (fails: no tdd) beside the head c2 (passes): one evaluation, runs interleaved,
-    # the table, exit 0.
+    # Baseline c1 beside the head c2: one evaluation naming the baseline, runs interleaved, exit 0.
     out = q.run(0, kq, "--evals", ev, "--case", "reads", "--runs", "2", "--baseline", c1[:9])
-    q.check(want["compared"])
+    q.check([w for w in want["compared"] if w.text.startswith(("^qa: run ", "; baseline kit "))])
     if (
         re.findall(r"^  (?:baseline|current) run [0-9]/2: (?:PASS|FAIL)", out, re.MULTILINE)
         != data.INTERLEAVED
     ):
         fail(f"runs not interleaved: {out}")
-    compared_fields(q, c1, c2)
     # The exit status follows the current kit only: the change side c1 fails beside a passing
     # baseline c2.
     q.run(1, kq, "--evals", ev, "--case", "reads", "--kit-ref", c1, "--baseline", c2)
@@ -362,38 +349,9 @@ def baseline(s: Scratch) -> None:
     q.check(want["unknown"])
     q.run(64, kq, "--evals", ev, "--baseline")
     say(
-        "qa-baseline: ok (time and tokens mean +/- spread per case, baseline beside current in "
-        "one interleaved evaluation with the difference, exit by the current kit, unknown "
-        "baseline 64)"
+        "qa-baseline: ok (baseline beside current in one interleaved evaluation, exit by the "
+        "current kit, unknown baseline 64; cost and the table: test_qa_stored.py)"
     )
-
-
-def compared_fields(q: Qa, c1: str, c2: str) -> None:
-    """tests/qa-baseline.sh: the baseline run's result.json and summary.json fields."""
-    d = q.last()
-    c = d / "trig" / "reads"
-    r = load(c / "result.json")
-    for side, sha in (("baseline", c1), ("current", c2)):
-        for n in (1, 2):
-            x = load(c / side / f"run-{n}" / "result.json")
-            assert (at(x, "config"), at(x, "run"), at(x, "kit_sha")) == (side, n, sha), x
-    b = at(r, "baseline")
-    got = (
-        at(r, "verdict"),
-        at(r, "kit_sha"),
-        at(b, "verdict"),
-        at(b, "kit_sha"),
-        at(b, "pass_rate"),
-    )
-    assert got == ("PASS", c2, "FAIL", c1, 0.0), r
-    assert [at(x, "dir") for x in seq(at(b, "runs"))] == ["baseline/run-1", "baseline/run-2"], b
-    assert at(b, "runs", 0, "facts", 0, "status") == "fail", b
-    assert at(r, "delta", "pass_rate") == 1.0, at(r, "delta")
-    assert at(r, "delta", "tokens") == 0.0, at(r, "delta")
-    sm = load(d / "summary.json")
-    assert at(sm, "baseline", "kit_sha") == c1, sm
-    assert at(sm, "kit_sha") == c2, sm
-    assert (at(sm, "passed"), at(sm, "total")) == (1, 1), sm
 
 
 def before_tool(s: Scratch) -> None:
@@ -694,6 +652,18 @@ def tail(q: Qa) -> None:
     q.run(1, Q, "--evals", jg, "--classifier", "stub/first")
     jl("FAILED bench jb: the bench command printed no bench result:")
     jl("(pi exit 3)")
+
+
+def declared(s: Scratch) -> None:
+    """tests/qa-declared.sh: the dec suite's runs the watcher's timeout stops (suite timeout_s 8),
+    through the command (the other dec cases: test_qa_grading.py)."""
+    q = Qa(s)
+    want = [w for w in data.declared(q) if w.line in ("FAIL dec/early", "FAIL dec/earlyrb")]
+    q.run(1, Q, "--evals", str(s.root / "dec"), "--case", "early", "--case", "earlyrb")
+    q.check(want)
+    say(
+        "qa-declared: ok (declared stopped early by the timeout, a skill_read_before target never reached fails)"
+    )
 
 
 def blob(q: Qa, data: bytes) -> str:
@@ -1862,41 +1832,16 @@ def fake_qa(q: Qa) -> None:
 
 
 def review(s: Scratch) -> None:
-    """tests/qa-review.sh."""
+    """tests/qa-review.sh: the command's wiring of --review and a review case's shape (the run
+    side, awaiting review, the verdict and note: test_qa_stored.py, test_qa_review)."""
     q, t = Qa(s), s.root
     rv = t / "rv"
     data.essay(q, "The notes say hi.")
-    # Run: awaiting review, never a pass (exit 1), its output shown and kept.
-    q.run(1, Q, "--evals", str(rv))
-    q.check(data.review()["run"])
-    d1 = q.last()
-    id1 = d1.name
-    want = data.review(id1)
-    c = d1 / "rv" / "essay"
-    k, r = load(c / "review.json"), load(c / "result.json")
-    assert k == data.REVIEW_KEPT, k
-    assert at(r, "verdict") == "REVIEW", r
-    assert at(r, "review") == {"question": "Do the notes answer the brief?"}, r
-    # Shown awaiting review until a verdict is recorded; then the verdict and note.
-    q.run(0, Q, "--review", str(d1), "rv/essay")
-    q.check(want["show"])
-    q.run(0, Q, "--review", str(d1), "rv/essay", "pass", "Clear and short.")
-    q.check(want["record"])
-    q.run(0, Q, "--review", str(d1), "rv/essay")
-    q.check(want["shown"])
-    if len((t / "out" / "reviews" / "rv" / "essay.jsonl").read_text().splitlines()) != 1:
-        fail("the verdict is not one line in the reviews file")
-    # The next run: the latest verdict and note beside its new output.
-    data.essay(q, "The notes say hello.")
-    q.run(1, Q, "--evals", str(rv), "--runs", "2")
-    q.check(want["next"])
-    # Usage: a bad verdict, a blank note, a case that is no review case: 64.
-    q.run(64, Q, "--review", str(d1), "rv/essay", "maybe", "x")
-    q.run(64, Q, "--review", str(d1), "rv/essay", "fail", " ")
-    q.run(0, Q, "--evals", str(t / "evals"), "--case", "reads")
-    out = q.run(64, Q, "--review", str(q.last()), "trig/reads", "pass", "x")
-    if not grep("not a review case", out):
-        fail(f"a graded case took a verdict: {out}")
+    # Usage: no stored run case there, or too few arguments: 64.
+    out = q.run(64, Q, "--review", str(t / "nowhere"), "rv/essay")
+    if not grep("no stored run case", out):
+        fail(f"--review of no stored run: {out}")
+    q.run(64, Q, "--review", str(t / "nowhere"))
     # Shape: a review case needs its question, and has no facts.
     ev = q.fresh(rv)
     edit(ev / "rv" / "cases.json", 'c[0]["review"] = {}', "c")
@@ -1910,12 +1855,34 @@ def review(s: Scratch) -> None:
         "rv",
     )
     say(
-        "qa-review: ok (awaiting review with its output, verdict and note recorded and shown, the next run shows them beside its new output, shape refusals)"
+        "qa-review: ok (--review usage 64, shape refusals; the review case's run side: test_qa_stored.py)"
     )
 
 
 def events_with(p: Path, mark: str) -> list[object]:
     return [load_text(x) for x in p.read_text().splitlines() if mark in x]
+
+
+def rt_targets(s: Scratch) -> None:
+    """tests/qa-rt-targets.sh: the rt suite's case declared, test_write by the spec fixture's
+    declared tests, behind the slow test runner (Qa), through the command (the other rt cases:
+    test_qa_grading.py)."""
+    q, t = Qa(s), s.root
+    q.rt()
+    q.run(0, Q, "--evals", str(t / "rt"), "--case", "declared")
+    q.check([w for w in data.rt_targets()[0] if w.line == "PASS rt/declared"])
+    d = q.last() / "rt"
+    ms = [at(e, "marks") for e in events_with(d / "declared" / "transcript.jsonl", '"qa_fs"')]
+    assert ms == [["edit"], ["edit"], ["edit", "test_write"]], (
+        ms
+    )  # tests/README.md, tests/test_y.py, specs/cli_check.py
+    g3 = seq(at(load(d / "declared" / "grading.json"), "facts"))[0]
+    assert at(g3, "status") == "pass", g3
+    assert (
+        "first test_write at tool call 5 of 5 (bash echo 'def test_c(): pass' > specs/cli_check.py)"
+        in str(at(g3, "evidence"))
+    ), g3
+    say("qa-rt-targets: ok (test_write by a fixture's declared tests, behind a slow test runner)")
 
 
 def rt(s: Scratch) -> None:
@@ -1961,32 +1928,16 @@ def rt_artifacts(d: Path) -> None:
 
 
 def runs(s: Scratch) -> None:
-    """tests/qa-runs.sh."""
+    """tests/qa-runs.sh: the command's wiring of --runs (a case over its runs: test_qa_stored.py,
+    test_qa_runs)."""
     q, t = Qa(s), s.root
     alt = t / "alt"
     want = data.runs(q)
-    # Some runs pass, some fail: 2/3, FAIL, exit 1; each run's own line first, the failing run's
-    # facts named.
+    # The run header says the runs; each run sandboxed, its sandbox.json in run-<k>/; exit 1.
     q.run(1, Q, "--evals", str(alt), "--case", "alt", "--runs", "3")
-    q.check(want["alt"])
-    runs_artifacts(q)
-    # Every run passes: PASS, 2/2, exit 0.
-    q.run(0, Q, "--evals", str(alt), "--case", "reads", "--runs", "2")
-    q.check(want["every"])
-    # One run (default): no run lines, artifacts in the case dir, result.json with one run.
-    q.run(0, Q, "--evals", str(alt), "--case", "reads")
-    q.check(want["one"])
-    c = q.last() / "trig" / "reads"
-    r = load(c / "result.json")
-    assert not (c / "run-1").exists(), r
-    assert "run" not in keys(r), r
-    assert (at(r, "verdict"), at(r, "runs_passed"), at(r, "pass_rate"), at(r, "stddev")) == (
-        "PASS",
-        1,
-        1.0,
-        0.0,
-    ), r
-    assert [at(x, "dir") for x in seq(at(r, "runs"))] == ["."], r
+    q.check([w for w in want["alt"] if w.text.startswith("^qa: run ")])
+    for k in (1, 2, 3):
+        assert (q.last() / "trig" / "alt" / f"run-{k}" / "sandbox.json").exists(), k
     # Usage: a bad value exits 64 before any run; --help documents it.
     for v in ("0", "-1", "two"):
         q.run(64, Q, "--evals", str(alt), "--runs", v)
@@ -1996,50 +1947,8 @@ def runs(s: Scratch) -> None:
     if not grep("^  --runs N  ", out):
         fail(f"--help does not document --runs: {out}")
     say(
-        "qa-runs: ok (--runs: 2/3 with pass rate and stddev FAILS exit 1, 2/2 PASSES exit 0, run-<k> artifacts, result.json and summary.json runs/pass_rate/stddev, one run unchanged, bad value 64, --help)"
+        "qa-runs: ok (--runs: the run header, run-<k> sandbox.json, exit 1, bad value 64, --help; the case over its runs: test_qa_stored.py)"
     )
-
-
-def runs_artifacts(q: Qa) -> None:
-    """tests/qa-runs.sh: run-<k> artifacts, result.json and summary.json fields of the 2/3 run."""
-    rd = q.last()
-    c = rd / "trig" / "alt"
-    for k in (1, 2, 3):
-        for f in (
-            "prompt.md",
-            "input.json",
-            "transcript.jsonl",
-            "sandbox.json",
-            "grading.json",
-            "result.json",
-        ):
-            assert (c / f"run-{k}" / f).exists(), (k, f)
-        r = load(c / f"run-{k}" / "result.json")
-        assert (at(r, "run"), at(r, "of"), at(r, "verdict")) == (
-            k,
-            3,
-            "FAIL" if k == 2 else "PASS",
-        ), r
-        assert at(load(c / f"run-{k}" / "input.json"), "run") == k
-    r = load(c / "result.json")
-    assert at(r, "verdict") == "FAIL", r
-    assert (at(r, "runs_passed"), at(r, "pass_rate"), at(r, "stddev")) == (2, 0.6667, 0.5774), r
-    rs = [(at(x, "run"), at(x, "dir"), at(x, "verdict")) for x in seq(at(r, "runs"))]
-    assert rs == [(1, "run-1", "PASS"), (2, "run-2", "FAIL"), (3, "run-3", "PASS")], rs
-    assert {
-        "suite",
-        "id",
-        "verdict",
-        "deciding",
-        "model",
-        "seconds",
-        "stop",
-        "tool_calls",
-        "kit_sha",
-    } <= keys(r), r
-    sm = load(rd / "summary.json")
-    assert (at(sm, "passed"), at(sm, "total"), at(sm, "runs")) == (0, 1, 3), sm
-    assert at(sm, "cases", 0, "pass_rate") == 0.6667, sm
 
 
 def shape(s: Scratch) -> None:
@@ -2392,5 +2301,5 @@ def shape_facts(q: Qa) -> None:
 
 if __name__ == "__main__":
     skip_on_macos()
-    main(qa, baseline, before_tool, bench, fixture_base, history, isolation, judgment_shape, kit_ref,
-         ran, review, rt, runs, shape)  # fmt: skip
+    main(qa, baseline, before_tool, bench, declared, fixture_base, history, isolation, judgment_shape,
+         kit_ref, ran, review, rt, rt_targets, runs, shape)  # fmt: skip

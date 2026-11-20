@@ -41,7 +41,8 @@ def by_target(r: Run) -> dict[tuple[str, object], tuple[str, str]]:
     return {(str(f["skill"]), f.get("before")): (f["status"], str(f["evidence"])) for f in r.graded}
 
 
-DECLARED_TIMEOUT = ("early", "earlyrb")  # each stopped by the watcher's timeout (suite timeout_s 8)
+# Stopped by the watcher's real timeout: end-to-end, through the command (tests/qa-declared.sh).
+DECLARED_TIMEOUT = ("early", "earlyrb")
 
 
 @pytest.mark.criterion("quality#acceptance-qa-per-case", "quality#acceptance-qa-role-cases")
@@ -51,18 +52,6 @@ def test_qa_declared(q: Qa) -> None:
     wants = [w for w in data.declared(q) if w.line.split("/")[1] not in DECLARED_TIMEOUT]
     runs = q.graded(q.t / "dec", "dec", ["ok", "out", "none", "two"])
     graded_check(runs, wants)
-
-
-@pytest.mark.e2e
-@pytest.mark.criterion("quality#acceptance-qa-per-case", "quality#acceptance-qa-role-cases")
-def test_qa_declared_timeout(q: Qa) -> None:
-    """A run the watcher's timeout stops (a real wait: suite timeout_s 8; why no time seam: #1089):
-    declared fails stopped before its final message; skill_read_before final_message fails, its
-    target never reached (schema.md, Facts)."""
-    wants = [w for w in data.declared(q) if w.line.split("/")[1] in DECLARED_TIMEOUT]
-    runs = q.graded(q.t / "dec", "dec", DECLARED_TIMEOUT)
-    graded_check(runs, wants)
-    assert all((r.stop or {}).get("stop") == "timeout" for r in runs.values()), runs
 
 
 @pytest.mark.criterion("quality#acceptance-qa-per-case", "quality#acceptance-qa-role-cases")
@@ -86,9 +75,9 @@ def test_qa_before_tool(q: Qa) -> None:
 
 @pytest.mark.criterion("quality#acceptance-qa-skill-triggers")
 def test_qa_cap_batch(q: Qa) -> None:
-    """At the max_tool_calls bound (3; the stop rule: octo-feather-qa --help): a skill read in
-    flight in the codemode batch that crosses it is graded, the run stopped once decided at 5
-    calls; a read started after that batch is never credited, the run stopped at the bound."""
+    """The max_tool_calls stop rule (its owner: octo-feather-qa --help) at bound 3: inbatch's
+    read, nested in the codemode batch that crosses it, passes, stopped decided at 5 calls;
+    afterbatch's read, after that batch, fails, stopped at the bound at 4."""
     wants = data.cap_batch(q)
     runs = q.graded(q.t / "cb", "cb")
     graded_check(runs, wants)
@@ -140,13 +129,15 @@ def test_qa_rt(q: Qa) -> None:
 
 @pytest.mark.criterion("quality#acceptance-qa-per-case", "quality#acceptance-qa-role-cases")
 def test_qa_rt_targets(q: Qa) -> None:
-    """The rt suite's cases on the python-app fixtures: before targets from filesystem snapshots
-    (test_write by the fixture's declared tests, edit, git_commit, git_push, gh_call,
-    final_message, kit_contract_edit), a target never reached fails."""
+    """The rt suite's cases on the python-app fixture: before targets from filesystem snapshots
+    (test_write, edit, git_commit, git_push, gh_call, final_message, kit_contract_edit), a target
+    never reached fails. test_write by a fixture's declared tests (case declared, behind a slow
+    test runner): end-to-end, tests/qa-rt-targets.sh."""
     q.rt()
-    runs = q.graded(q.t / "rt", "rt", data.RT_TARGETS)
+    ids = [c for c in data.RT_TARGETS if c != "declared"]
+    runs = q.graded(q.t / "rt", "rt", ids)
     lines_, want = data.rt_targets()
-    graded_check(runs, lines_)
+    graded_check(runs, [w for w in lines_ if w.line != "PASS rt/declared"])
     g = by_target(runs["order"])
     for k, (st, ev) in want.items():
         assert g[k][0] == st, (k, g[k])
@@ -162,16 +153,6 @@ def test_qa_rt_targets(q: Qa) -> None:
     g2 = {f.get("before"): str(f["evidence"]) for f in runs["fsonly"].graded}
     assert "first test_write at tool call 4 of 4" in g2["test_write"], g2
     assert "first edit at tool call 4 of 4" in g2["edit"], g2
-    # tests/README.md, tests/test_y.py, specs/cli_check.py
-    assert fs_marks(runs["declared"]) == [["edit"], ["edit"], ["edit", "test_write"]], runs[
-        "declared"
-    ]
-    g3 = runs["declared"].graded[0]
-    assert g3["status"] == "pass", g3
-    assert (
-        "first test_write at tool call 5 of 5 (bash echo 'def test_c(): pass' > specs/cli_check.py)"
-        in str(g3["evidence"])
-    ), g3
     g4 = {f.get("before"): (f["status"], str(f["evidence"])) for f in runs["contract"].graded}
     assert g4["edit"][0] == "fail", g4
     assert "first edit at tool call 2 of 4" in g4["edit"][1], g4

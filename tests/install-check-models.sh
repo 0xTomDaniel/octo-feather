@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Integration test for `just install-check`, its review service and models section (#508; setup
 # tests/gate/kit/testkit/install_check.py):
 #   Review service (#462): systemctl a stub: active and enabled ok; inactive, failed or no systemctl named with Spec

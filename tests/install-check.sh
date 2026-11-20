@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Integration test for `just install-check` per target (spec remote#host-tools, #acceptance-install-linear), offline:
 # the kit's justfile run in a target (`just -f KIT/justfile install-check`, or TARGET as the argument).
 # One section of the `just install-check` test per gate item (#508): tests/install-check.sh and each tests/install-check-*.sh (mise, browser, box, models).

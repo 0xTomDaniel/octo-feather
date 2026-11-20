@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Integration test for `just install-check`, its browser section (#508; setup tests/gate/kit/testkit/install_check.py):
 #   browser target (qc.toml [browser] playwright pin, spec remote#acceptance-install-browser), no browser folder:
 #     browser MISSING naming the pin, the box folder and the install command, exit 1; a fake headless shell in

@@ -955,14 +955,6 @@ def sample(picked, n):
     return [p for p in picked if id(p) in chosen]
 
 
-def scores(results):
-    """{split: {passed, total}} over the cases that have a split; {} when none has one."""
-    if not any("split" in r for r in results):
-        return {}
-    return {sp: {"passed": sum(r["verdict"] == "PASS" for r in results if r.get("split") == sp),
-                 "total": sum(r.get("split") == sp for r in results)} for sp in ("train", "held-out")}
-
-
 def reanalyze(run_dir: str, *, evidence: bool = False) -> int:
     """--analyze RUN_DIR: the analysis of a stored run, from its summary.json only; no case, sandbox or model runs.
     With EVIDENCE (--evidence), the run's evidence block instead."""
@@ -1068,23 +1060,13 @@ def run_all(o, evals, picked, kit, sha, base: "tuple[Path, str | None] | None" =
         s = next(s for s, _, _ in picked if s["suite"] == name)
         benches.append(run_bench(qc, evals / name, s, [(c, e) for x, c, e in picked if x is s], o["classifier"],
                                  runid.split("-")[-1], run_dir / name, judgment_model(evals)))
-    passed = sum(r["verdict"] == "PASS" for r in results)
-    sc = scores(results)
-    an, flags = grading.analysis(results)
-    if results and (base or runs > 1):
-        print("\n".join(flags), flush=True)
-    for sp, v in sc.items():
-        print(f"qa: {sp} score {v['passed']}/{v['total']} passed")
-    (run_dir / "summary.json").write_text(json.dumps({"run_id": runid, "kit_ref": o["kit-ref"] or "HEAD", "kit_sha": sha,
-                                                      "passed": passed, "total": len(results), "scores": sc, "runs": runs,
-                                                      **({"baseline": {"kit_ref": o["baseline"], "kit_sha": base[1]}} if base else {}),
-                                                      "seconds": round(time.time() - t0, 1), "cases": results, "analysis": an,
-                                                      **({"benches": benches} if benches else {})}, indent=2) + "\n")
-    if results:
-        print(f"qa: {passed}/{len(results)} passed (run {runid}); artifacts {run_dir}")
-    if benches:
-        print(f"qa: {sum(b['verdict'] == 'DONE' for b in benches)}/{len(benches)} bench(es) done (run {runid}); artifacts {run_dir}")
-    return 0 if passed == len(results) and all(b["verdict"] == "DONE" for b in benches) else 1
+    head: Result = {"run_id": runid, "kit_ref": o["kit-ref"] or "HEAD", "kit_sha": sha, "runs": runs,
+            **({"baseline": {"kit_ref": o["baseline"], "kit_sha": base[1]}} if base else {}), "seconds": round(time.time() - t0, 1)}
+    benched = cast("list[Result]", benches)
+    sm, lines = grading.summarize(run_dir, head, results, benched)
+    if lines:
+        print("\n".join(lines), flush=True)
+    return 0 if sm["passed"] == sm["total"] and all(b["verdict"] == "DONE" for b in benched) else 1
 
 
 if __name__ == "__main__":
