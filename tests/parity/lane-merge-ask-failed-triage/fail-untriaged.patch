@@ -1,0 +1,14 @@
+Seeded defect: a fail row with no Failed triage line passes (spec #delivery-qa-triage).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index eebfe2b6..2137d7e1 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -605,7 +605,7 @@ def rows_against(rows: dict[str, str], built: set[str], fails: dict[str, str]) -
+                 f"criterion row {cid}: pass but not in Built; qc flips each pass to built, so "
+                 "rerun just qc or correct the row"
+             )
+-        if v == "fail" and cid not in fails:
++        if v == "fail" and cid in fails and not fails[cid]:
+             miss.append(
+                 f"criterion row {cid}: fail with no triage; add `- {cid}: <triage>` under Failed "
+                 "(spec #delivery-qa-triage)"

@@ -1,0 +1,14 @@
+Seeded defect: a recorded full pass carries over any code commit after it (spec #lanes-checkpoints).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index a5b4b9e4..859b177e 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -1514,7 +1514,7 @@ def _carries(
+         ]
+     else:
+         try:
+-            _, no = head_proof(g, c, head, at="full pass", kept="the full pass", rerun=fix)
++            no = []
+         except _RefusedError as e:
+             no = [str(e)]
+     return no or [

@@ -1,0 +1,14 @@
+Seeded defect: an unreadable head tree no longer names the failed read (one named item, fail closed).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index 575dba8d..2c299e83 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -370,7 +370,7 @@ def head_checks(c: Checks) -> tuple[list[str], str, list[dict[str, object]]]:
+             miss.append(f"Checks: {e}")
+     elif isinstance(at, Unread):
+         miss.append(
+-            f"Checks: none reported on head {h}, and the no-CI fact could not be read ({at.why})"
++            f"Checks: none reported on head {h}, and the no-CI fact could not be read"
+         )
+     elif isinstance(at, Workflows):
+         miss.append(

@@ -1,0 +1,14 @@
+Seeded defect: rows naming two judged heads pass (spec #lanes-one-head).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index eebfe2b6..1596047d 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -452,7 +452,7 @@ def criteria(  # noqa: C901, PLR0912  one branch per row gap, in the order print
+         if not rows and not no_crit:
+             miss.append("criterion table: no rows; add one per claimed criterion")
+     judged = next(iter(judged_at)) if len(judged_at) == 1 else None
+-    if len(judged_at) > 1:
++    if len(judged_at) > 2:
+         miss.append(
+             f"criterion table: rows name {len(judged_at)} judged heads "
+             f"({', '.join(sorted(x[:12] for x in judged_at))}); qc and the review judge one "

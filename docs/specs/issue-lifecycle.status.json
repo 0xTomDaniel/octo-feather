@@ -83,6 +83,15 @@
       "status": "built",
       "pr": 91
     },
+    "acceptance-one-head-hunks": {
+      "status": "built",
+      "pr": 1164,
+      "record": "20261120T182128Z-dd0e4bf5",
+      "commit": "f462fc68ef2b93f76e8000ddfe073e082d047ce9",
+      "tests": [
+        "tests/gate/kit/lane_merge_ask_hunks.py"
+      ]
+    },
     "acceptance-qc-interim": {
       "status": "built",
       "pr": 880,
@@ -186,6 +195,15 @@
     "acceptance-merge-ask-evidence": {
       "status": "built",
       "pr": 49
+    },
+    "acceptance-merge-ask-siblings": {
+      "status": "built",
+      "pr": 1164,
+      "record": "20261120T182128Z-1b38c372",
+      "commit": "f462fc68ef2b93f76e8000ddfe073e082d047ce9",
+      "tests": [
+        "tests/gate/kit/lane_merge_order.py"
+      ]
     },
     "acceptance-merge-ask-no-criterion": {
       "status": "built",
