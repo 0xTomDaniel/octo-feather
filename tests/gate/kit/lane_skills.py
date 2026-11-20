@@ -133,12 +133,30 @@ def send_back_once(s: Scratch) -> None:
 
 
 def refusals(s: Scratch) -> None:
-    """No caller pane and a pane owning no lane: exit 2, nothing logged."""
+    """A comparison that cannot run never blocks (supervisor ruling on #1099): exit 2 naming the
+    cause and `integrate, only exit 1 sends the worker back`. With the caller's log found, one
+    non-blocking finding line, class skills-unchecked, with the ticket: a ticket the tracker cannot
+    read (#16, no recording: gh exits 2), one with no spawn line in the log (#1094's spawn line
+    gone). No caller pane or a pane owning no lane: nothing recorded, said so."""
     log = world(s)
-    n = len(log.read_text())
-    assert "HERDR_PANE_ID is unset" in skills(s, "1099", want=2, HERDR_PANE_ID="")
-    assert "pane w9:p9 owns no lane record" in skills(s, "1099", want=2, HERDR_PANE_ID="w9:p9")
-    assert len(log.read_text()) == n, "a refused run wrote to the log"
+    before = log.read_text()
+    err = skills(s, "16", want=2)
+    assert "tracker script github-issues/issue-view 16 --notes failed" in err, err
+    assert f"could not check, recorded in {log} (class skills-unchecked, not blocking)" in err, err
+    assert "integrate, only exit 1 sends the worker back" in err, err
+    got = [strip(f) for f in findings(log)]
+    want = {"kind": "finding", "source": "skills", "class": "skills-unchecked", "blocking": False}
+    assert got == [want | {"ticket": "16"}], got
+    log.write_text("".join(x for x in before.splitlines(keepends=True) if '"1094"' not in x))
+    err = skills(s, "1094", want=2)
+    assert "no spawn line for ticket 1094" in err, err
+    assert [strip(f) for f in findings(log)] == [want | {"ticket": "1094"}], findings(log)
+    n = log.read_text()
+    for pane, why in (("", "HERDR_PANE_ID is unset"), ("w9:p9", "pane w9:p9 owns no lane record")):
+        err = skills(s, "1099", want=2, HERDR_PANE_ID=pane)
+        assert why in err, err
+        assert "could not check, not recorded (no hand-off log for this pane)" in err, err
+    assert log.read_text() == n, "an unrecorded run wrote to the log"
 
 
 def tickets_comment(s: Scratch) -> None:

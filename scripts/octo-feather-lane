@@ -289,8 +289,12 @@ worker back once (owner ruling 2026-11-19 on #1099), counted by that log alone: 
 back before integrate: herdr-say <pane> '...'` and exits 1; a later miss of the same ticket and skill logs blocking
 false, prints `<ticket>: skill <skill>: sent back once already; this miss stands recorded, not blocking` and, when
 no other skill is a first miss, exits 0. Exit 0 also with no miss, with `Skills: none` or with no line (nothing
-compared; `ticket` and `tickets` fail the last). Exit 2, nothing logged: usage, a tracker error, no HERDR_PANE_ID, a
-pane owning no record, no spawn line with a session for TICKET, not exactly one session file, or one it cannot read.
+compared; `ticket` and `tickets` fail the last). Exit 2, could not check, never blocking (supervisor ruling on
+#1099: only a real miss, exit 1, sends the worker back): a tracker error, no HERDR_PANE_ID, a pane owning no record,
+no spawn line with a session for TICKET, not exactly one session file, or one it cannot read. It names the cause and
+appends one line to the caller's hand-off log when it finds one, {at, kind: finding, source: skills, class:
+skills-unchecked, blocking: false, summary, ticket}, saying `recorded in <log>` or `not recorded (<why>)`; a usage
+error records nothing.
 The limit: it proves a load, never that the skill was applied, nor that the line named the right skills; review
 judges those.
 
@@ -3544,10 +3548,33 @@ def handoff_module():
 
 
 def cmd_skills(args: list[str]) -> int:
-    """TICKET's Skills: line against its worker's Pi session (spec issue-lifecycle #lanes-tickets; --help, skills)."""
+    """TICKET's Skills: line against its worker's Pi session (spec issue-lifecycle #lanes-tickets; --help, skills). A
+    comparison that cannot run never blocks: exit 2, recorded as a non-blocking finding when the caller's log is found."""
     if len(args) != 1 or not args[0].strip():
         raise Unchecked(f"usage: octo-feather-lane skills TICKET (the ticket key, e.g. 40 or ENG-123; got {' '.join(args) or 'nothing'})")
-    key = args[0]
+    try:
+        return skills_check(args[0])
+    except Unchecked as e:
+        try:
+            log = handoff_module().owned_log(os.environ["HERDR_PANE_ID"])
+        except (KeyError, OSError, subprocess.CalledProcessError):
+            log = None
+        line = {"at": f"{dtm.datetime.now(dtm.timezone.utc):%Y-%m-%dT%H:%M:%SZ}", "kind": "finding", "source": "skills",
+                "class": "skills-unchecked", "blocking": False, "summary": f"skills {args[0]} could not compare: {e}",
+                "ticket": args[0].lstrip("#")}
+        try:
+            if log is None:
+                raise OSError("no hand-off log for this pane")
+            with log.open("a", encoding="utf-8") as f:
+                f.write(encode(cast("dict[str, object]", line)) + "\n")
+            said = f"recorded in {log} (class skills-unchecked, not blocking)"
+        except OSError as why:
+            said = f"not recorded ({why})"
+        raise Unchecked(f"{e}; could not check, {said}: integrate, only exit 1 sends the worker back") from e
+
+
+def skills_check(key: str) -> int:
+    """cmd_skills' comparison of KEY; Unchecked when it cannot run."""
     name, notes = ticket_notes(key)
     named = skills_named(by_change(notes))
     if not named:
@@ -3615,7 +3642,7 @@ def cmd_skills(args: list[str]) -> int:
     print(f"{name}: {len(back)} blocking finding line(s) in {log}, class skill-not-loaded: {', '.join(back)}")
     skills = ", ".join(back)
     print(f"{name}: fix: send {worker} back before integrate: herdr-say {wpane} 'Load {skills} (read each SKILL.md by "
-          f"path), apply it to ticket {name}, then hand off again'; integrate only once octo-feather-lane skills {name} exits 0")
+          f"path), apply it to ticket {name}, then hand off again'; integrate once octo-feather-lane skills {name} no longer exits 1")
     return 1
 
 
