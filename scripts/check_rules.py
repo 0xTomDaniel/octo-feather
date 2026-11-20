@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """The kit's check rules: each a function of a repo dir and its tracked files, returning a Report.
 
-A kit module, imported by name, never loaded by file path: by its command (scripts/check-dashes;
-how: correction_lanes.py's docstring) and by tests (how: pyproject.toml, [tool.pytest.ini_options]
-pythonpath). Standard library only (AGENTS.md Rules, kit scripts).
+A kit module, imported by name, never loaded by file path: by its commands (scripts/check-dashes,
+scripts/check-refs; how: correction_lanes.py's docstring) and by tests (how: pyproject.toml,
+[tool.pytest.ini_options] pythonpath). Standard library only (AGENTS.md Rules, kit scripts).
 
 Interface:
 
