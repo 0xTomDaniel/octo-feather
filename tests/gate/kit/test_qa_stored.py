@@ -87,3 +87,54 @@ def test_qa_runs(q: Qa) -> None:
         0.0,
     ), r
     assert [at(x, "dir") for x in seq(at(r, "runs"))] == ["."], r
+
+
+@pytest.mark.criterion("quality#acceptance-qa-cost", "quality#acceptance-qa-baseline")
+def test_qa_baseline(q: Qa) -> None:
+    """--runs and --baseline (octo-feather-qa --help): a case's time and tokens as mean and spread
+    (the stub's runs 1 and 2 report 220 and 240 tokens); a baseline kit c1 (its implementer lists
+    no tdd: the case fails) beside the current kit c2 (it passes), with the compare table and the
+    difference, each run's result.json, the case's and summary.json's baseline fields."""
+    k = q.kits()
+    c1, c2 = k.c1.sha, k.c2.sha
+    want = data.baseline(c1, c2)
+    ev = q.evaluation(q.t / "evals" / "trig", ["reads"], runs=2, configs=[k.c2._replace(ref=None)])
+    printed("\n".join(ev.lines), want["cost"])
+    d = ev.run_dir
+    r = load(d / "trig" / "reads" / "result.json")
+    assert [at(x, "usage", "total") for x in seq(at(r, "runs"))] == [220, 240], r
+    assert at(r, "tokens") == {"mean": 230, "stddev": 14.1421}, r
+    assert at(r, "cost_usd") == {"mean": 0.002, "stddev": 0.0}, r
+    assert keys(at(r, "time")) == {"mean", "stddev"}, r
+    f0 = at(r, "runs", 0, "facts", 0)
+    assert at(f0, "status") == "pass", at(r, "runs", 0)
+    assert "evidence" not in keys(f0), at(r, "runs", 0)
+    assert at(load(d / "summary.json"), "cases", 0, "tokens", "mean") == 230
+    # Baseline c1 (fails: no tdd) beside the head c2 (passes), the table.
+    configs = [k.c1._replace(name="baseline", ref=c1[:9]), k.c2._replace(name="current", ref=None)]
+    ev = q.evaluation(q.t / "evals" / "trig", ["reads"], runs=2, configs=configs)
+    header = ("^qa: run ", "; baseline kit ")  # the run header: tests/qa-baseline.sh
+    printed("\n".join(ev.lines), [w for w in want["compared"] if not w.text.startswith(header)])
+    c = ev.run_dir / "trig" / "reads"
+    r = load(c / "result.json")
+    for side, sha in (("baseline", c1), ("current", c2)):
+        for n in (1, 2):
+            x = load(c / side / f"run-{n}" / "result.json")
+            assert (at(x, "config"), at(x, "run"), at(x, "kit_sha")) == (side, n, sha), x
+    b = at(r, "baseline")
+    got = (
+        at(r, "verdict"),
+        at(r, "kit_sha"),
+        at(b, "verdict"),
+        at(b, "kit_sha"),
+        at(b, "pass_rate"),
+    )
+    assert got == ("PASS", c2, "FAIL", c1, 0.0), r
+    assert [at(x, "dir") for x in seq(at(b, "runs"))] == ["baseline/run-1", "baseline/run-2"], b
+    assert at(b, "runs", 0, "facts", 0, "status") == "fail", b
+    assert at(r, "delta", "pass_rate") == 1.0, at(r, "delta")
+    assert at(r, "delta", "tokens") == 0.0, at(r, "delta")
+    sm = load(ev.run_dir / "summary.json")
+    assert at(sm, "baseline", "kit_sha") == c1, sm
+    assert at(sm, "kit_sha") == c2, sm
+    assert (at(sm, "passed"), at(sm, "total")) == (1, 1), sm

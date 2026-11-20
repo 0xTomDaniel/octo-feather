@@ -45,6 +45,7 @@ from eval_grading import (
     Slot,
     Where,
     combine,
+    export,
     grade,
     plan,
     record,
@@ -52,7 +53,7 @@ from eval_grading import (
     watch,
 )
 
-from testkit import FIXTURES, HERE, ROOT, Scratch, kit
+from testkit import FIXTURES, HERE, ROOT, Scratch, kit, kit_deps
 from testkit.jsonwalk import at, get
 from testkit.qc_box import mise_dir
 
@@ -81,6 +82,51 @@ class Config(NamedTuple):
     kit: Path
     ref: str | None
     sha: str
+
+
+# The kit's dirs a case run never reads (its evals are the test's, its fixtures there): left out of
+# the kit copy, which each item copies and a baseline exports again.
+UNREAD = ("evals/", "evidence/", "docs/", "templates/", "tests/")
+
+
+def build_kit(s: Scratch) -> None:
+    """The kit's files (tracked, and new ones git would track) but UNREAD in HOME/src/kit, a git
+    repo: c1 with the implementer not listing tdd, c2 the head; c1's sha in kit.json."""
+    k = s.home / "src" / "kit"
+    files = subprocess.run(
+        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],  # noqa: S607
+        cwd=ROOT,
+        capture_output=True,
+        check=True,
+    ).stdout.decode()
+    for rel in filter(None, files.split("\0")):
+        if rel.startswith(UNREAD):
+            continue
+        src = ROOT / rel
+        if src.is_file() or src.is_symlink():
+            (k / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, k / rel, follow_symlinks=False)
+    im = k / "agents" / "implementer.md"
+    head = im.read_text()
+    im.write_text(re.sub(r"^(skills:.*), tdd,", r"\1,", head, count=1, flags=re.MULTILINE))
+    assert not re.search(r"^skills:.*tdd", im.read_text(), re.MULTILINE), "c1 still lists tdd"
+    g = ["-c", "core.hooksPath=/dev/null"]
+    s.git(k, "init", "-q", "-b", "main")
+    s.git(k, "add", "-A")
+    s.git(k, *g, "commit", "-qm", "c1")
+    c1 = s.git(k, "rev-parse", "HEAD")
+    im.write_text(head)
+    s.git(k, *g, "commit", "-qam", "c2")
+    kit_deps(k)
+    (s.root / "kit.json").write_text(json.dumps({"c1": c1}))
+
+
+class Kits(NamedTuple):
+    """A kit copy (build_kit) as an evaluation's two kits: c1 (the implementer not listing tdd)
+    exported as --baseline exports it, c2 the copy itself at its head; their shas."""
+
+    c1: Config
+    c2: Config
 
 
 class Evaluation(NamedTuple):
@@ -591,6 +637,18 @@ class Qa:
 
         with ThreadPoolExecutor() as pool:
             return dict(pool.map(one, cs))
+
+    def kits(self, ref: Callable[[str], str] = str) -> Kits:
+        """This scratch's kit copy (build_kit, prepared once per gate run, copied here) as Kits,
+        each Config's ref REF of its sha (as --baseline or --kit-ref names it)."""
+        self.s.prepare("qa-kit", build_kit)
+        k = self.home / "src" / "kit"
+        c1 = str(json.loads((self.t / "kit.json").read_text())["c1"])
+        c2 = self.s.git(k, "rev-parse", "HEAD")
+        d = Path(tempfile.mkdtemp(prefix=f"qa-kit-{c1[:12]}-", dir=self.t))
+        err = export(k, c1, d)
+        assert err is None, err
+        return Kits(Config("", d, ref(c1), c1), Config("", k, ref(c2), c2))
 
     def watched(self, fx: Path, s: Path, c: Result, at: Path, k: Path) -> Watched:
         """One run of case C of the stub suite in S on kit dir K, its fixtures in FX (as

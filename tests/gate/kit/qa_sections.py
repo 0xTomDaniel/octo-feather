@@ -326,33 +326,20 @@ def kit_repo(q: Qa, *, c0: bool) -> tuple[Path, list[str]]:
 
 
 def baseline(s: Scratch) -> None:
-    """tests/qa-baseline.sh."""
+    """tests/qa-baseline.sh: the command's wiring of --baseline (a case on both kits, its cost and
+    the table: test_qa_stored.py, test_qa_baseline)."""
     q, t = Qa(s), s.root
     k, (c1, c2) = kit_repo(q, c0=False)
     kq, ev = str(k), str(t / "evals")
     want = data.baseline(c1, c2)
-    q.run(0, kq, "--evals", ev, "--case", "reads", "--runs", "2")
-    q.check(want["cost"])
-    d = q.last()
-    r = load(d / "trig" / "reads" / "result.json")
-    assert [at(x, "usage", "total") for x in seq(at(r, "runs"))] == [220, 240], r
-    assert at(r, "tokens") == {"mean": 230, "stddev": 14.1421}, r
-    assert at(r, "cost_usd") == {"mean": 0.002, "stddev": 0.0}, r
-    assert keys(at(r, "time")) == {"mean", "stddev"}, r
-    f0 = at(r, "runs", 0, "facts", 0)
-    assert at(f0, "status") == "pass", at(r, "runs", 0)
-    assert "evidence" not in keys(f0), at(r, "runs", 0)
-    assert at(load(d / "summary.json"), "cases", 0, "tokens", "mean") == 230
-    # Baseline c1 (fails: no tdd) beside the head c2 (passes): one evaluation, runs interleaved,
-    # the table, exit 0.
+    # Baseline c1 beside the head c2: one evaluation naming the baseline, runs interleaved, exit 0.
     out = q.run(0, kq, "--evals", ev, "--case", "reads", "--runs", "2", "--baseline", c1[:9])
-    q.check(want["compared"])
+    q.check([w for w in want["compared"] if w.text.startswith(("^qa: run ", "; baseline kit "))])
     if (
         re.findall(r"^  (?:baseline|current) run [0-9]/2: (?:PASS|FAIL)", out, re.MULTILINE)
         != data.INTERLEAVED
     ):
         fail(f"runs not interleaved: {out}")
-    compared_fields(q, c1, c2)
     # The exit status follows the current kit only: the change side c1 fails beside a passing
     # baseline c2.
     q.run(1, kq, "--evals", ev, "--case", "reads", "--kit-ref", c1, "--baseline", c2)
@@ -362,38 +349,9 @@ def baseline(s: Scratch) -> None:
     q.check(want["unknown"])
     q.run(64, kq, "--evals", ev, "--baseline")
     say(
-        "qa-baseline: ok (time and tokens mean +/- spread per case, baseline beside current in "
-        "one interleaved evaluation with the difference, exit by the current kit, unknown "
-        "baseline 64)"
+        "qa-baseline: ok (baseline beside current in one interleaved evaluation, exit by the "
+        "current kit, unknown baseline 64; cost and the table: test_qa_stored.py)"
     )
-
-
-def compared_fields(q: Qa, c1: str, c2: str) -> None:
-    """tests/qa-baseline.sh: the baseline run's result.json and summary.json fields."""
-    d = q.last()
-    c = d / "trig" / "reads"
-    r = load(c / "result.json")
-    for side, sha in (("baseline", c1), ("current", c2)):
-        for n in (1, 2):
-            x = load(c / side / f"run-{n}" / "result.json")
-            assert (at(x, "config"), at(x, "run"), at(x, "kit_sha")) == (side, n, sha), x
-    b = at(r, "baseline")
-    got = (
-        at(r, "verdict"),
-        at(r, "kit_sha"),
-        at(b, "verdict"),
-        at(b, "kit_sha"),
-        at(b, "pass_rate"),
-    )
-    assert got == ("PASS", c2, "FAIL", c1, 0.0), r
-    assert [at(x, "dir") for x in seq(at(b, "runs"))] == ["baseline/run-1", "baseline/run-2"], b
-    assert at(b, "runs", 0, "facts", 0, "status") == "fail", b
-    assert at(r, "delta", "pass_rate") == 1.0, at(r, "delta")
-    assert at(r, "delta", "tokens") == 0.0, at(r, "delta")
-    sm = load(d / "summary.json")
-    assert at(sm, "baseline", "kit_sha") == c1, sm
-    assert at(sm, "kit_sha") == c2, sm
-    assert (at(sm, "passed"), at(sm, "total")) == (1, 1), sm
 
 
 def before_tool(s: Scratch) -> None:
