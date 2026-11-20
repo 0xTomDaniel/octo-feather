@@ -31,6 +31,13 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
       pass on a clean tree (record); a test item changed since the map head always runs. A changed
       file no recorded coverage reaches that the list names, or that is absent at the map head (the
       map cannot know it), runs every non-e2e item.
+  octo-feather-gate changed
+      The test items changed as select judges a changed test item, one pytest argument per line: a
+      tests/*.sh as its test_gate.py node id, any other changed file as its path (a pytest item's
+      file); test_gate.py itself is no item's. Changed since the diff base and since the map head;
+      with no map, since the latest commit of HEAD's history with a recorded full pass on a clean
+      tree; with neither, none. Where from on stderr. The gate's per-test CPU budget reads it
+      (tests/gate/conftest.py; quality #acceptance-test-cpu-budget).
   octo-feather-gate map DATA_DIR --junit FILE
       In the kit, under its uv venv (coverage): writes the coverage map from a mapping run's data
       (just fast-map), one coverage data dir per gate item, DATA_DIR/<item>/ (<item> GATE_ITEM: a
@@ -345,6 +352,47 @@ def diff_base(at: str) -> str:
             f"newer than the map at {at[:12]}: only changes past it select",
         )
     return best[1]
+
+
+def last_pass() -> str | None:
+    """The latest commit of HEAD's history with a recorded full pass on a clean tree (record)."""
+    best: tuple[int, str] | None = None
+    for rec in records():
+        head = rec.get("head")
+        if not isinstance(head, str) or rec.get("clean") is not True:
+            continue
+        if ok("merge-base", "--is-ancestor", head, "HEAD"):
+            n = (int(git("rev-list", "--count", f"{head}..HEAD")), head)
+            best = min(best, n) if best else n
+    return best[1] if best else None
+
+
+def changed_items() -> None:
+    """The test items changed as choose judges one (--help, changed), as pytest arguments."""
+    if not ok("rev-parse", "--verify", "-q", "HEAD"):
+        sys.stderr.write("changed: none judged: no commit here, so no diff base\n")
+        return
+    m = newest_map(git("rev-parse", "HEAD").strip())
+    if m is not None:
+        at = str(m["head"])
+        base = diff_base(at)
+        files = changed_since(base) | changed_since(at)
+        since = f"since the diff base {base[:12]} and the map at {at[:12]}"
+    elif (base := last_pass()) is not None:
+        files = changed_since(base)
+        since = f"since {base[:12]}, the latest recorded full pass on HEAD's history (no map)"
+    else:
+        sys.stderr.write(
+            "changed: none judged: no diff base (no coverage map, no recorded full pass"
+            " on HEAD's history)\n"
+        )
+        return
+    out = [
+        f"{NODE}test_script[{f}]" if re.fullmatch(r"tests/[^/]*\.sh", f) else f
+        for f in sorted(files - {NODE[:-2]})
+    ]
+    sys.stderr.write(f"changed: {len(out)} files {since}\n")
+    sys.stdout.write("".join(f"{i}\n" for i in out))
 
 
 def beyond_map(at: str, base: str, unreached: list[str]) -> str:
@@ -676,6 +724,7 @@ def main() -> int:
     g = sub.add_parser("config")
     g.add_argument("rev", nargs="?", default="HEAD")
     sub.add_parser("select")
+    sub.add_parser("changed")
     m = sub.add_parser("map")
     m.add_argument("data", type=Path)
     m.add_argument("--junit", type=Path, required=True)
@@ -699,6 +748,8 @@ def main() -> int:
         sys.stdout.write(json.dumps(identity(rev)) + "\n")
     elif a.cmd == "select":
         select()
+    elif a.cmd == "changed":
+        changed_items()
     else:
         build_map(a.data, a.junit)
     return 0
