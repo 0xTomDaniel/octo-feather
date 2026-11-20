@@ -238,9 +238,9 @@ at the current directory; on GitHub it works under the qc judge's offline gh).
 A ticket's skills (spec issue-lifecycle #lanes-tickets): one line at column 0, outside fences and HTML comments as
 the body is read above, `Skills: <skill>, <skill>` (a name may be backticked) or `Skills: none`, under the to-tickets
 template's `## Skills` heading; with several, the last counts. Every ticket carries one (owner ruling 2026-11-19 on
-#1099): none is class missing-skills. `ticket` reads the draft's line; `tickets` the body's, else, when the body has
-none, the latest line of its body and comments (a line set later is a comment; `issue-view KEY --notes`, as `seam`
-reads them, by each note's last change). Each name must be a skill agents/implementer.md is offered as pi-role
+#1099): none is class missing-skills. `ticket` reads the draft's line; `tickets`, as `skills`, the latest line of
+each ticket's body and comments (a line set later is a comment; `issue-view KEY --notes`, as `seam` reads them, by
+each note's last change), so a later comment's line replaces the body's and is the one checked. Each name must be a skill agents/implementer.md is offered as pi-role
 resolves its skills line, {tracker} as the target's tracker skill; else class unknown-skill, one line per name.
 Transition, as check-owner-field's: `tickets` passes a ticket with no line anywhere whose body was written (its
 last change, from that notes read) before the commit adding the rule (the kit's commit adding the SKILLS_SINCE line,
@@ -2833,17 +2833,14 @@ def cmd_tickets(args: list[str]) -> int:
     bodies = []   # read every ticket first: a tracker failure midway reports nothing as passed
     cache: dict[object, object] = {}
     for k in kids:
-        t = issue_view(k)
-        if not isinstance(t.get("body"), str):
-            raise Unchecked(f"issue-view {k} printed no body: the tracker skill's issue-view must print body, then rerun")
-        bodies.append((t["key"], t["body"]))
-        if skills_named([cast("str", t["body"])]) is None:   # a Skills: line set later is a comment (--help, ticket)
-            notes = ticket_notes(cast("str", k))[1]
-            cache[("notes", t["key"])] = by_change(notes)
+        name, notes = ticket_notes(cast("str", k))   # body and comments: the latest Skills: line counts, as for `skills`
+        bodies.append((name, notes[0][3]))
+        cache[("notes", name)] = by_change(notes)
+        if skills_named(by_change(notes)) is None:
             written = iso_time(notes[0][1] or notes[0][0], "issue-view notes time")   # the body's last change
             since = skills_rule_since()
-            if skills_named(by_change(notes)) is None and (since is None or written < since[1]):
-                cache[("old", t["key"])] = (
+            if since is None or written < since[1]:
+                cache[("old", name)] = (
                     f"notice: no `Skills:` line, body written {written:%Y-%m-%dT%H:%M:%SZ}, before the rule "
                     + (f"({since[0][:12]}, {since[1].astimezone(dtm.timezone.utc):%Y-%m-%dT%H:%M:%SZ})" if since else
                        "(its commit not in the kit's git history)") + f": not checked; the line it owes: {SKILLS_FORM}")

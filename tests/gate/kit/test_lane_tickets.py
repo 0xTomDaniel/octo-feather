@@ -4,6 +4,7 @@ docstring), each run as that file's command through `case` (tests/gate/kit/conft
 from collections.abc import Callable
 
 from lane_tickets import (
+    comment_overrides,
     creates,
     drafts,
     errors,
@@ -72,3 +73,7 @@ def test_skills_lines(case: Case) -> None:
 
 def test_transition(case: Case) -> None:
     case(transition)
+
+
+def test_comment_overrides(case: Case) -> None:
+    case(comment_overrides)
