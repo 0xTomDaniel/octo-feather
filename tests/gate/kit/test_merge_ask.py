@@ -11,19 +11,23 @@ the passing ask printed): lane_merge_ask.py merge_ask_passes, no_criterion_lane.
 rules: test_merge_ask_checks.py.
 """
 
+import datetime as dt
 from dataclasses import replace
+from pathlib import Path
 
 from merge_ask import (
     Ask,
     Checks,
     Comment,
     Commit,
+    Gate,
     Git,
     Merge,
     NoParent,
     ParentLine,
     Reported,
     Snapshot,
+    Trend,
     Unread,
     check,
 )
@@ -45,6 +49,7 @@ CHECK_OK: list[dict[str, object]] = [
     {"__typename": "StatusContext", "context": "ci/x", "state": "SUCCESS"},
 ]
 CODE = frozenset({"app.py"})
+DIFF = ":100644 100644 a b M"  # app.py's line in the lane's diff (git diff --raw)
 ONLY = frozenset({STATUS})
 
 
@@ -500,6 +505,108 @@ def test_merge_ask_one_judged_head() -> None:
     outside = "--status /x/demo.status.json is outside this repo (/r): run merge-ask ..."
     refused = replace(LANE, git=replace(LANE.git or facts(), status=Unread(outside)))
     assert gaps_of(refused) == [f"Judged: {outside}"]
+    # H may add only qc's status commit (one_judged_head): a code commit, a qc commit carrying
+    # another file or a hand status edit after it fails naming it; qc rerun at the exact head
+    # passes
+    f, q, st = sha("b"), sha("c"), sha("d")
+    rerun = "run just qc and the review again, in parallel, on"
+    qc = f"qc: built acceptance-a (judged {J[:12]})"
+    for at, subject, files, why in (
+        (f, "feat: after qc", CODE, "changes app.py, not only the status file qc writes"),
+        (q, qc, ONLY | {"stray.txt"}, "changes stray.txt, not only the status file qc writes"),
+        (st, "fix status", ONLY, "is not a `qc: built ... (judged <sha>)` commit: only just qc"),
+    ):
+        tail = f" ({STATUS}): {rerun} {at[:12]}" if "only the status" in why else ""
+        tail = tail or f" writes the status file; drop it, then {rerun} {at[:12]}"
+        chain = [(J, "feat: x", CODE), (H, QC, ONLY), (at, subject, files)]
+        s = replace(
+            LANE,
+            body=body(head=at[:12]),
+            head=at,
+            commits=[(at, subject), *LANE.commits],
+            git=facts(*chain),
+        )
+        want = f"Judged: commit {at[:12]} {subject!r} after the judged head {J[:12]} {why}{tail}"
+        assert gaps_of(s) == [want], (subject, gaps_of(s))
+    exact = replace(
+        LANE,
+        body=body(head=f[:12], judged=f"{f[:12]} is the PR head", rows=lane_rows(f[:9])),
+        head=f,
+        commits=[(f, "feat: after qc"), *LANE.commits],
+        git=facts((J, "feat: x", CODE), (H, QC, ONLY), (f, "feat: after qc", CODE)),
+        comments=[Comment(URL, verdict(f))],
+    )
+    assert gaps_of(exact) == []
+
+
+def lane_rows(at: str) -> str:
+    """Rows a and b judged at AT, evidence r."""
+    return (
+        f"| demo#acceptance-a | pass | judged {at} | r |\n"
+        f"| demo#acceptance-b | pass | judged {at} | r |"
+    )
+
+
+R = sha("e")  # PR #7's head: a merge of main after H
+
+
+def merged(merge: Merge, diff: str = DIFF, subject: str = "Merge main") -> Snapshot:
+    """PR #7 at R, a merge MERGE of H with main's M, the lane's diff at R DIFF (J's: DIFF)."""
+    g = facts((J, "feat: x", CODE), (H, QC, ONLY), (R, subject, merge))
+    diffs = {J: {"app.py": DIFF}, H: {"app.py": DIFF}, R: {"app.py": diff}}
+    return replace(
+        LANE,
+        body=body(head=R[:12]),
+        head=R,
+        commits=[(R, subject), *LANE.commits],
+        git=replace(g, diffs=diffs),
+    )
+
+
+def test_merge_ask_main_merges() -> None:
+    """Main merges (the rule: spec #lanes-one-head): one the rule lets keep the qc verdict
+    keeps it, the check giving its proof line; one touching a lane file, resolving a conflict,
+    changing a file beyond git's automatic merge, or merging another branch: qc reruns."""
+    proof = (
+        f"{J[:12]} to {R[:12]}: qc status commits {H[:12]} change only {STATUS}; clean merge of "
+        f"main {R[:12]}: lane diff identical (1 file, sha256 970d7aa3e679)"
+    )
+    clean = merged(Merge(onto=True))
+    assert gaps_of(clean) == [
+        f"Judged: names {PROOF!r}; add the check's proof line `Judged: {proof}`"
+    ]
+    assert gaps_of(replace(clean, body=body(head=R[:12], judged=proof))) == []
+    rerun = f"run just qc and the review again, in parallel, on {R[:12]}"
+    moved = merged(Merge(onto=True), diff=":100644 100644 a c M")
+    assert gaps_of(moved) == [
+        (
+            "Judged: after merging origin/main, the lane's own diff changed in app.py (main "
+            "touched a lane file, or the lane's diff moved): the qc verdict does not carry over; "
+            f"{rerun}"
+        )
+    ]
+    resolved = "Merge main, conflict resolved"
+    conflict = merged(Merge(onto=True, conflict=True, resolution=("app.py",)), subject=resolved)
+    assert gaps_of(conflict) == [
+        (
+            f"Judged: merge {R[:12]} {resolved!r} resolved a conflict with origin/main: the qc "
+            f"verdict does not carry over; {rerun}"
+        )
+    ]
+    evil = merged(Merge(onto=True, beyond=("evil.txt",), resolution=("evil.txt",)))
+    assert gaps_of(evil) == [
+        (
+            f"Judged: merge {R[:12]} 'Merge main' changes evil.txt beyond git's automatic merge: "
+            f"{rerun}"
+        )
+    ]
+    side = merged(Merge(onto=False), subject="Merge side")
+    assert gaps_of(side) == [
+        (
+            f"Judged: merge {R[:12]} 'Merge side' brings in {M[:12]}, not origin/main: only a "
+            f"merge of main keeps the qc verdict; {rerun}"
+        )
+    ]
 
 
 N = sha("8")  # PR #8's head: a fix off main, no qc commit
@@ -565,6 +672,119 @@ def test_merge_ask_no_criterion_lane() -> None:
     )
     assert gaps_of(merged) == [f"Judged: missing; add the check's proof line `Judged: {p}`"]
     assert gaps_of(pr8(nm, (nm, "Merge main"), judged=f"Judged: {p}")) == []
+    # the verdict's head is the judged head: a code commit after it fails (no --status: the
+    # status files none)
+    nf = sha("f")
+    after = pr8(nf, head=nf[:12])
+    after = replace(
+        after,
+        commits=[(nf, "fix: more"), (N, "fix: a rule")],
+        git=replace(facts((N, "fix: a rule", CODE), (nf, "fix: more", CODE)), status=frozenset()),
+    )
+    assert gaps_of(after) == [
+        (
+            f"Judged: commit {nf[:12]} 'fix: more' after the judged head {N[:12]} changes app.py, "
+            f"not only the status file qc writes (): run just qc and the review again, in "
+            f"parallel, on {nf[:12]}"
+        )
+    ]
+    # the full pass: N's recorded pass carries to the head N, never to a code commit after it
+    ident: dict[str, object] = {"gate_config": "c" * 64, "list": "absent"}
+    rec: dict[str, object] = {"tier": "full", "head": N, "clean": True, **ident}
+    assert gaps_of(replace(pr8(), gate=Gate((0, ident), {N: rec}))) == []
+    n2 = sha("0")
+    fix = (
+        f"run the full gate, just check, on {n2[:12]} and record its pass (octo-feather-integrate "
+        "--full records it; octo-feather-gate --help)"
+    )
+    later = replace(
+        pr8(n2, head=n2[:12]),
+        commits=[(n2, "fix: no full pass"), (N, "fix: a rule")],
+        comments=[Comment(URL8, verdict(n2))],
+        git=replace(
+            facts((N, "fix: a rule", CODE), (n2, "fix: no full pass", CODE)), status=frozenset()
+        ),
+        gate=Gate((0, ident), {n2: {}, N: rec}),
+    )
+    assert gaps_of(later) == [
+        (
+            f"Full pass: head {n2[:12]} has no current recorded full gate pass for that head and "
+            f"its gate configuration; the full pass recorded at {N[:12]} does not carry over: "
+            f"commit {n2[:12]} 'fix: no full pass' after the full pass {N[:12]} changes app.py, "
+            f"not only the status file qc writes (): {fix}"
+        )
+    ]
+
+
+def test_merge_ask_gate_time() -> None:
+    """issue-lifecycle#acceptance-merge-ask-gate-budget: the full gate's wall time on the final
+    head (J's run: H adds only qc's status commit) against gate-budget.toml at the head, flagged
+    over budget and grown past the share, beside the trend (passed full runs on the head's
+    history: B's three; a subset run on H and a red full run on J stay out) and the slowest
+    items; no gate on timing: the ask passes, or fails with the same items, as with none."""
+    path = Path("/s/octo-feather/check-runs.jsonl")
+    now = dt.datetime(2026, 10, 5, 12, 0, tzinfo=dt.UTC)
+    budget = "budget_seconds = 150\ngrowth_share = 0.25\ntrend_runs = 3\n"
+    j, h, b = J[:12], H[:12], B[:12]
+    head = (
+        f"Gate time (the full gate on the final head against gate-budget.toml at {h}; the code "
+        "reviewer judges it, no gate reads it: issue-lifecycle #lanes-checkpoints):"
+    )
+    history = frozenset({B, J, H})
+    none = replace(LANE, trend=Trend(path, None, history, budget, now))
+    assert ask(none).gate_time == [head, f"  no gate run recorded ({path}: none)"]
+
+    def run(
+        start: str, sha: str, total: float, rc: int = 0, tier: str = "full"
+    ) -> dict[str, object]:
+        steps = [
+            {"name": "tests/a.sh", "seconds": int(total) - 30, "result": "ok"},
+            {"name": "tests/b.sh", "seconds": 20.5, "result": "ok"},
+            {"name": "check-lint", "seconds": 1.0, "result": "ok"},
+        ]
+        return {
+            "start": start,
+            "head": sha,
+            "total_s": total,
+            "exit": rc,
+            "tier": tier,
+            "steps": steps,
+        }
+
+    day = "2026-10-0{}T{}:00:00Z".format
+    rows = [
+        run(day(1, 10), B, 100),
+        run(day(2, 10), B, 120),
+        run(day(3, 10), B, 110),
+        run(day(4, 10), J, 90, 1),
+        run(day(4, 11), J, 200.5),
+        run(day(4, 12), H, 5, tier="subset"),
+    ]
+    trend = Trend(path, (list(enumerate(rows, 1)), []), history, budget, now)
+    timed = replace(LANE, trend=trend)
+    assert ask(timed).gate_time == [
+        head,
+        (
+            f"  full gate: 200.5s, head {j}, started {day(4, 11)} (1d1h0m ago): OVER BUDGET by "
+            "50.5s (budget 150s)"
+        ),
+        (
+            "  growth: +82.3% over the trend's median 110s (the 3 passed full runs before it); set "
+            "share 25%: GROWN"
+        ),
+        (
+            f"  trend: 100s {b} {day(1, 10)}, 120s {b} {day(2, 10)}, 110s {b} {day(3, 10)}, "
+            f"200.5s {j} {day(4, 11)} (passed full runs, oldest first)"
+        ),
+        "  slowest: tests/a.sh 170s, tests/b.sh 20.5s, check-lint 1s",
+    ]
+    for s in (LANE, replace(LANE, body=body(review=""))):  # a pass, a refusal: the same gaps
+        assert (
+            ask(replace(s, trend=trend)).gaps
+            == ask(replace(s, trend=None)).gaps
+            == ask(replace(s, trend=Trend(path, None, history, budget, now))).gaps
+        )
+    assert ask(replace(LANE, body=body(review=""))).gaps != []
 
 
 def test_merge_ask_criterion_claimed() -> None:

@@ -10,13 +10,13 @@ passes a complete section and prints it with each row's decision source (quality
 #acceptance-qc-fallback), also through the qc judge's offline gh; fails PR #16's real body
 (fixture) naming each missing item; the Checks rules' reads and output (no_ci). The parent
 line, Head, the Checks rules (--help, merge-ask Checks line; the projection aside), criterion
-rows, Built, Failed, the review verdict link and qc's evidence: test_merge_ask.py and
-test_merge_ask_checks.py, in-process. One judged head (spec #acceptance-one-head; the rule:
-#lanes-one-head): what keeps the verdict, with the check's proof line; anything else fails
-naming it.
-Full pass (#acceptance-merge-ask-full-proof), gate time (#acceptance-merge-ask-gate-budget,
-shown only), skipped checks (#acceptance-ci-status-only, the rule: #lanes-one-head), a lane that
-builds no criterion, and a PR of 101 commits.
+rows, Built, Failed, the review verdict link, qc's evidence, one judged head (spec
+#acceptance-one-head), main merges and the gate time (#acceptance-merge-ask-gate-budget):
+test_merge_ask.py and test_merge_ask_checks.py, in-process; their git, gate ledger and trend
+reads through merge-ask: full_pass, merge_ask_passes. Full pass
+(#acceptance-merge-ask-full-proof), skipped checks (#acceptance-ci-status-only, the rule:
+#lanes-one-head), a lane that builds no criterion, and a PR of 101 commits (its commits read
+from git).
 """
 
 from __future__ import annotations
@@ -62,8 +62,6 @@ REPORT2 = "Note: a nit.\nChecks: none\nVerdict: blocking\n"
 HDR = "| criterion | qc verdict | judged | evidence |\n|---|---|---|---|"
 STATUS = "docs/specs/demo.status.json"
 ONLY = f"change only {STATUS}"
-AGE = re.compile(r"\(([0-9]+d)?([0-9]+h)?[0-9]+m ago\)")
-GATE = re.compile(r"^Gate time \(.*?(?=^$|\Z)", re.MULTILINE | re.DOTALL)
 ERR502 = "gh: Server Error (HTTP 502)"
 
 
@@ -356,12 +354,6 @@ def section(out: str) -> list[str]:
     return out.split("\nGate time (", 1)[0].splitlines()
 
 
-def proof_line(err: str) -> str:
-    m = re.search(r"add the check.s proof line `Judged: (.*)`$", err, re.MULTILINE)
-    assert m, f"no proof line: {err}"
-    return m.group(1)
-
-
 # --- verdict ---
 
 
@@ -577,6 +569,8 @@ def merge_ask_passes(s: Scratch) -> None:
         i = out.splitlines().index(src)
         return out.splitlines()[i + 1 : i + 3]
 
+    trend = ln.t / "xdg" / "octo-feather" / "check-runs.jsonl"  # the gate time's read, none here
+    assert f"  no gate run recorded ({trend}: none)" in out.splitlines(), out
     none = "no qc result at the judged head"
     assert sources(out) == [f"- demo#acceptance-a: {none}", f"- demo#acceptance-b: {none}"], out
     tagged = "tagged test assertions"
@@ -588,73 +582,6 @@ def merge_ask_passes(s: Scratch) -> None:
     out = ln.ask().out
     assert sources(out) == [f"- demo#acceptance-a: {tagged}", "- demo#acceptance-b: a rerun"]
     assert ln.writes() == n, "merge-ask wrote"
-
-
-def gate_time(s: Scratch) -> None:
-    """issue-lifecycle#acceptance-merge-ask-gate-budget: the full gate's wall time on the final
-    head (J's run: H adds only qc's status commit) against gate-budget.toml at the head, flagged
-    over budget and grown past the share, beside the trend (passed full runs on the head's
-    history: B's three; a subset run on H and a red full run on J stay out) and the slowest
-    items; no gate on timing: the ask passes, or fails with the same items, as with none."""
-    ln = Lane(s)
-    j, h, b = ln.j[:12], ln.h[:12], ln.b[:12]
-    trend = ln.t / "xdg" / "octo-feather" / "check-runs.jsonl"
-
-    def block(out: str) -> str:
-        m = GATE.search(out)
-        assert m, out
-        return AGE.sub("(AGE ago)", m.group(0).rstrip("\n"))
-
-    head = (
-        f"Gate time (the full gate on the final head against gate-budget.toml at {h}; the code "
-        "reviewer judges it, no gate reads it: issue-lifecycle #lanes-checkpoints):"
-    )
-    ln.setpr()
-    none_out = ln.ask().out
-    assert block(none_out) == f"{head}\n  no gate run recorded ({trend}: none)", none_out
-    trend.parent.mkdir(parents=True, exist_ok=True)
-
-    def run(start: str, sha: str, total: float, rc: int = 0, tier: str = "full") -> str:
-        steps = [
-            {"name": "tests/a.sh", "seconds": int(total) - 30, "result": "ok"},
-            {"name": "tests/b.sh", "seconds": 20.5, "result": "ok"},
-            {"name": "check-lint", "seconds": 1.0, "result": "ok"},
-        ]
-        r = {"start": start, "repo": str(ln.r), "head": sha, "total_s": total, "exit": rc}
-        return json.dumps(r | {"tier": tier, "steps": steps}) + "\n"
-
-    day = "2026-10-0{}T{}:00:00Z".format
-    trend.write_text(
-        run(day(1, 10), ln.b, 100)
-        + run(day(2, 10), ln.b, 120)
-        + run(day(3, 10), ln.b, 110)
-        + run(day(4, 10), ln.j, 90, 1)
-        + run(day(4, 11), ln.j, 200.5)
-        + run(day(4, 12), ln.h, 5, tier="subset")
-    )
-    out = ln.ask().out
-    trend_line = (
-        f"100s {b} {day(1, 10)}, 120s {b} {day(2, 10)}, 110s {b} {day(3, 10)}, "
-        f"200.5s {j} {day(4, 11)} (passed full runs, oldest first)"
-    )
-    assert block(out) == (
-        f"{head}\n"
-        f"  full gate: 200.5s, head {j}, started {day(4, 11)} (AGE ago): "
-        "OVER BUDGET by 50.5s (budget 150s)\n"
-        "  growth: +82.3% over the trend's median 110s (the 3 passed full runs before it); "
-        "set share 25%: GROWN\n"
-        f"  trend: {trend_line}\n"
-        "  slowest: tests/a.sh 170s, tests/b.sh 20.5s, check-lint 1s"
-    ), block(out)
-    assert GATE.sub("", out) == GATE.sub("", none_out), f"the gate time changed the ask: {out}"
-    # a refusal: the same items with or without the run, the gate time on stderr only
-    r = ln.bad(f"  full gate: 200.5s, head {j}", FAILURE)
-    items = r.err[r.err.index("merge ask incomplete") :]
-    trend.rename(trend.with_suffix(".keep"))
-    r = ln.ask(want=1)
-    assert r.err[r.err.index("merge ask incomplete") :] == items, (
-        f"the gate time changed it: {r.err}"
-    )
 
 
 def single_gaps(s: Scratch) -> None:
@@ -887,117 +814,6 @@ def current_head_identity(s: Scratch) -> None:
     c.refused(f"{unavailable} ('app')")
 
 
-def one_judged_head(s: Scratch) -> None:
-    """One judged head (spec #acceptance-one-head): review and qc judged J; H may add only qc's
-    status commit, with the check's proof; a code commit, a qc commit carrying another file or a
-    hand status edit fails naming it; qc rerun at the exact head passes. The rows' one head and
-    the Judged line: test_merge_ask.py, in-process."""
-    ln = Lane(s)
-    j, h = ln.j, ln.h
-    ln.setpr()
-    assert f"Judged: {ln.proof}" in ln.ask().out.splitlines()
-    f = ln.change(h, "feat: after qc")
-    ln.on(f, ln.record)
-    ln.bad(
-        f"Judged: commit {f[:12]} 'feat: after qc' after the judged head {j[:12]} changes app.py, "
-        f"not only the status file qc writes ({STATUS}): run just qc and the review again, in "
-        f"parallel, on {f[:12]}",
-        pr_head(f, "feat: after qc"),
-        head=f[:12],
-    )
-    qc = f"qc: built acceptance-a (judged {j[:12]})"
-
-    def stray() -> None:  # qc's own commit carrying a non-status file
-        p = ln.r / STATUS
-        pa = '"planned", "pr": null}, "acceptance-b'
-        p.write_text(p.read_text().replace(pa, '"built", "pr": 7}, "acceptance-b'))
-        ln.write("stray.txt", "x\n")
-        ln.commit(qc)
-
-    q = ln.on(j, stray)
-    after = f"after the judged head {j[:12]}"
-    ln.bad(
-        f"commit {q[:12]} '{qc}' {after} changes stray.txt, not only", pr_head(q, qc), head=q[:12]
-    )
-    st = ln.change(h, "fix status", STATUS, " ")
-    ln.bad(
-        f"commit {st[:12]} 'fix status' {after} is not a `qc: built",
-        pr_head(st, "fix status"),
-        head=st[:12],
-    )
-    # qc reran at the exact head, nothing to flip: no status commit, passes
-    edits, lines = ln.at(f, "feat: after qc")
-    ln.setpr(*edits, **lines)
-    ln.ask()
-
-
-def main_merges(s: Scratch) -> None:
-    """Main merges (the rule: spec #lanes-one-head): one the rule lets keep the qc verdict
-    keeps it, the check printing its proof line; one touching a lane file, resolving a
-    conflict, or merging another branch: qc reruns."""
-    ln = Lane(s)
-    j, h = ln.j, ln.h
-    m1 = ln.change(ln.b, "main: notes", "notes.txt", "main")
-    ln.main(m1)
-    r1 = ln.merge(h, m1)
-    r = ln.bad(
-        rf"add the check's proof line .Judged: {j[:12]} to {r1[:12]}: qc status commits "
-        rf"{h[:12]} {ONLY}; clean merge of main {r1[:12]}: lane diff identical "
-        r"\(1 file, sha256 [0-9a-f]{12}\).",
-        pr_head(r1, "Merge main"),
-        regex=True,
-        head=r1[:12],
-    )
-    proof = proof_line(r.err)
-    ln.setpr(pr_head(r1, "Merge main"), head=r1[:12], judged=proof)
-    assert f"Judged: {proof}" in ln.ask().out.splitlines()
-
-    def line(n: int, text: str, msg: str) -> Callable[[], object]:
-        return lambda: (ln.line(n, text), ln.commit(msg))
-
-    m2 = ln.on(m1, line(20, "twenty", "main: app tail"))
-    ln.main(m2)
-    r2 = ln.merge(h, m2)
-    ln.bad(
-        "Judged: after merging origin/main, the lane's own diff changed in app.py (main touched a "
-        "lane file, or the lane's diff moved): the qc verdict does not carry over; run just qc and "
-        f"the review again, in parallel, on {r2[:12]}",
-        pr_head(r2, "Merge main"),
-        head=r2[:12],
-    )
-    m3 = ln.on(m1, line(1, "uno", "main: app head"))
-    ln.main(m3)
-    resolved = "Merge main, conflict resolved"
-
-    def conflict() -> None:
-        ln.git("merge", "-q", "--no-edit", m3, want=1)
-        ln.git("checkout", "-q", "--ours", "app.py")
-        ln.git("commit", "-qam", resolved)
-
-    r3 = ln.on(h, conflict)
-    ln.bad(
-        f"Judged: merge {r3[:12]} '{resolved}' resolved a conflict with origin/main: the qc "
-        "verdict does not carry over",
-        pr_head(r3, resolved),
-        head=r3[:12],
-    )
-    ln.main(m1)
-
-    def side() -> None:
-        ln.write("side.txt", "side\n")
-        ln.commit("side")
-
-    x = ln.on(ln.b, side)
-    r4 = ln.merge(h, x)
-    ln.bad(
-        rf"Judged: merge {r4[:12]} .* brings in {x[:12]}, not origin/main: only a merge of main "
-        "keeps the qc verdict",
-        pr_head(r4, "Merge side"),
-        regex=True,
-        head=r4[:12],
-    )
-
-
 def full_pass(s: Scratch) -> None:
     """issue-lifecycle#acceptance-merge-ask-full-proof (rule: #lanes-checkpoints): the passes
     stand on J's recorded full pass (H adds only qc's status commit). A head with none refuses,
@@ -1146,11 +962,10 @@ class Pr8:
 
 def no_criterion_lane(s: Scratch) -> None:
     """A lane building no criterion passes on head, checks, parent line and the review verdict
-    alone, --status optional (its rules: test_merge_ask.py, in-process); a failing check still
-    fails; the verdict's head is the judged head: a code commit after it fails, a main merge spec
-    #lanes-one-head keeps needs its proof line; a head with no recorded full pass refuses."""
+    alone, --status optional (its rules: test_merge_ask.py, in-process, its judged head and full
+    pass among them); a failing check still fails."""
     p = Pr8(s)
-    ln, n = p.ln, p.n
+    n = p.n
     p.put(n, p.body())
     for args in ([], ["--status", STATUS]):
         out = p.ask(*args).out.splitlines()
@@ -1158,31 +973,6 @@ def no_criterion_lane(s: Scratch) -> None:
         assert "Built: none" in out, (args, out)
     p.put(n, p.body(), FAILURE)
     assert "Checks: failing" in p.ask(want=1).err
-    nf = ln.change(n, "fix: more", text="three")
-    p.put(nf, p.body(head=nf[:12]), subject="fix: more")
-    err = p.ask(want=1).err
-    assert (
-        f"Judged: commit {nf[:12]} 'fix: more' after the judged head {n[:12]} changes app.py" in err
-    )
-    m1 = ln.change(ln.b, "main: notes", "notes.txt", "main")
-    ln.main(m1)
-    nm = ln.merge(n, m1)
-    p.put(nm, p.body(head=nm[:12]), subject="Merge main")
-    err = p.ask(want=1).err
-    want = (
-        f"Judged: missing; add the check's proof line `Judged: {n[:12]} to {nm[:12]}: no qc status "
-        f"commit; clean merge of main {nm[:12]}: lane diff identical"
-    )
-    assert want in err, err
-    proof = proof_line(err)
-    p.put(nm, p.body(head=nm[:12], judged=f"Judged: {proof}"), subject="Merge main")
-    assert f"Judged: {proof}" in p.ask().out.splitlines()
-    n2 = ln.change(n, "fix: no full pass", text="four")
-    edit = verdict_says(f"Head: {n}", f"Head: {n2}")
-    p.put(n2, p.body(head=n2[:12]), edit, subject="fix: no full pass")
-    err = p.ask(want=1).err
-    want = f"(1 item), head {n2[:12]}:\n  - Full pass: head {n2[:12]} has no current recorded full"
-    assert want in err, err
 
 
 def many_commits(s: Scratch) -> None:
@@ -1227,14 +1017,11 @@ if __name__ == "__main__":
         verdict_write_fails,
         offline_gh,
         merge_ask_passes,
-        gate_time,
         single_gaps,
         no_ci,
         ci_status_only,
         current_head_checks,
         current_head_identity,
-        one_judged_head,
-        main_merges,
         full_pass,
         usage_failures,
         no_criterion_lane,

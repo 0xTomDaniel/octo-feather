@@ -11,14 +11,11 @@ from lane_merge_ask import (
     current_head_identity,
     fields,
     full_pass,
-    gate_time,
-    main_merges,
     many_commits,
     merge_ask_passes,
     no_ci,
     no_criterion_lane,
     offline_gh,
-    one_judged_head,
     single_gaps,
     usage_failures,
     verdict_posts,
@@ -55,10 +52,6 @@ def test_merge_ask_passes(case: Case) -> None:
     case(merge_ask_passes)
 
 
-def test_merge_ask_gate_time(case: Case) -> None:
-    case(gate_time)
-
-
 def test_merge_ask_single_gaps(case: Case) -> None:
     case(single_gaps)
 
@@ -80,14 +73,6 @@ def test_merge_ask_current_head_checks(case: Case) -> None:
 @pytest.mark.criterion("issue-lifecycle#acceptance-ci-status-only", source=SOURCE)
 def test_merge_ask_current_head_identity(case: Case) -> None:
     case(current_head_identity)
-
-
-def test_merge_ask_one_judged_head(case: Case) -> None:
-    case(one_judged_head)
-
-
-def test_merge_ask_main_merges(case: Case) -> None:
-    case(main_merges)
 
 
 @pytest.mark.criterion("issue-lifecycle#acceptance-merge-ask-full-proof", source=SOURCE)
