@@ -275,6 +275,30 @@
       "tests": [
         "tests/gate/kit/lane_stale.py"
       ]
+    },
+    "acceptance-lane-start": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-lane-start-files": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-lane-start-sub-issue": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-lane-start-exists": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-lane-start-rerun": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-lane-start-current-kit": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
