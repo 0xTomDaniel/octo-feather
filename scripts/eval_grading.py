@@ -14,12 +14,14 @@ Interface (__all__):
   record(slot, run, ...) -> (result, lines)   one run's artifacts written, the lines to print
   combine(case_dir, done, *, runs, baseline) -> (result, lines)   a case over its runs and kits
   analysis(cases) -> (analysis, lines)   the deterministic flags
+  summarize(run_dir, head, cases, benches) -> (summary, lines)   an evaluation's summary.json
+      written, the lines it ends with
   reanalysis(run_dir) -> lines, evidence(run_dir) -> str   --analyze, --analyze --evidence
   review(run_dir, key, verdict, note) -> lines   --review, show or record
   verdict(pins, *, cwd, qa_dir) -> Judged   --verdict
   UsageError   a stored dir or argument refused (the command exits 64)
-Invariants: record and combine are the only writers of a run's and a case's artifacts (the
-command writes the run's summary.json; review appends a verdict to the reviews dir); every reader
+Invariants: record, combine and summarize are the only writers of a run's, a case's and an
+evaluation's artifacts (review appends a verdict to the reviews dir); every reader
 of a stored run is here; nothing here prints or exits.
 
 How it is found: it sits beside the command, in scripts/. Run as a command, Python puts the
@@ -75,6 +77,7 @@ __all__ = [
     "record",
     "review",
     "safe_json",
+    "summarize",
     "verdict",
     "watch",
 ]
@@ -1961,6 +1964,55 @@ def analysis(cases: list[Result]) -> tuple[Result, list[str]]:
     printed; no model."""
     a = analyze(cases)
     return a, analysis_lines(a)
+
+
+def scores(cases: list[Result]) -> Result:
+    """{split: {passed, total}} over the cases that have a split; {} when none has one."""
+    if not any("split" in r for r in cases):
+        return {}
+    return {
+        sp: {
+            "passed": sum(r["verdict"] == "PASS" for r in cases if r.get("split") == sp),
+            "total": sum(r.get("split") == sp for r in cases),
+        }
+        for sp in ("train", "held-out")
+    }
+
+
+def summarize(
+    run_dir: Path, head: Result, cases: list[Result], benches: list[Result]
+) -> tuple[Result, list[str]]:
+    """An evaluation's end: RUN_DIR/summary.json written (the result fields: --help) from HEAD
+    {run_id, kit_ref, kit_sha, runs, seconds, and baseline {kit_ref, kit_sha} when compared}, its
+    fact CASES (each combine's result) and judgment BENCHES; returns (the summary, the lines to
+    print: the analysis with --runs or --baseline, the score lines, the totals)."""
+    passed = sum(r["verdict"] == "PASS" for r in cases)
+    sc = scores(cases)
+    an, flags = analysis(cases)
+    rid = head["run_id"]
+    sm: Result = {
+        "run_id": rid,
+        "kit_ref": head["kit_ref"],
+        "kit_sha": head["kit_sha"],
+        "passed": passed,
+        "total": len(cases),
+        "scores": sc,
+        "runs": head["runs"],
+        **({"baseline": head["baseline"]} if "baseline" in head else {}),
+        "seconds": head["seconds"],
+        "cases": cases,
+        "analysis": an,
+        **({"benches": benches} if benches else {}),
+    }
+    (run_dir / "summary.json").write_text(json.dumps(sm, indent=2) + "\n")
+    lines = flags if cases and ("baseline" in head or head["runs"] > 1) else []
+    lines += [f"qa: {sp} score {v['passed']}/{v['total']} passed" for sp, v in sc.items()]
+    if cases:
+        lines.append(f"qa: {passed}/{len(cases)} passed (run {rid}); artifacts {run_dir}")
+    if benches:
+        done = sum(b["verdict"] == "DONE" for b in benches)
+        lines.append(f"qa: {done}/{len(benches)} bench(es) done (run {rid}); artifacts {run_dir}")
+    return sm, lines
 
 
 def summary(run_dir: str | Path) -> Result:
