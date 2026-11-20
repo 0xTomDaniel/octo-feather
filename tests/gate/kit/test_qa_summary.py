@@ -12,7 +12,6 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
-from eval_grading import analysis
 from testkit import Scratch
 from testkit import qa_box as data
 from testkit.jsonwalk import at
@@ -24,6 +23,23 @@ if TYPE_CHECKING:
 TOTALS = "^qa: 0/1 passed"
 # Each an case's time mean on each kit, as the runs record it (record's seconds): baseline, current.
 STATED = {"same": (10.0, 10.0), "costly": (10.0, 20.0)}
+
+# summary.json's analysis of same and costly at STATED (the flags test_qa_analyst.py's comparison
+# prints, as its fields).
+ANALYSIS = {
+    "threshold": 0.5,
+    "non_discriminating_cases": [{"case": "an/same", "pass_rate": 1.0}],
+    "non_discriminating_facts": [],
+    "high_variance": [],
+    "cost_tradeoffs": [
+        {
+            "case": "an/costly",
+            "pass_rate": 1.0,
+            "time": {"baseline": 10.0, "current": 20.0},
+            "tokens": {"baseline": 220.0, "current": 550.0},
+        }
+    ],
+}
 
 
 @pytest.fixture
@@ -56,7 +72,9 @@ def test_qa_summary_runs(q: Qa) -> None:
 def test_qa_summary_kits(q: Qa) -> None:
     """summary.json of a case's runs on one kit (its tokens mean, the stub's runs 1 and 2 220
     and 240 tokens) and on both (baseline c1 beside current c2: both kit shas, passed and total);
-    its analysis that of its cases (same and costly on both kits, each run's time stated)."""
+    its analysis of same and costly on both kits, each run's time stated: same non-discriminating,
+    costly a cost tradeoff in time (10 to 20 s) and tokens (its stub's 3 more messages on c2: 220
+    to 550)."""
     k = q.kits()
     c1, c2 = k.c1.sha, k.c2.sha
     ev = q.evaluation(q.t / "evals" / "trig", ["reads"], runs=2, configs=[k.c2._replace(ref=None)])
@@ -73,6 +91,5 @@ def test_qa_summary_kits(q: Qa) -> None:
 
     configs = [k.c1._replace(name="baseline"), k.c2._replace(name="current", ref=None)]
     ev = q.evaluation(q.an(), ["same", "costly"], configs=configs, secs=secs)
-    a, _ = analysis(ev.cases)
     sm = load(ev.run_dir / "summary.json")
-    assert at(sm, "analysis") == a, sm
+    assert at(sm, "analysis") == ANALYSIS, sm

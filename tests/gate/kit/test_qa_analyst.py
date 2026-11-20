@@ -26,6 +26,16 @@ if TYPE_CHECKING:
 
 Case = Callable[..., None]
 HEAD = "qa: analysis (deterministic, no model; rules: octo-feather-qa --help, --analyze):"
+# The analysis of same and costly, one --baseline run each at STATED: same non-discriminating,
+# costly a cost tradeoff in time and tokens (its stub's 3 more messages on c2).
+COMPARED = [
+    HEAD,
+    "  non-discriminating case an/same: every run on both kits passed",
+    (
+        "  cost tradeoff an/costly: pass rate 1.00 on both kits; time mean 10.0 to 20.0;"
+        " tokens mean 220.0 to 550.0"
+    ),
+]
 # Each case's time mean on each kit, as the runs record it (record's seconds): baseline, current.
 STATED = {"same": (10.0, 10.0), "costly": (10.0, 20.0)}
 
@@ -60,15 +70,7 @@ def test_comparison(q: Qa) -> None:
     c2: 220 to 550 tokens)."""
     ev = compared(q, "same", "costly", runs=1, stated=True)
     a, got = flags(ev)
-    want = [
-        HEAD,
-        "  non-discriminating case an/same: every run on both kits passed",
-        (
-            "  cost tradeoff an/costly: pass rate 1.00 on both kits; time mean 10.0 to 20.0;"
-            " tokens mean 220.0 to 550.0"
-        ),
-    ]
-    assert got == want, got
+    assert got == COMPARED, got
     assert a["threshold"] == 0.5, a
     assert a["non_discriminating_facts"] == a["high_variance"] == [], a
     tokens = {x["case"]: x.get("tokens") for x in a["cost_tradeoffs"]}
@@ -105,11 +107,10 @@ def test_no_baseline(q: Qa) -> None:
 
 
 def test_analyze_rerun(q: Qa) -> None:
-    """--analyze on a stored run (one --baseline run each of same and costly): the analysis of
-    its cases, from summary.json alone, starting no pi and no sandbox (a poison pi first on
-    PATH, which no rerun may start)."""
-    ev = compared(q, "same", "costly", runs=1)
-    live = flags(ev)[1]
+    """--analyze on a stored run (one --baseline run each of same and costly, each run's time
+    stated): their flags, from summary.json alone, starting no pi and no sandbox (a poison pi
+    first on PATH, which no rerun may start)."""
+    ev = compared(q, "same", "costly", runs=1, stated=True)
     poison = q.t / "poison"
     poison.mkdir()
     (poison / "pi").write_text(f"#!/bin/sh\ntouch {q.t / 'ran'}\nexit 99\n")
@@ -124,7 +125,7 @@ def test_analyze_rerun(q: Qa) -> None:
     )
     assert p.returncode == 0, p
     rerun = p.stdout.splitlines()
-    assert rerun[rerun.index(HEAD) :] == live, f"rerun: {p.stdout}\nlive: {live}"
+    assert rerun[rerun.index(HEAD) :] == COMPARED, f"rerun: {p.stdout}"
     assert not (q.t / "ran").exists(), f"the rerun started pi: {p.stdout}"
     assert "qc sandbox" not in p.stdout + p.stderr, f"the rerun started a sandbox: {p.stderr}"
 
