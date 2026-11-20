@@ -277,8 +277,13 @@
       ]
     },
     "acceptance-merge-starts-routine": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1153,
+      "record": "20261120T020222Z-47909873",
+      "commit": "3a05451ec7e12a91fef8d13ef792f66e6b54184d",
+      "tests": [
+        "tests/gate/kit/lane_merge.py"
+      ]
     },
     "acceptance-red-main-stops": {
       "status": "planned",
