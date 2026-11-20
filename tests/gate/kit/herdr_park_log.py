@@ -1,15 +1,14 @@
-"""herdr-close --park records its own parked line (comms spec #acceptance-park-line; the line:
-#handoff-fields, parked; which log: #roles-park), through the command with the testkit's Herdr
-stand-in (testkit/herdr.py, its FAKE_HERDR world) and its systemd stand-in (testkit/systemd.py:
-no real scope is ever stopped), each run from a pane set in HERDR_PANE_ID over a scratch
-XDG_STATE_HOME, so no real hand-off log is written.
+"""herdr-close --park's parked line (comms spec #acceptance-park-line; the line:
+#handoff-fields, parked; when and which log: #roles-park), through the command with the
+testkit's Herdr stand-in (testkit/herdr.py, its FAKE_HERDR world) and its systemd stand-in
+(testkit/systemd.py: no real scope is ever stopped), each run from a pane set in HERDR_PANE_ID
+over a scratch XDG_STATE_HOME, so no real hand-off log is written.
 
 Lane gh7's supervisor w1:p1 parks its idle worker implementer-gh7 (w1:p2, a stand-in Pi real
 enough for /proc to read: session S7, role implementer, parent w1:p1), then tries its working
-worker code-reviewer-gh7 (w1:p3): the lane log gains exactly one parked line, naming the idle
-worker; the working one is refused (75), its tab still open; stdout carries no parked line, and
-`herdr-say --parked implementer-gh7` finds it. A park by a pane owning no log is told so on
-stderr, the line with it, no log gaining one; a park whose close Herdr fails appends none."""
+worker code-reviewer-gh7 (w1:p3), and `herdr-say --parked implementer-gh7` looks the line up
+(#acceptance-park-line); then a park by a pane owning no log and a park whose close Herdr fails
+(#roles-park; output and notice: herdr_scope.py park)."""
 
 from __future__ import annotations
 
@@ -91,9 +90,8 @@ def logged(log: Path) -> list[dict[str, object]]:
 
 
 def park_line(s: Scratch) -> None:
-    """The demo: supervisor w1:p1 runs `herdr-close --park w1:p2` (idle) then `--park w1:p3`
-    (working); its lane log gains one parked line, naming the idle worker, which herdr-say
-    --parked finds; stdout empty both times."""
+    """The demo (comms spec #acceptance-park-line): supervisor w1:p1 runs `herdr-close --park
+    w1:p2` (idle) then `--park w1:p3` (working), then herdr-say --parked implementer-gh7."""
     with lane(s) as (d, lane_log, director_log):
         out, err = park(s, "w1:p2", "w1:p1")
         show(f"herdr-close --park w1:p2 (idle) from supervisor w1:p1: stdout {out!r}; {err}")
@@ -121,8 +119,8 @@ def park_line(s: Scratch) -> None:
 
 
 def park_no_log(s: Scratch) -> None:
-    """Pane w1:p5 (no lane's supervisor, not the director) parks the idle worker: parked, told on
-    stderr with the line, no log gaining one."""
+    """Pane w1:p5 (no lane's supervisor, not the director) parks the idle worker (its notice:
+    herdr_scope.py park)."""
     with lane(s) as (_, lane_log, director_log):
         before = lane_log.read_text(), director_log.read_text()
         out, err = park(s, "w1:p2", "w1:p5")
@@ -134,7 +132,7 @@ def park_no_log(s: Scratch) -> None:
 
 
 def park_close_fails(s: Scratch) -> None:
-    """A park whose close Herdr fails (tab close exits 1) appends no parked line."""
+    """A park whose close Herdr fails (tab close exits 1; comms spec #roles-park)."""
     with lane(s) as (_, lane_log, _):
         fake = (s.bin / "herdr").resolve()
         (s.bin / "herdr").unlink()

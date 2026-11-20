@@ -33,12 +33,11 @@ log, else in the lane logs (lanes/*.handoffs.jsonl); a pane left with no name, r
 held no agent: no line. Prints nothing; exit 65, nothing written, when PANE owns no log.
 
 park --caller PANE reads on stdin the one parked line herdr-close --park made for an agent it
-parked, {at, kind: parked, pane, name, role, cwd, session, label, parent} (comms spec
-#handoff-fields, parked), and appends it unchanged to the log it belongs in (comms spec
-#roles-park), each found as spawn --caller finds it: the parked pane's own log when it owns one
-(a supervisor's: its lane log), else PANE's own (a lane worker's: its supervisor's lane log; the
-director's general worker's: the director log). Prints nothing; exit 65, nothing written, when
-neither owns a log.
+parked (fields: comms spec #handoff-fields, parked), and appends it unchanged to the log it
+belongs in (comms spec #roles-park), each found as spawn --caller finds it: the parked pane's
+own log when it owns one (a supervisor's: its lane log), else PANE's own (a lane worker's: its
+supervisor's lane log; the director's general worker's: the director log). Prints nothing;
+exit 65, nothing written, when neither owns a log.
 
 parent PANE prints the caller's parent pane, resolved by identity at each call (comms spec
 #say-parent: the parent survives park, restart and resume): the hand-off log holding a spawn or

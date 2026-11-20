@@ -1,0 +1,14 @@
+# The parity lever's case for the command scenario back_to_back (tests/gate/kit/slot.py at old_at), rewritten in place
+# with no wall-clock sleep racing the second gate's start: a long grace, the grace shown over by a grace-0 check
+# (#1163; tests/parity/lever.py --help).
+old = "tests/gate/kit/test_slot.py::test_back_to_back"
+old_at = "7933ff0c"
+# The old item's scenario file; its testkit is unchanged.
+needs = ["tests/gate/kit/slot.py"]
+new = "tests/gate/kit/test_slot.py::test_back_to_back"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): octo-feather-slot and the gate's
+# pytest, run by the kit venv's python, import them: coverage.py measures them.
+[ran]
+"scripts/slot_queue.py" = "coverage"
+"tests/gate/heavy_slot.py" = "coverage"

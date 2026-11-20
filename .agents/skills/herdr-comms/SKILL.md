@@ -99,8 +99,9 @@ those leave to the caller:
   prompt sent then is typed but never submitted (`agent_prompt_stalled`, #585).
   Nor is `idle` alone: Herdr reads Pi's screen only, and reads a booting Pi
   `idle` (its fallback) before Pi takes input (#871). So the spawn loads
-  Herdr's own Pi integration (`herdr integration install pi`, written to
-  `~/.cache/octo-feather/herdr-pi/`, never the user's Pi profile), which
+  Herdr's own Pi integration (`herdr integration install pi`, installed per
+  launch to `$(octo-feather-state)/herdr-pi/SESSION/`, never the user's Pi
+  profile nor a shared file; `herdr-close` removes it), which
   reports from inside Pi once its TUI runs. The spawn returns only once
   `herdr agent get` shows that report (`agent_session`, source `herdr:pi`),
   `herdr agent wait PANE --until idle` matches, and `herdr agent get` finds the
@@ -148,7 +149,9 @@ handles only (`herdr pane list --workspace`, each pane's `shell_pid` from
 `herdr pane process-info`, that pid's `/proc/PID/cgroup`); after the close it
 stops each one (`systemctl --user stop`: TERM, KILL 10 s on), which ends the
 detached children close alone leaves running, also when the agent's Pi already
-exited. It reads no other process: one elsewhere tagged with the closed tab's
+exited, and, the close succeeded, removes each closed pane's Herdr extension dir
+`$(octo-feather-state)/herdr-pi/SESSION/` (SESSION its Pi's, as park reads it;
+none without one). It reads no other process: one elsewhere tagged with the closed tab's
 `HERDR_TAB_ID` is untouched. A pane outside any agent scope (an agent spawned
 before scopes, a hand-started director, macOS) is unowned: closed, nothing
 swept, named in the report. Only the unit spawn named for that pane
@@ -187,10 +190,8 @@ end it, then park. With none, and for an unowned pane (no scope: spawned before
 scopes, the hand-started director), park closes PANE's tab, or its whole space
 when that tab is the space's only one (a supervisor in its own space), as
 `herdr-close` does (owned: its scope stopped; unowned: nothing swept, named
-`unowned=PANE`); the close report goes to stderr, nothing to stdout. A park records
-itself (when: comms spec `#roles-park`): its one parked line, in the log that line belongs in
-(fields: comms spec `#handoff-fields`, parked; which log: `octo-feather-handoff --help`, park,
-and `assets/herdr_scope.py`). A park no log takes is told so on stderr, with its line.
+`unowned=PANE`). Its output: `assets/herdr_scope.py`, park. Its parked line: comms spec
+`#roles-park`, `#handoff-fields` (parked); `octo-feather-handoff --help`, park.
 Refused, nothing closed: not idle or done, 75; no Pi
 process with a `herdr-spawn` session (a `--session-id` and the matching
 `OCTO_FEATHER_SESSION_ID`), 65; macOS (no `/proc`), 69; a Herdr answer that

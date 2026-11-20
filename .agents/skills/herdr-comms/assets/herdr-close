@@ -6,7 +6,8 @@
 #
 # Closing a tab or space kills its panes, but a detached command child (setsid)
 # survives, reparented: plain close then ends each closed pane's own agent
-# scope, never reading another process (herdr_scope.py close; the rule:
+# scope, never reading another process, and removes its Pi session's Herdr
+# extension dir herdr-spawn installed (herdr_scope.py close; the rule:
 # herdr-comms SKILL.md, Close an agent or a lane space; its close line:
 # comms spec #roles-park).
 # A tab id is <space>:<tab>; an id without a colon is a space. A pane id
@@ -15,8 +16,8 @@
 # from outside what it closes: the spawner owns teardown.
 #
 # --park PANE parks one idle Pi agent: herdr_scope.py park (what it reads, closes and
-# refuses: herdr-comms SKILL.md, Park an idle agent). A park records itself in
-# its hand-off log, never on stdout (herdr_scope.py park; same rule).
+# refuses: herdr-comms SKILL.md, Park an idle agent; its output: herdr_scope.py park;
+# its parked line: comms spec #roles-park).
 set -uo pipefail
 
 usage() { echo "usage: herdr-close TAB|SPACE|PANE | --park PANE" >&2; exit 64; }

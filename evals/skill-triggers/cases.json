@@ -2246,5 +2246,53 @@
     "should_trigger": false,
     "split": "held-out",
     "task": "Is review/shout.diff fit to merge? It adds `app hello NAME --shout`, which prints the greeting in capitals with a \"!\" (`HELLO, ADA!`), with one new test; the ticket asked for the smallest change that does it. Verdict, with reasons."
+  },
+  {
+    "id": "sup-design-port-test",
+    "role": "supervisor",
+    "fixture": "python-app-refactor",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Lane gh15, parent issue #15: tests/test_cli.py holds the in-process tests and the one that runs the installed `app` command in one file, so every commit pays for the subprocess. The issue asks to port the suite to tally's layout: tests/integration/ (app.cli.main in-process) and tests/e2e/ (the `app` command as a process, marked e2e), with a `just fast` recipe that skips e2e. Every test keeps checking what it checks today. Ticket #16 is that whole port. Write the implementer's brief for #16 into notes/brief-16.md."
+  },
+  {
+    "id": "sup-tdd-port-test",
+    "role": "supervisor",
+    "fixture": "python-app-refactor",
+    "should_trigger": true,
+    "split": "train",
+    "task": "lane gh17 (parent #17): port tests/test_cli.py into tests/integration/test_cli.py and tests/e2e/test_command.py like the tally repo has them, nothing dropped, `just check` green after. cut the lane's tickets and file them as sub-issues of #17."
+  },
+  {
+    "id": "sup-design-review-fix",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Code review round 1 on ticket #13 (hello --shout) is blocking: the implementer's new tests/test_shout.py imports a private _shout helper from app.cli and asserts on its return value, so it stays green even when `app hello Ada --shout` prints lower case. Write implementer-13's fix brief into notes/brief-13-fix.md."
+  },
+  {
+    "id": "sup-tdd-review-fix",
+    "role": "supervisor",
+    "fixture": "tally-tiers",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Review on ticket #8 (lane gh7: tally on a non-UTF-8 file exits 2 with `error: cannot read PATH: not UTF-8 text`) came back blocking: the only test for it sits in tests/e2e/test_command.py and monkeypatches Path.read_text to raise, so `just fast` never runs it and it passes whatever count.py does. Write implementer-8's fix brief into notes/brief-8-fix.md."
+  },
+  {
+    "id": "sup-testplace-near-docs",
+    "role": "supervisor",
+    "fixture": "tally-tiers",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Lane gh19, parent issue #19: AGENTS.md's Commands list does not say that `just fast` skips the e2e tests and only `just check` runs them; the issue asks for that one line, no code or test change. Ticket #20 is that whole change. Write the implementer's brief for #20 into notes/brief-20.md."
+  },
+  {
+    "id": "sup-testplace-near-status",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. QC flagged that --times 0 is not exercised. Is that finding blocking, and has implementer-13 reported a commit since it was logged? Read notes/handoffs.jsonl."
   }
 ]

@@ -29,9 +29,10 @@ in the file `ready_after` later (0 without one), then reading the state in the f
 (idle without one). Until then Herdr reads it `unknown`, and from
 IDLE_FALLBACK s after its start `idle` (Herdr 0.9.5's screen fallback; why that is not ready:
 herdr-comms SKILL.md, Spawn an agent). Pi reports itself only when ARGS load Herdr's Pi
-integration (`--extension F`, F the file `integration install pi` wrote): once it takes input,
-`agent_session` (source herdr:pi).
-`integration install pi` writes that file to $PI_CODING_AGENT_DIR/extensions (else
+integration (`--extension F`, F a file holding what `integration install pi` writes now): once it
+takes input, `agent_session` (source herdr:pi).
+`integration install pi` writes that file, the text of the file `integration` when there is one
+(an upgraded Herdr's), else INTEGRATION, to $PI_CODING_AGENT_DIR/extensions (else
 $HOME/.pi/agent/extensions); with no agent dir it fails, as Herdr does, and so with a file
 `install-down` (`herdr: integration install failed`); a file `no-report` makes Pi never report.
 `agent get T` (by name or pane), as Herdr 0.9.5 prints it:
@@ -262,7 +263,7 @@ class World:
         delay = float(after.read_text()) if after.exists() else 0.0
         g = self.agents[opts(a, "--pane")[0]]
         ext = [Path(x) for x in opts(a[a.index("--") :] if "--" in a else [], "--extension")]
-        reports = any(x.is_file() and x.read_text() == INTEGRATION for x in ext)
+        reports = any(x.is_file() and x.read_text() == self.integration() for x in ext)
         reports = reports and not (self.dir / "no-report").exists()
         state = self.dir / "start-status"
         status = state.read_text().strip() if state.exists() else "idle"
@@ -285,9 +286,14 @@ class World:
             return 1
         f = agent_dir / "extensions" / "herdr-agent-state.ts"
         f.parent.mkdir(exist_ok=True)
-        f.write_text(INTEGRATION)
+        f.write_text(self.integration())
         sys.stdout.write(f"installed pi integration to {f}\n")
         return 0
+
+    def integration(self) -> str:
+        """The Pi integration this Herdr installs now (the module docstring)."""
+        f = self.dir / "integration"
+        return f.read_text() if f.exists() else INTEGRATION
 
     def agent_get(self, a: list[str]) -> int:
         down = self.dir / "get-down"

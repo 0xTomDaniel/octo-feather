@@ -45,11 +45,19 @@ were retired on 2026-10-19 and remain in git history; docs/specs/comms.spec.html
 docs/specs/issue-lifecycle.spec.html and docs/specs/roles.spec.html adapt contract text and
 keep anchor names from octo-lite's domains/octo-lite.spec.html.
 
-Copied unmodified from Spec Chat (commit 0f4e0fa), licensed under the Apache
-License, Version 2.0: docs/specs/.viz/runtime.js and docs/specs/.style/spec.css (Spec Chat's
-page runtime and fallback style). docs/specs/.viz/vendor/echarts-5.5.1.min.js is
-Apache ECharts, Apache-2.0. templates/python/docs/specs/.style/spec.css and
-templates/typescript/docs/specs/.style/spec.css are copies of that same fallback style.
+Copied unmodified from Spec Chat (0xTomDaniel/spec-chat@09d5286, the Skillfile
+fetch-only `spec-chat` pin), licensed under the Apache License, Version 2.0, each
+declared by a Skillfile `#carry` line, written by `scripts/check-vendored --update
+spec-chat` and checked by `just check-vendored`: docs/specs/.viz/ (Spec Chat's
+review runtime folder, skill/review-spec/assets/viz/: runtime.js and vendor/) and
+docs/specs/.style/spec.css (its fallback style, skill/shape-spec/assets/style/spec.css).
+docs/specs/.viz/vendor/echarts-5.5.1.min.js is Apache ECharts 5.5.1, Apache-2.0, with
+its licence and notice files beside it: docs/specs/.viz/vendor/echarts-5.5.1/LICENSE,
+NOTICE, ORIGIN.json, licenses/LICENSE-d3 and licenses/LICENSE-zrender.
+templates/python/docs/specs/.style/spec.css,
+templates/typescript/docs/specs/.style/spec.css and the eval fixture's
+evals/fixtures/python-app-verify-live/docs/specs/.style/spec.css are copies of that
+same fallback style.
 
 Vendored, not from octo-lite, under .agents/skills/ with patches in .skillfile/patches/skills/
 (pins in Skillfile.lock):
