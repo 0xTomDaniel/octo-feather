@@ -2,7 +2,8 @@
 """octo-feather-spec-status: the per-criterion status file beside an accepted spec (docs/adr/0021).
 
   octo-feather-spec-status check [DIR...]          check every DIR/*.status.json (default docs/specs)
-  octo-feather-spec-status init SPEC COMMIT        write SPEC's status file, every criterion planned
+  octo-feather-spec-status init SPEC COMMIT        write SPEC's status file, every criterion planned; over an
+                                                   existing one, an accepted revision (below)
   octo-feather-spec-status built STATUS PR ID...   flip the named criteria to built in PR
   octo-feather-spec-status built STATUS PR ID --record RECORD --commit SHA [--test TEST]...
                                                    flip ID to built in PR with its evidence link
@@ -23,6 +24,12 @@ missing, extra or duplicate id, a status other than planned/built, a planned
 criterion with a PR or an evidence link, a built one without a PR, or a partial or
 malformed link; a built row with no link (built before qc linked one) passes.
 The spec HTML is never edited.
+
+`init` over an existing status file applies an owner-accepted revision as issue-lifecycle
+#spec-status-file says. A kept row stays byte for byte as this script writes rows; criteria follow
+SPEC's order. It refuses, naming the problem and writing nothing, when the existing file is not JSON or a
+row fails the rules `check` applies to a row (status, pr, evidence link), when SPEC cannot be read or a
+criterion has no or a duplicate id, or when COMMIT is no commit sha.
 
 `show` is read-only and git-only, never part of `check` (a stale criterion stays
 built until a lane's just qc judges it again, quality #qc-stale). Per status file
@@ -46,7 +53,9 @@ append-only, one judgement call per line:
 `check` fails on a line that is not JSON, a missing, empty or whitespace-only field, a lane that
 is no tracker's lane key (one some kit tracker skill's lane-key maps to itself: gh12, eng-123), a role other
 than supervisor, passes_as_written not false, an unknown kind, or a criterion id
-in neither the spec nor the spec at accepted_commit. It then compares the spec
+in neither the spec nor the spec at accepted_commit, unless the call was already in
+the log at accepted_commit (checked when written; a revision may drop a criterion it
+names; an identical copy added since is a new call). It then compares the spec
 at accepted_commit (git show, from the spec's own repo, so a shallow clone needs
 full history) with the working tree, element by data-anchor: each element's own
 content, each nested anchored element cut out and replaced by a placeholder naming
@@ -62,6 +71,7 @@ group by time. Each call shows its spec, lane, role, anchors, criteria, what, wh
 and evidence, and DENIED when the owner denied it. It ends with the count, and a
 line per lane with more than three calls.
 """
+from collections import Counter
 import argparse, importlib.machinery, importlib.util, json, re, subprocess, sys, tomllib
 from html.parser import HTMLParser
 from pathlib import Path
@@ -94,7 +104,8 @@ def _pairs(pairs):
 
 
 def check_file(status: Path) -> list[str]:
-    errs, rel = [], str(status)
+    errs: list[str] = []
+    rel = str(status)
     try:
         data = json.loads(status.read_text(encoding="utf-8"), object_pairs_hook=_pairs)
     except ValueError as e:
@@ -108,10 +119,7 @@ def check_file(status: Path) -> list[str]:
     if not re.fullmatch(r"[0-9a-f]{7,40}", str(data.get("accepted_commit", ""))):
         errs.append(f"{rel}: accepted_commit must be a commit sha")
     ids = criteria(spec)
-    if "" in ids:
-        errs.append(f"{spec}: a data-acceptance-criterion element has no data-anchor")
-    for d in sorted({i for i in ids if i and ids.count(i) > 1}):
-        errs.append(f"{spec}: duplicate criterion id {d}")
+    errs.extend(id_errors(spec, ids))
     got = data.get("criteria")
     if not isinstance(got, dict):
         return errs + [f"{rel}: criteria must be an object"]
@@ -120,6 +128,22 @@ def check_file(status: Path) -> list[str]:
         errs.append(f"{rel}: missing criterion {m}")
     for x in sorted(got.keys() - want):
         errs.append(f"{rel}: extra criterion {x} (not in {spec.name})")
+    return errs + entry_errors(rel, cast("dict[str, object]", got))
+
+
+def id_errors(spec: Path, ids: list[str]) -> list[str]:
+    """What is wrong with SPEC's criterion ids: one without a data-anchor, or one id twice."""
+    errs: list[str] = []
+    if "" in ids:
+        errs.append(f"{spec}: a data-acceptance-criterion element has no data-anchor")
+    for d in sorted({i for i in ids if i and ids.count(i) > 1}):
+        errs.append(f"{spec}: duplicate criterion id {d}")
+    return errs
+
+
+def entry_errors(rel: str, got: dict[str, object]) -> list[str]:
+    """Each criterion row's problem, whatever the spec: its status, its pr, its evidence link."""
+    errs: list[str] = []
     for k, v in sorted(got.items()):
         st = v.get("status") if isinstance(v, dict) else None
         pr = v.get("pr") if isinstance(v, dict) else None
@@ -129,7 +153,22 @@ def check_file(status: Path) -> list[str]:
             errs.append(f"{rel}: {k}: a planned criterion has pr null")
         elif st == "built" and not (isinstance(pr, int) and not isinstance(pr, bool) and pr > 0):
             errs.append(f"{rel}: {k}: a built criterion names the PR that built it")
-    return cast("list[str]", errs) + link_errors(rel, cast("dict[str, object]", got))
+    return errs + link_errors(rel, got)
+
+
+def existing_rows(status: Path) -> tuple[dict[str, object], list[str]]:
+    """(criterion rows, errors) of the status file init is about to replace: none when there is none."""
+    if not status.exists():
+        return {}, []
+    try:
+        data: object = json.loads(status.read_text(encoding="utf-8"), object_pairs_hook=cast("Any", _pairs))
+    except (OSError, ValueError) as e:
+        return {}, [f"{status}: {e}"]
+    got: object = cast("Entry", data).get("criteria") if isinstance(data, dict) else None
+    if not isinstance(got, dict):
+        return {}, [f"{status}: criteria must be an object"]
+    rows = cast("dict[str, object]", got)
+    return rows, entry_errors(str(status), rows)
 
 
 LINK = ("record", "commit", "tests")   # a built criterion's evidence link (quality #qc-results)
@@ -280,9 +319,12 @@ def is_lane_key(lane: str) -> bool:
     return _LANE_KEYS[lane]
 
 
-def read_calls(log: Path, known: set[str]) -> tuple[list[dict], list[str]]:
-    """The valid calls in log, and an error per bad line naming file, line, the call and fix."""
+def read_calls(log: Path, known: set[str], settled: "Counter[str] | None" = None) -> tuple[list[dict[str, Any]], list[str]]:
+    """The valid calls in log, and an error per bad line naming file, line, the call and fix. A settled call (its
+    _identity in SETTLED, counted: a copy added since is a new call) was checked when written, so its criteria need
+    not be in KNOWN any more."""
     calls, errs = [], []
+    left = Counter[str](settled or ())
     if not log.is_file():
         return calls, errs
     fix = "fix: the supervisor rewrites the call (issue-lifecycle #gates-spec-calls)"
@@ -315,8 +357,10 @@ def read_calls(log: Path, known: set[str]) -> tuple[list[dict], list[str]]:
             line_errs.append("passes_as_written must be false: if the criteria pass as written there is no edit")
         if c["kind"] not in KINDS:
             line_errs.append(f"kind {c['kind']!r} is not one of {', '.join(KINDS)}")
+        old = left[_identity(c)] > 0
+        left[_identity(c)] -= old
         for i in c["criteria"]:
-            if i not in known:
+            if i not in known and not old:
                 line_errs.append(f"criterion {i} is in neither the spec nor its accepted commit")
         if "commit" in c and not (isinstance(c["commit"], str) and re.fullmatch(r"[0-9a-f]{7,40}", c["commit"])):
             line_errs.append("commit, when set, is a commit sha")
@@ -344,7 +388,7 @@ def check_calls(status: Path) -> list[str]:
         return [err]
     new = spec.read_text(encoding="utf-8")
     was, now = criteria_of(old), criteria_of(new)
-    calls, errs = read_calls(log, was | now)
+    calls, errs = read_calls(log, was | now, settled_calls(log, commit))
     live = [c for c in calls if not c.get("denied")]
     a, b = anchors(old), anchors(new)
     changed = sorted(k for k in a.keys() | b.keys() if a.get(k) != b.get(k))
@@ -360,6 +404,15 @@ def check_calls(status: Path) -> list[str]:
                 errs.append(f"{spec}: criterion {i} {how} since accepted_commit {commit} needs a call of kind "
                             f"{kind} naming it; fix: log one in {log.name} (issue-lifecycle #gates-spec-calls)")
     return errs
+
+
+def settled_calls(log: Path, commit: str) -> Counter[str]:
+    """Each call (_identity) already in LOG at COMMIT: an accepted revision may drop a criterion such a call names."""
+    rc, top = _run(log.parent, "rev-parse", "--show-toplevel")
+    if rc or not log.is_file():
+        return Counter()
+    rc, shown = _run(log.parent, "show", f"{commit}:{log.resolve().relative_to(Path(top.strip()).resolve()).as_posix()}")
+    return Counter() if rc else Counter(_identity(c) for c in cast("list[dict[str, Any]]", _parse_log(shown, str(log))[0]))
 
 
 LOUDNESS = (  # (kind, heading): the order and wording of #gates-call-loudness
@@ -631,10 +684,20 @@ def main(argv: list[str]) -> int:
             print(bad, file=sys.stderr); return 64
     if cmd == "init" and len(args) == 2:
         spec = Path(args[0]); slug = spec.name.removesuffix(".spec.html")
-        ids = criteria(spec)
+        try:
+            ids = criteria(spec)
+        except (OSError, UnicodeDecodeError) as e:
+            print(f"{spec}: cannot read the spec: {e}", file=sys.stderr); return 1
+        out = spec.with_name(f"{slug}.status.json")
+        rows, errs = existing_rows(out)   # an accepted revision's: kept where the spec still has the criterion
+        errs = id_errors(spec, ids) + errs
+        if not re.fullmatch(r"[0-9a-f]{7,40}", args[1]):
+            errs.append(f"{args[1]}: COMMIT must be a commit sha, the accepted one")
+        if errs:
+            print("\n".join(errs + [f"init: nothing written to {out}"]), file=sys.stderr); return 1
         data = {"spec": spec.name, "accepted_commit": args[1],
-                "criteria": {i: {"status": "planned", "pr": None} for i in ids}}
-        out = spec.with_name(f"{slug}.status.json"); write(out, data)
+                "criteria": {i: rows.get(i, {"status": "planned", "pr": None}) for i in ids}}
+        write(out, data)
         errs = check_file(out)
         if errs:
             print("\n".join(errs), file=sys.stderr); return 1
