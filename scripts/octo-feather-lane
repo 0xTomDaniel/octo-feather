@@ -544,6 +544,8 @@ class Refuse(Exception):
 
 
 gh = functools.partial(tracker_calls.gh, err=Refuse)   # the lane's gh calls raise its own Refuse
+check_runs = functools.partial(merge_ask.check_runs, err=Refuse)   # the carried checks' read (merge_ask, Interface)
+ci_workflows = functools.partial(merge_ask.ci_workflows, err=Refuse)   # post-merge's no-CI fact (merge_ask, Interface)
 
 
 def lanes_dir() -> Path:
@@ -1038,78 +1040,6 @@ def pr_number(s: str) -> int:
     if not re.fullmatch(r"[1-9][0-9]*", s or ""):
         raise Refuse(f"PR must be a positive integer, got {s!r}")
     return int(s)
-
-
-def ci_workflows(repo: str | None, sha: str) -> tuple[list[str], str]:
-    """The no-CI fact (rule: --help, post-merge step 2): the workflow files at commit SHA and the source as printed."""
-    name = repo or "{owner}/{repo}"   # gh fills the placeholders from this directory's repo
-    src = f"gh api repos/{repo or '<this repo>'}/git/trees/{sha[:12]}"
-    tree = sha
-    for part in (".github", "workflows", None):
-        out = gh(["api", f"repos/{name}/git/trees/{tree}"], f"check gh auth status and that {sha[:12]} is in {repo or 'this repo'}, then rerun")
-        try:
-            entries = [(str(e["path"]), str(e["type"]), str(e["sha"])) for e in json.loads(out)["tree"]]
-        except (ValueError, KeyError, TypeError):
-            raise Refuse(f"gh api git/trees/{tree[:12]} printed no tree ({out[:100]!r}): check the gh on PATH")
-        if part is None:
-            return [f".github/workflows/{p}" for p, t, _ in entries if t == "blob" and p.endswith((".yml", ".yaml"))], src
-        tree = next((s for p, t, s in entries if p == part and t == "tree"), "")
-        if not tree:
-            return [], src
-    return [], src   # unreachable: the loop returns at its last part
-
-
-# GitHub's answer to rules/branches on a plan without rulesets, as gh prints it on stderr `gh: <it> (HTTP 403)` (private
-# repo, free plan; 0xTomDaniel/exosurface read 2026-11-05): no ruleset can be in force.
-NO_RULESETS = "Upgrade to GitHub Pro or make this repository public to enable this feature."
-
-
-def required_none(repo: str | None, base: str) -> str:
-    """The base branch's required-check policy, read from GitHub, when it requires no check: the line naming both
-    sources. Refuse naming the required checks, or the source that could not be read (fail closed)."""
-    name = repo or "{owner}/{repo}"
-    shown = f"repos/{repo or '<this repo>'}"
-    def read(path: str) -> tuple[object, str]:
-        try:
-            p = subprocess.run(["gh", "api", f"repos/{name}/{path}"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
-        except FileNotFoundError:
-            raise Refuse("gh not on PATH: install the GitHub CLI and log in (just install-check)")
-        err = (p.stderr or p.stdout).strip().splitlines()
-        if p.returncode:
-            return None, err[-1][:200] if err else f"exit {p.returncode}"
-        try:
-            return json.loads(p.stdout), ""
-        except ValueError:
-            return None, f"no JSON ({p.stdout[:80]!r})"
-    br, why = read(f"branches/{base}")
-    try:
-        prot = cast("dict[str, object]", cast("dict[str, object]", br)["protection"])
-        rsc = cast("dict[str, list[dict[str, object]]]", prot["required_status_checks"])
-        req = sorted({str(c) for c in rsc["contexts"]} | {str(c["context"]) for c in rsc["checks"]})
-    except (KeyError, TypeError):
-        raise Refuse(f"the required checks of base {base} could not be read (gh api {shown}/branches/{base}: "
-                     f"{why or 'no protection.required_status_checks'}): fix gh auth status or read access, then rerun")
-    rules, why = read(f"rules/branches/{base}")
-    if why == f"gh: {NO_RULESETS} (HTTP 403)":
-        rsrc = f"gh api {shown}/rules/branches/{base}: rulesets unavailable on this plan, none in force"
-    elif isinstance(rules, list):
-        try:
-            for r in cast("list[dict[str, object]]", rules):
-                if r["type"] == "required_status_checks":
-                    params = cast("dict[str, list[dict[str, object]]]", r["parameters"])
-                    req += sorted(str(c["context"]) for c in params["required_status_checks"])
-        except (KeyError, TypeError):
-            raise Refuse(f"the rulesets of base {base} could not be read (gh api {shown}/rules/branches/{base}: "
-                         "a required_status_checks rule with no contexts): check the gh on PATH, then rerun")
-        rsrc = f"gh api {shown}/rules/branches/{base}: no required_status_checks rule"
-    else:
-        raise Refuse(f"the rulesets of base {base} could not be read (gh api {shown}/rules/branches/{base}: "
-                     f"{why or 'no rule list'}): fix gh auth status or read access, then rerun")
-    if req:
-        raise Refuse(f"base {base} requires checks {', '.join(dict.fromkeys(req))} (gh api {shown}/branches/{base}, "
-                     f"{shown}/rules/branches/{base}): push the head and wait for them")
-    return (f"base {base} requires no check (gh api {shown}/branches/{base}: no required status check; {rsrc}), "
-            "so required checks are none")
 
 
 def take_repo(args: list[str]) -> tuple[list[str], str | None]:
@@ -1621,105 +1551,6 @@ def field(lines: list[str], name: str) -> tuple[int, str] | None:
     return None
 
 
-def bad_checks(rollup: list[dict]) -> tuple[list[str], list[str]]:
-    failed, pending = [], []
-    for c in rollup:
-        name = c.get("name") or c.get("context") or "?"
-        if c.get("__typename") == "StatusContext" or "state" in c and "conclusion" not in c:
-            s = (c.get("state") or "").upper()
-            (pending if s in ("PENDING", "EXPECTED", "") else failed if s != "SUCCESS" else []).append(f"{name} {s.lower() or 'pending'}")
-        elif (c.get("status") or "COMPLETED").upper() != "COMPLETED" or not c.get("conclusion"):
-            pending.append(f"{name} {(c.get('status') or 'pending').lower()}")
-        elif c["conclusion"].upper() not in ("SUCCESS", "NEUTRAL", "SKIPPED"):
-            failed.append(f"{name} {c['conclusion'].lower()}")
-    return failed, pending
-
-
-def check_runs(sha: str, repo: str | None, what: str) -> "list[dict[str, object]]":
-    """GitHub's check runs on commit SHA (REST check-runs, the latest of each), each {id, name, status, conclusion, html_url}.
-    WHAT names the commit in a refusal."""
-    out = gh(["api", f"repos/{repo or '{owner}/{repo}'}/commits/{sha}/check-runs?per_page=100"],
-             f"read the check runs of {sha[:12]}, {what} (gh auth status)")
-    try:
-        data = json.loads(out)
-        got = cast("list[object]", data["check_runs"])
-        if data.get("total_count", len(got)) > len(got):
-            raise ValueError("incomplete check runs")
-    except (ValueError, KeyError, TypeError):
-        raise Refuse(f"gh api check-runs of {sha[:12]} printed no check runs: check the gh on PATH ({out[:100]!r})")
-    return [cast("dict[str, object]", r) for r in got if isinstance(r, dict)]
-
-
-def current_checks(rollup: list[dict[str, object]], head: str, repo: str | None) -> list[dict[str, object]]:
-    """Project repeated checks through GitHub's actual head runs, retaining app/workflow/context identity."""
-    def obj(value: object) -> dict[str, object]:
-        if not isinstance(value, dict):
-            raise ValueError("expected an object")
-        return cast("dict[str, object]", value)
-
-    def number(value: object) -> int:
-        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
-            raise ValueError("expected a positive integer identity")
-        return value
-
-    def text(value: object) -> str:
-        if not isinstance(value, str) or not value:
-            raise ValueError("expected nonempty text")
-        return value
-
-    checks = [c for c in rollup if c.get("__typename") == "CheckRun"]
-    keys = [(str(c.get("name")), str(c.get("workflowName"))) for c in checks]
-    if len(keys) == len(set(keys)):
-        return rollup
-    runs = check_runs(head, repo, "the PR head")
-    out = gh(["api", f"repos/{repo or '{owner}/{repo}'}/actions/runs?head_sha={head}&per_page=100"],
-             f"read workflow identities on {head[:12]} (gh auth status)")
-    try:
-        data = obj(json.loads(out))
-        raw = data["workflow_runs"]
-        if not isinstance(raw, list):
-            raise ValueError("expected workflow runs")
-        workflows = [obj(w) for w in cast("list[object]", raw)]
-        if number(data.get("total_count", len(workflows))) > len(workflows):
-            raise ValueError("incomplete workflow runs")
-        suites: dict[int, int] = {}
-        latest: dict[int, tuple[int, int]] = {}
-        for w in workflows:
-            if w["head_sha"] != head:
-                raise ValueError("workflow on another head")
-            suite, workflow, rid = number(w["check_suite_id"]), number(w["workflow_id"]), number(w["id"])
-            suites[suite] = workflow
-            latest[workflow] = max(latest.get(workflow, (0, 0)), (rid, suite))
-        identities: dict[str, tuple[int, int, str]] = {}
-        grouped: dict[tuple[int, int, str], list[dict[str, object]]] = {}
-        for r in runs:
-            if r["head_sha"] != head:
-                raise ValueError("check on another head")
-            suite, app = number(obj(r["check_suite"])["id"]), number(obj(r["app"])["id"])
-            number(r["id"])
-            text(r["status"])
-            if r["conclusion"] is not None:
-                text(r["conclusion"])
-            key = (app, suites[suite], text(r["name"]))
-            identities[text(r["html_url"])] = key
-            grouped.setdefault(key, []).append(r)
-        projected = [c for c in rollup if c.get("__typename") != "CheckRun"]
-        seen: set[tuple[int, int, str]] = set()
-        for c in checks:
-            key = identities[text(c["detailsUrl"])]
-            if key in seen:
-                continue
-            seen.add(key)
-            candidates = [r for r in grouped[key] if number(obj(r["check_suite"])["id"]) == latest[key[1]][1]]
-            r = max(candidates, key=lambda r: number(r["id"]), default=None)
-            projected.append({"__typename": "CheckRun", "name": key[2],
-                              "status": r["status"] if r else "QUEUED",
-                              "conclusion": r["conclusion"] if r else None})
-    except (ValueError, KeyError, TypeError) as e:
-        raise Refuse(f"current check identities on {head[:12]} unavailable ({e}): reread GitHub's complete head checks") from e
-    return projected
-
-
 @no_traceback
 def cmd_ci_start(args: list[str]) -> int:
     """CI on the lane's final head (when: spec issue-lifecycle #lanes-one-head): refuse unless the local HEAD is the PR's head and has a current full
@@ -1954,7 +1785,8 @@ def cmd_merge_ask(args: list[str]) -> int:
         commits = pr_commits(pr, cast("str", head), base)
     except Refuse as e:   # named with the other gaps; no commit of the PR is read
         commits = []; miss.append(f"PR commits: {e}")
-    miss += merge_ask.check(merge_ask.snapshot(cast("str", d["body"] or ""), cast("str", d["headRefName"] or ""))).gaps
+    ask = merge_ask.check(merge_ask.snapshot(cast("dict[str, object]", d), repo))
+    miss += ask.gaps
     sec = section(d["body"])
     if sec is None:
         miss.append("`## Merge ask` section: none in the PR body; add it (format: octo-feather-lane with no arguments)")
@@ -1971,32 +1803,7 @@ def cmd_merge_ask(args: list[str]) -> int:
 
     if not field(lines, "Checks"):
         miss.append("Checks: missing; add `Checks: <the head's checks, all passing>`")
-    rollup = d["statusCheckRollup"] or []
-    try:
-        rollup = current_checks(cast("list[dict[str, object]]", rollup), cast("str", head), repo)
-    except Refuse as e:
-        miss.append(f"Checks: {e}")
-    failed, pending = bad_checks(rollup)
-    no_ci = ""
-    if not rollup:   # the rule: --help, merge-ask Checks line
-        try:   # an unreadable no-CI fact is this one item failing closed, never an abort of the whole check
-            wf, src = ci_workflows(repo, cast("str", head))
-        except Refuse as e:
-            wf, src = None, str(e)
-        if wf is None:
-            miss.append(f"Checks: none reported on head {head[:12]}, and the no-CI fact could not be read ({src})")
-        elif wf:
-            miss.append(f"Checks: none reported on head {head[:12]}, its workflows {', '.join(wf)}; push the head and wait for CI")
-        else:
-            try:
-                no_ci = (f"no CI: no workflow file under .github/workflows at head {head[:12]} ({src}); "
-                         + required_none(repo, cast("str", pr_view(pr, "baseRefName", repo)["baseRefName"])))
-            except Refuse as e:
-                miss.append(f"Checks: none reported on head {head[:12]}, no workflow file there ({src}), but {e}")
-    if failed:
-        miss.append(f"Checks: failing on head {head[:12]}: {', '.join(failed)}; fix them (a red check is never pre-existing)")
-    if pending:
-        miss.append(f"Checks: pending on head {head[:12]}: {', '.join(pending)}; wait for them to finish, then rerun")
+    miss += ask.checks; no_ci, rollup = ask.no_ci, ask.current
 
     rows: dict[str, str] = {}; judged_at: set[str] = set()
     t = next((i for i, l in enumerate(lines) if re.fullmatch(r"\|\s*criterion\s*\|\s*qc verdict\s*\|\s*judged\s*\|\s*evidence\s*\|", l.strip(), re.I)), None)
@@ -2057,7 +1864,7 @@ def cmd_merge_ask(args: list[str]) -> int:
             miss.append(f"Judged: {'names ' + repr(jl[1]) if jl else 'missing'}; add the check's proof line `Judged: {proof}`")
 
     try:
-        why, carried = carried_checks(cast("list[dict[str, object]]", rollup), cast("str", head), judged, proof, repo)
+        why, carried = carried_checks(rollup, cast("str", head), judged, proof, repo)
     except Refuse as e:
         why, carried = [f"Checks: {e}"], []
     miss += why
@@ -3642,7 +3449,7 @@ def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None
             rollup = [c for c in d["statusCheckRollup"] or [] if isinstance(c, dict)]
             head = str(d["headRefOid"])[:12]
             out.append(f"  pr: #{pr} {d['state']} {'draft' if d['isDraft'] else 'ready'} head {head} checks: {check_results(rollup)}")
-            check_waits = [f"  waits: check {c} on head {head}" for c in bad_checks(rollup)[1]]
+            check_waits = [f"  waits: check {c} on head {head}" for c in merge_ask.bad_checks(cast("list[dict[str, object]]", rollup))[1]]
             pr_heads = {c["oid"] for c in d["commits"] or [] if isinstance(c, dict) and "oid" in c}
             src.repo_heads[repo] |= pr_heads
         except (Refuse, KeyError, TypeError, AttributeError) as e:

@@ -7,7 +7,15 @@ the Snapshot's parent, as its github-issues and linear scripts print it. The com
 no_criterion_lane.
 """
 
-from merge_ask import NoParent, ParentLine, Snapshot, check
+from merge_ask import Checks, NoParent, ParentLine, Reported, Snapshot, check
+
+HEAD = "0123456789ab" + "0" * 28
+# The head's checks as the PR's rollup reports them, all passing (gh pr view statusCheckRollup)
+CHECK_OK: list[dict[str, object]] = [
+    {"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"},
+    {"__typename": "StatusContext", "context": "ci/x", "state": "SUCCESS"},
+]
+PASSING = Checks(HEAD, None, Reported(CHECK_OK, None))
 
 GH6 = ParentLine("6", "Closes #6")
 ENG = ParentLine("ENG-123", "Tracks ENG-123")
@@ -27,7 +35,7 @@ def body(parent: str) -> str:
 
 
 def gaps(parent: ParentLine | NoParent, line: str, branch: str = "gh6") -> list[str]:
-    return check(Snapshot(body(line), branch, parent)).gaps
+    return check(Snapshot(body(line), branch, parent, PASSING)).gaps
 
 
 def missing(p: ParentLine) -> str:
