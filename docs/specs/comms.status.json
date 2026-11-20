@@ -96,10 +96,6 @@
       "status": "built",
       "pr": 24
     },
-    "acceptance-close-report-first": {
-      "status": "planned",
-      "pr": null
-    },
     "acceptance-escalation-content": {
       "status": "built",
       "pr": 24
@@ -230,6 +226,24 @@
     "acceptance-report-reflection": {
       "status": "built",
       "pr": 279
+    },
+    "acceptance-close-message": {
+      "status": "built",
+      "pr": 1153,
+      "record": "20261120T211804Z-0221bd77",
+      "commit": "57783b620d5cffc5c1eb0910c805aee2833fb3cc",
+      "tests": [
+        "tests/gate/kit/lane_archive_teardown.py"
+      ]
+    },
+    "acceptance-shared-supervisor-kept": {
+      "status": "built",
+      "pr": 1153,
+      "record": "20261120T211804Z-2d50c17d",
+      "commit": "57783b620d5cffc5c1eb0910c805aee2833fb3cc",
+      "tests": [
+        "tests/gate/kit/lane_archive_teardown.py"
+      ]
     }
   }
 }
