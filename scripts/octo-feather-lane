@@ -171,15 +171,16 @@ lines for the owner (send it all with herdr-say --parent). Failure: each missing
 with its fix on stderr, exit 1.
 
 `Merge order` (spec issue-lifecycle #gates-merge-order), shown only, after `Gate time` on a pass, and on stderr
-after it, before the items, on a failure (before the refusal when nothing can be judged): the ask passes or fails the same without it. It names each other open
-PR on the PR's base (`gh pr list --state open --base <base>`), its head fetched (`git fetch origin pull/N/head`)
-when the repo lacks it, that this merge would set back: `- PR #N (<branch>): its head conflicts with this head in
-<files>` (git merge-tree of the two heads), and `- PR #N (<branch>): this merge stales its pinned run
-RUN/SUITE/CASE: <items>` for each `octo-feather-qa --verdict` pin its qc.toml demos name at its head (none without
-a qc.toml), the items that command names stale for it at BASE merged with this head (a git commit-tree, no ref
-moved) and not at BASE, each run in a scratch detached worktree (freshness: octo-feather-qa --help, Verdict). A read
-that fails, or a pin that command judges no freshness for, is one `- not read: ...` line; nothing named prints
-`- none: <n> other open pull requests on <base>, none this merge would stale or conflict with`.
+after it, before the items, on a failure (before the refusal when nothing can be judged): the ask passes or fails
+the same without it. It names each other open PR on the PR's base (`gh pr list --state open --base <base>`), its
+head fetched (`git fetch origin pull/N/head`) when the repo lacks it, that this merge would set back: `- PR #N
+(<branch>): its head conflicts with this head in <files>` (git merge-tree of the two heads), and `- PR #N
+(<branch>): this merge stales its pinned run RUN/SUITE/CASE: <items>` for each `octo-feather-qa --verdict` pin its
+qc.toml demos name at its head (none without a qc.toml), the items that command names stale for it at BASE merged
+with this head (a git commit-tree, no ref moved) and not at BASE, each run in a scratch detached worktree
+(freshness: octo-feather-qa --help, Verdict). A read that fails, or a pin that command judges no freshness for, is
+one `- not read: ...` line; nothing named prints `- none: <n> other open pull requests on <base>, none this merge
+would stale or conflict with`.
 
 A lane that builds no criterion (spec #lanes-one-head) says `Built: none` and `Failed: none` with no
 criterion row (no table, or its header alone), and its PR holds no `qc: built` commit and no --status
