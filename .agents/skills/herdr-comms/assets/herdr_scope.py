@@ -19,9 +19,10 @@ session from its Pi process, as park reads them); once Herdr's close succeeded, 
 `octo-feather-handoff close --caller HERDR_PANE_ID`, and names on stderr a caller owning no log
 (the rule: herdr-comms SKILL.md, Close an agent or a lane space).
 
-park PANE (herdr-close --park): prints the parked line on stdout and close's report on stderr,
-and exits close's status; what it reads and its refusals: herdr-comms SKILL.md, Park an idle
-agent.
+park PANE (herdr-close --park): close's report on stderr, nothing on stdout, and exits close's
+status; once that close succeeded, it hands the parked line to `octo-feather-handoff park
+--caller HERDR_PANE_ID` (which log takes it: its --help), and names on stderr, with the line, a
+park no log takes; what it reads and its refusals: herdr-comms SKILL.md, Park an idle agent.
 
 Herdr's answers are checked here by hand against the shape Herdr 0.9.5 states for them
 (`herdr api schema --json`, protocol 22: PaneInfo, PaneProcessInfo): every field named,
@@ -449,7 +450,22 @@ def park(pane: str) -> int:
     encode += ["encode", *(x for k, v in fields.items() for x in ("--field", k, v))]
     line = subprocess.run(encode, capture_output=True, text=True, check=True).stdout
     rc = close(workspace if only else me.tab_id, sys.stderr)
-    sys.stdout.write(line)
+    if rc != 0:
+        return rc
+    caller = os.environ.get("HERDR_PANE_ID", "")
+    log = [encode[0], "park", "--caller", caller]
+    rc_log = subprocess.run(log, input=line, text=True, check=False).returncode
+    if rc_log == 65:  # noqa: PLR2004 (octo-feather-handoff park: no log owns the line)
+        who = f"pane {caller}" if caller else "the caller (no HERDR_PANE_ID)"
+        sys.stderr.write(
+            f"herdr-close: no hand-off log recorded this park: neither {pane} nor {who} owns one"
+            " (no lane record's supervisor, not director.toml's pane); its parked line:\n" + line
+        )
+    elif rc_log != 0:
+        sys.stderr.write(
+            "herdr-close: park not recorded in its hand-off log (error above); parked, its"
+            " parked line:\n" + line
+        )
     return rc
 
 

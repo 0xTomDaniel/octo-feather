@@ -15,7 +15,8 @@
 # from outside what it closes: the spawner owns teardown.
 #
 # --park PANE parks one idle Pi agent: herdr_scope.py park (what it reads, closes and
-# refuses: herdr-comms SKILL.md, Park an idle agent).
+# refuses: herdr-comms SKILL.md, Park an idle agent). A park records itself in
+# its hand-off log, never on stdout (herdr_scope.py park; same rule).
 set -uo pipefail
 
 usage() { echo "usage: herdr-close TAB|SPACE|PANE | --park PANE" >&2; exit 64; }

@@ -32,6 +32,14 @@ field given empty is taken from the latest spawn or worker-spawn line naming the
 log, else in the lane logs (lanes/*.handoffs.jsonl); a pane left with no name, role nor session
 held no agent: no line. Prints nothing; exit 65, nothing written, when PANE owns no log.
 
+park --caller PANE reads on stdin the one parked line herdr-close --park made for an agent it
+parked, {at, kind: parked, pane, name, role, cwd, session, label, parent} (comms spec
+#handoff-fields, parked), and appends it unchanged to the log it belongs in (comms spec
+#roles-park), each found as spawn --caller finds it: the parked pane's own log when it owns one
+(a supervisor's: its lane log), else PANE's own (a lane worker's: its supervisor's lane log; the
+director's general worker's: the director log). Prints nothing; exit 65, nothing written, when
+neither owns a log.
+
 parent PANE prints the caller's parent pane, resolved by identity at each call (comms spec
 #say-parent: the parent survives park, restart and resume): the hand-off log holding a spawn or
 worker-spawn line whose `session` is the caller's OCTO_FEATHER_SESSION_ID (lane logs first, then the
@@ -435,6 +443,18 @@ def record_close(args: argparse.Namespace) -> int:
     return 0
 
 
+def record_park(args: argparse.Namespace) -> int:
+    """Append herdr-close --park's parked line to the log it belongs in (module docstring)."""
+    line = cast("dict[str, object]", json.loads(sys.stdin.read()))
+    panes = (str(line.get("pane") or ""), cast("str", args.caller))
+    log = next((x for x in (owned_log(p) for p in panes if p) if x is not None), None)
+    if log is None:
+        return 65
+    with log.open("a", encoding="utf-8") as f:
+        f.write(encode(line) + "\n")
+    return 0
+
+
 def agent_gone(pane: str) -> int:
     """0 when Herdr finds no agent at PANE, else the refusal's exit code (message on stderr)."""
     get = ["herdr", "agent", "get", pane]
@@ -515,6 +535,7 @@ def resume_workspace(_: argparse.Namespace) -> int:
 LEVERS = {
     "spawn": record_spawn,
     "close": record_close,
+    "park": record_park,
     "attempt": ended_unreported,
     "resume-workspace": resume_workspace,
     "parent": parent,
@@ -544,6 +565,7 @@ def main() -> int:  # noqa: C901 (encode and parked, then the levers' dispatch)
     spawn.add_argument("--ticket")
     spawn.add_argument("--caller")
     commands.add_parser("close").add_argument("--caller", required=True)
+    commands.add_parser("park").add_argument("--caller", required=True)
     attempt = commands.add_parser("attempt")
     attempt.add_argument("--ended-unreported", action="store_true", required=True)
     attempt.add_argument("log", type=Path)
