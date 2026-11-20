@@ -161,9 +161,10 @@ def refusals(s: Scratch) -> None:
 
 def tickets_comment(s: Scratch) -> None:
     """`tickets 644` (lane gh644's parent) on real gh's answers, unmodified
-    (testkit/recordings/lane-tickets-644.json, 2026-11-19): #1094's body has no `Skills:` line,
-    its comment does, so `tickets` reads its notes and passes it; #1099's body line passes with no
-    notes read. The target is a scratch repo with the kit's specs and its scripts/ demos tracked."""
+    (testkit/recordings/lane-tickets-644.json, 2026-11-20): `tickets` reads each ticket's body and
+    comments; #1094's only `Skills:` line is a comment (`Skills: eval-cases`), #1099's is in its
+    body (`Skills: tdd, codebase-design`); both pass. The target is a scratch repo with the kit's
+    specs and its scripts/ demos tracked."""
     s.gh.store("tape.json", json.loads(TICKETS.read_text()))
     t = s.root / "t"
     shutil.copytree(ROOT / "docs" / "specs", t / "docs" / "specs")
@@ -175,8 +176,8 @@ def tickets_comment(s: Scratch) -> None:
     s.git(t, "add", "-A")
     r = s.run([kit("octo-feather-lane"), "tickets", "644"], cwd=t)
     assert r.out == "1094: ok\n1099: ok\n644: 2 of 2 tickets pass", r.out
-    asked = [x.split(" ", 3)[:3] for x in s.gh.log()]
-    assert asked.count(["api", "graphql", "-F"]) == 1, s.gh.log()
+    notes = sorted(x.split()[3] for x in s.gh.log() if x.startswith("api graphql "))
+    assert notes == ["n=1094", "n=1099"], s.gh.log()
 
 
 if __name__ == "__main__":

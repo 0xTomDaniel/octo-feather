@@ -120,3 +120,9 @@ Fix: agents/supervisor.md Delivery: "only exit 1 blocks: send the worker back as
 Smoke: agents/supervisor.md run 20261120T001636Z-8a2c20 at kit 6c440d36, --runs 3 --baseline origin/main (777e2f07): implementer-result-integrated-not-candidate and reviewed-implementer-result-integrated PASS 3/3 each (0/3 each at 02677bd1, run 20261119T232852Z-9687db), with the other three pinned cases (fact cases PASS 3/3; the review case owner-access-blocker-message awaits a fresh code-reviewer). Pinned in qc.toml; generated evidence: evidence/2026-11-18-gh978-eval-verdict.md.
 
 Removed: "integrate only once it exits 0" from the supervisor's Delivery line: it blocked integration on a check that could not run (run 20261119T232852Z-9687db).
+
+## Review of b0e7475d (blocking, three findings)
+
+1. unlisted-test-seam: `tickets` seam set on #1099 by the supervisor at 2026-11-20T01:41:19Z; `transition` (lane_tickets.py) and `tickets_comment` (lane_skills.py) rewritten in a commit after it, `seam 1099 issue-lifecycle#acceptance-tracer-tickets 'octo-feather-lane tickets' --before <it>` exit 0.
+2. implementation-coupled-test: `transition` asserts the whole notice line against the literal rule commit fee170656b1e and its committer time 2026-11-19T21:24:35Z, with literal outcomes per ticket, never the code's marker search.
+3. ignored-ticket-update: `tickets` now reads every ticket's notes and checks the latest line of body and comments, as `skills` does. New item `test_lane_tickets.py::test_comment_overrides`: body `Skills: tdd` with a later comment `Skills: nope` fails unknown-skill for nope; body `Skills: nope` with a later comment `Skills: tdd` passes. Reverting to the body-only read fails it. `tickets_comment` re-recorded from a real `tickets 644` run (one notes read per ticket now). The tickets tests' tapes and store answer the notes read (built, in the shape of real gh's and linear-cli's answers).
