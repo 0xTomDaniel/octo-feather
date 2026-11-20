@@ -444,7 +444,7 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH') $CALLER
     try: got = json.load(open(os.path.join(root, "node_modules", srt, "package.json"))).get("version")
     except (OSError, ValueError): got = None
     if pin and got == pin: print(f"srt ok {srt} {got} (package.json pin, the qc sandbox)")
-    else: print(f"srt MISSING {srt} {pin} (package.json pin, the qc sandbox), found {got or 'none'} in {root}/node_modules; pnpm install --frozen-lockfile --dir {root}"); bad = 1
+    else: print(f"srt MISSING {srt} {pin} (package.json pin, the qc sandbox), found {got or '"'"'none'"'"'} in {root}/node_modules; pnpm install --frozen-lockfile --dir {root}"); bad = 1
     rc, st, _ = run(os.path.join(root, "scripts", "octo-feather-state"))
     lanes = os.path.join(st, "lanes")
     if rc or not st: print(f"state  UNREADABLE octo-feather-state failed (exit {rc}); set HOME, or XDG_STATE_HOME, to a writable folder"); bad = 1
