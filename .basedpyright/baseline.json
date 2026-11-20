@@ -15800,30 +15800,6 @@
                 }
             },
             {
-                "code": "reportUnknownVariableType",
-                "range": {
-                    "startColumn": 8,
-                    "endColumn": 9,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownArgumentType",
-                "range": {
-                    "startColumn": 23,
-                    "endColumn": 24,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownMemberType",
-                "range": {
-                    "startColumn": 26,
-                    "endColumn": 31,
-                    "lineCount": 1
-                }
-            },
-            {
                 "code": "reportUnknownMemberType",
                 "range": {
                     "startColumn": 8,
