@@ -363,3 +363,11 @@ covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/tracker
 [demo."issue-lifecycle#acceptance-lane-start-rerun"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
 covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/tracker_calls.py", "scripts/octo-feather-start", ".agents/skills/herdr-comms/assets/herdr-spawn", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
+
+# Proven by tests/gate/kit/test_lane_start.py's tagged item (behind_kit); the demo is the lane-start drive's current-kit
+# case: OCTO_FEATHER_KIT_INSTALL a scratch kit clone one commit behind its origin's main, `octo-feather-lane start 905
+# --goal ... --outcome ... --brief-file brief.md` with the testkit's stand-ins exits 1 naming the install and that it is
+# behind main, nothing made; then the install fast-forwarded as named and the start runs.
+[demo."issue-lifecycle#acceptance-lane-start-current-kit"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
+covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]

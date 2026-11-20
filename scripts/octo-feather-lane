@@ -560,7 +560,10 @@ agents: not read: <why>`. post-merge step 5 prints the same report.
   octo-feather-lane start TICKET --goal TITLE --outcome TEXT --brief-file FILE
                                    the director's lane start, one command, in its checkout of a target
 
-`start` (spec issue-lifecycle #acceptance-lane-start) reads the lane key (the target's tracker skill's lane-key, as
+`start` (spec issue-lifecycle #acceptance-lane-start) first fetches the kit install's origin (the kit dir this command
+runs from, or OCTO_FEATHER_KIT_INSTALL: the install post-merge's step 3 refreshes) and refuses, exit 1 with nothing
+made, when main there has a commit the install lacks, naming the install, its commit, main's and the fix (post-merge's
+kit refresh, or a fast-forward of the install; #acceptance-lane-start-current-kit). Then it reads the lane key (the target's tracker skill's lane-key, as
 octo-feather-start resolves it), the ticket (issue-view), the repository (gh repo view) and the caller's
 $HERDR_PANE_ID (the director pane), each answer validated and refused naming its field before anything is made
 (arguments by argparse); refuses a lane that exists (spec #acceptance-lane-start-exists): when any of lanes/<key>.toml,
@@ -4745,6 +4748,7 @@ def cmd_post_merge(args: list[str]) -> int:
 def cmd_start(args: list[str]) -> int:
     """`start` (--help): the logic in scripts/start_lane.py."""
     import start_lane
+    start_lane.current_kit(kit_install(), Refuse)
     print(start_lane.start(args, lanes_dir(), Refuse), flush=True)
     return 0
 

@@ -3568,7 +3568,9 @@ def drive_lane_start(f: Feature) -> None:
     is the kit's testkit Herdr and GitHub the testkit's fake gh (tests/gate/kit/testkit/gh.py: repo o/r, open issue
     905), first on PATH, the real octo-feather-start and herdr-spawn behind the command. Then reads, as the director
     would: the supervisor in Herdr, the worktree's branch and head, the lane record, what the supervisor received, the
-    director log. Cases: features/lane-start.md."""
+    director log. First, issue-lifecycle#acceptance-lane-start-current-kit: the kit install (OCTO_FEATHER_KIT_INSTALL, a
+    scratch kit clone) one commit behind its origin's main is refused with nothing made; the install fast-forwarded as
+    the refusal says, the start runs. Cases: features/lane-start.md."""
     w = comms_world(f, "lane-start")
     w.put({"w0:p1": comms_agent("w0:p1", "director")})
     (w.state / "lanes" / "gh7.toml").unlink()
@@ -3596,11 +3598,35 @@ def drive_lane_start(f: Feature) -> None:
                  [str(Path(f.s.repo) / "scripts" / "pi-role"), "--set-identity", "t", "t@t"]):
         subprocess.run(argv, env=clean, check=True, capture_output=True)
     main = output(["git", "-C", str(seed), "rev-parse", "HEAD"])[1].strip()
+    kit_origin, kit_seed, kit = w.sc / "kit-origin.git", w.sc / "kit-seed", w.sc / "kit-install"
+    for argv in (["git", "init", "-q", "--bare", "-b", "main", str(kit_origin)], ["git", "clone", "-q", str(kit_origin), str(kit_seed)],
+                 ["git", "-C", str(kit_seed), *ident, "commit", "-q", "--allow-empty", "-m", "kit"],
+                 ["git", "-C", str(kit_seed), "push", "-q", "origin", "main"],
+                 ["git", "clone", "-q", str(kit_origin), str(kit)],
+                 ["git", "-C", str(kit_seed), *ident, "commit", "-q", "--allow-empty", "-m", "kit main moved"],
+                 ["git", "-C", str(kit_seed), "push", "-q", "origin", "main"]):
+        subprocess.run(argv, env=clean, check=True, capture_output=True)
+    kit_head = output(["git", "-C", str(kit), "rev-parse", "HEAD"])[1].strip()
+    kit_main = output(["git", "-C", str(kit_seed), "rev-parse", "HEAD"])[1].strip()
+    say(f"kit install {kit} at {kit_head[:12]}, its origin's main {kit_main[:12]} one commit ahead")
     brief = w.sc / "brief.md"
     brief.write_text(LANE_BRIEF)
     say(f"target {checkout}: origin's main {main[:12]}, the clone's main one commit behind")
-    director = base | {"OCTO_FEATHER_ROLE": "director", "HERDR_PANE_ID": "w0:p1", "HERDR_WORKSPACE_ID": "w0"}
+    director = base | {"OCTO_FEATHER_ROLE": "director", "HERDR_PANE_ID": "w0:p1", "HERDR_WORKSPACE_ID": "w0",
+                        "OCTO_FEATHER_KIT_INSTALL": str(kit)}
     comms_env(f, director)
+    f.run("current-kit", "sh", "-c", 'cd "$1" && exec octo-feather-lane start 905 --goal "$2" --outcome "$3" --brief-file "$4"',
+          "sh", str(checkout), LANE_TITLE, "a scratch proof", str(brief))
+    wt = checkout.with_name("target-gh905")
+    log, prompts, record = w.world / "log", w.world / "prompts", w.state / "lanes" / "gh905.toml"
+    made = {f"worktree {wt}": wt.exists(), "branch gh905": bool(output(["git", "-C", str(checkout), "branch", "--list", "gh905"])[1]),
+            "a herdr call": log.exists() and bool(log.read_text()), "a prompt": prompts.exists(), f"record {record}": record.exists(),
+            "a gh call": bool((store / "log").read_text())}
+    f.obs("current-kit", "made", ", ".join(k for k, v in made.items() if v))
+    f.check("current-kit", lambda c: c.code == 1 and f"kit install {kit} at {kit_head} is behind main on its origin ({kit_main}" in c.err
+            and f"git -C {kit} merge --ff-only origin/main" in c.err and c.o["made"] == "")
+    subprocess.run(["git", "-C", str(kit), "merge", "-q", "--ff-only", "origin/main"], env=clean, check=True, capture_output=True)
+    say(f"kit install fast-forwarded as the refusal says: {kit} at {kit_main[:12]}")
     f.run("start", "sh", "-c", 'cd "$1" && exec octo-feather-lane start 905 --goal "$2" --outcome "$3" --brief-file "$4"',
           "sh", str(checkout), LANE_TITLE, "a scratch proof", str(brief))
     out = (f.d / "start.stdout").read_text()
@@ -3609,7 +3635,6 @@ def drive_lane_start(f: Feature) -> None:
     f.run("supervisor", "herdr", "agent", "get", "gh905")
     calls = (w.world / "log").read_text().splitlines()
     f.obs("supervisor", "workspace-create", "\n".join(x for x in calls if x.startswith("workspace create ")))
-    wt = checkout.with_name("target-gh905")
     f.check("supervisor", lambda c: c.code == 0 and c.j["result"]["agent"]["pane_id"] == pane
             and c.j["result"]["agent"]["cwd"] == str(wt)
             and c.j["result"]["agent"]["workspace_id"] == pane.split(":", maxsplit=1)[0]
