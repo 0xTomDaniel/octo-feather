@@ -10,6 +10,34 @@
       "status": "planned",
       "pr": null
     },
+    "acceptance-revision-preserve": {
+      "status": "built",
+      "pr": 1190,
+      "record": "20261120T110717Z-f90528f4",
+      "commit": "67b7c3fa10235195d071f96e6a1d1294814834bf",
+      "tests": []
+    },
+    "acceptance-revision-remove": {
+      "status": "built",
+      "pr": 1190,
+      "record": "20261120T110720Z-682cc676",
+      "commit": "67b7c3fa10235195d071f96e6a1d1294814834bf",
+      "tests": []
+    },
+    "acceptance-revision-repeat": {
+      "status": "built",
+      "pr": 1190,
+      "record": "20261120T110724Z-c124c6aa",
+      "commit": "67b7c3fa10235195d071f96e6a1d1294814834bf",
+      "tests": []
+    },
+    "acceptance-revision-invalid": {
+      "status": "built",
+      "pr": 1190,
+      "record": "20261120T110728Z-69f7ac5d",
+      "commit": "67b7c3fa10235195d071f96e6a1d1294814834bf",
+      "tests": []
+    },
     "acceptance-chat-not-acceptance": {
       "status": "planned",
       "pr": null
@@ -54,6 +82,15 @@
     "acceptance-one-head": {
       "status": "built",
       "pr": 91
+    },
+    "acceptance-one-head-hunks": {
+      "status": "built",
+      "pr": 1164,
+      "record": "20261120T182128Z-dd0e4bf5",
+      "commit": "f462fc68ef2b93f76e8000ddfe073e082d047ce9",
+      "tests": [
+        "tests/gate/kit/lane_merge_ask_hunks.py"
+      ]
     },
     "acceptance-qc-interim": {
       "status": "built",
@@ -158,6 +195,15 @@
     "acceptance-merge-ask-evidence": {
       "status": "built",
       "pr": 49
+    },
+    "acceptance-merge-ask-siblings": {
+      "status": "built",
+      "pr": 1164,
+      "record": "20261120T182128Z-1b38c372",
+      "commit": "f462fc68ef2b93f76e8000ddfe073e082d047ce9",
+      "tests": [
+        "tests/gate/kit/lane_merge_order.py"
+      ]
     },
     "acceptance-merge-ask-no-criterion": {
       "status": "built",
@@ -269,9 +315,9 @@
     },
     "acceptance-stale-agents": {
       "status": "built",
-      "pr": 1086,
-      "record": "20261119T214939Z-7e81221f",
-      "commit": "48fe56d83c6dbb094ea2db78251d53734d9d7f32",
+      "pr": 1145,
+      "record": "20261120T175844Z-4a832248",
+      "commit": "33241c12793c82072a80189a68087989ecef86db",
       "tests": [
         "tests/gate/kit/lane_stale.py"
       ]

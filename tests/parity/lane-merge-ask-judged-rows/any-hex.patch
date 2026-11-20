@@ -1,0 +1,14 @@
+Seeded defect: a row's judged sha that is no commit of the PR is taken as the judged head.
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index eebfe2b6..53c4cac2 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -792,7 +792,7 @@ def judged_sha(
+             "(7+ hex)"
+         )
+     sha = m.group(1).lower()
+-    at = [oid for oid, _ in commits if oid.lower().startswith(sha)]
++    at = [oid for oid, _ in commits if oid.lower().startswith(sha)] or [sha]
+     if len(at) != 1:
+         return None, (
+             f"judged {sha} is {'ambiguous among' if at else 'not a commit of'} PR #{pr}; name the "

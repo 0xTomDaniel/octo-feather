@@ -91,6 +91,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, NoReturn
 
+from eval_grading import DEFAULT_TIMEOUT
+
 Result = dict[str, Any]   # one claimed criterion's result (quality spec #qc-results)
 
 
@@ -544,7 +546,7 @@ def ask(qa: types.ModuleType, base: dict[str, Any], ids: list[str], states: list
     inp = {"question": q["question"], "labels": labels, "criteria": {lb: q["label_help"][lb] for lb in labels},
            "cases": [{"id": i, "state": st} for i, st in zip(ids, states, strict=True)], "classifiers": [model]}
     print(f"qc: advisory {ADVICE} question to {model} for {len(ids)} recorded criteria (no gate reads it)", file=sys.stderr)
-    bench, _, _, problem = qa.classify(sys.modules[__name__], inp, int(suite.get("timeout_s", qa.DEFAULT_TIMEOUT)), session, purpose="judge")
+    bench, _, _, problem = qa.classify(sys.modules[__name__], inp, int(suite.get("timeout_s", DEFAULT_TIMEOUT)), session, purpose="judge")
     if problem:
         return {}, str(problem)
     if model not in (bench.get("benched") or []):

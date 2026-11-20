@@ -1,14 +1,14 @@
 Seeded defect: declared accepts a final message with two ```json blocks.
-diff --git a/scripts/octo-feather-qa b/scripts/octo-feather-qa
-index 6e1952e9..8480d521 100755
---- a/scripts/octo-feather-qa
-+++ b/scripts/octo-feather-qa
-@@ -306,7 +306,7 @@ def final_json(head, final, last):
-     if text is None:
-         return "fail", f"{head}: no final assistant message", None
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index af457dc7..26124dad 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -265,7 +265,7 @@ def final_message(head: str, last: Last, *, final: bool, unread: str) -> tuple[s
+ def json_block(text: str) -> tuple[Fact, str | None]:
+     """(the object, None) of TEXT's one ```json block (schema, Final JSON), else ({}, why not)."""
      opens = list(JSON_FENCE.finditer(text))
 -    if len(opens) != 1:
 +    if not opens:
-         return "fail", f"{head}: final message holds {len(opens)} ```json blocks, want exactly 1", None
+         return {}, f"final message holds {len(opens)} ```json blocks, want exactly 1"
      end = FENCE_END.search(text, opens[0].end())
      if end is None:

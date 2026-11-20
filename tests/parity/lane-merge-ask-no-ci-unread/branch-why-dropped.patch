@@ -1,0 +1,14 @@
+Seeded defect: an unreadable branch protection no longer names gh's error (fail closed, naming the read).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index 575dba8d..0227f619 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -537,7 +537,7 @@ def required_none(repo: str | None, p: Policy | Unread) -> str:
+     except (KeyError, TypeError) as e:
+         msg = (
+             f"the required checks of base {base} could not be read "
+-            f"(gh api {shown}/branches/{base}: {why or 'no protection.required_status_checks'}): "
++            f"(gh api {shown}/branches/{base}: {'no protection.required_status_checks'}): "
+             "fix gh auth status or read access, then rerun"
+         )
+         raise _Gap(msg) from e

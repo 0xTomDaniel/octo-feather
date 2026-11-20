@@ -1,13 +1,14 @@
 Seeded defect: a full gate pass recorded on a dirty tree (clean false) counts as the head's full pass (octo-feather-lane --help, merge-ask: a record whose clean is true; issue-lifecycle #acceptance-merge-ask-full-proof).
-diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
---- a/scripts/octo-feather-lane
-+++ b/scripts/octo-feather-lane
-@@ -1274,7 +1274,7 @@
-         rec = cast("dict[str, object]", raw) if isinstance(raw, dict) else {}
-         if rec.get("tier") != "full" or str(rec.get("head", "")).lower() != c.lower():
-             continue
--        if rec.get("clean") is not True:
-+        if rec.get("clean") is None:
-             no = [f"it was recorded on a dirty tree (clean {json.dumps(rec.get('clean'))}): it proves nothing; {fix}"]
-         else:
-             try:
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index a5b4b9e4..6f0bcbb9 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -1505,7 +1505,7 @@ def _carries(
+     if rec.get("tier") != "full" or str(rec.get("head", "")).lower() != c.lower():
+         return None
+     fix = _fix(head)
+-    if rec.get("clean") is not True:
++    if rec.get("clean") is None:
+         no = [
+             (
+                 f"it was recorded on a dirty tree (clean {json.dumps(rec.get('clean'))}): it "

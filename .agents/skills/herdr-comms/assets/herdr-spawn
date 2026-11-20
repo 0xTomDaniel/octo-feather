@@ -98,9 +98,12 @@ launch_argv+=(--session-id "$session")
 
 # Herdr's own Pi integration (#871): an extension that reports Pi's state and session to Herdr from
 # inside Pi, which Readiness below waits for. Herdr writes it only into a Pi agent dir, so it goes to
-# a kit cache dir, never the user's Pi profile; written aside and moved, so a concurrent launch never
-# loads a half-written file. Each spawn takes the running Herdr's current copy.
-ext="${XDG_CACHE_HOME:-$HOME/.cache}/octo-feather/herdr-pi"; mkdir -p "$ext"
+# this launch's own dir, herdr-pi/SESSION beside its launch-set record in the state dir (#1140), never
+# the user's Pi profile nor a file another launch shares; written aside and moved within it, so Pi
+# never loads a half-written file (a resume reuses the session and reinstalls). Each spawn takes the
+# running Herdr's current copy; herdr-close removes the dir after the agent's tab closed.
+[[ "$session" =~ ^[A-Za-z0-9][A-Za-z0-9._-]*$ ]] || { echo "herdr-spawn: --resume needs a session id, got $session" >&2; exit 64; }
+ext="$("$root/scripts/octo-feather-state")/herdr-pi/$session"; mkdir -p "$ext"
 agent_dir="$(mktemp -d "$ext/install.XXXXXX")"
 if ! err="$(PI_CODING_AGENT_DIR="$agent_dir" herdr integration install pi 2>&1)" \
   || ! mv -f "$agent_dir/extensions/herdr-agent-state.ts" "$ext/herdr-agent-state.ts"; then
