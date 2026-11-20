@@ -1,7 +1,8 @@
 """The scenarios of tests/gate/kit/test_lane_archive_teardown.py (its items), this file their
 command (testkit.main): scripts/octo-feather-lane archive on a merged lane (issue 1134;
 issue-lifecycle #gates-main-moved, #acceptance-archive-tears-down; comms #transport-close-space,
-#acceptance-close-message), offline, in tests/gate/kit/lane_merge.py's world (PR #7 of lane gh7,
+#acceptance-close-message, #acceptance-shared-supervisor-kept), offline, in
+tests/gate/kit/lane_merge.py's world (PR #7 of lane gh7,
 parent issue 70 with sub-issue 71, lane gh8 open, the kit install and the director's checkout of
 o/r), with testkit.reflector's reflection world (each reflector finding no gap, the director's
 pane w9:p99 in director.toml) and these on top: lane gh7's branch gh70 (`lane-key 70`) at the
@@ -237,6 +238,35 @@ def archive_tears_down(s: Scratch) -> None:
     torn_down(t, "systemd-run --user")
 
 
+def shared_supervisor_kept(s: Scratch) -> None:
+    """comms#acceptance-shared-supervisor-kept (#892): lanes gh7 and gh8 open, both records naming
+    supervisor zt1:p1. gh7 merges, then its supervisor archives it: the teardown unit closes no
+    space or tab (zt1:p1's tab stays open), gh8's record is byte for byte unchanged, and the
+    director's one message names the tab kept and gh8, the lane holding it; gh7's worktree,
+    branch gh70 and PR #9 handled as when not shared."""
+    t = Lane(s)
+    t.w.record("gh8", "zt1:p1", 80, None)
+    gh8 = t.w.lanes / "gh8.toml"
+    before = gh8.read_bytes()
+    t.merged()
+    t.run(0, "archive", "gh7")
+    t.ended()
+    closes = [x for x in t.herdr_log() if x.startswith(("workspace close", "tab close"))]
+    assert not closes, f"closed: {closes}"
+    assert gh8.read_bytes() == before, "gh8's record changed"
+    assert not t.wt.exists(), "worktree kept"
+    assert not t.branch("origin"), "branch gh70 kept on origin"
+    said = t.said()
+    sys.stdout.write("# the director's messages\n" + "\n".join(said) + "\n")
+    assert len(said) == 1, f"director got {len(said)} messages: {said}"
+    teardown = (
+        f"teardown: kept: supervisor zt1:p1 still supervises gh8; worktree {t.wt} removed (0 mise "
+        "config links into it pruned); PR #9 retargeted from gh70 to main; local branch gh70 "
+        "deleted; remote branch gh70 deleted from origin"
+    )
+    assert said[0].split(" | ")[-1] == teardown, f"message: {said[0]}"
+
+
 def no_manager(s: Scratch) -> None:
     """No systemd user manager answers (macOS): the archive starts the teardown in its own
     session instead, under the same runtime limit, never through systemd-run; it ends as with a
@@ -442,4 +472,5 @@ if __name__ == "__main__":
         unit_fails,
         unit_killed,
         unit_start_fails,
+        shared_supervisor_kept,
     )

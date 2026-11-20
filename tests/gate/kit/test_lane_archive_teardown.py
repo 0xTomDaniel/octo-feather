@@ -10,6 +10,7 @@ from lane_archive_teardown import (
     director_unread,
     no_manager,
     red_main,
+    shared_supervisor_kept,
     unit_fails,
     unit_killed,
     unit_start_fails,
@@ -24,6 +25,11 @@ SOURCE = "tests/gate/kit/lane_archive_teardown.py"
 @pytest.mark.criterion("comms#acceptance-close-message", source=SOURCE)
 def test_lane_archive_tears_down(case: Case) -> None:
     case(archive_tears_down)
+
+
+@pytest.mark.criterion("comms#acceptance-shared-supervisor-kept", source=SOURCE)
+def test_lane_archive_shared_supervisor_kept(case: Case) -> None:
+    case(shared_supervisor_kept)
 
 
 def test_lane_archive_teardown_no_manager(case: Case) -> None:
