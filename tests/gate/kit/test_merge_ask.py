@@ -4,8 +4,8 @@ the gaps out. Each test is the command scenario of the same name it replaced in
 tests/gate/kit/lane_merge_ask.py (parity: tests/parity/lane-merge-ask-*/). LANE is that file's
 lane as merge-ask reads it: PR #7 at H, qc's status commit after the judged head J, its clear
 review verdict on J, demo's status file; what the tracker skill prints for a branch is the
-Snapshot's parent, as its github-issues and linear scripts print it; the head proof
-(octo-feather-lane's head_proof) is the Snapshot's answer to check's Need. The command's wiring
+Snapshot's parent, as its github-issues and linear scripts print it; its git facts (Git) the
+lane's commits as git reads them (facts). The command's wiring
 (snapshot over the real tracker scripts, comments, status files and qc reports, the gaps and
 the passing ask printed): lane_merge_ask.py merge_ask_passes, no_criterion_lane. The Checks
 rules: test_merge_ask_checks.py.
@@ -17,17 +17,19 @@ from merge_ask import (
     Ask,
     Checks,
     Comment,
-    Need,
+    Commit,
+    Git,
+    Merge,
     NoParent,
     ParentLine,
-    Proof,
-    ProofAsk,
-    ProofError,
     Reported,
     Snapshot,
+    Unread,
     check,
 )
 
+B = "abcdef0" + "2" * 33  # origin/main, the lane's base
+M = "abcdef3" + "3" * 33  # a later main commit, a merge's second parent
 J = "abcdef1" + "0" * 33  # the judged head: the lane's code commit
 H = "abcdef2" + "1" * 33  # PR #7's head: qc's status commit after J
 OTHER = "ffee" * 10
@@ -42,6 +44,33 @@ CHECK_OK: list[dict[str, object]] = [
     {"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"},
     {"__typename": "StatusContext", "context": "ci/x", "state": "SUCCESS"},
 ]
+CODE = frozenset({"app.py"})
+ONLY = frozenset({STATUS})
+
+
+def facts(*commits: tuple[str, str, frozenset[str] | Merge]) -> Git:
+    """The lane's git facts over origin/main at B: COMMITS oldest first, each (sha, subject, the
+    files it changes, or a merge's facts), each the next one's first parent (a merge's second:
+    M, on main); every lane diff the same (a merge of main moved none), the status file demo's."""
+    got: dict[str, Commit] = {}
+    walks: dict[str, tuple[str, ...]] = {}
+    prev, seen = B, list[str]()
+    for sha, subject, what in commits:
+        seen.append(sha)
+        got[sha] = (
+            Commit((prev, M), subject, merge=what)
+            if isinstance(what, Merge)
+            else Commit((prev,), subject, what)
+        )
+        walks[sha] = tuple(seen)
+        prev = sha
+    diffs: dict[str, dict[str, str]] = {c: {} for c in seen}
+    topo = tuple(reversed(seen))
+    return Git(
+        "origin/main", here=True, topo=topo, commits=got, walks=walks, diffs=diffs, status=ONLY
+    )
+
+
 REMOVE = (
     "remove it (the supervisor's close moves each ticket to done with the tracker skill's "
     "issue-done)"
@@ -98,7 +127,9 @@ LANE = Snapshot(
     specs={"demo": demo()},
     named=True,
     comments=[Comment(URL, verdict())],
-    proofs={ProofAsk(J, H): Proof(PROOF, ())},
+    git=facts(
+        (J, "feat: x", CODE), (H, f"qc: built acceptance-a acceptance-b (judged {J[:12]})", ONLY)
+    ),
 )
 
 
@@ -177,17 +208,14 @@ def sha(c: str) -> str:
 
 
 def lane(head: str, *commits: tuple[str, str], **o: str) -> Snapshot:
-    """PR #7 at HEAD, its COMMITS (newest first), the head proof from J giving no why, its
-    section the complete one with HEAD and that proof, and each of O."""
-    proof = f"{J[:12]} to {head[:12]}: qc status commits"
-    o = {"head": head[:12], "judged": proof, **o}
-    return replace(
-        LANE,
-        body=body(**o),
-        head=head,
-        commits=list(commits),
-        proofs={ProofAsk(J, head): Proof(proof, ())},
-    )
+    """PR #7 at HEAD, its COMMITS (newest first; J's changes app.py, each after it the status
+    file), its section the complete one with HEAD and the head proof's line from J, and each
+    of O."""
+    after = [c for c, sj in reversed(commits) if c != J and sj.startswith("qc: built")]
+    proof = f"{J[:12]} to {head[:12]}: qc status commits {' '.join(c[:12] for c in after)}"
+    o = {"head": head[:12], "judged": f"{proof} change only {STATUS}", **o}
+    chain = [(c, sj, CODE if c == J else ONLY) for c, sj in reversed(commits)]
+    return replace(LANE, body=body(**o), head=head, commits=list(commits), git=facts(*chain))
 
 
 def gaps_of(s: Snapshot) -> list[str]:
@@ -260,7 +288,12 @@ def test_merge_ask_rows_and_built() -> None:
     assert gaps_of(reset) == []
     qn = sha("6")
     assert gaps_of(lane(qn, (qn, "chore: status"), (J, "feat: x"))) == [
-        "Built: no `qc: built` commit on PR #7; run just qc on the lane head (docs/adr/0022)"
+        (
+            f"Judged: commit {qn[:12]} 'chore: status' after the judged head {J[:12]} is not a "
+            "`qc: built ... (judged <sha>)` commit: only just qc writes the status file; drop it, "
+            f"then run just qc and the review again, in parallel, on {qn[:12]}"
+        ),
+        "Built: no `qc: built` commit on PR #7; run just qc on the lane head (docs/adr/0022)",
     ]
 
 
@@ -450,9 +483,8 @@ def test_merge_ask_passes() -> None:
 
 
 def test_merge_ask_one_judged_head() -> None:
-    """One judged head (spec #lanes-one-head): the rows name one head, the head proof is asked
-    for it (Need) and its line is the section's Judged line; each why it gives is a gap."""
-    assert check(replace(LANE, proofs={})) == Need(ProofAsk(J, H))
+    """One judged head (spec #lanes-one-head): the rows name one head, the head proof's line for
+    it is the section's Judged line; each why it gives is a gap, a refusal its one."""
     assert gaps_of(replace(LANE, body=body(judged=""))) == [
         f"Judged: names ''; add the check's proof line `Judged: {PROOF}`"
     ]
@@ -465,11 +497,9 @@ def test_merge_ask_one_judged_head() -> None:
             "on one integrated head"
         )
     ]
-    why = f"commit {OTHER[:12]} 'feat: after qc' after the judged head {J[:12]} changes app.py"
-    no = replace(LANE, proofs={ProofAsk(J, H): Proof(None, (why,))})
-    assert gaps_of(no) == [f"Judged: {why}"]
-    refused = replace(LANE, proofs={ProofAsk(J, H): ProofError("base origin/main is not a commit")})
-    assert gaps_of(refused) == ["Judged: base origin/main is not a commit"]
+    outside = "--status /x/demo.status.json is outside this repo (/r): run merge-ask ..."
+    refused = replace(LANE, git=replace(LANE.git or facts(), status=Unread(outside)))
+    assert gaps_of(refused) == [f"Judged: {outside}"]
 
 
 N = sha("8")  # PR #8's head: a fix off main, no qc commit
@@ -495,7 +525,7 @@ def pr8(at: str = N, *after: tuple[str, str], **o: str) -> Snapshot:
         head=at,
         commits=[*after, (N, "fix: a rule")],
         comments=[Comment(URL8, verdict(N))],
-        proofs={ProofAsk(N, at): Proof(f"{N[:12]} is the PR head" if at == N else "P", ())},
+        git=facts((N, "fix: a rule", CODE), *((c, sj, Merge(onto=True)) for c, sj in after)),
     )
 
 
@@ -529,9 +559,12 @@ def test_merge_ask_no_criterion_lane() -> None:
     ]
     nm = sha("9")
     merged = pr8(nm, (nm, "Merge main"))
-    assert check(replace(merged, proofs={})) == Need(ProofAsk(N, nm))
-    assert gaps_of(merged) == ["Judged: missing; add the check's proof line `Judged: P`"]
-    assert gaps_of(pr8(nm, (nm, "Merge main"), judged="Judged: P")) == []
+    p = (
+        f"{N[:12]} to {nm[:12]}: no qc status commit; clean merge of main {nm[:12]}: lane diff "
+        "identical (0 files, sha256 e3b0c44298fc)"
+    )
+    assert gaps_of(merged) == [f"Judged: missing; add the check's proof line `Judged: {p}`"]
+    assert gaps_of(pr8(nm, (nm, "Merge main"), judged=f"Judged: {p}")) == []
 
 
 def test_merge_ask_criterion_claimed() -> None:
