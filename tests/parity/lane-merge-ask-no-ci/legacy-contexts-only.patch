@@ -1,0 +1,14 @@
+Seeded defect: branch protection's checks list is ignored, only its legacy contexts count.
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index 575dba8d..2e3a0e47 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -520,7 +520,7 @@ def _branch_required(branch: object) -> list[str]:
+     none (no protection.required_status_checks)."""
+     prot = cast("dict[str, object]", cast("dict[str, object]", branch)["protection"])
+     rsc = cast("dict[str, list[dict[str, object]]]", prot["required_status_checks"])
+-    return sorted({str(c) for c in rsc["contexts"]} | {str(c["context"]) for c in rsc["checks"]})
++    return sorted({str(c) for c in rsc["contexts"]})
+ 
+ 
+ def required_none(repo: str | None, p: Policy | Unread) -> str:
