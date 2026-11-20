@@ -174,7 +174,7 @@ caller owning no log is told so on stderr.
 herdr-close --park PANE
 ```
 
-`$lanes` is `$(octo-feather-state)/lanes`. Reads the parked line's fields only
+Reads the parked line's fields only
 from PANE's own Pi process, the foreground process `herdr pane process-info`
 names with a `--session-id` (#1001): the session from that argv, role and parent
 from that process's own environ (`OCTO_FEATHER_ROLE`, `OCTO_FEATHER_PARENT`),
@@ -190,9 +190,9 @@ scopes, the hand-started director), park closes PANE's tab, or its whole space
 when that tab is the space's only one (a supervisor in its own space), as
 `herdr-close` does (owned: its scope stopped; unowned: nothing swept, named
 `unowned=PANE`); the close report goes to stderr, nothing to stdout. A park records
-itself (when: comms spec `#roles-park`): its one parked line (fields: comms spec
-`#handoff-fields`, parked; which log: `octo-feather-handoff --help`, park, and
-`assets/herdr_scope.py`). A park no log takes is told so on stderr, with its line.
+itself (when: comms spec `#roles-park`): its one parked line, in the log that line belongs in
+(fields: comms spec `#handoff-fields`, parked; which log: `octo-feather-handoff --help`, park,
+and `assets/herdr_scope.py`). A park no log takes is told so on stderr, with its line.
 Refused, nothing closed: not idle or done, 75; no Pi
 process with a `herdr-spawn` session (a `--session-id` and the matching
 `OCTO_FEATHER_SESSION_ID`), 65; macOS (no `/proc`), 69; a Herdr answer that
@@ -210,7 +210,8 @@ octo-feather-handoff attempt --ended-unreported "$lanes/<lane>.handoffs.jsonl" P
 herdr-spawn ...                        # the replacement, a fresh session
 ```
 
-The attempt reads the old session from the spawn line `herdr-spawn` recorded
+`$lanes` is `$(octo-feather-state)/lanes`. The attempt reads the old session from the spawn
+line `herdr-spawn` recorded
 (`herdr-spawn --help`); its refusals: `octo-feather-handoff --help`. The
 line's fields: comms spec `#handoff-fields`.
 
