@@ -26,10 +26,12 @@ already closed. Space ids `zt*`, which no real Herdr gives."""
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -48,6 +50,11 @@ def herdr_world(s: Scratch, agents: dict[str, dict[str, object]] | None = None) 
     d = s.root / "herdr"
     d.mkdir()
     (d / "agents.json").write_text(json.dumps(agents or {}))
+    return herdr_env(s, d)
+
+
+def herdr_env(s: Scratch, d: Path) -> Path:
+    """S's env on the Herdr world in D (herdr_world): D."""
     for k in [k for k in s.env if k.startswith(("HERDR_", "OCTO_FEATHER_"))]:
         del s.env[k]
     s.env["FAKE_HERDR"] = str(d)
@@ -478,7 +485,26 @@ def drop(d: Path, pane: str) -> None:
 def supervised(s: Scratch) -> tuple[Path, dict[str, str], dict[str, str]]:
     """Director w0:p1; lane gh7's supervisor started by octo-feather-start, its lane record
     naming it (with other keys and a comment), and its implementer spawned through herdr-spawn,
-    the spawn line in the lane log. The Herdr world, the supervisor's start and the worker's env."""
+    the spawn line in the lane log. The Herdr world, the supervisor's start and the worker's env.
+    Built once per gate run (build_supervised) and copied here, its paths moved to S's root (the
+    tabs' env, the logs' cwd), as several items start from it."""
+    s.prepare("herdr-supervised", build_supervised)
+    got = json.loads((s.root / "supervised.json").read_text())
+    if got["root"] != str(s.root):
+        old, new = got["root"].encode(), str(s.root).encode()
+        for f in s.root.rglob("*"):
+            if f.is_file() and not f.is_symlink() and old in (b := f.read_bytes()):
+                f.write_bytes(b.replace(old, new))
+        got = json.loads((s.root / "supervised.json").read_text())
+    d = herdr_env(s, s.root / "herdr")
+    s.env["HERDR_SESSION"] = got["session"]
+    return d, got["sup"], got["worker"]
+
+
+def build_supervised(s: Scratch) -> None:
+    """supervised's world in S, with supervised.json: S's root, its Herdr session, the
+    supervisor's start and the worker's env. Its tabs' shells (each a process Herdr names for a
+    pane, alive while S's Herdr dir is) ended and unnamed: a copy's own Herdr starts its own."""
     d = herdr_world(s, {"w0:p1": agent("w0:p1", "director", "idle")})
     s.env["HERDR_SESSION"] = f"parent-{os.getpid()}"  # only this scenario's processes count
     s.identity()
@@ -492,7 +518,15 @@ def supervised(s: Scratch) -> tuple[Path, dict[str, str], dict[str, str]]:
     spawn = [str(ASSETS / "herdr-spawn"), "--workspace", sup["workspace"], "--name"]
     spawn += ["implementer-gh7", "--label", "gh7", "--role", "implementer", "--cwd", str(s.root)]
     worker = dict(x.split("=", 1) for x in s.run(spawn, env=tab_env(d, sup["pane"])).out.split())
-    return d, sup, tab_env(d, worker["pane"])
+    got = {"root": str(s.root), "session": s.env["HERDR_SESSION"], "sup": sup}
+    got["worker"] = tab_env(d, worker["pane"])
+    agents = json.loads((d / "agents.json").read_text())
+    for g in agents.values():
+        if isinstance(pid := g.pop("shell_pid", None), int):
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(pid, signal.SIGKILL)
+    (d / "agents.json").write_text(json.dumps(agents))
+    (s.root / "supervised.json").write_text(json.dumps(got))
 
 
 def parent_resumed(s: Scratch) -> None:
