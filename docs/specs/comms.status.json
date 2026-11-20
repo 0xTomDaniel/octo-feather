@@ -116,6 +116,18 @@
       "status": "built",
       "pr": 49
     },
+    "acceptance-close-line": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-park-line": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-close-no-log": {
+      "status": "planned",
+      "pr": null
+    },
     "acceptance-report-lanes": {
       "status": "built",
       "pr": 252
