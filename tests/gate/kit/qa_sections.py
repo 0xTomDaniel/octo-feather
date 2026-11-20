@@ -696,6 +696,18 @@ def tail(q: Qa) -> None:
     jl("(pi exit 3)")
 
 
+def declared(s: Scratch) -> None:
+    """tests/qa-declared.sh: the dec suite's runs the watcher's timeout stops (suite timeout_s 8),
+    through the command (the other dec cases: test_qa_grading.py)."""
+    q = Qa(s)
+    want = [w for w in data.declared(q) if w.line in ("FAIL dec/early", "FAIL dec/earlyrb")]
+    q.run(1, Q, "--evals", str(s.root / "dec"), "--case", "early", "--case", "earlyrb")
+    q.check(want)
+    say(
+        "qa-declared: ok (declared stopped early by the timeout, a skill_read_before target never reached fails)"
+    )
+
+
 def blob(q: Qa, data: bytes) -> str:
     """git's blob id of DATA (git hash-object --stdin)."""
     p = subprocess.run(
@@ -1918,6 +1930,28 @@ def events_with(p: Path, mark: str) -> list[object]:
     return [load_text(x) for x in p.read_text().splitlines() if mark in x]
 
 
+def rt_targets(s: Scratch) -> None:
+    """tests/qa-rt-targets.sh: the rt suite's case declared, test_write by the spec fixture's
+    declared tests, behind the slow test runner (Qa), through the command (the other rt cases:
+    test_qa_grading.py)."""
+    q, t = Qa(s), s.root
+    q.rt()
+    q.run(0, Q, "--evals", str(t / "rt"), "--case", "declared")
+    q.check([w for w in data.rt_targets()[0] if w.line == "PASS rt/declared"])
+    d = q.last() / "rt"
+    ms = [at(e, "marks") for e in events_with(d / "declared" / "transcript.jsonl", '"qa_fs"')]
+    assert ms == [["edit"], ["edit"], ["edit", "test_write"]], (
+        ms
+    )  # tests/README.md, tests/test_y.py, specs/cli_check.py
+    g3 = seq(at(load(d / "declared" / "grading.json"), "facts"))[0]
+    assert at(g3, "status") == "pass", g3
+    assert (
+        "first test_write at tool call 5 of 5 (bash echo 'def test_c(): pass' > specs/cli_check.py)"
+        in str(at(g3, "evidence"))
+    ), g3
+    say("qa-rt-targets: ok (test_write by a fixture's declared tests, behind a slow test runner)")
+
+
 def rt(s: Scratch) -> None:
     """tests/qa-rt.sh."""
     q, t = Qa(s), s.root
@@ -2392,5 +2426,5 @@ def shape_facts(q: Qa) -> None:
 
 if __name__ == "__main__":
     skip_on_macos()
-    main(qa, baseline, before_tool, bench, fixture_base, history, isolation, judgment_shape, kit_ref,
-         ran, review, rt, runs, shape)  # fmt: skip
+    main(qa, baseline, before_tool, bench, declared, fixture_base, history, isolation, judgment_shape,
+         kit_ref, ran, review, rt, rt_targets, runs, shape)  # fmt: skip
