@@ -237,6 +237,7 @@ PANE = {"name": "implementer-gh1", "pane_id": "w1:p1", "workspace_id": "w1", "ta
 PANE["label"] = "gh1"
 PEER = {"name": "gh1", "pane_id": "w1:p9", "workspace_id": "w1", "tab_id": "w1:t9"}
 TAB_ENV = {"OCTO_FEATHER_ROLE": "implementer", "OCTO_FEATHER_PARENT": "w1:p9"}
+PEER_ENV = {"HERDR_PANE_ID": "w1:p9"}  # the caller: lane gh1's supervisor
 
 
 def read_pid(f: Path) -> int:
@@ -256,8 +257,17 @@ def foreign(s: Scratch) -> subprocess.Popen[bytes]:
 
 
 def park(s: Scratch, want: int = 0) -> tuple[str, str]:
-    ran = s.run([str(ASSETS / "herdr-close"), "--park", "w1:p1"], want=want)
-    return ran.out, ran.err
+    """`herdr-close --park w1:p1` from its supervisor w1:p9, lane gh1's in S's state: the parked
+    line it appended to the lane log ('' for none; stdout carries none), and stderr."""
+    lanes = s.home / ".local" / "state" / "octo-feather" / "lanes"
+    lanes.mkdir(parents=True, exist_ok=True)
+    (lanes / "gh1.toml").write_text('issue = "1"\nsupervisor = "w1:p9"\n')
+    log = lanes / "gh1.handoffs.jsonl"
+    before = log.read_text() if log.is_file() else ""
+    ran = s.run([str(ASSETS / "herdr-close"), "--park", "w1:p1"], env=PEER_ENV, want=want)
+    assert not ran.out, ran.out
+    after = log.read_text() if log.is_file() else ""
+    return after.removeprefix(before).strip(), ran.err
 
 
 def parked_ok(line: str, wt: Path) -> dict[str, str]:
@@ -321,11 +331,11 @@ def park_owned(s: Scratch) -> None:
 
 
 def resume(s: Scratch, d: Path, line: dict[str, str]) -> str:
-    """LINE in the director log: herdr-say to its name resumes it with its session; its pane."""
-    state = s.home / ".local" / "state" / "octo-feather"
-    state.mkdir(parents=True)
-    (state / "director.handoffs.jsonl").write_text(json.dumps(line) + "\n")
+    """LINE in the lane log, where park appended it: herdr-say --parked finds it, and herdr-say to
+    its name resumes it with its session; its pane."""
     s.identity()
+    found = s.run([str(ASSETS / "herdr-say"), "--parked", "implementer-gh1"]).out
+    assert json.loads(found) == line | {"lane": "gh1"}, found
     said = s.run([str(ASSETS / "herdr-say"), "implementer-gh1", "go on"]).out
     resumed = said.removeprefix("pane=").split()[0]
     g = json.loads((d / "agents.json").read_text())[resumed]

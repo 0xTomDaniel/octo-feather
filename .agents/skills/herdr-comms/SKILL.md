@@ -171,8 +171,7 @@ caller owning no log is told so on stderr.
 ## Park an idle agent
 
 ```
-herdr-close --park PANE >>"$lanes/<lane>.handoffs.jsonl"
-herdr-close --park PANE >>"$(octo-feather-state)/director.handoffs.jsonl"   # the director's own general worker
+herdr-close --park PANE
 ```
 
 `$lanes` is `$(octo-feather-state)/lanes`. Reads the parked line's fields only
@@ -190,10 +189,11 @@ end it, then park. With none, and for an unowned pane (no scope: spawned before
 scopes, the hand-started director), park closes PANE's tab, or its whole space
 when that tab is the space's only one (a supervisor in its own space), as
 `herdr-close` does (owned: its scope stopped; unowned: nothing swept, named
-`unowned=PANE`), and prints one parked line (`at kind pane name role cwd session
-label parent`) on stdout, even when the close fails; the close report goes to
-stderr. The parker appends the line to the log comms spec `#roles-park` names
-(the two commands above). Refused, nothing closed: not idle or done, 75; no Pi
+`unowned=PANE`); the close report goes to stderr, nothing to stdout. A park records
+itself (when: comms spec `#roles-park`): its one parked line (fields: comms spec
+`#handoff-fields`, parked; which log: `octo-feather-handoff --help`, park, and
+`assets/herdr_scope.py`). A park no log takes is told so on stderr, with its line.
+Refused, nothing closed: not idle or done, 75; no Pi
 process with a `herdr-spawn` session (a `--session-id` and the matching
 `OCTO_FEATHER_SESSION_ID`), 65; macOS (no `/proc`), 69; a Herdr answer that
 fails or is malformed, as `herdr-close` (`assets/herdr_scope.py`, park).
