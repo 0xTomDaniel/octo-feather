@@ -13,5 +13,5 @@ Every merge was the owner's gate. Of 15 merge asks on 18 and 19 November 2026, 7
 
 - A merge ask the owner never saw can land a mistake; the digest and the veto, which opens a lane, are how he reaches it within a day.
 - A ruling the owner gives must be written where a call can link it, or the call waits for him again.
-- Lane start depends on the model route passing the provider's usage headers through; without a reading no lane starts.
+- Lane start depends on the model route passing the provider's usage headers through; without a reading the brake is off, and lanes start as if there were none.
 - Until the kit's watchdog exists, nothing resumes lane starts after the weekly reset by itself.
