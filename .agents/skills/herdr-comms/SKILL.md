@@ -163,6 +163,11 @@ Prints `tab= tab_close_rc= killed=` or `space= space_close_rc= killed=`
 (`killed=` the scopes' members when stopped), plus `unowned=PANE[,PANE...]`
 when any, and exits with the close status.
 
+A close records itself (when: comms spec `#roles-park`): one `close` line per agent closed,
+in the caller's own hand-off log (fields: comms spec `#handoff-fields`, close; which log and
+how each field is read: `octo-feather-handoff --help`, close, and `assets/herdr_scope.py`). A
+caller owning no log is told so on stderr.
+
 ## Park an idle agent
 
 ```

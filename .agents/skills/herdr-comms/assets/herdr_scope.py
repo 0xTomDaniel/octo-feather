@@ -13,7 +13,11 @@ Herdr's own exit when it fails. Closing the tab is the caller's.
 
 close TAB|SPACE (herdr-close's plain close): prints `tab=|space=ID ..._close_rc=RC killed=N
 [unowned=PANE,...]` and exits RC, Herdr's close status. A Herdr answer that fails or breaks the
-shape below stops it before anything is closed: Herdr's exit, or 76 for a malformed one.
+shape below stops it before anything is closed: Herdr's exit, or 76 for a malformed one. Before
+the close it reads each closed pane's agent (its name from `herdr agent get`, its role and
+session from its Pi process, as park reads them); once Herdr's close succeeded, it hands them to
+`octo-feather-handoff close --caller HERDR_PANE_ID`, and names on stderr a caller owning no log
+(the rule: herdr-comms SKILL.md, Close an agent or a lane space).
 
 park PANE (herdr-close --park): prints the parked line on stdout and close's report on stderr,
 and exits close's status; what it reads and its refusals: herdr-comms SKILL.md, Park an idle
@@ -310,12 +314,17 @@ def adopt(pane: str) -> int:
     return REFUSED
 
 
+def members(target: str) -> list[Pane]:
+    """The panes TARGET, a tab (with a colon) or a space, holds."""
+    shown = panes(target.split(":", 1)[0])
+    return [p for p in shown if ":" not in target or p.tab_id == target]
+
+
 def close(target: str, out: TextIO = sys.stdout) -> int:
     """Close TARGET through Herdr, then stop its panes' agent scopes (module docstring); the
     report on OUT."""
     kind = "tab" if ":" in target else "space"
-    workspace = target.split(":", 1)[0]
-    shown = [p for p in panes(workspace) if kind == "space" or p.tab_id == target]
+    shown = members(target)
     scopes: list[str] = []
     unowned: list[str] = []
     for p in shown:
@@ -444,6 +453,57 @@ def park(pane: str) -> int:
     return rc
 
 
+def agent_name(pane: str) -> str:
+    """The name Herdr gives PANE's agent, '' when it has none or finds no agent there."""
+    try:
+        answer = herdr("agent", "get", pane)
+    except HerdrFailedError as e:
+        if "agent_not_found" in str(e):
+            return ""
+        raise
+    where = f"herdr agent get {pane}"
+    got = result(answer, where, "agent_info", "agent", typed=False)
+    got = record(got, f"{where}: result.agent", AGENT_FIELDS, set())
+    name = got.get("name")
+    if name is not None and not isinstance(name, str):
+        msg = f"{where}: result.agent.name: not a string or null"
+        raise BadAnswerError(msg)
+    return name or ""
+
+
+def close_recorded(target: str) -> int:
+    """herdr-close's plain close, recorded in the caller's own hand-off log (module docstring)."""
+    me = os.environ.get("HERDR_PANE_ID", "")
+    agents: list[dict[str, str]] = []
+    for p in members(target) if me else []:
+        got = pi_session(process_info(p.pane_id))
+        role = environ(got[0].pid).get("OCTO_FEATHER_ROLE", "") if got else ""
+        fields = {"pane": p.pane_id, "name": agent_name(p.pane_id), "role": role}
+        agents.append(fields | {"session": got[1] if got else ""})
+    rc = close(target)
+    if rc != 0:
+        return rc
+    rc_log = 65
+    if me:
+        handoff = [str(Path(__file__).resolve().parents[4] / "scripts" / "octo-feather-handoff")]
+        lines = "".join(json.dumps(x) + "\n" for x in agents)
+        log = subprocess.run(
+            [*handoff, "close", "--caller", me], input=lines, text=True, check=False
+        )
+        rc_log = log.returncode
+    if rc_log == 65:  # noqa: PLR2004 (octo-feather-handoff close: the caller owns no log)
+        who = f"pane {me}" if me else "the caller (no HERDR_PANE_ID)"
+        sys.stderr.write(
+            f"herdr-close: no hand-off log recorded this close: {who} owns none (no lane record's"
+            " supervisor, not director.toml's pane)\n"
+        )
+    elif rc_log != 0:
+        sys.stderr.write(
+            "herdr-close: close not recorded in the caller's hand-off log (error above); closed\n"
+        )
+    return rc
+
+
 def main() -> int:
     if len(sys.argv) != 3 or sys.argv[1] not in ("adopt", "close", "park"):  # noqa: PLR2004
         sys.stderr.write(__doc__ or "")
@@ -453,7 +513,7 @@ def main() -> int:
         ("herdr-spawn", "not started") if verb == "adopt" else ("herdr-close", "nothing closed")
     )
     try:
-        return {"adopt": adopt, "close": close, "park": park}[verb](arg)
+        return {"adopt": adopt, "close": close_recorded, "park": park}[verb](arg)
     except HerdrFailedError as e:
         sys.stderr.write(f"{who}: {e}; {after}\n")
         return e.rc
