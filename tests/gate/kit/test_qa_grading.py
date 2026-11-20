@@ -53,6 +53,7 @@ def test_qa_declared(q: Qa) -> None:
     graded_check(runs, wants)
 
 
+@pytest.mark.e2e
 @pytest.mark.criterion("quality#acceptance-qa-per-case", "quality#acceptance-qa-role-cases")
 def test_qa_declared_timeout(q: Qa) -> None:
     """A run the watcher's timeout stops (a real wait: suite timeout_s 8; why no time seam: #1089):
