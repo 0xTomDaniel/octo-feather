@@ -31,6 +31,22 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
       pass on a clean tree (record); a test item changed since the map head always runs. A changed
       file no recorded coverage reaches that the list names, or that is absent at the map head (the
       map cannot know it), runs every non-e2e item.
+  octo-feather-gate changed
+      The test items the change adds or changes, one pytest argument per line: a tests/*.sh as its
+      test_gate.py node id, any other changed file as its path (a pytest item's file); test_gate.py
+      itself is no item's; a test file (test_*.py) that directly imports a changed in-repo file
+      is named too (one level, by ast: a kit scenario NAME.py names test_NAME.py; imports are
+      resolved from the dirs holding test files or a conftest.py, never the configured
+      pythonpath, scripts/). Its misses: a file reached only through another import (testkit, as
+      a scenario imports it), and what a test runs by path, never imports: tests/lib/*
+      (prepared.py, its .sh helpers), fixtures, a tests/*.sh item's helpers. Changed: differing
+      from the merge base of HEAD with the default branch, to the working tree, untracked files
+      too: the change's net changes, so a file changed and restored is none, the same on CI (a
+      checkout with the default branch's history). The default branch from local refs, no
+      network: origin/HEAD; else origin/<name>, then the local <name>, for init.defaultBranch,
+      main, master. None found: none judged. Where from on stderr. Not select's diff base, which
+      is for selection. The gate's per-test CPU budget reads it (tests/gate/conftest.py; quality
+      #acceptance-test-cpu-budget).
   octo-feather-gate map DATA_DIR --junit FILE
       In the kit, under its uv venv (coverage): writes the coverage map from a mapping run's data
       (just fast-map), one coverage data dir per gate item, DATA_DIR/<item>/ (<item> GATE_ITEM: a
@@ -67,6 +83,7 @@ tool. Stdlib only, but map, which reads coverage data.
 from __future__ import annotations
 
 import argparse
+import ast
 import datetime as dt
 import hashlib
 import json
@@ -345,6 +362,73 @@ def diff_base(at: str) -> str:
             f"newer than the map at {at[:12]}: only changes past it select",
         )
     return best[1]
+
+
+def default_branch() -> str | None:
+    """The default branch's ref, from local refs only (no network): origin/HEAD as the clone or
+    `git remote set-head` left it; else, for init.defaultBranch, main and master in turn, origin's
+    remote-tracking branch (a CI checkout's), then the local branch."""
+    head = git("symbolic-ref", "-q", "refs/remotes/origin/HEAD", check=False).strip()
+    if head:
+        return head
+    names = [git("config", "init.defaultBranch", check=False).strip(), "main", "master"]
+    for n in filter(None, names):
+        for ref in (f"refs/remotes/origin/{n}", f"refs/heads/{n}"):
+            if ok("rev-parse", "--verify", "-q", ref):
+                return ref
+    return None
+
+
+def imported(root: Path, test: str, dirs: list[str]) -> set[str]:
+    """The in-repo files TEST imports directly (ast, one level, imports anywhere in it), each module
+    resolved as pytest's prepend import mode finds it: TEST's own dir first, then DIRS, every dir
+    holding a test file or a conftest.py; the configured pythonpath (the kit's scripts/, product
+    modules) is left out."""
+    try:
+        tree = ast.parse((root / test).read_text(encoding="utf-8"))
+    except (OSError, SyntaxError, ValueError):
+        return set()
+    names = {
+        a.name.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names
+    }
+    names |= {
+        n.module.split(".")[0]
+        for n in ast.walk(tree)
+        if isinstance(n, ast.ImportFrom) and n.module and not n.level
+    }
+    out: set[str] = set()
+    for m in names:
+        for d in (str(Path(test).parent), *dirs):
+            hit = [
+                f for f in (Path(d, f"{m}.py"), Path(d, m, "__init__.py")) if (root / f).is_file()
+            ]
+            if hit:
+                out.add(hit[0].as_posix())
+                break
+    return out
+
+
+def changed_items() -> None:
+    """The test items the change adds or changes (--help, changed), as pytest arguments."""
+    ref = default_branch() if ok("rev-parse", "--verify", "-q", "HEAD") else None
+    base = git("merge-base", "HEAD", ref, check=False).strip() if ref else ""
+    if not base:
+        sys.stderr.write("changed: none judged: no default branch or no merge base with it\n")
+        return
+    files = changed_since(base) - {NODE[:-2]}
+    root = Path(git("rev-parse", "--show-toplevel").strip())
+    listed = lines(git("ls-files", "--cached", "--others", "--exclude-standard"))
+    tests = [f for f in listed if re.fullmatch(r"(.*/)?test_[^/]*\.py", f) and f != NODE[:-2]]
+    dirs = sorted(
+        {str(Path(f).parent) for f in listed if re.fullmatch(r"(.*/)?(test_|conftest)[^/]*\.py", f)}
+    )
+    files |= {t for t in tests if (root / t).is_file() and imported(root, t, dirs) & files}
+    out = [
+        f"{NODE}test_script[{f}]" if re.fullmatch(r"tests/[^/]*\.sh", f) else f
+        for f in sorted(files)
+    ]
+    sys.stderr.write(f"changed: {len(out)} files since {base[:12]}, the merge base with {ref}\n")
+    sys.stdout.write("".join(f"{i}\n" for i in out))
 
 
 def beyond_map(at: str, base: str, unreached: list[str]) -> str:
@@ -676,6 +760,7 @@ def main() -> int:
     g = sub.add_parser("config")
     g.add_argument("rev", nargs="?", default="HEAD")
     sub.add_parser("select")
+    sub.add_parser("changed")
     m = sub.add_parser("map")
     m.add_argument("data", type=Path)
     m.add_argument("--junit", type=Path, required=True)
@@ -699,6 +784,8 @@ def main() -> int:
         sys.stdout.write(json.dumps(identity(rev)) + "\n")
     elif a.cmd == "select":
         select()
+    elif a.cmd == "changed":
+        changed_items()
     else:
         build_map(a.data, a.junit)
     return 0
