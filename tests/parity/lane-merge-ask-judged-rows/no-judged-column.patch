@@ -1,0 +1,14 @@
+Seeded defect: a criterion table with no judged column is read as the table.
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index eebfe2b6..59acc1c8 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -389,7 +389,7 @@ def criteria(  # noqa: C901, PLR0912  one branch per row gap, in the order print
+             i
+             for i, ln in enumerate(lines)
+             if re.fullmatch(
+-                r"\|\s*criterion\s*\|\s*qc verdict\s*\|\s*judged\s*\|\s*evidence\s*\|",
++                r"\|\s*criterion\s*\|\s*qc verdict\s*\|\s*(?:judged\s*\|\s*)?evidence\s*\|",
+                 ln.strip(),
+                 re.IGNORECASE,
+             )

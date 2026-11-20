@@ -1,0 +1,14 @@
+Seeded defect: the plan's 403 on rules/branches (no ruleset can be in force) refuses instead of passing (--help, merge-ask Checks line).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index 575dba8d..fcd5ae9b 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -542,7 +542,7 @@ def required_none(repo: str | None, p: Policy | Unread) -> str:
+         )
+         raise _Gap(msg) from e
+     rules, why = p.rules or (None, "not read")
+-    if why == f"gh: {NO_RULESETS} (HTTP 403)":
++    if why == f"gh: {NO_RULESETS}":
+         rsrc = (
+             f"gh api {shown}/rules/branches/{base}: rulesets unavailable on this plan, "
+             "none in force"

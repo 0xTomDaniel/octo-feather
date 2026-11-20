@@ -17,10 +17,13 @@ prints {"result": "delivered"}; `agent prompt P ...` to any other P fails `pane_
 With FAKE_HERDR set, it stands for Herdr's agents instead (#666): a world in that dir, each call one
 line in its `log`. `agents.json` maps each pane id to its agent, {name, pane_id, workspace_id,
 tab_id, agent_status}, and `ready_at` (an epoch time: `unknown` until then, a Pi still booting);
-a scenario may write it. `tab create --workspace W [--label L] [--env K=V]...` makes tab W:tN,
-pane W:pN (N past every earlier tab's), keeping L and the env (its agent's `label`, `env`);
+a scenario may write it. `tab create --workspace W [--label L] [--cwd D] [--env K=V]...` makes tab
+W:tN, pane W:pN (N past every earlier tab's), keeping L, D and the env (its agent's `label`, `cwd`,
+as Herdr's AgentInfo names the pane's working directory, and `env`);
 `workspace create --label L` makes workspace wN, N past every agent's workspace, its seed tab
-made as a tab create's (Herdr's envelope: workspace.workspace_id, tab.tab_id);
+made as a tab create's (Herdr's envelope: workspace.workspace_id, tab.tab_id), its label kept in
+`workspaces.json` (workspace id to label; a scenario may write it); `workspace list` lists each
+workspace an agent is in, {workspace_id, label, tab_count}, as octo-feather-start reads it;
 `tab get T` prints T's label; `tab close T` drops T's agents; `workspace close W` drops W's agents,
 `workspace get W` finds W while an agent is in it, with its tab count, as Herdr 0.9.5 prints it
 (else workspace_not_found on stderr, exit 1, as does a close of it);
@@ -48,6 +51,10 @@ TEXT typed, unsent (a line in `typed`), `agent_prompt_stalled`; any other gets i
 "PANE<TAB>TEXT" in `prompts`): an idle one turns working, then idle, so the wait matches; a
 working one (busy, as #619 saw it) never matches, so the wait ends only at --timeout
 (`timeout`), else never.
+Induced once each, the file then removed: a file `prompt-down` refuses the next prompt as Herdr
+refuses a blocked agent (`agent_blocked`, nothing sent); a file `prompt-timeout` has the next
+prompt to a found agent submitted (a line in `prompts`) and its wait end at once in `timeout`, as
+a target Herdr never saw start a turn.
 An agent holding `compacting_until` (an epoch time) is a Pi compacting until then: a prompt to it
 is queued, not submitted (a line in `queued`), Herdr seeing no turn start (`agent_prompt_stalled`),
 and `agent read` shows Pi's compaction line and each queued text as Pi does (`Steering: TEXT`);
@@ -177,6 +184,8 @@ class World:
         self.agents[pane] = {"name": "", "pane_id": pane, "workspace_id": w, "tab_id": tab}
         self.agents[pane]["agent_status"] = "none"
         self.agents[pane]["label"] = next(iter(opts(a, "--label")), "")
+        if cwd := opts(a, "--cwd"):
+            self.agents[pane]["cwd"] = cwd[0]
         self.agents[pane]["env"] = dict(kv.split("=", 1) for kv in opts(a, "--env"))
         self.save()
         return pane, tab
@@ -186,6 +195,9 @@ class World:
         ws = [str(g["workspace_id"])[1:] for g in self.agents.values()]
         w = f"w{max((int(x) for x in ws if x.isdigit()), default=0) + 1}"
         _, tab = self.tab(w, a)
+        labels = self.dir / "workspaces.json"
+        known: dict[str, str] = json.loads(labels.read_text()) if labels.exists() else {}
+        labels.write_text(json.dumps(known | {w: next(iter(opts(a, "--label")), "")}))
         return say({"workspace": {"workspace_id": w}, "tab": {"tab_id": tab}})
 
     def tab_get(self, a: list[str]) -> int:
@@ -245,6 +257,18 @@ class World:
             fg.append({"pid": pi, "name": name, "argv": argv, "argv0": argv[0], "cwd": cwd})
         info = {"pane_id": p[0], "shell_pid": g["shell_pid"], "foreground_processes": fg}
         return say({"process_info": info, "type": "pane_process_info"})
+
+    def workspace_list(self, _: list[str]) -> int:
+        labels = self.dir / "workspaces.json"
+        known: dict[str, str] = json.loads(labels.read_text()) if labels.exists() else {}
+        tabs: dict[str, set[object]] = {}
+        for g in self.agents.values():
+            tabs.setdefault(str(g["workspace_id"]), set()).add(g["tab_id"])
+        spaces = [
+            {"workspace_id": w, "label": known.get(w, ""), "tab_count": len(t)}
+            for w, t in tabs.items()
+        ]
+        return say({"type": "workspace_list", "workspaces": spaces})
 
     def workspace(self, a: list[str]) -> int:
         """`workspace get|close W`."""
@@ -351,6 +375,18 @@ class World:
             return fail("timeout")
         return say({"agent_status": "idle"})
 
+    def prompt_induced(self, a: list[str]) -> int:
+        """`agent prompt` failing as a scenario induced (module docstring), else agent_prompt."""
+        down, late = self.dir / "prompt-down", self.dir / "prompt-timeout"
+        if down.exists():
+            down.unlink()
+            return fail("agent_blocked")
+        if late.exists() and (g := self.find(a[2])):
+            late.unlink()
+            self.note("prompts", f"{g['pane_id']}\t{a[3]}")
+            return fail("timeout")
+        return self.agent_prompt(a)
+
     def agent_list(self) -> int:
         told = self.dir / "list-answer"
         if told.exists():
@@ -388,11 +424,12 @@ class World:
             ("pane", "process-info"): self.process_info,
             ("workspace", "close"): self.workspace,
             ("workspace", "get"): self.workspace,
+            ("workspace", "list"): self.workspace_list,
             ("workspace", "create"): self.workspace_create,
             ("agent", "start"): self.agent_start,
             ("agent", "get"): self.agent_get,
             ("agent", "wait"): self.agent_wait,
-            ("agent", "prompt"): self.agent_prompt,
+            ("agent", "prompt"): self.prompt_induced,
             ("agent", "read"): self.agent_read,
             ("integration", "install"): self.integration_install,
         }

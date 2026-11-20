@@ -1,0 +1,14 @@
+Seeded defect: a line merely starting with the pr-line (Closes #60 for Closes #6) counts as the parent line (spec #gates-pr-line).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index 38e44c8f..b2a80682 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -98,7 +98,7 @@ def parent_line(s: Snapshot) -> list[str]:
+         ln
+         for ln in lines
+         if ln == want
+-        or (ln.startswith(want) and not re.match(r"[\w-]", ln[len(want) : len(want) + 1]))
++        or ln.startswith(want)
+     ]
+     out = (
+         []
