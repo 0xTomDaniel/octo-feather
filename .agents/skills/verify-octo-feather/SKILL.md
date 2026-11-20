@@ -53,6 +53,7 @@ What each key means and how its commands run: `schemas/qc.v2.schema.json`. Valid
 
 - runs `bin/kit <command>` with cwd an empty `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/cwd/<case>`, the `just` recipes as `just --justfile <kit>/justfile <recipe> ...`, in the environment the helper's `case_env` gives every command a drive runs (what it drops and why: its docstring);
 - writes `<case>.cmd` (the command as typed, with any scratch env or `unshare` wrapper), `<case>.stdout`, `<case>.stderr`, `<case>.exit`, `<case>.files` (files left in its cwd; must be empty), `<case>.kit-status` (change to the kit's `git status`; must be empty) and `<case>.obs.<key>` (facts observed after it) to `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/<feature>/`;
+- a drive stopped by an error fails and records like any other (the line it appends: the helper's `cmd_drive`);
 - appends `PASS|FAIL <case>: <cmd>` to `<feature>/summary.txt` and prints it with the case's stdout, stderr and exit code; the summary's last line is `PASS|FAIL <feature>`, or `PASS-with-unreachable <feature> (unreachable: <step>...)` when every case passed and a step this box cannot reach was printed and recorded as `UNREACHABLE <step>: <prerequisite and route attempted>`.
 
 To drive one command by hand, the same way: after `launch`, `cd "$(mktemp -d)" && <run state>/bin/kit octo-feather-contract <kit>; echo "exit $?"`. Keep scratch only: a DEST under `/tmp`, `XDG_STATE_HOME` under the run state for commands that write box state, `unshare -Un --map-current-user` before anything that would reach `gh` or the network.

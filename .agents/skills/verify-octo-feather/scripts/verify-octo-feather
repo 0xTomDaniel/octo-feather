@@ -22,6 +22,7 @@ import shutil
 import statistics
 import subprocess
 import sys
+import traceback
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -1367,6 +1368,9 @@ def drive_shape(f: Feature) -> None:
         for n in (*kit_skills, *ext_skills, "home-decoy"):
             (d / n).mkdir(parents=True)
             (d / n / "SKILL.md").write_text(f"---\nname: {n}\ndescription: A home decoy; never offered.\n---\nBody.\n")
+    # The shaper commits: its factory commit identity, set once in the scratch state as an owner sets it on a box (#665).
+    subprocess.run([f.s.kit, "pi-role", "--set-identity", "verify-octo-feather", "verify@octo-feather.invalid"],
+                   env=case_env({"XDG_STATE_HOME": str(sc / "state")}), capture_output=True, check=True)
     port = "8765"  # the namespace is private: no other listener can hold it
     (agent / "models.json").write_text(json.dumps({"providers": {"fake": {
         "baseUrl": f"http://127.0.0.1:{port}/v1", "api": "openai-completions", "apiKey": "x", "models": [{"id": "fake"}]}}}) + "\n")
@@ -1560,12 +1564,18 @@ def drive_qc_insufficient(f: Feature) -> None:
     say(f"qc-insufficient evidence: {f.d}")
 
 
-# A scratch target's launcher: answers `pi-role --json agents/<role>.md` with one launched skill (s) and extension
-# (e.ts) in the repo, as octo-feather-qa --verdict asks it (--help, Verdict).
-STAND_IN_PI_ROLE = """#!/bin/sh
-top=$(cd "$(dirname "$0")/.." && pwd -P)
-printf '{"args": ["--extension", "%s/extensions/e.ts", "--skill", "%s/.agents/skills/s"]}\\n' "$top" "$top"
-"""
+# A scratch target's role, launching one skill (s) and extension (e.ts) in the repo, with the tracker skill pi-role
+# needs. Its scripts/pi-role is a link to the kit's real one (launcher), so whatever octo-feather-qa --verdict asks
+# of it (--help, Verdict) the real tool answers.
+ROLE_FILES = (("agents/worker.md", "---\nname: worker\ndescription: the worker\nskills: s\nextensions: e.ts\n---\nthe worker role\n"),
+              ("extensions/e.ts", "export default () => {};\n"), (".agents/skills/s/SKILL.md", "the skill\n"),
+              (".agents/skills/github-issues/SKILL.md", "the tracker\n"))
+
+
+def launcher(f: Feature, r: Path) -> None:
+    """The scratch target R's scripts/pi-role: the kit's real launcher, linked."""
+    (r / "scripts").mkdir(parents=True, exist_ok=True)
+    (r / "scripts" / "pi-role").symlink_to(f"{f.s.repo}/scripts/pi-role")
 
 
 def drive_qc_eval_verdict(f: Feature) -> None:
@@ -1586,14 +1596,14 @@ def drive_qc_eval_verdict(f: Feature) -> None:
     case = {"id": "c1", "role": "worker", "fixture": "fx", "task": "Do it."}
     facts = [{"fact": "skill_read", "skill": "s"}]
     run, pin = "20260101T000000Z-abc123", "20260101T000000Z-abc123/s1/c1"
-    for rel, text in (("agents/worker.md", "the worker role\n"), ("scripts/pi-role", STAND_IN_PI_ROLE), (".agents/skills/s/SKILL.md", "the skill\n"),
+    for rel, text in (*ROLE_FILES,
                       ("evals/s1/cases.json", json.dumps([case])), ("evals/s1/reference/expectations.json", json.dumps({"c1": {"facts": facts}})),
                       ("evals/fixtures/fx/a.txt", "fixture\n"), ("README.md", "target\n"),
                       ("qc.toml", ('format = 2\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n[demo."demo#acceptance-a"]\n'
                                    f'command = "{f.s.repo}/scripts/octo-feather-qa --verdict {pin}"\ncovers = ["agents"]\n'))):
         (r / rel).parent.mkdir(parents=True, exist_ok=True)
         (r / rel).write_text(text)
-    (r / "scripts" / "pi-role").chmod(0o755)
+    launcher(f, r)
     shutil.copy(f"{f.s.repo}/tests/fixtures/spec-status/good/demo.spec.html", r / "docs" / "specs")
     git("add", "-A")
     git("commit", "-q", "-m", "accepted")
@@ -1626,7 +1636,7 @@ def drive_qc_eval_verdict(f: Feature) -> None:
             (r / "README.md").write_text("target, changed\n")
             git("commit", "-q", "-am", "readme")
         elif at == "role":
-            (r / "agents" / "worker.md").write_text("the worker role, changed\n")
+            (r / "agents" / "worker.md").write_text(ROLE_FILES[0][1] + "changed\n")
             git("commit", "-q", "-am", "role")
         judged = git("rev-parse", "HEAD")
         f.run(name, *qc)
@@ -1660,11 +1670,11 @@ def drive_qa_evidence(f: Feature) -> None:
         git("config", k, val)
     case = {"id": "c1", "role": "worker", "fixture": "fx", "task": "Report."}
     say_ = {"fact": "ran", "program": "herdr-say", "args": ["--parent"]}
-    for rel, text in (("agents/worker.md", "the worker role\n"), ("scripts/pi-role", STAND_IN_PI_ROLE), ("evals/s1/cases.json", json.dumps([case])),
+    for rel, text in (*ROLE_FILES, ("evals/s1/cases.json", json.dumps([case])),
                       ("evals/s1/reference/expectations.json", json.dumps({"c1": {"facts": [say_]}})), ("evals/fixtures/fx/a.txt", "fixture\n")):
         (r / rel).parent.mkdir(parents=True, exist_ok=True)
         (r / rel).write_text(text)
-    (r / "scripts" / "pi-role").chmod(0o755)
+    launcher(f, r)
     git("add", "-A")
     git("commit", "-q", "-m", "accepted")
     kit, base = git("rev-parse", "HEAD"), "b" * 40
@@ -3978,7 +3988,13 @@ def cmd_drive(feature: str | None) -> int:
     d.mkdir(parents=True)
     (d / "summary.txt").write_text(f"{feature} @ rev {s.rev}, {now()}\n")
     f = Feature(s=s, d=d)
-    DRIVES[feature](f)
+    try:
+        DRIVES[feature](f)
+    except Exception as e:  # noqa: BLE001  a drive that cannot go on (a qc sandbox failed before its report) fails, recorded
+        at = [t for t in traceback.extract_tb(e.__traceback__) if t.filename == __file__][-1]
+        why = f"{type(e).__name__}: {e}" + (f" {e.stderr.strip()}" if isinstance(e, subprocess.CalledProcessError) and e.stderr else "")
+        f.summary(f"FAIL {feature}: drive stopped at {ME} line {at.lineno} ({at.name}): {why}; the cases run so far: {d}")
+        f.fails += 1
     result = f.verdict()
     unreached = f" (unreachable: {', '.join(f.unreachable)})" if f.unreachable else ""
     with (d / "summary.txt").open("a") as fh:
