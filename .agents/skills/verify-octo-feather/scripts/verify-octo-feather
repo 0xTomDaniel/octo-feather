@@ -3665,6 +3665,7 @@ def drive_lane_start(f: Feature) -> None:
     lane_start_rerun(f, w, store, str(checkout), str(brief))
     lane_start_files(f, w.sc, store, checkout, clean)
     lane_start_sub_issue(f, w, store, checkout)
+    lane_start_unknown(f, w, store, str(checkout), str(brief))
     f.env, f.pre = {}, []
     say(f"lane-start evidence: {f.d}")
 
@@ -3691,8 +3692,8 @@ def lane_start_exists(f: Feature, w: CommsWorld, checkout: str, brief: str) -> N
 
 
 def lane_start_rerun(f: Feature, w: CommsWorld, store: Path, checkout: str, brief: str) -> None:
-    """issue-lifecycle#acceptance-lane-start-rerun: lane gh906, the testkit Herdr failing the goal's delivery once
-    (its file prompt-down): the first start stops naming step goal, the same start again finishes on the same pane,
+    """issue-lifecycle#acceptance-lane-start-rerun: lane gh906, the testkit Herdr refusing the goal's delivery once
+    (its file prompt-down, agent_blocked: nothing typed): the first start stops naming step goal, the same start again finishes on the same pane,
     one worktree, supervisor, record, goal then brief once each, one spawn and one prod line; a third is refused."""
     issue = json.loads((store / "issue" / "905.json").read_text()) | {"number": 906, "url": "https://github.com/o/r/issues/906"}
     (store / "issue" / "906.json").write_text(json.dumps(issue))
@@ -3700,7 +3701,7 @@ def lane_start_rerun(f: Feature, w: CommsWorld, store: Path, checkout: str, brie
     argv = ("sh", "-c", LANE_START, "sh", checkout, "906", LANE_TITLE, "a scratch proof", brief)
     f.run("rerun-stopped", *argv)
     f.check("rerun-stopped", lambda c: c.code == 1 and "step goal (made so far: " in c.err
-            and "herdr: server not reachable" in c.err)
+            and " exit 75 (" in c.err and "not delivered; rerun once the cause is fixed" in c.err)
     f.run("rerun", *argv)
     out = (f.d / "rerun.stdout").read_text()
     pane = next((x.removeprefix("pane=") for x in out.split() if x.startswith("pane=")), "")
@@ -3725,6 +3726,40 @@ def lane_start_rerun(f: Feature, w: CommsWorld, store: Path, checkout: str, brie
     f.run("rerun-refused", *argv)
     f.check("rerun-refused", lambda c: c.code == 1
             and f"lane gh906 exists: lane record {w.state / 'lanes' / 'gh906.toml'}, " in c.err)
+
+
+def lane_start_unknown(f: Feature, w: CommsWorld, store: Path, checkout: str, brief: str) -> None:
+    """issue-lifecycle#acceptance-lane-start-rerun, an unknown send: lane gh909, the testkit Herdr timing out the goal's
+    send once (its file prompt-timeout: submitted, no turn seen; herdr-say exit 124). The first start stops, delivery
+    unknown; the same start again refuses naming the unknown send and the pane to look at, sending nothing; with
+    --shown goal (the pane shows it) it finishes, the goal and the brief once each."""
+    issue = json.loads((store / "issue" / "905.json").read_text()) | {"number": 909, "url": "https://github.com/o/r/issues/909"}
+    (store / "issue" / "909.json").write_text(json.dumps(issue))
+    (w.world / "prompt-timeout").write_text("")
+    args = ("sh", checkout, "909", LANE_TITLE, "a scratch proof", brief)
+    goal = LANE_GOAL.replace("gh905", "gh909")
+
+    def pane() -> str:
+        return next((p for p, g in json.loads((w.world / "agents.json").read_text()).items() if g["name"] == "gh909"), "")
+
+    def goals() -> str:
+        return str(sum(x == f"{pane()}\t{goal}" for x in (w.world / "prompts").read_text().splitlines()))
+
+    f.run("unknown-stopped", "sh", "-c", LANE_START, *args)
+    f.obs("unknown-stopped", "goals", goals())
+    f.check("unknown-stopped", lambda c: c.code == 1 and f"herdr-say {pane()} exit 124 (" in c.err
+            and "delivery unknown, not sent again blind" in c.err and c.o["goals"] == "1")
+    f.run("unknown-refused", "sh", "-c", LANE_START, *args)
+    f.obs("unknown-refused", "goals", goals())
+    f.check("unknown-refused", lambda c: c.code == 1
+            and f"step goal: the goal send to {pane()} is unknown (herdr-say {pane()} exit 124" in c.err
+            and f"look at supervisor pane {pane()} (herdr pane read {pane()})" in c.err
+            and "--shown goal" in c.err and "--absent goal" in c.err and c.o["goals"] == "1")
+    f.run("unknown-shown", "sh", "-c", LANE_START + " --shown goal", *args)
+    f.obs("unknown-shown", "goals", goals())
+    f.obs("unknown-shown", "briefs", str((w.world / "prompts").read_text().count(f"{pane()}\tLane facts")))
+    f.check("unknown-shown", lambda c: c.code == 0 and c.out == f"key=gh909 pane={pane()} issue=909\n"
+            and c.o["goals"] == "1" and c.o["briefs"] == "1")
 
 
 LANE_NEW = "Scratch lane"
