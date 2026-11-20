@@ -12,6 +12,9 @@
 #   file) fails naming the skill; a missing cache fails naming `just vendored-fetch`;
 # - --extract spec-chat DEST writes the fetch-only Spec Chat pin offline, exec bits kept;
 #   uncached, it fails naming `just vendored-fetch` (#96);
+# - carried Spec Chat copies (Skillfile `#carry` lines, #1168): a stale, a missing and an extra carried file,
+#   and two Spec Chat fetch-only lines on different shas, fail named with the fix; `--update spec-chat`
+#   restores every copy to the committed bytes, and a rerun changes nothing;
 # - a fetch GitHub refuses for credentials (a private pin) names gh auth login && gh auth setup-git (#463).
 # Needs the warm cache `just vendored-fetch` makes (CI runs it before `just check`).
 set -euo pipefail
@@ -24,6 +27,8 @@ cp "$kit/justfile" "$kit/Skillfile" "$kit/Skillfile.lock" "$r/"
 cp "$kit/scripts/check-vendored" "$r/scripts/"
 cp -r "$kit/.skillfile/patches" "$r/.skillfile/"
 cp -r "$kit/.agents/skills" "$r/.agents/"
+while read -r k _ _ dest; do [[ $k == "#carry" ]] || continue
+  mkdir -p "$r/$(dirname "$dest")"; cp -r "$kit/$dest" "$r/$dest"; done <"$kit/Skillfile"
 cp -r "$src" "$t/c/octo-feather/"; chmod -R u+w "$t/c"
 gr() { git -C "$r" -c user.name=t -c user.email=t@t "$@"; }
 gr init -q; gr add -A; gr commit -qm base
@@ -41,7 +46,30 @@ run() { local want="$1"; shift; [[ $stage == 0 ]] || gr add -A; set +e; out="$("
   [[ "$rc" == "$want" ]] || { echo "check-vendored test: want exit $want, got $rc: $out" >&2; exit 1; }; }
 has() { grep -qF -- "$1" <<<"$out" || { echo "check-vendored test: output lacks '$1': $out" >&2; exit 1; }; }
 # Clean copy, no network at all: passes.
-run 0 ${ns[@]+"${ns[@]}"}; has "vendored: ok"
+run 0 ${ns[@]+"${ns[@]}"}; has "vendored: ok"; has "carried: ok (5 carried copies"
+# Carried copies (#1168): stale (one byte appended), missing (a file, a file of the carried folder), extra (in it).
+fix='run `scripts/check-vendored --update spec-chat`, then `just check`'
+printf x >>"$r/docs/specs/.style/spec.css"; rm "$r/templates/python/docs/specs/.style/spec.css"
+rm "$r/docs/specs/.viz/vendor/echarts-5.5.1/LICENSE"; echo x >"$r/docs/specs/.viz/EXTRA.js"
+run 1; has "check-vendored: spec-chat: docs/specs/.style/spec.css differs from 0xTomDaniel/spec-chat@09d5286 skill/shape-spec/assets/style/spec.css; $fix"
+has "check-vendored: spec-chat: templates/python/docs/specs/.style/spec.css is missing; it is a carried copy of 0xTomDaniel/spec-chat@09d5286 skill/shape-spec/assets/style/spec.css; $fix"
+has "check-vendored: spec-chat: docs/specs/.viz/vendor/echarts-5.5.1/LICENSE is missing"
+has "check-vendored: spec-chat: docs/specs/.viz/EXTRA.js is not in 0xTomDaniel/spec-chat@09d5286 skill/review-spec/assets/viz; $fix"
+has "4 carried copy finding(s)"
+set +e; out="$(${ns[@]+"${ns[@]}"} "$r/scripts/check-vendored" --update spec-chat 2>&1)"; rc=$?; set -e
+[[ $rc == 0 ]] || { echo "check-vendored test: --update spec-chat: rc=$rc $out" >&2; exit 1; }
+has "(4 file(s) changed)"
+gr add -A; [[ -z "$(gr status --porcelain)" ]] || { echo "check-vendored test: --update left a change: $(gr status --porcelain)" >&2; exit 1; }
+out="$("$r/scripts/check-vendored" --update spec-chat 2>&1)"; has "(0 file(s) changed)"
+run 0; has "carried: ok"
+# The two Spec Chat fetch-only lines on different shas.
+cp "$r/Skillfile" "$t/keep"
+edit "$r/Skillfile" 's.replace("spec-chat-installer  0xTomDaniel/spec-chat@09d5286", "spec-chat-installer  0xTomDaniel/spec-chat@1111111", 1)'
+run 1; has "check-vendored: Skillfile fetch-only lines of 0xTomDaniel/spec-chat name different shas (spec-chat at 09d5286, spec-chat-installer at 1111111)"
+set +e; out="$("$r/scripts/check-vendored" --update spec-chat 2>&1)"; rc=$?; set -e
+[[ $rc == 1 ]] || { echo "check-vendored test: --update on disagreeing pins: want exit 1, got $rc: $out" >&2; exit 1; }
+has "nothing written"
+cp "$t/keep" "$r/Skillfile"; run 0
 # Pinned Spec Chat, written out with no network: its files, exec bits kept.
 sc() { set +e; out="$(${ns[@]+"${ns[@]}"} "$r/scripts/check-vendored" --extract spec-chat "$1" 2>&1)"; rc=$?; set -e; }
 sc "$t/sc"; [[ "$rc" == 0 && "$out" == "$t/sc/skill" && -x "$t/sc/skill/review-spec/scripts/review-host.py" \
@@ -122,6 +150,6 @@ set +e; out="$(PATH="$t/authbin:$PATH" just -f "$r/justfile" vendored-fetch 2>&1
 has "could not read Username"; has "GitHub wants credentials (a private pin): sign in and let git use gh: gh auth login && gh auth setup-git, then rerun \`just vendored-fetch\`"
 ! grep -qF "check network" <<<"$out" || { echo "check-vendored test: credential refusal blamed on the network: $out" >&2; exit 1; }
 for x in ${skipped[@]+"${skipped[@]}"}; do echo "check-vendored test: skipped, Linux-only proof: $x"; done
-ran="pinned Spec Chat written and uncached, credentials refused named with gh auth setup-git, drift, committed modes, untracked strays, symlinks, special files and empty folders not committed, poisoned and missing cache"
+ran="pinned Spec Chat written and uncached, carried copies stale, missing, extra and on split pins named then restored by --update, credentials refused named with gh auth setup-git, drift, committed modes, untracked strays, symlinks, special files and empty folders not committed, poisoned and missing cache"
 [[ ${#ns[@]} -gt 0 ]] && ran="offline-namespace gate, $ran"
 echo "check-vendored test: ok ($ran)"
