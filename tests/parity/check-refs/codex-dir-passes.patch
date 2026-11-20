@@ -1,0 +1,14 @@
+Seeded defect: the .codex projection dir drops out of the pattern, so an instruction file under it passes (check_refs, overview #acceptance-pi-only).
+diff --git a/scripts/check_rules.py b/scripts/check_rules.py
+index c7e25c88..0320b529 100755
+--- a/scripts/check_rules.py
++++ b/scripts/check_rules.py
+@@ -103,7 +103,7 @@ def check_dashes(root: Path, tracked: Sequence[str]) -> Report:
+ 
+ # check_refs' patterns, each bracketing a letter so this file does not match the scan that holds it.
+ PROJECTION = re.compile(
+-    r"(^|/)(CLAUDE(\.local)?\.md|AGENTS\.override\.md|\.claude|\.codex)(/|$)", re.IGNORECASE
++    r"(^|/)(CLAUDE(\.local)?\.md|AGENTS\.override\.md|\.claude)(/|$)", re.IGNORECASE
+ )
+ UNSCANNED = r"(docs/|\.skillfile/|AGENTS\.md$|README\.md$|NOTICE$|LICENSE$|justfile$)"
+ LABELS = r"evals/judgment-[^/]+/(cases\.json|reference/expectations\.json|REPORT\.md)$"

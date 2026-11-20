@@ -1,0 +1,14 @@
+Seeded defect: a field the schema does not list is accepted (check_decision_logs, additionalProperties).
+diff --git a/scripts/decision_log.py b/scripts/decision_log.py
+index f16b8918..b5c43606 100755
+--- a/scripts/decision_log.py
++++ b/scripts/decision_log.py
+@@ -222,7 +222,7 @@ def line_problems(  # noqa: C901  the line's problems in the order the command p
+             elif e.validator == "pattern":
+                 out.append(e.message)
+     if any(e.validator == "additionalProperties" for e in errors):
+-        out += [f"unknown field {k}" for k in sorted(set(obj) - set(props))]
++        pass
+     return out
+ 
+ 

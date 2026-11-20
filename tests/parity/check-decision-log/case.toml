@@ -1,0 +1,13 @@
+# The parity lever's case for tests/check-decision-log.sh's planted cases, moved in-process to check_decision_logs in
+# tests/gate/kit/test_check_decision_log.py (#1116; tests/parity/lever.py --help). old_at: the deepen commit, the old
+# test unmodified and green on the moved code.
+old = "tests/check-decision-log.sh"
+old_at = "d0a8c3ba"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none.
+needs = []
+new = "tests/gate/kit/test_check_decision_log.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): open: scripts/check-decision-log,
+# run by the copy's justfile, imports it in the kit environment it re-execs into.
+[ran]
+"scripts/decision_log.py" = "open scripts/decision_log.py"

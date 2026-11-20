@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Integration test for `just install-check`, its mise, PATH and just section (#508; setup tests/gate/kit/testkit/install_check.py):
 #   mise (owner ruling #261): at mise-version ok; a mise reporting another release: WRONG VERSION naming
 #     mise-version, exit 1; a target with its own mise.toml (a repo the kit created): its tools ok at their lock with
