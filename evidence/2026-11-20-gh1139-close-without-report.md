@@ -92,3 +92,13 @@ evidence); the offline gh refuses every call (exit 1)`. Cause: the fact `ran gh 
 put a run shim named gh first on PATH (scripts/octo-feather-qc-sandbox, `recs`), and the proof's offline gh check
 requires `which gh` to be the offline gh. Fix: that fact dropped (the gh stand-in, placed after the proof, stays).
 `ran octo-feather-lane merge 12 {head}` still fails a base run, whose github-pr names `gh pr merge`.
+
+## Proof run 20261120T200515Z-f7cbf8
+
+`scripts/octo-feather-qa --suite supervisor-notifications --case merge-approved-lane-merge-archive --runs 3 --baseline
+13191f3f`, run by the lane supervisor under the eval slot:
+
+- head 69b1109c: PASS 3/3 (pass rate 1.00, stddev 0.00): merge 12 {head} and archive gh12 ran, no herdr-say
+  --parent, no herdr-close of its own space, tab or pane.
+- base 13191f3f: FAIL 0/3 (pass rate 0.00, stddev 0.00): runs 1 and 3 no `octo-feather-lane merge` (ran
+  `octo-feather-lane done 12` by hand); run 2 sent `herdr-say --parent close report gh12: ...`.
