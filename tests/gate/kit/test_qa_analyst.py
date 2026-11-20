@@ -49,15 +49,15 @@ def compared(q: Qa, *ids: str, runs: int, stated: bool = False) -> Evaluation:
 
 
 def flags(ev: Evaluation) -> tuple[Result, list[str]]:
-    """The analysis of EV's stored cases (summary.json's, as summarize wrote it)."""
-    return analysis(ev.summary["cases"])
+    """The analysis of EV's cases (each combine's result)."""
+    return analysis(ev.cases)
 
 
 @pytest.mark.criterion("quality#acceptance-qa-analyst")
 def test_comparison(q: Qa) -> None:
     """--baseline, one run each of same and costly, each run's time stated: same
     non-discriminating, costly a cost tradeoff in time and tokens (its stub's 3 more messages on
-    c2: 220 to 550 tokens), as summary.json records them."""
+    c2: 220 to 550 tokens)."""
     ev = compared(q, "same", "costly", runs=1, stated=True)
     a, got = flags(ev)
     want = [
@@ -69,7 +69,6 @@ def test_comparison(q: Qa) -> None:
         ),
     ]
     assert got == want, got
-    assert ev.summary["analysis"] == a, ev.summary
     assert a["threshold"] == 0.5, a
     assert a["non_discriminating_facts"] == a["high_variance"] == [], a
     tokens = {x["case"]: x.get("tokens") for x in a["cost_tradeoffs"]}
@@ -80,8 +79,7 @@ def test_comparison(q: Qa) -> None:
 @pytest.mark.criterion("quality#acceptance-qa-analyst")
 def test_variance(q: Qa) -> None:
     """--baseline, two runs: a case passing every other run on the current kit, and never on c1,
-    is high variance on that kit, and its pull fact, passing in every run, is non-discriminating
-    (summary.json the same)."""
+    is high variance on that kit, and its pull fact, passing in every run, is non-discriminating."""
     a, got = flags(compared(q, "alt", runs=2))
     want = [
         HEAD,
@@ -107,11 +105,11 @@ def test_no_baseline(q: Qa) -> None:
 
 
 def test_analyze_rerun(q: Qa) -> None:
-    """--analyze on a stored run (one --baseline run each of same and costly): the analysis the
-    run printed, from summary.json alone, starting no pi and no sandbox (a poison pi first on
+    """--analyze on a stored run (one --baseline run each of same and costly): the analysis of
+    its cases, from summary.json alone, starting no pi and no sandbox (a poison pi first on
     PATH, which no rerun may start)."""
     ev = compared(q, "same", "costly", runs=1)
-    live = ev.lines[ev.lines.index(HEAD) : ev.lines.index(HEAD) + len(flags(ev)[1])]
+    live = flags(ev)[1]
     poison = q.t / "poison"
     poison.mkdir()
     (poison / "pi").write_text(f"#!/bin/sh\ntouch {q.t / 'ran'}\nexit 99\n")

@@ -130,12 +130,15 @@ class Kits(NamedTuple):
 
 
 class Evaluation(NamedTuple):
-    """An evaluation's stored run (Qa.evaluation): its dir, its summary, and the lines the
-    command prints after its header, in order."""
+    """An evaluation's stored run (Qa.evaluation): its dir; each case's result and the lines its
+    runs and cases print, in order (record's and combine's); the summary and the lines the
+    evaluation ends with (summarize's)."""
 
     run_dir: Path
-    summary: Result
+    cases: list[Result]
     lines: list[str]
+    summary: Result
+    ending: list[str]
 
 
 G = "git -c user.name=t -c user.email=t@t.invalid -c commit.gpgsign=false"
@@ -767,7 +770,7 @@ class Qa:
                         **({"baseline": {"kit_ref": cfgs[0].ref, "kit_sha": cfgs[0].sha}} if not alone else {}),
                         "seconds": 0.0}  # fmt: skip
         sm, said = summarize(run_dir, head, results, [])
-        return Evaluation(run_dir, sm, lines + said)
+        return Evaluation(run_dir, results, lines, sm, said)
 
     def case_repo(self, src: Path, c: Result, at: Path) -> tuple[Path, str]:
         """AT/repo, case C's fixture SRC (as `check-evals --export` materialized it) committed on

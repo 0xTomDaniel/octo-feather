@@ -29,6 +29,8 @@ def q(tmp_path: Path) -> Qa:
     return Qa(Scratch(tmp_path))
 
 
+# The run header (the command's: tests/qa-runs.sh), the totals line (summarize's: test_qa_summary)
+TOTALS = ("^qa: run ", "^qa: 0/1 passed")
 RUN_FILES = ("prompt.md", "input.json", "transcript.jsonl", "grading.json", "result.json")
 
 
@@ -36,11 +38,11 @@ RUN_FILES = ("prompt.md", "input.json", "transcript.jsonl", "grading.json", "res
 def test_qa_runs(q: Qa) -> None:
     """--runs (octo-feather-qa --help): alt, whose stub reads tdd on odd runs only, 2/3 with pass
     rate and spread FAILS, each run's line first, the failing run's facts named; run-<k>
-    artifacts, result.json and summary.json runs/pass_rate/stddev; every run passing, 2/2 PASSES;
+    artifacts and result.json runs/pass_rate/stddev; every run passing, 2/2 PASSES;
     one run (the default): no run lines, artifacts in the case dir, result.json with one run."""
     want = data.runs(q)  # alt/ (the trig suite plus alt)
     ev = q.evaluation(q.t / "alt" / "trig", ["alt"], runs=3)
-    printed("\n".join(ev.lines), [w for w in want["alt"] if not w.text.startswith("^qa: run ")])
+    printed("\n".join(ev.lines), [w for w in want["alt"] if not w.text.startswith(TOTALS)])
     c = ev.run_dir / "trig" / "alt"
     for k in (1, 2, 3):
         for f in RUN_FILES:
@@ -68,9 +70,6 @@ def test_qa_runs(q: Qa) -> None:
         "tool_calls",
         "kit_sha",
     } <= keys(r), r
-    sm = load(ev.run_dir / "summary.json")
-    assert (at(sm, "passed"), at(sm, "total"), at(sm, "runs")) == (0, 1, 3), sm
-    assert at(sm, "cases", 0, "pass_rate") == 0.6667, sm
     # Every run passes: PASS, 2/2.
     ev = q.evaluation(q.t / "alt" / "trig", ["reads"], runs=2)
     printed("\n".join(ev.lines), want["every"])
@@ -95,7 +94,7 @@ def test_qa_baseline(q: Qa) -> None:
     """--runs and --baseline (octo-feather-qa --help): a case's time and tokens as mean and spread
     (the stub's runs 1 and 2 report 220 and 240 tokens); a baseline kit c1 (its implementer lists
     no tdd: the case fails) beside the current kit c2 (it passes), with the compare table and the
-    difference, each run's result.json, the case's and summary.json's baseline fields."""
+    difference, each run's result.json and the case's baseline fields."""
     k = q.kits()
     c1, c2 = k.c1.sha, k.c2.sha
     want = data.baseline(c1, c2)
@@ -110,7 +109,6 @@ def test_qa_baseline(q: Qa) -> None:
     f0 = at(r, "runs", 0, "facts", 0)
     assert at(f0, "status") == "pass", at(r, "runs", 0)
     assert "evidence" not in keys(f0), at(r, "runs", 0)
-    assert at(load(d / "summary.json"), "cases", 0, "tokens", "mean") == 230
     # Baseline c1 (fails: no tdd) beside the head c2 (passes), the table.
     configs = [k.c1._replace(name="baseline", ref=c1[:9]), k.c2._replace(name="current", ref=None)]
     ev = q.evaluation(q.t / "evals" / "trig", ["reads"], runs=2, configs=configs)
@@ -135,10 +133,6 @@ def test_qa_baseline(q: Qa) -> None:
     assert at(b, "runs", 0, "facts", 0, "status") == "fail", b
     assert at(r, "delta", "pass_rate") == 1.0, at(r, "delta")
     assert at(r, "delta", "tokens") == 0.0, at(r, "delta")
-    sm = load(ev.run_dir / "summary.json")
-    assert at(sm, "baseline", "kit_sha") == c1, sm
-    assert at(sm, "kit_sha") == c2, sm
-    assert (at(sm, "passed"), at(sm, "total")) == (1, 1), sm
 
 
 @pytest.mark.criterion("quality#acceptance-qa-review")
@@ -150,7 +144,7 @@ def test_qa_review(q: Qa) -> None:
     rv = q.t / "rv" / "rv"
     data.essay(q, "The notes say hi.")
     ev = q.evaluation(rv)
-    printed("\n".join(ev.lines), data.review()["run"])
+    printed("\n".join(ev.lines), [w for w in data.review()["run"] if not w.text.startswith(TOTALS)])
     d1 = ev.run_dir
     id1 = d1.name
     want = data.review(id1)
