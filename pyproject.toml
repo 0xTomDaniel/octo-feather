@@ -45,6 +45,7 @@ extend-include = [
   ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
   "scripts/check-behavior-smoke",
   "scripts/check-dashes",
+  "scripts/check-refs",
   "scripts/check-decision-log",
   "scripts/check-evals",
   "scripts/check-gate-free",
