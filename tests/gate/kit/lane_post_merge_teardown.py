@@ -303,6 +303,38 @@ def shared_space(s: Scratch) -> None:
     assert w.closes() == ["tab close zt1:t2"], f"director's space: closed {w.closes()}"
 
 
+def shared_supervisor(s: Scratch) -> None:
+    """comms#acceptance-shared-supervisor-kept (#892): another open lane record names the
+    archived lane's supervisor pane: the tab kept (no herdr-close), that record byte for byte
+    unchanged, the line naming the pane and that lane; the merged lane's worktree, PRs and
+    branches torn down as when not shared. director.toml naming the pane keeps it too."""
+    w = World(s, "shared-supervisor")
+    w.archived("zt5:p1")
+    w.lane(w.lanes / "gh8.toml", "zt5:p1", 8)
+    w.lane(w.lanes / "gh9.toml", "zt6:p1", 9)
+    before = {p.name: p.read_bytes() for p in w.lanes.glob("*.toml")}
+    r, s5 = w.run(0)
+    assert not w.closes(), f"shared supervisor: closed {w.closes()}"
+    assert s5 == (
+        f"step 7 teardown: ok: kept: supervisor zt5:p1 still supervises gh8; worktree {w.wt} "
+        "removed (0 mise config links into it pruned); PR #13 retargeted from gh12 to main; local "
+        "branch gh12 deleted; remote branch gh12 deleted from origin"
+    ), f"shared supervisor: {s5}"
+    assert w.last(r) == f"{S4}; step 7 teardown ok", f"shared supervisor: {r.out}"
+    after = {p.name: p.read_bytes() for p in w.lanes.glob("*.toml")}
+    assert after == before, "open lane records changed"
+    assert not w.wt.is_dir(), "worktree kept"
+    assert not w.branch_on(w.origin, bare=True), "remote branch kept"
+    _, s5 = w.run(0)
+    assert s5 == f"step 7 teardown: ok: kept: supervisor zt5:p1 still supervises gh8; {ALREADY}", s5
+    assert not w.closes(), f"shared supervisor rerun: closed {w.closes()}"
+    w = World(s, "director-pane")
+    w.archived("zt1:p1")
+    _, s5 = w.run(0)
+    assert not w.closes(), f"director's pane: closed {w.closes()}"
+    assert s5.startswith("step 7 teardown: ok: kept: supervisor zt1:p1 is the director; "), s5
+
+
 def kept(s: Scratch) -> None:
     """Refused and kept, exit 1, nothing retargeted: a dirty worktree (git's words), a review
     row's root, the kit install, the main worktree (step 4 stops first); a local branch past the
@@ -372,4 +404,4 @@ def kept(s: Scratch) -> None:
 
 
 if __name__ == "__main__":
-    main(not_archived, own_space, no_ci, shared_space, kept)
+    main(not_archived, own_space, no_ci, shared_space, shared_supervisor, kept)
