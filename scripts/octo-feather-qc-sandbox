@@ -844,6 +844,11 @@ def setup(judge: list[str]) -> NoReturn:
     # Host facts, read before any namespace or mask.
     sjs, srtv, snm = srt_js()
     COV = cov_dir()
+    if COV:  # its config read-only, as each process of the run reads it at start (another repo's is masked)
+        cfg = os.path.realpath(E["COVERAGE_PROCESS_START"])
+        ro_binds.append(cfg)
+        if cfg.startswith("/tmp/"):
+            E["QC_KEEP"] = "\n".join([*E.get("QC_KEEP", "").split("\n"), cfg]).strip("\n")
     if snm.startswith("/tmp/"):  # srt's node_modules, bound back on the private /tmp (step 1)
         E["QC_KEEP"] = "\n".join([*E.get("QC_KEEP", "").split("\n"), snm]).strip("\n")
     os.makedirs(HC, exist_ok=True)
