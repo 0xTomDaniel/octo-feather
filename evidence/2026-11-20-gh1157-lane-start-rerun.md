@@ -32,3 +32,26 @@ rerun-refused: step exists: lane gh906 exists: lane record <state>/lanes/gh906.t
 
 `just test tests/gate/kit/test_lane_start.py`: 5 passed; `exists` and `rerun` red on the pilot's start_lane.py
 (947b3158: with the record there the start went on to spawn a supervisor; the rerun's second run exit 1).
+
+## Review round 2 (B1, B2, B3, B4, N1) at head 780f5eec
+
+Smoke: .agents/skills/verify-octo-feather/features/lane-start.md (unknown-send case added, rerun line removed; the drive below follows it)
+Smoke: agents/director.md (Bootstrap adoption sentence back to main's text; `git diff origin/main -- agents/director.md` shows no Bootstrap hunk)
+Removed: agents/director.md "write a lane record for each live lane without one (started by hand; keys: comms spec `#lane-record`)", restored to main's "create any missing lane records" (adoption stays issue #273's); features/lane-start.md's restated rerun line.
+
+`verify-octo-feather run --unreachable-exit 77 lane-start`: 16 cases PASS (current-kit, start, supervisor, worktree,
+record, messages, director-log, exists, rerun-stopped, rerun, rerun-refused, files, sub-issue, unknown-stopped,
+unknown-refused, unknown-shown); run PASS, exit 0. Evidence record for issue-lifecycle#acceptance-lane-start-rerun:
+20261120T054806Z-c015943b (the others: -exists 20261120T054806Z-fc6c307d, lane-start 20261120T054805Z-80ce8bb2).
+
+```
+unknown-stopped: step goal (made so far: ...): herdr-say w4:p9 exit 124 (...): delivery unknown, not sent again blind
+unknown-refused: step goal: the goal send to w4:p9 is unknown (herdr-say w4:p9 exit 124 (...)), so it is not sent
+                 again blind (comms spec #delivery-unknown): look at supervisor pane w4:p9 (herdr pane read w4:p9):
+                 when it shows the goal, rerun this start with --shown goal; when it does not and is not compacting,
+                 with --absent goal (sent once more); made so far: ...          (the goal once in the pane)
+unknown-shown:   key=gh909 pane=w4:p9 issue=909                                 (the goal and the brief once each)
+```
+
+Kit test: `just test tests/gate/kit/test_lane_start.py`: 11 passed; unknown_send red at b5c23b5d (the rerun sent the
+goal again).
