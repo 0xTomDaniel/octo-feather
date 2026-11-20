@@ -18,15 +18,18 @@ and the director's one message, `post-merge --lane gh7`.
 from __future__ import annotations
 
 import json
+import subprocess
 import sys
 import time
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from herdr_messaging import agent, lines
 from lane_merge import H, World
 from testkit import HERE, Scratch, kit, main, reflector
 
 if TYPE_CHECKING:
+    from pathlib import Path
+
     from testkit import Ran
 
 UNIT = "octo-feather-teardown-gh7"
@@ -83,34 +86,35 @@ class Lane:
     def merged(self, want: int = 0) -> None:
         self.run(want, "merge", "7", H, "--repo", "o/r", cwd="t")
 
-    def ended(self) -> dict[str, object]:
+    def unit(self) -> dict[str, str]:
+        """The lane's post-merge record's unit ({} before one is recorded)."""
+        rec = cast("dict[str, object]", json.loads((self.records / "gh7.json").read_text()))
+        return cast("dict[str, str]", rec.get("unit") or {})
+
+    def ended(self) -> dict[str, str]:
         """The teardown unit's end, waited for (the stand-in logs it after its stop hook ran):
-        the lane's post-merge record then; its lines printed."""
+        the record's unit then; its lines printed."""
         end = time.monotonic() + 120
         while f"unit {UNIT} ended" not in self.text(self.syslog):
             assert time.monotonic() < end, f"unit never ended: {self.text(self.syslog)}"
             time.sleep(0.2)
         out = self.text(self.records / "gh7.teardown.log")
         sys.stdout.write(f"# the teardown unit's lines ({UNIT})\n{out}")
-        return json.loads((self.records / "gh7.json").read_text())
+        return self.unit()
 
-    def wait_record_unit(self) -> dict[str, object]:
+    def wait_record_unit(self) -> dict[str, str]:
         """The record once its unit's end is recorded (the fallback logs to no systemd log)."""
         end = time.monotonic() + 120
         while True:
-            rec = json.loads((self.records / "gh7.json").read_text())
-            unit = rec.get("unit") or {}
+            unit = self.unit()
             if unit.get("ended") and "director " in self.text(self.records / "gh7.teardown.log"):
-                return rec
-            assert time.monotonic() < end, f"unit never ended: {rec}"
+                return unit
+            assert time.monotonic() < end, f"unit never ended: {unit}"
             time.sleep(0.2)
 
     @staticmethod
-    def text(p: object) -> str:
-        from pathlib import Path
-
-        q = Path(str(p))
-        return q.read_text() if q.exists() else ""
+    def text(p: Path) -> str:
+        return p.read_text() if p.exists() else ""
 
     def said(self) -> list[str]:
         """Each message Herdr delivered to the director."""
@@ -137,8 +141,6 @@ class Lane:
                 "--verify",
             ]
             ref = "refs/heads/gh70"
-        import subprocess
-
         return subprocess.run([*git, ref], capture_output=True, check=False).returncode == 0
 
 
@@ -180,8 +182,11 @@ def torn_down(lane: Lane, how: str) -> None:
         "reflection findings: lane gh7: 0 findings; director: 0 findings",
         "correction lanes: none filed or commented",
         "left on disk on purpose: nothing",
-        f"teardown: space zt1 closed; worktree {t.wt} removed (0 mise config links into it pruned); "
-        "PR #9 retargeted from gh70 to main; local branch gh70 deleted; remote branch gh70 deleted from origin",
+        (
+            f"teardown: space zt1 closed; worktree {t.wt} removed (0 mise config links into it "
+            "pruned); PR #9 retargeted from gh70 to main; local branch gh70 deleted; remote branch "
+            "gh70 deleted from origin"
+        ),
     )
     assert msg.split(" | ") == list(items), f"message: {msg}"
     shown = t.run(0, "post-merge", "--lane", "gh7", cwd="t").out.split("\n")
@@ -251,7 +256,8 @@ def archive_waits(s: Scratch) -> None:
     t = Lane(s)
     (t.t / "a").write_text("mine\n")
     t.merged(1)
-    assert len(t.said()) == 1 and "step 3 kit refresh stopped: checkout " in t.said()[0], t.said()
+    assert len(t.said()) == 1, t.said()
+    assert "step 3 kit refresh stopped: checkout " in t.said()[0], t.said()
     before = t.tree()
     r = t.run(1, "archive", "gh7")
     assert "archive waits: step 3 kit refresh stopped: checkout " in r.err, r.err
@@ -266,7 +272,8 @@ def archive_waits(s: Scratch) -> None:
     assert t.w.lane.head() == t.w.lane.m, "install not refreshed"
     t.ended()
     said = t.said()
-    assert len(said) == 2 and said[1].startswith("lane gh7 closed: PR #7 "), said
+    assert len(said) == 2, said
+    assert said[1].startswith("lane gh7 closed: PR #7 "), said
 
 
 def unit_fails(s: Scratch, how: str = "fails") -> None:
@@ -279,8 +286,7 @@ def unit_fails(s: Scratch, how: str = "fails") -> None:
     if how == "fails":
         (t.wt / "stray").write_text("x\n")
     t.run(0, "archive", "gh7", **env)
-    rec = t.ended()
-    unit = rec["unit"]
+    unit = t.ended()
     said = t.said()
     sys.stdout.write("# the director's messages\n" + "\n".join(said) + "\n")
     assert len(said) == 1, said
@@ -295,9 +301,8 @@ def unit_fails(s: Scratch, how: str = "fails") -> None:
             f"post-merge gh7 PR #7 stopped: teardown unit {UNIT} ended timeout (killed TERM) before"
         )
         assert said[0].startswith(want), said
-    end = {"SERVICE_RESULT": str(unit["result"])} | dict(
-        zip(("EXIT_CODE", "EXIT_STATUS"), str(unit["status"]).split(" "), strict=True)
-    )
+    code, status = unit["status"].split(" ")
+    end = {"SERVICE_RESULT": unit["result"], "EXIT_CODE": code, "EXIT_STATUS": status}
     r = t.run(0, "post-merge", "--lane", "gh7", "--unit-end", cwd="t", **end)
     assert "director already told" in r.out, r.out
     assert len(t.said()) == 1, t.said()
