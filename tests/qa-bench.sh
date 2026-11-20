@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Integration test for scripts/octo-feather-qa (factory evals) and scripts/check-evals (eval case shape),
 # driven as commands with a stub `pi` and a fake `herdr` first on PATH: no model, no live Herdr (tests/gate/kit/testkit/qa_box.py).
 # One section of the factory-evals test per gate item (#506): tests/qa.sh and each tests/qa-*.sh.

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Integration test for scripts/octo-feather-qc with the qc judge stand-in as `pi` and the testkit's `herdr`
 # on PATH (no model call).
 # One section of the qc sandbox test per gate item (#508): tests/qc.sh and each tests/qc-*.sh it names below.

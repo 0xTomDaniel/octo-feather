@@ -37,9 +37,9 @@
     },
     "acceptance-real-blocker": {
       "status": "built",
-      "pr": 1005,
-      "record": "20261119T025742Z-1208fa72",
-      "commit": "5ca5009828f1b648c26b6abb5b64ebdeca57d7e8",
+      "pr": 1021,
+      "record": "20261119T230046Z-a1e2abca",
+      "commit": "75e20744d16e8e234ee84fd37f66ad6f30aeb726",
       "tests": []
     },
     "acceptance-no-routine-traffic": {
@@ -57,6 +57,27 @@
       "tests": [
         "tests/gate/kit/herdr_messaging.py"
       ]
+    },
+    "acceptance-parent-resumed": {
+      "status": "built",
+      "pr": 1021,
+      "record": "20261119T230033Z-0dd83bf6",
+      "commit": "75e20744d16e8e234ee84fd37f66ad6f30aeb726",
+      "tests": []
+    },
+    "acceptance-result-file": {
+      "status": "built",
+      "pr": 1021,
+      "record": "20261119T230039Z-3fc94a64",
+      "commit": "75e20744d16e8e234ee84fd37f66ad6f30aeb726",
+      "tests": []
+    },
+    "acceptance-result-missing": {
+      "status": "built",
+      "pr": 1021,
+      "record": "20261119T230042Z-15969160",
+      "commit": "75e20744d16e8e234ee84fd37f66ad6f30aeb726",
+      "tests": []
     },
     "acceptance-director-worker-resume": {
       "status": "built",

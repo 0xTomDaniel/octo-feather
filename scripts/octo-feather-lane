@@ -590,7 +590,11 @@ def cmd_archive(args: list[str]) -> int:
         if not stat.S_ISREG(mode):
             raise Refuse(f"not a regular file: {f}; replace it with the real file (a lane's record and hand-off log are plain files), then rerun")
         files.append(f)
-    for f in (record, log):
+    results = lanes / f"{name}.results"   # its workers' result files (octo-feather-handoff --help, report)
+    if os.path.lexists(results) and (results.is_symlink() or not results.is_dir()):
+        raise Refuse(f"not a directory: {results}; a lane's result files sit in a plain directory: replace it, then rerun")
+    moved = results.is_dir()
+    for f in (record, log, *([results] if moved else [])):
         if (archive / f.name).exists() or (archive / f.name).is_symlink():
             raise Refuse(f"archive target exists: {archive / f.name}; compare it with {f}, then remove or rename the archived one by hand")
     pre = log.stat().st_size if log in files else None   # the log's length before the reflection appends
@@ -625,6 +629,8 @@ def cmd_archive(args: list[str]) -> int:
             if got != before[f.name]:
                 raise ValueError(f"{f} changed before the move: sha256 {before[f.name]} -> {got}")
             f.unlink()
+        if moved:
+            results.rename(archive / results.name)   # last: nothing after it can fail
     except Exception as e:
         rollback(created, archive)
         unreflect(log, pre)
@@ -637,6 +643,8 @@ def cmd_archive(args: list[str]) -> int:
         raise Refuse(f"move failed ({e}); nothing archived, every file left in {lanes}: fix the cause, then rerun") from e
     for f in files:
         print(f"archived: {archive / f.name} sha256={before[f.name]}")
+    if moved:
+        print(f"archived: {archive / results.name}")
     return 0
 
 

@@ -10,7 +10,7 @@ Case = Callable[..., None]
 
 
 @pytest.mark.criterion("quality#acceptance-gate-recipes-first")
-@pytest.mark.parametrize("how", ["fast", "check", "nested"])
+@pytest.mark.parametrize("how", ["fast", "check", "nested", "granted"])
 def test_red_recipe_stops(case: Case, how: str) -> None:
     case(red, how)
 

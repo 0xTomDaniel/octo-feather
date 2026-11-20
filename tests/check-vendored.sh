@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Integration test for `just check-vendored` and `just vendored-fetch`
 # (scripts/check-vendored) on a throwaway copy of the kit's Skillfile, lock,
 # patches and skill folders, against a copy of the warm cache:
