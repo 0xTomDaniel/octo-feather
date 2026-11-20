@@ -66,6 +66,9 @@ docs/specs/.style/** language-exempt
 .agents/skills/interrogate/** language-exempt
 .agents/skills/linear-cli/** language-exempt
 .agents/skills/agent-browser/** language-exempt
+# The github-issues issue-view --notes GraphQL query: a document GitHub's API validates on each call; the kit holds
+# no GitHub schema to lint or type it against (#1099).
+.agents/skills/github-issues/scripts/notes.graphql language-exempt
 # Tool-written lockfiles, never hand-edited (scc calls a .lock file Unknown).
 uv.lock language-exempt
 mise.lock language-exempt

@@ -18,7 +18,7 @@ import json
 import os
 from pathlib import Path
 
-from lane_tickets import VIEW
+from lane_tickets import NOTES, VIEW
 from testkit import HERE, ROOT, Ran, Scratch, kit, main
 
 # gh 2.102.0 on 0xTomDaniel/octo-feather, 2026-11-18 (each recording's source).
@@ -82,12 +82,6 @@ def github(s: Scratch) -> None:
     assert asked == {"issue view", "api graphql"}, f"gh asked: {s.gh.log()}"
 
 
-# The linear skill's issue-view --notes second call: its GraphQL document, verbatim.
-NOTES = (
-    "query IssueNotes($id: String!) { issue(id: $id) { url createdAt description\n"
-    "  comments(first: 250) { nodes { url createdAt editedAt body } pageInfo { hasNextPage } }\n"
-    "  history(first: 250) { nodes { updatedAt updatedDescription } pageInfo { hasNextPage } } } }"
-)
 SOURCE = (
     "Not recorded: LINEAR_API_KEY is not set in the factory (director decision on #921). Built "
     "from schpet/linear-cli v3.1.0's source (the linear skill's cli-version: `api` prints Linear's "

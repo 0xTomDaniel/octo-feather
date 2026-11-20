@@ -1,0 +1,6 @@
+# The gate's two tiers: fast before a hand-off, check at a checkpoint.
+fast:
+    python3 -m unittest discover -s tests -q
+
+check: fast
+    python3 -c 'import json, pathlib; [json.loads(p.read_text()) for p in pathlib.Path("evals").rglob("*.json")]'

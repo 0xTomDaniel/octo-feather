@@ -1,9 +1,9 @@
 Seeded defect: the baseline comparison's difference is baseline minus current.
-diff --git a/scripts/octo-feather-qa b/scripts/octo-feather-qa
-index 6e1952e9..6b8312a3 100755
---- a/scripts/octo-feather-qa
-+++ b/scripts/octo-feather-qa
-@@ -1447,7 +1447,7 @@ def mean(res: Result, k: str) -> float | None:
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index af457dc7..31603ef4 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -1754,7 +1754,7 @@ def mean(res: Result, k: str) -> float | None:
  def diff(cur: Result, base: Result, k: str) -> float | None:
      """Current minus baseline mean of K (skill-creator's delta), None when either side has none."""
      c, b = mean(cur, k), mean(base, k)

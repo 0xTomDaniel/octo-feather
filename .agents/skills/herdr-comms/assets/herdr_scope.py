@@ -12,7 +12,8 @@ octo-feather-agent-PANE-<hex>.scope, waited until active. Exit 0 scoped, or unsc
 Herdr's own exit when it fails. Closing the tab is the caller's.
 
 close TAB|SPACE (herdr-close's plain close): prints `tab=|space=ID ..._close_rc=RC killed=N
-[unowned=PANE,...]` and exits RC, Herdr's close status. A Herdr answer that fails or breaks the
+[unowned=PANE,...]` and exits RC, Herdr's close status; closed, each herdr-spawn agent's Herdr
+extension dir goes (herdr-pi/SESSION in the state dir). A Herdr answer that fails or breaks the
 shape below stops it before anything is closed: Herdr's exit, or 76 for a malformed one. Before
 the close it reads each closed pane's agent (its name from `herdr agent get`, its role and
 session from its Pi process, as park reads them); once Herdr's close succeeded, it hands them to
@@ -39,6 +40,7 @@ import os
 import platform
 import re
 import secrets
+import shutil
 import subprocess
 import sys
 import time
@@ -84,6 +86,9 @@ AGENT_REQUIRED = {
 TAB_FIELDS = {
     "agent_status", "focused", "label", "number", "pane_count", "tab_id", "workspace_id",
 }  # fmt: skip
+KIT = Path(__file__).resolve().parents[4]
+# A Pi session id as herdr-spawn and pi-role --record take it: one path component.
+SESSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 NOT_NOW = 75  # EX_TEMPFAIL
 NOT_SPAWNED = 65  # EX_DATAERR
 
@@ -328,8 +333,13 @@ def close(target: str, out: TextIO = sys.stdout) -> int:
     shown = members(target)
     scopes: list[str] = []
     unowned: list[str] = []
+    sessions: list[str] = []
     for p in shown:
-        pid = shell_pid(p.pane_id)
+        info = process_info(p.pane_id)
+        pid = info.shell_pid
+        got = pi_session(info)  # a herdr-spawn session, as park reads it
+        if got and environ(got[0].pid).get("OCTO_FEATHER_SESSION_ID") == got[1]:
+            sessions += [got[1]] if SESSION.fullmatch(got[1]) else []
         cg = scope_of(pid, p.pane_id) if pid is not None else None
         if cg is None:
             unowned.append(p.pane_id)
@@ -346,6 +356,11 @@ def close(target: str, out: TextIO = sys.stdout) -> int:
         stop = ["systemctl", "--user", "stop", cg.rsplit("/", 1)[-1]]
         if subprocess.run(stop, capture_output=True, check=False).returncode == 0:
             killed += n
+    if rc == 0 and sessions:  # each closed agent's own Herdr extension (herdr-spawn)
+        state = [str(KIT / "scripts" / "octo-feather-state")]
+        top = subprocess.run(state, capture_output=True, text=True, check=False).stdout.strip()
+        for session in sessions if top else []:
+            shutil.rmtree(Path(top, "herdr-pi", session), ignore_errors=True)
     report = f"{kind}={target} {kind}_close_rc={rc} killed={killed}"
     out.write(report + (f" unowned={','.join(unowned)}" if unowned else "") + "\n")
     return rc

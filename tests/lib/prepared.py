@@ -14,11 +14,16 @@ in tests/lib/ so the gate's tests/*.sh glob does not collect it.
       in place of the filelock library (the kit's own scripts stay stdlib-only). The tree is
       read-only by contract: a test copies what it needs (`cp -a`), never writes it. A failed
       install exits 1 with pnpm's output and the fetch command; the next caller tries again.
+      Prepared under $GATE_RUN_DIR, its CPU is billed to its own line, shared-typescript, never to
+      the item that happened to build it (GATE_SHARED_CPU: tests/gate/conftest.py).
 """
 
+import contextlib
 import fcntl
+import json
 import os
 import pathlib
+import resource
 import shutil
 import subprocess
 import sys
@@ -58,6 +63,11 @@ def typescript(dest: pathlib.Path) -> None:
         )
 
 
+def _cpu() -> float:
+    s, c = resource.getrusage(resource.RUSAGE_SELF), resource.getrusage(resource.RUSAGE_CHILDREN)
+    return s.ru_utime + s.ru_stime + c.ru_utime + c.ru_stime
+
+
 def main() -> None:
     if len(sys.argv) != 3 or sys.argv[1] != "typescript":
         sys.exit("usage: prepared.py typescript DIR")
@@ -68,7 +78,12 @@ def main() -> None:
         if not done.exists():
             shutil.rmtree(tree, ignore_errors=True)  # a caller before failed part way
             tree.mkdir()
+            cpu = _cpu()
             typescript(tree)
+            if os.environ.get("GATE_RUN_DIR") and (bill := os.environ.get("GATE_SHARED_CPU")):
+                line = {"line": "shared-typescript", "cpu_s": round(_cpu() - cpu, 3)}
+                with contextlib.suppress(OSError), pathlib.Path(bill).open("a") as f:
+                    f.write(json.dumps(line) + "\n")
             done.touch()
     sys.stdout.write(f"{tree}\n")
 

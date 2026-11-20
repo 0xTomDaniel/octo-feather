@@ -33,6 +33,9 @@ check run also carries a runtime marker:
       that argv (`just -q check`: -q conflicts with the dry run), fails closed:
       a new marker too, carrying just's reason, so qa and the judge refuse
       under it; else the inherited marker, if any.
+  check-gate-free --guard-and-run   the scan above, then, only on its pass, the
+      --run marker on the line after the ok line: one process answers both
+      justfile backticks, so a just run starts one Python, not two (#1181).
   check-gate-free --refuse WHAT   run where qa or the judge would start:
       outside a check run prints `gate-free: ok`; inside one, whatever it would
       launch, names WHAT on stderr, stops the outermost check run (SIGTERM to
@@ -194,8 +197,9 @@ def main():
         return run_marker()
     if sys.argv[1:2] == ["--refuse"]:
         return refuse(sys.argv[2:])
+    guard_and_run = sys.argv[1:2] == ["--guard-and-run"]
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    path = sys.argv[1] if len(sys.argv) > 1 else parent_justfile() or os.path.join(root, "justfile")
+    path = sys.argv[1] if len(sys.argv) > 1 and not guard_and_run else parent_justfile() or os.path.join(root, "justfile")
     try:
         p = subprocess.run(["just", "--justfile", path, "--dump", "--dump-format", "json"],
                            capture_output=True, text=True)
@@ -233,6 +237,8 @@ def main():
         print(f"check-gate-free: the gate recipes above reach the product judge or factory evals; {FIX}", file=sys.stderr)
         sys.exit(1)
     print("gate-free: ok")
+    if guard_and_run:
+        run_marker()
 
 
 if __name__ == "__main__":
