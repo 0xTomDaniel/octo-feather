@@ -2,8 +2,10 @@
 """gh: the qc judge's offline, read-only gh (docs/adr/0022).
 scripts/octo-feather-qc-sandbox puts this dir first on the judge's PATH. It answers reads from the
 snapshot scripts/octo-feather-qc-ghsnap fetched before the run (read-only bind, never the network):
-issue view|list, pr view|list|diff|checks, run view|list, repo view, api GET, --json/-q/--jq.
-It refuses every write and every call the snapshot cannot answer (exit 1) and logs each refusal.
+issue view|list, pr view|list|diff|checks, run view|list, repo view, api GET, --json/-q/--jq, and one graphql
+query: the github-issues skill's issue-view --notes (the snapshot's notes.graphql, asked with -F n=N and the
+snapshot's owner and name), answered with the issue/N.notes.json GitHub gave the snapshot. It refuses every write,
+every other graphql call and every call the snapshot cannot answer (exit 1) and logs each refusal.
 Env: OCTO_FEATHER_GHSNAP snapshot dir; OCTO_FEATHER_GHSNAP_OFF why there is none (then every call
 is refused with it); OCTO_FEATHER_GHSNAP_MISS the refusal log (a file, or the sandbox recorder's socket). File contents and commits come from
 the git repo of the current directory."""
@@ -218,6 +220,25 @@ def api(args):
     emit(d, o.get("jq"))
 
 
+def notes(argv: list[str], repo: str) -> None:
+    """The one graphql query the snapshot answers (module docstring): ARGV exactly `api graphql` with -F n=N and -f
+    owner, name (REPO's) and query (the snapshot's notes.graphql), in any order; any other call returns, for the
+    rest of this shim to answer or refuse."""
+    try:
+        with open(os.path.join(SNAP, "notes.graphql"), encoding="utf-8") as f: want = f.read()
+    except OSError: return
+    pairs = list(zip(argv[2::2], argv[3::2], strict=False))
+    if argv[:2] != ["api", "graphql"] or len(argv) != 2 + 2 * len(pairs) or sorted(k for k, _ in pairs) != ["-F", "-f", "-f", "-f"]: return
+    v = {k: val for k, _, val in (x.partition("=") for _, x in pairs)}
+    if sorted(v) != ["n", "name", "owner", "query"] or v["query"] != want or not v["n"].isdigit() \
+            or f"{v['owner']}/{v['name']}".lower() != repo.lower():
+        return
+    try:
+        with open(os.path.join(SNAP, "issue", f"{int(v['n'])}.notes.json"), encoding="utf-8") as f: sys.stdout.write(f.read())
+    except OSError: miss(f"graphql: issue #{v['n']} notes not in read-only snapshot (list-only or not an issue)")
+    sys.exit(0)
+
+
 def run_cmd(sub, args):
     o, pos = parse(args, {**COMMON, "-L": "limit", "--limit": "limit", "-b": "branch", "--branch": "branch", "-w": "workflow",
                           "--workflow": "workflow", "-s": "status", "--status": "status", "-c": "commit", "--commit": "commit",
@@ -244,6 +265,7 @@ def main(a):
     if not SNAP:
         miss(os.environ.get("OCTO_FEATHER_GHSNAP_OFF") or "no GitHub snapshot in this run (OCTO_FEATHER_GHSNAP unset)")
     REPO = (load("meta.json") or {}).get("repo") or miss(f"snapshot {SNAP} unreadable (no meta.json)")
+    notes(sys.argv[1:], REPO if isinstance(REPO, str) else "")
     select_repo(a)
     while a and a[0] in ("-R", "--repo"): a = a[2:]  # tolerate leading global repo flag
     if not a or a[0] in ("-h", "--help", "help"):
