@@ -6,7 +6,7 @@ from collections.abc import Callable
 
 import pytest
 from slot import (
-    follow_up,
+    back_to_back,
     granted,
     new_reads_old,
     old_reads_new,
@@ -15,7 +15,6 @@ from slot import (
     queued,
     queued_late,
     refused,
-    regranted,
     revoked,
     sandboxed,
     two_sessions,
@@ -49,11 +48,6 @@ def test_user_mise_gate(case: Case) -> None:
 @pytest.mark.e2e
 def test_queued(case: Case) -> None:
     case(queued)
-
-
-@pytest.mark.e2e
-def test_follow_up(case: Case) -> None:
-    case(follow_up)
 
 
 def test_queue_free(case: Case) -> None:
@@ -91,10 +85,11 @@ def test_queued_late(case: Case) -> None:
 
 
 @pytest.mark.e2e
-def test_regranted(case: Case) -> None:
-    case(regranted)
-
-
-@pytest.mark.e2e
 def test_two_sessions(case: Case) -> None:
     case(two_sessions)
+
+
+@pytest.mark.e2e  # waits out a real grace through two real gate runs
+@pytest.mark.criterion("quality#acceptance-gate-recipes-first")
+def test_back_to_back(case: Case) -> None:
+    case(back_to_back)
