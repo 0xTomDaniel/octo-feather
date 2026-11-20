@@ -277,8 +277,11 @@
       ]
     },
     "acceptance-ticket-skills": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1118,
+      "record": "20261120T031844Z-83b2b4dd",
+      "commit": "36cf228e330332607b7e60e0bc0d24ec8791600d",
+      "tests": []
     }
   }
 }
