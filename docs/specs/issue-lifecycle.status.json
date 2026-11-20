@@ -298,8 +298,8 @@
     "acceptance-stale-agents": {
       "status": "built",
       "pr": 1145,
-      "record": "20261120T045956Z-1db44648",
-      "commit": "f1d150a2359b4977c0e77c5ab34673328050b388",
+      "record": "20261120T175844Z-4a832248",
+      "commit": "33241c12793c82072a80189a68087989ecef86db",
       "tests": [
         "tests/gate/kit/lane_stale.py"
       ]
