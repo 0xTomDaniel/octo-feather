@@ -40,8 +40,8 @@ Setup (this process, outside the judge's namespaces):
         >= 5.11 and tmpfs user xattrs >= 6.6, else exit 66); uv's cache (as `uv --color never cache dir` names it) the same
         overlay, so an offline `uv sync` finds the box's packages and nothing reaches the real cache; Pi's
         auth.json and models.json per-run copies there, bound over the real files (never written back; none with
-        QC_PI=none, a run with no Pi such as a declared demo); in a coverage mapping run (just fast-map, cov_dir) a
-        dir there bound at its data dir's path, its files copied into the real one at exit (cov_out); the caller's
+        QC_PI=none, a run with no Pi such as a declared demo); a coverage mapping run's data dir (just fast-map:
+        docs/adr/0022; what leaves it: cov_out); the caller's
         archived lanes and director log bound
         at a scratch state dir (none with QC_HISTORY=none: a factory eval sees no lane history), the qa runs dir QC_QA
      at its qa/ (why and when: docs/adr/0022, sandbox paragraph; none without QC_QA), and the box
@@ -52,8 +52,7 @@ Setup (this process, outside the judge's namespaces):
      the worktree; what is bound back on each mask: docs/adr/0022), the cache dir and Pi's agent dir; allowRead
      carve-outs under them, read-only (kept /tmp paths, the shims, the attempt record view, history, what a repo
      mask binds back, the vendored-skill cache, Pi's entries but sessions); allowWrite only the overlays, the Pi
-     copies and a mapping run's coverage data dir (their writes discarded by step D, but the data files it copies
-     out); srt's own convenience write dirs (~/.npm/_logs, ~/.claude/debug)
+     copies and a mapping run's coverage data dir (their writes discarded by step D; the last: cov_out); srt's own convenience write dirs (~/.npm/_logs, ~/.claude/debug)
      read-denied, so they are masks, never the real dirs; allowAllUnixSockets (Herdr talks over a Unix socket; srt's
      default seccomp filter refuses socket(AF_UNIX)); allowNestedUserNamespaces (a qc run inside the sandbox); the
      network: no host at all for a run with no Pi, else the model hosts of Pi's models.json and auth.json and the
@@ -112,6 +111,7 @@ import shlex
 import shutil
 import signal
 import socket
+import sqlite3
 import stat
 import struct
 import subprocess
@@ -736,38 +736,64 @@ def srt_node(data: str) -> str:
     return node
 
 
-def cov_dir() -> str:
-    """A coverage mapping run's data dir (just fast-map: COVERAGE_PROCESS_START names its TOML config,
-    tests/gate/coverage.toml): the dir of [tool.coverage.run] data_file, its env vars expanded as coverage.py does,
-    made if absent. No mapping run, or a data_file this cannot place exactly (no such key, a variable left unset, a
-    relative path): ''."""
+def cov_dir() -> tuple[str, str]:
+    """A coverage mapping run's data dir and data file name (just fast-map: COVERAGE_PROCESS_START names its TOML
+    config, tests/gate/coverage.toml): [tool.coverage.run] data_file, its env vars expanded as coverage.py does, the
+    dir made if absent. No mapping run, or a data_file this cannot place exactly (no such key, a variable left
+    unset, a relative path): ('', '')."""
     cfg = E.get("COVERAGE_PROCESS_START", "")
     try:
         df = tomllib.load(open(cfg, "rb"))["tool"]["coverage"]["run"]["data_file"]
     except (OSError, ValueError, KeyError, TypeError):
-        return ""
+        return "", ""
     d = os.path.dirname(os.path.expandvars(df)) if isinstance(df, str) else ""
     if "$" in d or not d.startswith("/") or os.path.realpath(d) in ("/", "/tmp"):
-        return ""
+        return "", ""
     os.makedirs(d, exist_ok=True)
-    return os.path.realpath(d)
+    return os.path.realpath(d), os.path.basename(os.path.expandvars(df))
 
 
-def cov_out(run: str, fd: int, at: str) -> None:
-    """A mapping run's coverage data out of the run tmpfs RUN: each regular file there (no link followed, none
-    overwritten) copied into the real data dir (held open as FD), which is then bound back at AT, so this process's
-    own data, saved after this at exit, lands there too."""
+def cov_out(run: str, fd: int, at: str, base: str, root: int) -> None:
+    """A mapping run's coverage out of the run tmpfs RUN, where the run's processes, the judge's included, saved
+    it. No file there leaves: each is read as coverage data by coverage.py, and only what it measured is written
+    anew, as one data file BASE.qc-sandbox.<pid>.<hex> in the real data dir (held open as FD, then bound back at
+    AT, so this process's own data, saved after this at exit, lands there too): each measured file that is a
+    regular file on the box as it was before the sandbox (ROOT, the host root held open before any namespace;
+    nothing the judge wrote is there), with its lines within that file. Anything else, a file coverage cannot
+    read included, is dropped."""
+    lines: dict[str, set[int]] = {}
+    try:
+        import coverage  # noqa: PLC0415  # only a mapping run, under the kit's uv venv, has it
+    except ImportError:
+        mount(f"/proc/self/fd/{fd}", at, None, MS_BIND)
+        say(f"coverage data dropped: coverage.py not importable by {sys.executable}")
+        return
     for f in os.scandir(run):
         if not f.is_file(follow_symlinks=False):
             continue
-        w = os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW
-        with (
-            contextlib.suppress(OSError),
-            open(f.path, "rb") as i,
-            os.fdopen(os.open(f.name, w, 0o600, dir_fd=fd), "wb") as o,
-        ):
-            shutil.copyfileobj(i, o)
+        try:
+            cd = coverage.CoverageData(basename=f.path)
+            cd.read()
+            got = {m: set(cd.lines(m) or ()) for m in cd.measured_files()}
+        except (coverage.CoverageException, sqlite3.Error, OSError, ValueError, TypeError):
+            continue
+        for m, ls in got.items():
+            h = f"/proc/self/fd/{root}{m}"
+            if not m.startswith("/") or not os.path.isfile(h):
+                continue
+            try:
+                with open(h, "rb") as src:
+                    n = sum(1 for _ in src)
+            except OSError:
+                continue
+            lines.setdefault(m, set()).update(x for x in ls if 0 < x <= n)
     mount(f"/proc/self/fd/{fd}", at, None, MS_BIND)
+    if lines:
+        out = coverage.CoverageData(
+            basename=f"{at}/{base}", suffix=f"qc-sandbox.{os.getpid()}.{secrets.token_hex(4)}"
+        )
+        out.add_lines({m: sorted(ls) for m, ls in lines.items()})
+        out.write()
 
 
 def srt_log(p: subprocess.Popen[bytes], sock: str, early: list[str], rec: Recorder) -> None:
@@ -843,7 +869,7 @@ def setup(judge: list[str]) -> NoReturn:
 
     # Host facts, read before any namespace or mask.
     sjs, srtv, snm = srt_js()
-    COV = cov_dir()
+    COV, COVB = cov_dir()
     if COV:  # its config read-only, as each process of the run reads it at start (another repo's is masked)
         cfg = os.path.realpath(E["COVERAGE_PROCESS_START"])
         ro_binds.append(cfg)
@@ -961,6 +987,8 @@ def setup(judge: list[str]) -> NoReturn:
         finally:
             os.close(fd)
 
+    # the box's root as it is outside the discard stage, held before it: what a mapping run's coverage may name
+    rfd = os.open("/", os.O_RDONLY | os.O_DIRECTORY) if COV else -1
     try:
         os.unshare(os.CLONE_NEWUSER | os.CLONE_NEWNS | os.CLONE_NEWIPC)
         put("/proc/self/uid_map", f"{uid} {ou} 1")
@@ -1072,8 +1100,7 @@ def setup(judge: list[str]) -> NoReturn:
                 mount(f"{OV}/pi/{n}", f"{PI}/{n}", None, MS_BIND)
             except OSError as e:
                 die(f"copy Pi {n} ({e})")
-    # A coverage mapping run's data dir: a dir on the run tmpfs at its path, so the run's processes, the judge's
-    # included, save their data with no persistent writable path; copied out at exit (cov_out).
+    # A coverage mapping run's data dir on the run tmpfs (docs/adr/0022; what leaves it: cov_out).
     if COV:
         try:
             os.mkdir(f"{OV}/cov")
@@ -1081,7 +1108,7 @@ def setup(judge: list[str]) -> NoReturn:
             mount(f"{OV}/cov", COV, None, MS_BIND)
         except OSError as e:
             die(f"coverage data dir {COV} on the run tmpfs ({e})")
-        atexit.register(cov_out, f"{OV}/cov", cfd, COV)
+        atexit.register(cov_out, f"{OV}/cov", cfd, COV, COVB, rfd)
     os.chdir(cwd)
     # history at the scratch state dir (step 2, read-only through srt's allowRead below).
     os.makedirs(f"{SB}/lanes")
