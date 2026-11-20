@@ -14,19 +14,26 @@ octo-feather-lane's cmd_merge_ask.
 
 Interface:
 
-    snapshot(pr, repo, files, read, qc_dir, err=...) -> Snapshot
+    snapshot(pr, repo, files, read, qc_dir, err=..., base=None) -> Snapshot
         The one reader: the status FILES (--status), then PR in REPO (None: this directory's)
         through READ, the command's reader ((gh pr view's JSON: body, headRefName, headRefOid,
         statusCheckRollup, baseRefName, comments; the PR's commits or why they are unread)),
         what the tracker skill's key-from-branch and pr-line print for its head branch
         (ParentLine) or its refusal (NoParent), the head's GitHub check facts (Checks), each read
         only when its rule needs it, a failed read kept as Unread, and the qc reports in QC_DIR
-        at each commit of the PR. An unreadable status file raises ERR.
+        at each commit of the PR. An unreadable status file raises ERR. Spec #gates-merge-order
+        (Order): every other open PR on the PR's base branch (gh pr list), its head fetched (git
+        fetch origin pull/N/head) when this repo lacks it, git merge-tree of the two heads, the
+        octo-feather-qa --verdict pins its qc.toml demos name at its head, and that command's
+        lines for them at the base (pr_base: BASE, --base, else origin/<base branch>) and at the
+        base merged with the head (a commit-tree, no ref moved), each run in a scratch detached
+        worktree.
     check(s) -> Ask | Need
         Pure, no I/O. Need: the head proof (octo-feather-lane's head_proof) the rules need
         next, by its arguments; the caller adds its answer to S.proofs and checks again. Ask:
         each refusal line the merge ask prints for S, in order, by rule, in the parts the
-        command's own items go between; none when S passes; with what a passing ask prints.
+        command's own items go between; none when S passes; with what a passing ask prints;
+        Ask.order, the merge-order lines (spec #gates-merge-order), never a gap.
 
 Shared with octo-feather-lane's other commands: bad_checks (lane status), check_runs (the
 carried checks) and ci_workflows (post-merge), each read raising the ERR its caller passes.
@@ -39,12 +46,15 @@ __all__ = [  # check's interface, then the helpers octo-feather-lane's other com
     "Need",
     "NoParent",
     "NoWorkflow",
+    "Order",
     "ParentLine",
+    "Pin",
     "Policy",
     "Proof",
     "ProofAsk",
     "ProofError",
     "Reported",
+    "Sibling",
     "Snapshot",
     "Unread",
     "Workflows",
@@ -52,19 +62,24 @@ __all__ = [  # check's interface, then the helpers octo-feather-lane's other com
     "check",
     "check_runs",
     "ci_workflows",
+    "pr_base",
     "snapshot",
 ]
 
 import dataclasses
 import json
+import os
 import re
+import shlex
 import subprocess
+import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import cast
 
-from tracker_calls import gh, tracker
+import tomllib
+from tracker_calls import KIT, gh, tracker
 
 # GitHub's closing keywords: a PR body line with one closes that GitHub issue at merge, named
 # as #N, as owner/repo#N or by the issue URL.
@@ -194,6 +209,40 @@ class ProofError:
     why: str
 
 
+# --- the merge order (#1152, spec #gates-merge-order): the open PRs this merge sets back ---
+
+
+@dataclass(frozen=True)
+class Pin:
+    """A stored eval run an open PR's qc.toml demo pins (RUN_ID/SUITE/CASE, RUN), and the line
+    octo-feather-qa --verdict printed for it at the base (MAIN) and at the base merged with this
+    lane's head (MERGED)."""
+
+    run: str
+    main: str
+    merged: str
+
+
+@dataclass(frozen=True)
+class Sibling:
+    """Another open PR: NUMBER, head BRANCH, the files git merge-tree finds in conflict between its
+    head and this lane's (CONFLICTS), and the runs its demos pin (PINS)."""
+
+    number: int
+    branch: str
+    conflicts: list[str]
+    pins: list[Pin]
+
+
+@dataclass(frozen=True)
+class Order:
+    """The other open PRs on BASE (PRS, by number), and each read that failed (UNREAD), one line."""
+
+    base: str
+    prs: list[Sibling]
+    unread: list[str]
+
+
 @dataclass(frozen=True)
 class Snapshot:
     """A PR's facts, read once."""
@@ -220,6 +269,8 @@ class Snapshot:
         default_factory=dict
     )
     proofs: dict[ProofAsk, Proof | ProofError] = dataclasses.field(default_factory=dict)
+    # the merge order (#1152): ORDER, the other open PRs on the base, None when not read
+    order: Order | None = None
 
 
 @dataclass(frozen=True)
@@ -232,7 +283,8 @@ class Ask:
     be judged (exit 1, no gap). What a passing ask prints and the command reads: SECTION, the
     `## Merge ask` lines; JUDGED_HEAD and PROOF (its head proof line); CLASSES, the review's
     check classes; SOURCES, each row's decision source; JUDGMENTS, the model judgment comments
-    (shown only); NO_CI, the no-CI fact's line on a pass, else ''; CURRENT, the head's checks
+    (shown only); ORDER, the merge-order lines (shown only, spec #gates-merge-order, on
+    any Ask); NO_CI, the no-CI fact's line on a pass, else ''; CURRENT, the head's checks
     after the current-head projection (the rollup when it could not be made), which merge-ask's
     carried checks read."""
 
@@ -249,6 +301,7 @@ class Ask:
     classes: list[str] = dataclasses.field(default_factory=list)
     sources: list[str] = dataclasses.field(default_factory=list)
     judgments: list[str] = dataclasses.field(default_factory=list)
+    order: list[str] = dataclasses.field(default_factory=list)
 
     @property
     def gaps(self) -> list[str]:
@@ -282,6 +335,7 @@ def snapshot(  # noqa: PLR0913  each read's input, the command's reader among th
     qc_dir: Path,
     *,
     err: type[Exception],
+    base: str | None = None,
 ) -> Snapshot:
     specs = statuses(files, err) if files else {}
     view, commits = read()
@@ -303,6 +357,8 @@ def snapshot(  # noqa: PLR0913  each read's input, the command's reader among th
     comments = [Comment(str(c.get("url") or ""), str(c.get("body") or "")) for c in raw]
     listed = commits if isinstance(commits, list) else []
     shas = {oid.lower() for oid, _ in listed} | {head.lower()}
+    base_branch = str(view["baseRefName"] or "")
+    order = _order(pr, head, base_branch or "main", pr_base(base_branch, base), repo)
     return Snapshot(
         body,
         branch,
@@ -316,7 +372,14 @@ def snapshot(  # noqa: PLR0913  each read's input, the command's reader among th
         named=bool(files),
         comments=comments,
         qc={sha: qc_latest(qc_dir, sha) for sha in sorted(shas)},
+        order=order,
     )
+
+
+def pr_base(ref: str, base: str | None) -> str:
+    """The base a PR's commits are read against: BASE (--base) when given, else REF, its base
+    branch, on origin."""
+    return base or f"origin/{ref or 'main'}"
 
 
 def _reported(head: str, rollup: list[dict[str, object]], repo: str | None) -> Reported:
@@ -489,9 +552,10 @@ class _NeedError(Exception):
 
 def check(s: Snapshot) -> Ask | Need:
     try:
-        return _check(s)
+        a = _check(s)
     except _NeedError as m:
         return Need(m.ask)
+    return dataclasses.replace(a, order=merge_order(s.order)) if s.order else a
 
 
 def parent_line(s: Snapshot) -> list[str]:
@@ -1534,3 +1598,218 @@ def check_lines(text: str) -> tuple[list[str], list[str]]:
 
 def head_matches(named: str, head: str) -> bool:
     return bool(SHA.fullmatch(named)) and head.lower().startswith(named.lower())
+
+
+# The merge-order rule, pure (spec #gates-merge-order)
+
+# The freshness tail of an octo-feather-qa --verdict line (its --help, Verdict): fresh, stale with
+# each stale item, or missing with why.
+FRESHNESS = re.compile(
+    r"^\S+ \S+: stored \S+, run \S+, kit \S+, [^;]*; "
+    r"(?:fresh at HEAD \w+|stale at HEAD \w+: (?P<stale>.*)|missing: .*)$"
+)
+
+
+def _stale(line: str) -> list[str] | None:
+    """The stale items LINE names (none when fresh); None when it judged no freshness."""
+    m = FRESHNESS.match(line)
+    if m is None or line.split("; ", 1)[1].startswith("missing: "):
+        return None
+    return m.group("stale").split("; ") if m.group("stale") else []
+
+
+def merge_order(o: Order) -> list[str]:
+    """Spec #gates-merge-order: each other open PR whose pinned runs fresh on the base go stale
+    with this lane merged in (the items octo-feather-qa names stale only then), and each whose
+    head conflicts with this lane's head; shown only, never a gap."""
+    out: list[str] = []
+    for p in o.prs:
+        who = f"PR #{p.number} ({p.branch})"
+        if p.conflicts:
+            out.append(f"- {who}: its head conflicts with this head in {', '.join(p.conflicts)}")
+        for pin in p.pins:
+            was, now = _stale(pin.main), _stale(pin.merged)
+            if was is None or now is None:
+                said = pin.main if was is None else pin.merged
+                out.append(f"- not read: {who} pinned run {pin.run}: octo-feather-qa said {said}")
+            elif new := [x for x in now if x not in was]:
+                out.append(f"- {who}: this merge stales its pinned run {pin.run}: {'; '.join(new)}")
+    out += [f"- not read: {u}" for u in o.unread]
+    if not out:
+        n = len(o.prs)
+        out = [
+            (
+                f"- none: {n} other open pull request{'s' * (n != 1)} on {o.base}, none this "
+                "merge would stale or conflict with"
+            )
+        ]
+    head = (
+        "Merge order (issue-lifecycle #gates-merge-order; shown only: this merge ask passes or "
+        "fails the same without it):"
+    )
+    return [head, *out]
+
+
+# The merge-order reads (spec #gates-merge-order)
+
+
+class _UnreadError(Exception):
+    """A merge-order read that failed, kept as one Order.unread line."""
+
+
+QA = KIT / "scripts" / "octo-feather-qa"
+SHELL_OPS = {";", "&&", "||", "|", "&", "(", ")"}
+IDENT = {
+    f"GIT_{who}_{k}": v
+    for who in ("AUTHOR", "COMMITTER")
+    for k, v in (("NAME", "merge-ask"), ("EMAIL", "merge-ask@localhost"))
+}
+
+
+def _git(*args: str, ok: tuple[int, ...] = (0,)) -> tuple[int, str]:
+    """git ARGS in the current repo: (exit, stdout); _UnreadError naming it on another exit."""
+    p = subprocess.run(
+        ["git", *args],  # noqa: S607 (git from PATH, as the command runs it)
+        capture_output=True,
+        text=True,
+        env={**os.environ, **IDENT},
+        check=False,
+    )
+    if p.returncode not in ok:
+        said = (p.stderr or p.stdout).strip().splitlines()
+        msg = f"git {' '.join(args[:2])} failed ({said[-1][:200] if said else p.returncode})"
+        raise _UnreadError(msg)
+    return p.returncode, p.stdout
+
+
+def _pins(command: str) -> list[str]:
+    """The RUN_ID/SUITE/CASE arguments of each `octo-feather-qa --verdict` in shell COMMAND."""
+    lex = shlex.shlex(command, posix=True, punctuation_chars=True)
+    lex.whitespace_split = True
+    words = list(lex)
+    out: list[str] = []
+    for i, w in enumerate(words[:-1]):
+        if Path(w).name == "octo-feather-qa" and words[i + 1] == "--verdict":
+            for a in words[i + 2 :]:
+                if a.startswith("-") or a in SHELL_OPS:
+                    break
+                out.append(a)
+    return out
+
+
+def _demo_pins(oid: str) -> list[str]:
+    """The pins of every qc.toml demo at commit OID; none without a qc.toml there."""
+    rc, text = _git("show", f"{oid}:qc.toml", ok=(0, 128))
+    if rc:
+        return []
+    try:
+        demos: object = tomllib.loads(text).get("demo", {})
+        cmds = [
+            cast("dict[str, object]", c).get("command")
+            for c in cast("dict[str, object]", demos).values()
+            if isinstance(c, dict)
+        ]
+        return list(dict.fromkeys(p for c in cmds if isinstance(c, str) for p in _pins(c)))
+    except (tomllib.TOMLDecodeError, ValueError, AttributeError) as e:
+        msg = f"qc.toml at {oid[:12]} not parsed ({e})"
+        raise _UnreadError(msg) from e
+
+
+def _merge_tree(ours: str, theirs: str) -> tuple[str, list[str]]:
+    """(the tree git merge-tree writes for OURS and THEIRS, the files in conflict)."""
+    rc, out = _git(
+        "merge-tree", "--write-tree", "--name-only", "--no-messages", ours, theirs, ok=(0, 1)
+    )
+    lines = out.splitlines()
+    if not lines or not re.fullmatch(r"[0-9a-f]{40,64}", lines[0]):
+        msg = f"git merge-tree of {ours[:12]} and {theirs[:12]} printed no tree"
+        raise _UnreadError(msg)
+    return lines[0], list(dict.fromkeys(lines[1:])) if rc else []
+
+
+def _merged(base: str, head: str, name: str) -> str:
+    """A commit of BASE (NAME) merged with HEAD (git merge-tree, then commit-tree: no ref moved)."""
+    tree, conflicts = _merge_tree(base, head)
+    if conflicts:
+        msg = f"this head does not merge cleanly with {name} ({', '.join(conflicts)})"
+        raise _UnreadError(msg)
+    return _git("commit-tree", tree, "-p", base, "-p", head, "-m", f"merge-ask: {name} + head")[
+        1
+    ].strip()
+
+
+def _verdicts(rev: str, pins: list[str]) -> list[str]:
+    """octo-feather-qa --verdict PINS, run in a scratch detached worktree at REV: a line per pin."""
+    with tempfile.TemporaryDirectory(prefix="merge-ask-order-") as tmp:
+        wt = str(Path(tmp) / "wt")
+        _git("worktree", "add", "-q", "--detach", wt, rev)
+        try:
+            p = subprocess.run(
+                [str(QA), "--verdict", *pins], capture_output=True, text=True, cwd=wt, check=False
+            )
+        finally:
+            _git("worktree", "remove", "--force", wt, ok=(0, 128))
+    lines = p.stdout.splitlines()
+    if p.returncode not in (0, 1, 77) or len(lines) != len(pins):
+        said = p.stderr.strip().splitlines()
+        msg = (
+            f"octo-feather-qa --verdict at {rev[:12]} exited {p.returncode}"
+            f" ({said[-1][:200] if said else 'no error line'})"
+        )
+        raise _UnreadError(msg)
+    return lines
+
+
+def _open_prs(pr: int, base_branch: str, repo: str | None) -> list[tuple[int, str, str]]:
+    """(number, head branch, head oid) of every open PR but PR on BASE_BRANCH, by number."""
+    fields = "number,headRefName,headRefOid"
+    args = ["pr", "list", "--state", "open", "--base", base_branch, "--limit", "200"]
+    out = gh(
+        [*args, "--json", fields, *(["-R", repo] if repo else [])],
+        "check gh auth status, then rerun",
+        err=_UnreadError,
+    )
+    try:
+        rows = cast("list[dict[str, object]]", json.loads(out))
+        got = [(int(str(r["number"])), str(r["headRefName"]), str(r["headRefOid"])) for r in rows]
+    except (ValueError, KeyError, TypeError) as e:
+        msg = f"gh pr list printed no pull requests ({out[:100]!r})"
+        raise _UnreadError(msg) from e
+    return sorted(x for x in got if x[0] != pr)
+
+
+def _sibling(
+    head: str, n: int, branch: str, oid: str
+) -> tuple[int, str, list[str], list[str]] | str:
+    """PR N's (number, branch, files in conflict with HEAD, pins), its head OID fetched when this
+    repo lacks it; the unread line when a read fails."""
+    try:
+        if _git("cat-file", "-e", f"{oid}^{{commit}}", ok=(0, 1, 128))[0]:
+            _git("fetch", "-q", "--no-write-fetch-head", "origin", f"pull/{n}/head")
+        return n, branch, _merge_tree(head, oid)[1], _demo_pins(oid)
+    except _UnreadError as e:
+        return f"PR #{n} ({branch}) head {oid[:12]}: {e}"
+
+
+def _order(pr: int, head: str, base_branch: str, base: str, repo: str | None) -> Order:
+    """The Order the reads give for PR at HEAD on BASE_BRANCH (BASE the ref to merge with, REPO
+    gh's; spec #gates-merge-order); each failed read one unread line."""
+    try:
+        rows = _open_prs(pr, base_branch, repo)
+    except _UnreadError as e:
+        return Order(base_branch, [], [f"open pull requests on {base_branch}: {e}"])
+    read = [_sibling(head, *r) for r in rows]
+    found = [x for x in read if not isinstance(x, str)]
+    unread = [x for x in read if isinstance(x, str)]
+    pins = list(dict.fromkeys(p for *_, ps in found for p in ps))
+    said: dict[str, tuple[str, str]] = {}
+    if pins:
+        try:
+            main = _git("rev-parse", "--verify", f"{base}^{{commit}}")[1].strip()
+            at_main = _verdicts(main, pins)
+            at_merged = _verdicts(_merged(main, head, base), pins)
+            said = {p: (a, b) for p, a, b in zip(pins, at_main, at_merged, strict=True)}
+        except _UnreadError as e:
+            unread.append(f"pinned runs {' '.join(pins)}: {e}")
+    prs = [Sibling(n, b, c, [Pin(p, *said[p]) for p in ps if p in said]) for n, b, c, ps in found]
+    return Order(base_branch, prs, unread)
