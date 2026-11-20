@@ -34,13 +34,15 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
   octo-feather-gate changed
       The test items the change adds or changes, one pytest argument per line: a tests/*.sh as its
       test_gate.py node id, any other changed file as its path (a pytest item's file); test_gate.py
-      itself is no item's. Changed: differing from the merge base of HEAD with the default branch,
-      to the working tree, untracked files too: the change's net changes, so a file changed and
-      restored is none, the same on CI (a checkout with the default branch's history). The
-      default branch from local refs, no network: origin/HEAD; else origin/<name>, then the local
-      <name>, for init.defaultBranch, main, master. None found: none judged. Where from on
-      stderr. Not select's diff base, which is for selection. The gate's per-test CPU budget reads
-      it (tests/gate/conftest.py; quality #acceptance-test-cpu-budget).
+      itself is no item's; a changed kit scenario file, tests/gate/kit/NAME.py, also names the
+      test_NAME.py beside it, whose items run it (tests/gate/kit/testkit). Changed: differing
+      from the merge base of HEAD with the default branch, to the working tree, untracked files
+      too: the change's net changes, so a file changed and restored is none, the same on CI (a
+      checkout with the default branch's history). The default branch from local refs, no
+      network: origin/HEAD; else origin/<name>, then the local <name>, for init.defaultBranch,
+      main, master. None found: none judged. Where from on stderr. Not select's diff base, which
+      is for selection. The gate's per-test CPU budget reads it (tests/gate/conftest.py; quality
+      #acceptance-test-cpu-budget).
   octo-feather-gate map DATA_DIR --junit FILE
       In the kit, under its uv venv (coverage): writes the coverage map from a mapping run's data
       (just fast-map), one coverage data dir per gate item, DATA_DIR/<item>/ (<item> GATE_ITEM: a
@@ -379,9 +381,15 @@ def changed_items() -> None:
     if not base:
         sys.stderr.write("changed: none judged: no default branch or no merge base with it\n")
         return
+    files = changed_since(base) - {NODE[:-2]}
+    root = Path(git("rev-parse", "--show-toplevel").strip())
+    for f in list(files):  # a kit scenario file changes the pytest file whose items run it
+        m = re.fullmatch(r"(tests/gate/kit/)(?!test_)([^/]*\.py)", f)
+        if m and (root / m.group(1) / f"test_{m.group(2)}").is_file():
+            files.add(f"{m.group(1)}test_{m.group(2)}")
     out = [
         f"{NODE}test_script[{f}]" if re.fullmatch(r"tests/[^/]*\.sh", f) else f
-        for f in sorted(changed_since(base) - {NODE[:-2]})
+        for f in sorted(files)
     ]
     sys.stderr.write(f"changed: {len(out)} files since {base[:12]}, the merge base with {ref}\n")
     sys.stdout.write("".join(f"{i}\n" for i in out))
