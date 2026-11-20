@@ -340,6 +340,19 @@ def printed(out: str, wants: Sequence[Want]) -> None:
             fail(f"{w.why}: {out}")
 
 
+TDD: Result = {"fact": "skill_read", "skill": "tdd"}
+NO_TDD: Result = {"fact": "skill_not_read", "skill": "tdd"}
+NO_PULL: Result = {"fact": "skill_not_read", "skill": "pull"}
+# The an suite (Qa.an), each case by id: its task's stub tokens (testkit/pi_agent.py) and its
+# facts. same: passes on both kits. alt: fails on c1 (no tdd), alternates on c2, its pull fact
+# passing everywhere. costly: passes on both, 3 more messages' tokens on c2.
+AN: dict[str, tuple[str, list[object]]] = {
+    "same": ("Only look.", [NO_TDD]),
+    "alt": ("Build it. STUB-READ-TDD STUB-ALTERNATE", [TDD, NO_PULL]),
+    "costly": ("Only look. STUB-COSTLY", [NO_PULL]),
+}
+
+
 TRIG = [
     ("reads", True, "train", "Build it. STUB-READ-TDD"),
     ("near", False, "held-out", "Only look. STUB-READ-TDD"),
@@ -638,6 +651,15 @@ class Qa:
         with ThreadPoolExecutor() as pool:
             return dict(pool.map(one, cs))
 
+    def an(self) -> Path:
+        """The an stub suite (role-transcript, its fixture the trig suite's) in an/, its dir: each
+        case of AN, its task's stub tokens and its facts."""
+        e = self.t / "an"
+        self.fixture_fx(e)
+        suite(e, "an", "stub analysis", 10, 60)
+        cases(e / "an", [(ic(i, t), f) for i, (t, f) in AN.items()])
+        return e / "an"
+
     def kits(self, ref: Callable[[str], str] = str) -> Kits:
         """This scratch's kit copy (build_kit, prepared once per gate run, copied here) as Kits,
         each Config's ref REF of its sha (as --baseline or --kit-ref names it)."""
@@ -682,7 +704,7 @@ class Qa:
         *,
         runs: int = 1,
         configs: Sequence[Config] = (),
-        secs: Callable[[str, int], float] | None = None,
+        secs: Callable[[str, str, int], float] | None = None,
     ) -> Evaluation:
         """An evaluation of the cases of the stub suite in S (IDS: only those), RUNS each on
         each of CONFIGS (default: this kit alone), as the command runs one (octo-feather-qa
@@ -690,7 +712,7 @@ class Qa:
         run (Qa.watched, in a dir named as the command names it, qa-<id>-<n>r<k>-, whose run k
         the Pi stand-in reads) by `record` into its slot, each case by `combine`, the
         evaluation by `summarize`, under OCTO_FEATHER_QA_DIR (out/). SECS: a run's seconds by
-        (config, k), else its own. The runs are produced at once, then recorded in the
+        (case id, config, k), else its own. The runs are produced at once, then recorded in the
         command's order."""
         cfgs = list(configs) or [Config("", ROOT, None, self.s.git(ROOT, "rev-parse", "HEAD"))]
         d, name = s.parent, s.name
@@ -730,7 +752,7 @@ class Qa:
                     kits |= {"run": k, "of": runs, "config": cf.name}
                 dn = "." if one_run else (f"{cf.name}/run-{k}" if cf.name else f"run-{k}")
                 slot = Slot(out / dn, su, c, kits, root / "reviews")
-                took = secs(cf.name, k) if secs else w.secs
+                took = secs(str(c["id"]), cf.name, k) if secs else w.secs
                 res, said = record(
                     slot, w.run, inputs={**w.inputs, **kits}, secs=took, prompt=w.task
                 )

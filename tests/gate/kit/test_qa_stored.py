@@ -13,10 +13,10 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from eval_grading import UsageError, review
 from testkit import Scratch
 from testkit import qa_box as data
 from testkit.jsonwalk import at, keys, seq
-from eval_grading import UsageError, review
 from testkit.qa_box import Qa, Want, load, printed
 
 if TYPE_CHECKING:
