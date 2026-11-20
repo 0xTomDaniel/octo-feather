@@ -21,7 +21,7 @@ import json
 import subprocess
 import sys
 import time
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING
 
 from herdr_messaging import agent, lines
 from lane_merge import H, World
@@ -86,14 +86,16 @@ class Lane:
     def merged(self, want: int = 0) -> None:
         self.run(want, "merge", "7", H, "--repo", "o/r", cwd="t")
 
-    def unit(self) -> dict[str, str]:
-        """The lane's post-merge record's unit ({} before one is recorded)."""
-        rec = cast("dict[str, object]", json.loads((self.records / "gh7.json").read_text()))
-        return cast("dict[str, str]", rec.get("unit") or {})
+    def unit(self) -> str:
+        """The unit's line `post-merge --lane gh7` shows, its end after `ended `; "" with none."""
+        cmd = [kit("octo-feather-lane"), "post-merge", "--lane", "gh7"]
+        out = self.s.run(cmd, cwd=self.t, env={"PATH": self.w.path}).out
+        head = f"teardown unit {UNIT} "
+        return next((x for x in out.split("\n") if x.startswith(head)), "")
 
-    def ended(self) -> dict[str, str]:
+    def ended(self) -> str:
         """The teardown unit's end, waited for (the stand-in logs it after its stop hook ran):
-        the record's unit then; its lines printed."""
+        its line `post-merge --lane gh7` shows then; the unit's lines printed."""
         end = time.monotonic() + 120
         while f"unit {UNIT} ended" not in self.text(self.syslog):
             assert time.monotonic() < end, f"unit never ended: {self.text(self.syslog)}"
@@ -102,12 +104,13 @@ class Lane:
         sys.stdout.write(f"# the teardown unit's lines ({UNIT})\n{out}")
         return self.unit()
 
-    def wait_record_unit(self) -> dict[str, str]:
-        """The record once its unit's end is recorded (the fallback logs to no systemd log)."""
+    def wait_record_unit(self) -> str:
+        """The unit's line once `post-merge --lane gh7` shows its end and the unit's lines its
+        message (the fallback logs to no systemd log)."""
         end = time.monotonic() + 120
         while True:
             unit = self.unit()
-            if unit.get("ended") and "director " in self.text(self.records / "gh7.teardown.log"):
+            if ", ended " in unit and "director " in self.text(self.records / "gh7.teardown.log"):
                 return unit
             assert time.monotonic() < end, f"unit never ended: {unit}"
             time.sleep(0.2)
@@ -278,8 +281,9 @@ def archive_waits(s: Scratch) -> None:
 
 def unit_fails(s: Scratch, how: str = "fails") -> None:
     """A unit that fails (the worktree dirty: step 7 stops, the unit exits 1) or is killed at its
-    runtime limit (`killed`): its end recorded by its stop hook; the director told the stop once;
-    the hook run again for that end sends nothing."""
+    runtime limit (`killed`): its end recorded by its stop hook, as `post-merge --lane gh7` shows;
+    the director told the stop once: a failed routine tells it, and the stop hook, telling the
+    same stop, sends nothing."""
     t = Lane(s)
     t.merged()
     env = {"FAKE_SYSTEMD_KILLED": "1"} if how == "killed" else {}
@@ -291,23 +295,21 @@ def unit_fails(s: Scratch, how: str = "fails") -> None:
     sys.stdout.write("# the director's messages\n" + "\n".join(said) + "\n")
     assert len(said) == 1, said
     if how == "fails":
-        assert (unit["result"], unit["status"]) == ("exit-code", "exited 1"), unit
+        assert unit.endswith(": exit-code (exited 1)"), unit
+        log = t.text(t.records / "gh7.teardown.log")
+        assert "director already told (step 7 teardown stopped: " in log, log
         assert said[0].startswith("post-merge gh7 PR #7 stopped: step 7 teardown stopped: "), said
         assert "not removed" in said[0], said
         assert t.wt.exists(), "dirty worktree removed"
     else:
-        assert (unit["result"], unit["status"]) == ("timeout", "killed TERM"), unit
+        assert unit.endswith(": timeout (killed TERM)"), unit
         want = (
             f"post-merge gh7 PR #7 stopped: teardown unit {UNIT} ended timeout (killed TERM) before"
         )
         assert said[0].startswith(want), said
-    code, status = unit["status"].split(" ")
-    end = {"SERVICE_RESULT": unit["result"], "EXIT_CODE": code, "EXIT_STATUS": status}
-    r = t.run(0, "post-merge", "--lane", "gh7", "--unit-end", cwd="t", **end)
-    assert "director already told" in r.out, r.out
-    assert len(t.said()) == 1, t.said()
-    shown = t.run(0, "post-merge", "--lane", "gh7", cwd="t").out
-    assert f"teardown unit {UNIT} (systemd-run --user): started " in shown, shown
+    assert unit.startswith(f"teardown unit {UNIT} (systemd-run --user): started "), unit
+    shown = t.run(0, "post-merge", "--lane", "gh7", cwd="t").out.split("\n")
+    assert len([x for x in shown if x.startswith("director told: ")]) == 1, shown
 
 
 def unit_killed(s: Scratch) -> None:
