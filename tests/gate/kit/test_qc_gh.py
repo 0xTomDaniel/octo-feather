@@ -23,6 +23,7 @@ Case = Callable[..., None]
 pytestmark = pytest.mark.skipif(sys.platform == "darwin", reason="the qc sandbox needs Linux")
 
 
+@pytest.mark.e2e  # a real `unshare -cn` namespace (qc_gh.qc; quality spec #test-kinds)
 def test_refused_args(case: Case) -> None:
     case(refused_args)
 
@@ -42,6 +43,7 @@ def test_killed(case: Case) -> None:
     case(killed)
 
 
+@pytest.mark.e2e  # a real `unshare -cn` namespace (qc_gh.qc; quality spec #test-kinds)
 def test_fetch_fails(case: Case) -> None:
     case(fetch_fails)
 
