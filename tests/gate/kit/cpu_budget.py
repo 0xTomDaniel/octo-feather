@@ -19,7 +19,7 @@ import re
 import subprocess
 from typing import TYPE_CHECKING
 
-from testkit import ROOT, Ran, Scratch, kit_deps, main, pnpm_store, tool_homes
+from testkit import ROOT, Ran, Scratch, main, pnpm_store, tool_homes
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -49,7 +49,11 @@ def script(k: Path, name: str, head: str = "", *, once: bool = False) -> None:
 
 def build(s: Scratch) -> None:
     """The kit's files (tracked, and new ones git would track) but its tests, with heavy.sh and a
-    0.1 s budget, committed in a repo of its own at S/kit, the kit's packages linked."""
+    0.1 s budget, committed in a repo of its own at S/kit, with a copy of the kit's installed
+    node_modules (ignored by its git), so the copy's nested gate finds them current. A real copy,
+    never a link: the nested check-tests runs pnpm install in the copy, which writes in place, and
+    with CI set reinstalls a node_modules it judges not its own, through a link the kit's own (the
+    qc sandbox's srt gone for every concurrent item; CI red on 94953f6b)."""
     k = s.root / "kit"
     listed = subprocess.run(
         ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],  # noqa: S607
@@ -72,8 +76,9 @@ def build(s: Scratch) -> None:
         re.sub(r"(?m)^test_cpu_seconds = .*$", "test_cpu_seconds = 0.1", budget)
     )
     script(k, "heavy")
+    if (ROOT / "node_modules").is_dir():  # a real copy, never a link: below
+        subprocess.run(["cp", "-a", str(ROOT / "node_modules"), str(k)], check=True)  # noqa: S607
     s.git(k, "init", "-q", "-b", "main")
-    kit_deps(k)
     s.git(k, "add", "-A")
     s.git(k, "commit", "-qm", "copy")
 
