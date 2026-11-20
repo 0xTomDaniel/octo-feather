@@ -1,0 +1,14 @@
+Seeded defect: the final newline counts as one more, empty, line, so a valid log fails (check_decision_logs).
+diff --git a/scripts/decision_log.py b/scripts/decision_log.py
+index f16b8918..5e706836 100755
+--- a/scripts/decision_log.py
++++ b/scripts/decision_log.py
+@@ -282,7 +282,7 @@ def read_logs(root: Path, logs: list[str]) -> list[tuple[str, list[bytes] | OSEr
+             read.append((path, e))
+             continue
+         if rows[-1] == b"":
+-            rows.pop()
++            pass
+         read.append((path, rows))
+     return read
+ 

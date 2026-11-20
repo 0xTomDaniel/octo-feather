@@ -1,0 +1,14 @@
+Seeded defect: the per-run copies of Pi's auth.json and models.json are made but never bound over the box files, so a judge's write lands on them (octo-feather-qc-sandbox step 4: never written back).
+diff --git a/scripts/octo-feather-qc-sandbox b/scripts/octo-feather-qc-sandbox
+index 97ef12ba..86d4de6b 100755
+--- a/scripts/octo-feather-qc-sandbox
++++ b/scripts/octo-feather-qc-sandbox
+@@ -1019,7 +1019,7 @@ def setup(judge: list[str]) -> NoReturn:
+             try:
+                 shutil.copyfile(f"{PI}/{n}", f"{OV}/pi/{n}")
+                 shutil.copymode(f"{PI}/{n}", f"{OV}/pi/{n}")
+-                mount(f"{OV}/pi/{n}", f"{PI}/{n}", None, MS_BIND)
++                pass
+             except OSError as e:
+                 die(f"copy Pi {n} ({e})")
+     os.chdir(cwd)

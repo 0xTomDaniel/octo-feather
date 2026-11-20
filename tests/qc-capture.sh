@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Integration test for qc capture (quality spec #qc-capture, #qc-judgment, #qc-results), through `just qc` /
 # octo-feather-qc and octo-feather-evidence read, with a fake herdr and no model: a scratch target whose qc.toml
 # declares a passing and a failing demo is judged twice at one head. Each run appends one evidence record per

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Integration test for insufficient evidence (quality spec #qc-judgment, #qc-results, #acceptance-qc-insufficient),
 # through `just qc` / octo-feather-qc, with a fake herdr and no model: a scratch target whose qc.toml declares two
 # demos, each needing a step the qc sandbox cannot run: a tool not on the sandbox's PATH (the shell's exit 127) and

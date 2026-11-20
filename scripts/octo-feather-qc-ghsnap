@@ -9,19 +9,26 @@ the DETAIL_CAP most recently updated issues and PRs, fetched in parallel:
 `gh issue view`/`gh pr view --json` (comments, reviews, commits, files, closing
 issues, sub-issues, blocked-by), the diff, the timeline, sub-issues and
 blocked-by links, and the head's check runs; older items are list-only and
-named in meta.json. Repo, branches, labels, origin refs (refs.txt from branches).
-Layout: issue/N.json pr/N.json diff/N.diff api/<path, "/" as "__">.json
+named in meta.json. For each detailed issue, also the github-issues skill's `issue-view --notes` answer: its
+one graphql query (scripts/notes.graphql there), asked as issue-view asks it, its stdout kept unmodified, so the
+offline gh answers that query, and only it, with GitHub's own edit times; an issue GitHub cannot resolve there
+is recorded absent, as an api 404. Repo, branches, labels, origin refs (refs.txt from branches).
+Layout: issue/N.json issue/N.notes.json (with notes.graphql, the query asked) pr/N.json diff/N.diff api/<path, "/" as "__">.json
 issue-list.json pr-list.json run-list.json repo.json refs.txt meta.json.
 Stdout: one summary line. Exit 0, or 1 when any read failed (no auth, network):
 an api 404 or 410 is recorded as absent, an over-limit PR diff as diff/N.too-large
 (docs/adr/0022), every other failure is fatal.
 """
 import json, os, re, subprocess, sys, time
+import functools
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from typing import cast
 
 LIMITS = {"issue": 500, "pr": 500, "run": 200}
 DETAIL_CAP = 200
+# The github-issues skill's issue-view --notes query, read where that script reads it (one file).
+NOTES_QUERY = Path(__file__).resolve().parent.parent / ".agents" / "skills" / "github-issues" / "scripts" / "notes.graphql"
 IF = ("assignees,author,blockedBy,blocking,body,closed,closedAt,closedByPullRequestsReferences,comments,createdAt,id,"
       "labels,milestone,number,parent,state,stateReason,subIssues,subIssuesSummary,title,updatedAt,url")
 PL = ("additions,assignees,author,baseRefName,baseRefOid,body,changedFiles,closed,closedAt,closingIssuesReferences,createdAt,"
@@ -55,6 +62,28 @@ def pr_diff(out: Path, n: str, repo: str) -> None:
         (out / "diff" / f"{n}.diff").write_text(gh("pr", "diff", n, "-R", repo))
     except TooLarge as e:
         (out / "diff" / f"{n}.too-large").write_text(str(e))
+
+
+@functools.cache
+def notes_query(out: Path) -> str:
+    """The github-issues issue-view --notes query as that script reads it ($(cat): no trailing newline), kept in OUT."""
+    query = NOTES_QUERY.read_text(encoding="utf-8").rstrip("\n")
+    (out / "notes.graphql").write_text(query)
+    return query
+
+
+def issue_notes(out: Path, n: str, repo: str, absent: "list[str]") -> None:
+    """Issue N's notes answer into OUT/issue/N.notes.json, asked as the github-issues issue-view --notes asks it
+    (module docstring); named in ABSENT when GitHub cannot resolve the issue there, as an api 404."""
+    owner, name = repo.split("/")
+    try:
+        text = gh("api", "graphql", "-F", f"n={n}", "-f", f"owner={owner}", "-f", f"name={name}", "-f", f"query={notes_query(out)}")
+    except Fatal as e:
+        if "Could not resolve to an Issue" not in str(e):
+            raise
+        absent.append(f"graphql notes #{n}")
+        return
+    (out / "issue" / f"{n}.notes.json").write_text(text)
 
 
 def api_name(path):
@@ -114,7 +143,8 @@ def main(repo, out):
         api(f"{R}/issues/{n}/timeline")
 
     with ThreadPoolExecutor(max_workers=16) as ex:
-        for f in [ex.submit(fetch, k, r) for k, r in detail]:
+        for f in [ex.submit(fetch, k, r) for k, r in detail] + [ex.submit(issue_notes, out, str(cast("dict[str, object]", r)["number"]), repo if isinstance(repo, str) else "", cast("list[str]", absent))
+                                                                for k, r in detail if k == "issue"]:
             f.result()   # re-raises the first Fatal
     at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     meta = {"repo": repo, "fetched_at": at, "seconds": round(time.time() - t0, 1),

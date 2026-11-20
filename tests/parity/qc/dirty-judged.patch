@@ -1,0 +1,14 @@
+Seeded defect: qc judges a dirty worktree instead of refusing it (exit 65: QC judges a committed head).
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+index ce0774ba..a5c7e2fb 100755
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -933,7 +933,7 @@ def main(argv: list[str]) -> int:
+     if not re.fullmatch(r"[1-9][0-9]*", argv[n]):
+         die(64, f"PR must be a positive integer, got {argv[n]!r}")
+     statuses, pr, ids = [Path(a) for a in argv[:n]], int(argv[n]), argv[n + 1:]
+-    if git("status", "--porcelain"):
++    if False:
+         die(65, "worktree is dirty; QC judges a committed head")
+     head = git("rev-parse", "HEAD")
+     groups = named(statuses, ids)
