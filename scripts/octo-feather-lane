@@ -74,7 +74,7 @@ agent scope (herdr-comms herdr_scope.py close): `systemd-run --user --unit=octo-
 service or timer, running `post-merge PR HEAD --lane <lane>` in the director's checkout (`git worktree list`, first
 entry) with the archive's environment, bounded by RuntimeMaxSec 900, its lines appended to
 $(octo-feather-state)/post-merge/<lane>.teardown.log, its end (any exit, killed or timed out) recorded by its stop
-hook (ExecStopPost: `post-merge --lane <lane> --unit-end`, reading systemd's SERVICE_RESULT, EXIT_CODE,
+hook (ExecStopPost: `post-merge --lane <lane> --unit-end [--repo O/R]`, reading systemd's SERVICE_RESULT, EXIT_CODE,
 EXIT_STATUS). Where no systemd user manager answers (`systemctl --user is-system-running`; macOS), the same run in
 its own session (start_new_session, `post-merge PR HEAD --lane <lane> --unit-run`), killed past the same limit, then
 the same end. Prints `teardown: started unit ...`. A unit that cannot start is named, told as a stop, exit 1. A
@@ -498,20 +498,21 @@ with `post-merge PR HEAD --lane <name>`.
                                    the post-merge routine for lane NAME, its steps in order
   octo-feather-lane post-merge --lane NAME
                                    lane NAME's post-merge record
-  octo-feather-lane post-merge --lane NAME --unit-end
+  octo-feather-lane post-merge --lane NAME --unit-end [--repo O/R]
                                    the teardown unit's stop hook (archive, above): its end recorded, then the
                                    director told (below)
 
 `post-merge` is the routine after a lane merges (owner ruling 2026-10-29 on issue 206; docs/adr/0008 Duties): `merge`
 (above) runs it; `archive` (above) runs it for step 7 in its teardown unit; the director reruns it after a stop. The
 director's message (issue 1134): a run that stops tells the director's pane (director.toml) the stop, `post-merge
-<lane> PR #<n> stopped: step <n> <name> stopped: <line>; fix it, then rerun ...`; a run whose steps are all ok, on a
-record the archive recorded its part in, sends the one message for the merge: the summary, tickets done, left open,
+<lane> PR #<n> stopped: step <n> <name> stopped: <line>; fix it, then rerun ...` (the run's --repo kept); a run whose steps are
+all ok, on a record the archive recorded its part in, sends the one message for the merge: the summary, tickets done, left open,
 reflection findings, correction lanes, left on disk on purpose (the teardown's kept items) and the teardown line,
 ` | ` between them; a teardown unit that ended before its routine finished (killed, timed out) tells that. Each
 once: the record's told keeps what was told (the end, or the stop's line), and a run telling it again sends nothing
 (`director already told`). Sent as step 6 sends (herdr-say --timeout 20, killed 15 s past); a failed send prints
-`director NOT told: <why>; re-send by hand: herdr-say ...`, exit 1, nothing recorded. One run of a lane at a
+`director NOT told: <why>; re-send by hand: herdr-say ...` (no pane in director.toml: DIRECTOR_PANE and where
+to find it), exit 1, nothing recorded. One run of a lane at a
 time: a second waits for the first (a lock per lane). Each run records each step it runs, its outcome, line and
 time, in the lane's record, $(octo-feather-state)/post-merge/<lane>.json (its form: scripts/post_merge.py). A rerun for the same merge (its PR, and a
 head one of the two is a prefix of) runs no step recorded ok before the first one not ok: each prints its recorded
@@ -4080,7 +4081,7 @@ def cmd_post_merge(args: list[str]) -> int:
     if unit_end and not args and lane and NAME.fullmatch(lane):
         return post_merge.unit_end(lanes_dir(), lane, os.environ.get("SERVICE_RESULT", ""),
                                    f"{os.environ.get('EXIT_CODE', '')} {os.environ.get('EXIT_STATUS', '')}".strip(),
-                                   show_line)
+                                   show_line, repo=repo)
     if not args and lane and NAME.fullmatch(lane) and wait is None and repo is None:
         return pm_show(lane)
     if len(args) != 2 or not lane or not NAME.fullmatch(lane):
@@ -4256,7 +4257,7 @@ def pm_unit_start(name: str, pr: int, head: str, repo: str | None) -> int:
     why = ""
     try:
         if managed:
-            hook = shlex.join([str(me), "post-merge", "--lane", name, "--unit-end"])
+            hook = shlex.join([str(me), "post-merge", "--lane", name, "--unit-end", *(["--repo", repo] if repo else [])])
             cmd = ["systemd-run", "--user", "--quiet", "--collect", f"--unit={unit}", f"--working-directory={top}",
                    "-p", f"RuntimeMaxSec={PM_UNIT_LIMIT}", "-p", f"ExecStopPost={hook}",
                    "-p", f"StandardOutput=append:{log}", "-p", f"StandardError=append:{log}",
@@ -4272,7 +4273,7 @@ def pm_unit_start(name: str, pr: int, head: str, repo: str | None) -> int:
         why = f"{type(e).__name__}: {e}"
     if why:
         print(f"teardown: unit {unit} not started ({why})", flush=True)
-        return post_merge.unit_end(lanes_dir(), name, "start failed", why, show_line)
+        return post_merge.unit_end(lanes_dir(), name, "start failed", why, show_line, repo=repo)
     print(f"teardown: started unit {unit} ({how}, cwd {top}, limit {PM_UNIT_LIMIT}s, its lines in {log}); "
           "the director gets one message when it ends", flush=True)
     return 0
@@ -4291,7 +4292,7 @@ def pm_unit_run(pr: int, head: str, lane: str, repo: str | None) -> int:
             os.killpg(p.pid, signal.SIGKILL)
             p.wait()
             result, status = "timeout", "killed KILL"
-    return post_merge.unit_end(lanes_dir(), lane, result, status, show_line)
+    return post_merge.unit_end(lanes_dir(), lane, result, status, show_line, repo=repo)
 
 
 COMMANDS = {

@@ -18,12 +18,13 @@ and the director's one message, `post-merge --lane gh7`.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
 import time
 from typing import TYPE_CHECKING, cast
 
-from herdr_messaging import agent, lines
+from herdr_messaging import ASSETS, agent, lines
 from lane_merge import H, World
 from lane_post_merge import run1
 from testkit import HERE, Scratch, kit, main, reflector
@@ -279,7 +280,8 @@ def archive_waits(s: Scratch) -> None:
 
 def red_main(s: Scratch) -> None:
     """issue-lifecycle#acceptance-red-main-stops (the ticket's demo): the merge commit's push run
-    fails: `merge` stops at step 2 naming the run, the director told once, the kit install unmoved.
+    fails: `merge --repo o/r` stops at step 2 naming the run, the director told once, the rerun
+    command it names keeping `--repo o/r` (#1172), the kit install unmoved.
     `archive` reruns step 2: refused, `archive waits: step 2 main CI stopped: ...`, every lane file
     in place, no unit, the director not told again; the same with a later push run on main
     containing the merge still red. Once gh lists a later green push run of that workflow
@@ -294,6 +296,8 @@ def red_main(s: Scratch) -> None:
     said = t.said()
     assert len(said) == 1, said
     assert f"step 2 main CI stopped: {stop}" in said[0], said
+    rerun = f"rerun `octo-feather-lane post-merge 7 {H} --lane gh7 --repo o/r`"
+    assert rerun in said[0], said
     assert t.w.lane.head() == t.w.lane.b, "kit install moved"
     before = t.tree()
     sa, sb = "a" * 40, "b" * 40
@@ -326,6 +330,49 @@ def red_main(s: Scratch) -> None:
     said = t.said()
     assert len(said) == 2, said
     assert said[1].startswith("lane gh7 closed: PR #7 "), said
+
+
+def director_unread(s: Scratch) -> None:
+    """issue-lifecycle#acceptance-red-main-stops (#1172): a red main CI with director.toml
+    unreadable: `merge` stops at step 2, exit 1; its NOT-told line names director.toml unread and
+    how to find the director's pane for the re-send, never pane `None`; nothing reached Herdr."""
+    t = Lane(s)
+    s.gh.store("run/11.json", run1("check", "completed", "failure", 11, t.w.lane.m))
+    path = t.w.st / "director.toml"
+    path.write_text("pane = [\n")
+    r = t.run(1, "merge", "7", H, "--repo", "o/r", cwd="t")
+    line = next((x for x in r.out.split("\n") if x.startswith("director NOT told: ")), "")
+    assert line.startswith(f"director NOT told: {path} unread ("), r.out
+    assert "None" not in line, line
+    assert "re-send by hand: herdr-say DIRECTOR_PANE " in line, line
+    assert f"DIRECTOR_PANE the director's Herdr pane id (`pane` in {path}" in line, line
+    assert t.said() == [], t.said()
+
+
+def watch_gh_gone(s: Scratch) -> None:
+    """issue-lifecycle#acceptance-red-main-stops (#1172): the merge commit's push run in progress
+    and gh gone right after step 2's run list (every gh on PATH masked, a wrapper removing
+    itself): `merge` shows `step 2 main CI: stopped: ...` naming gh, exit 1, no traceback; the
+    director told the stop once."""
+    t = Lane(s)
+    m = t.w.lane.m
+    s.gh.store("run/11.json", run1("check", "in_progress", "", 11, m, completes="success"))
+    s.without("gh")
+    gone = s.root / "gone"
+    gone.mkdir()
+    gh = gone / "gh"
+    gh.write_text(
+        f'#!/bin/sh\ncase "$1 $2" in "run list") rm -f "$0";; esac\nexec "{HERE / "gh.py"}" "$@"\n'
+    )
+    gh.chmod(0o755)
+    t.w.path = os.pathsep.join([str(gone), t.w.lane.path["rec"] + str(ASSETS), s.env["PATH"]])
+    r = t.run(1, "merge", "7", H, "--repo", "o/r", cwd="t")
+    assert not gh.exists(), "gh never gone"
+    stop = "step 2 main CI: stopped: gh run watch 11: gh not on PATH: "
+    assert any(x.startswith(stop) for x in r.out.split("\n")), r.out
+    said = t.said()
+    assert len(said) == 1, said
+    assert "step 2 main CI stopped: gh run watch 11: gh not on PATH" in said[0], said
 
 
 def unit_fails(s: Scratch, how: str = "fails") -> None:
@@ -367,4 +414,13 @@ def unit_killed(s: Scratch) -> None:
 
 
 if __name__ == "__main__":
-    main(archive_tears_down, no_manager, archive_waits, red_main, unit_fails, unit_killed)
+    main(
+        archive_tears_down,
+        no_manager,
+        archive_waits,
+        red_main,
+        director_unread,
+        watch_gh_gone,
+        unit_fails,
+        unit_killed,
+    )

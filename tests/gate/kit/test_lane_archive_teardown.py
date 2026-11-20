@@ -7,10 +7,12 @@ import pytest
 from lane_archive_teardown import (
     archive_tears_down,
     archive_waits,
+    director_unread,
     no_manager,
     red_main,
     unit_fails,
     unit_killed,
+    watch_gh_gone,
 )
 
 Case = Callable[..., None]
@@ -34,6 +36,16 @@ def test_lane_archive_waits(case: Case) -> None:
 @pytest.mark.criterion("issue-lifecycle#acceptance-red-main-stops", source=SOURCE)
 def test_lane_archive_red_main(case: Case) -> None:
     case(red_main)
+
+
+@pytest.mark.criterion("issue-lifecycle#acceptance-red-main-stops", source=SOURCE)
+def test_lane_archive_director_unread(case: Case) -> None:
+    case(director_unread)
+
+
+@pytest.mark.criterion("issue-lifecycle#acceptance-red-main-stops", source=SOURCE)
+def test_lane_archive_watch_gh_gone(case: Case) -> None:
+    case(watch_gh_gone)
 
 
 def test_lane_archive_teardown_unit_fails(case: Case) -> None:
