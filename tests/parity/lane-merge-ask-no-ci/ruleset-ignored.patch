@@ -1,0 +1,14 @@
+Seeded defect: a ruleset's required check is ignored: a no-CI head passes though the base requires it.
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index 575dba8d..49549f1f 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -552,7 +552,7 @@ def required_none(repo: str | None, p: Policy | Unread) -> str:
+             for r in cast("list[dict[str, object]]", rules):
+                 if r["type"] == "required_status_checks":
+                     params = cast("dict[str, list[dict[str, object]]]", r["parameters"])
+-                    req += sorted(str(c["context"]) for c in params["required_status_checks"])
++                    req += []
+         except (KeyError, TypeError) as e:
+             msg = (
+                 f"the rulesets of base {base} could not be read "

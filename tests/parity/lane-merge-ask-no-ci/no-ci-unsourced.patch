@@ -1,0 +1,14 @@
+Seeded defect: the no-CI line drops the tree read it rests on (refusal and printed text byte-identical).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index 575dba8d..17982992 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -381,7 +381,7 @@ def head_checks(c: Checks) -> tuple[list[str], str, list[dict[str, object]]]:
+         src = f"gh api repos/{c.repo or '<this repo>'}/git/trees/{h}"
+         try:
+             no_ci = (
+-                f"no CI: no workflow file under .github/workflows at head {h} ({src}); "
++                f"no CI: no workflow file under .github/workflows at head {h}; "
+                 + required_none(c.repo, at.policy)
+             )
+         except _Gap as e:

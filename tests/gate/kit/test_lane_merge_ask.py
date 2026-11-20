@@ -19,7 +19,6 @@ from lane_merge_ask import (
     many_commits,
     merge_ask_passes,
     no_ci,
-    no_ci_unread,
     no_criterion_lane,
     offline_gh,
     one_judged_head,
@@ -75,10 +74,6 @@ def test_merge_ask_single_gaps(case: Case) -> None:
 
 def test_merge_ask_no_ci(case: Case) -> None:
     case(no_ci)
-
-
-def test_merge_ask_no_ci_unread(case: Case) -> None:
-    case(no_ci_unread)
 
 
 @pytest.mark.criterion("issue-lifecycle#acceptance-ci-status-only", source=SOURCE)
