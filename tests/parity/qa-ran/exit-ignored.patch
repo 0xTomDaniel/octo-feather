@@ -1,14 +1,13 @@
 Seeded defect: ran ignores the fact's exit, counting runs that exited otherwise.
-diff --git a/scripts/octo-feather-qa b/scripts/octo-feather-qa
-index 6e1952e9..3286d4ec 100755
---- a/scripts/octo-feather-qa
-+++ b/scripts/octo-feather-qa
-@@ -622,7 +622,7 @@ def judge_ran(fact: dict[str, object], record: list[dict[str, object]] | None, *
-     def show_(r: dict[str, object]) -> str:
-         return f"{str(r.get('what', ''))[:120]} ({str(r.get('result', ''))[:80]})"
-     hits = [r for r, a in runs if args_match(want, a, head if isinstance(head, str) else None)
--            and ("exit" not in fact or r.get("exit") == fact["exit"])]
-+            ]
-     hit = hits[0] if hits else None
-     if "count" in fact:   # rule: schema, Run record
-         n, name = cast("int", fact["count"]), f"{name} count {fact['count']}"
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index af457dc7..ffb900e1 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -687,7 +687,6 @@ def judge_ran(fact: Fact, seen: Seen, *, final: bool) -> Status:
+         r
+         for r, a in runs
+         if args_match(want, a, head if isinstance(head, str) else None)
+-        and ("exit" not in fact or r.get("exit") == fact["exit"])
+     ]
+     if "count" in fact:  # rule: schema, Run record
+         return ran_count(fact, name, hits, record, final=final)

@@ -51,7 +51,10 @@ GATE = (
 
 def kit_copy(s: Scratch) -> Path:
     """The kit's files (tracked, and new ones git would track) in a git repo of their own, with
-    the seeded item."""
+    the seeded item, and a copy of the kit's installed node_modules (ignored by its git), so the
+    copy's first `just test` finds them current, as on a box that ran the gate before: pnpm
+    installing them anew from its store costs that run ~2 s CPU more (#1180). A real copy, never
+    links: a pnpm install in the copy writes in place (.pnpm-workspace-state.json, .bin)."""
     k = s.root / "kit"
     files = subprocess.run(
         ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],  # noqa: S607
@@ -69,19 +72,27 @@ def kit_copy(s: Scratch) -> Path:
     subprocess.run(["tar", "-xf", str(s.root / "kit.tar"), "-C", str(k)], check=True)  # noqa: S607
     (k / "tests" / "zz-seed.sh").write_text(SEED)
     (k / "tests" / "zz-seed.sh").chmod(0o755)
+    if (ROOT / "node_modules").is_dir():
+        subprocess.run(["cp", "-a", str(ROOT / "node_modules"), str(k)], check=True)  # noqa: S607
     s.git(k, "init", "-q", "-b", "main")
     s.git(k, "add", "-A")
     s.git(k, "commit", "-qm", "copy")
     return k
 
 
-def gate(s: Scratch, k: Path, seed: str, want: int | None) -> Ran:
-    """`just test ITEM` in K with SEED; its stdout and stderr together, as a shell's 2>&1."""
+def homes() -> dict[str, str]:
+    """The tools' homes a nested gate runs with (tool_homes, pnpm_store), asked once per scenario:
+    each ask runs uv or pnpm, ~0.3 s CPU a run (#1180)."""
+    return tool_homes() | {"npm_config_store_dir": pnpm_store()}
+
+
+def gate(s: Scratch, k: Path, seed: str, want: int | None, tools: dict[str, str]) -> Ran:
+    """`just test ITEM` in K with SEED and the tools' homes TOOLS; its stdout and stderr
+    together, as a shell's 2>&1."""
     env = {k: v for k, v in s.env.items() if k not in GATE}
-    env |= tool_homes() | {
-        "npm_config_store_dir": pnpm_store(),
+    env |= tools | {
         "MISE_STATE_DIR": str(s.root / "user-mise"),
-        "GATE_WORKERS": "1",
+        "GATE_WORKERS": "0",  # one item: in pytest's own process, no xdist worker to start (#1180)
         "SEED": seed,
         "SEED_STATE": str(s.root / "user-mise"),
         "SEED_LIVE": str(s.root / "live" / "mise.toml"),
@@ -122,9 +133,10 @@ def seeded(s: Scratch) -> None:
         rf"check-tests: unchanged by the gate: {tc} \(\d+ entries\), "
         rf"{re.escape(str(st))}/trusted-configs \(0 entries\), {cfg} \(\d+ keys, branch\.\* aside\)"
     )
-    ok = gate(s, k, "", 0)
+    tools = homes()
+    ok = gate(s, k, "", 0, tools)
     assert re.search(unchanged, ok.out), ok.out
-    other = gate(s, k, "live link branch", 0)  # what another agent may do meanwhile
+    other = gate(s, k, "live link branch", 0, tools)  # what another agent may do meanwhile
     assert re.search(unchanged, other.out), other.out
     root = re.escape(str(s.root))
     for note in (
@@ -132,7 +144,7 @@ def seeded(s: Scratch) -> None:
         rf"{tc}/seeded: added -> /nowhere/seeded/mise\.toml",
     ):
         assert re.search(rf"check-tests: not this run's: {note}\n", other.out), other.out
-    ours = gate(s, k, "ours gone config", None)  # what this run left
+    ours = gate(s, k, "ours gone config", None, tools)  # what this run left
     assert ours.rc != 0, ours.out
     assert "1 passed" in ours.out, ours.out
     gt, mk = r"(/\S+/gate\.\w+)", r"tmp\.\w+"  # the run's own TMPDIR (check-tests), a mktemp -d

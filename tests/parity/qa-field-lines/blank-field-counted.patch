@@ -1,14 +1,14 @@
 Seeded defect: field_lines counts a field line with no value.
-diff --git a/scripts/octo-feather-qa b/scripts/octo-feather-qa
-index 6e1952e9..50602be8 100755
---- a/scripts/octo-feather-qa
-+++ b/scripts/octo-feather-qa
-@@ -387,7 +387,7 @@ def judge_fields(fact, final, last):
-             return "fail", f"{head}: {'; '.join(rec['errors'])}"
-         lines = rec["lines"]
-     else:
--        lines = [{"text": v} for v in got["fields"].get(f, []) if v]
-+        lines = [{"text": v} for v in got["fields"].get(f, [])]
-         if not lines:
-             return "fail", f"{head}: no column-0 `{f}:` line with a value outside code blocks"
-     show_ = lambda ls: json.dumps(ls)[:300]
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index af457dc7..474d2f9d 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -366,7 +366,7 @@ def field_lines(f: str, text: str) -> tuple[list[Fact], Fact, str | None]:
+         return (
+             (rec["lines"], rec, None) if not rec["errors"] else ([], {}, "; ".join(rec["errors"]))
+         )
+-    lines: list[Fact] = [{"text": v} for v in got["fields"].get(f, []) if v]
++    lines: list[Fact] = [{"text": v} for v in got["fields"].get(f, [])]
+     return lines, {}, None if lines else f"no column-0 `{f}:` line with a value outside code blocks"
+ 
+ 

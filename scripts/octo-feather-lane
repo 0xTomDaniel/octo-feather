@@ -560,7 +560,10 @@ at the close report), 1 with usage on stderr for bad arguments.
 `stale` (issue 1079; stale and unknown: spec roles#launch-set; the record: pi-role --help, Launch set) reads
 each agent `herdr agent list` names (checked against Herdr's AgentInfo, a malformed answer named), its session from
 the `--session-id` of its Pi process (`herdr pane process-info`, as herdr-close --park reads it), and asks the
-recorded launcher for the set now with the recorded args and working directory. A current agent is not named.
+recorded launcher for the set now with the recorded args and working directory. Its Herdr extension (herdr-spawn's
+per-launch copy, under herdr-pi/ in the state dir) is compared with what a launch would install now, a fresh
+`herdr integration install pi` into a temp dir (one per report), never with the agent's own copy; that install
+failing is `launches no more`. A current agent is not named.
 Lines, kit paths relative to the launcher's kit, skill folders with a trailing /:
   stale: <pane> <name> role <role>: <path> changed|added|gone, ...
   stale: <pane> <name> role <role>: <role file> launches no more from <cwd> (<why>)
@@ -592,6 +595,7 @@ from correction_lanes import (DIRECTOR, DIRECTOR_LOG, KIT_REPO, MARK_WORD, Refus
                               lane_logs)
 from correction_lanes import file_corrections as correction_filer
 from handoff_log import encode, read_log
+from eval_grading import DEFAULT_TIMEOUT
 from tracker_calls import tracker, utc
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -1221,7 +1225,7 @@ def cmd_judge(args: list[str]) -> int:
     qa = qa_module()
     inp = {"question": q["question"], "labels": q["labels"], "criteria": {lb: q["label_help"][lb] for lb in q["labels"]},
            "cases": [{"id": "state", "state": state}], "classifiers": [model]}
-    bench, _, _, problem = qa.classify(qa.qc_sandbox(), inp, int(suite.get("timeout_s", qa.DEFAULT_TIMEOUT)), f"judge-{pr}-{qid}",
+    bench, _, _, problem = qa.classify(qa.qc_sandbox(), inp, int(suite.get("timeout_s", DEFAULT_TIMEOUT)), f"judge-{pr}-{qid}",
                                       purpose="judge")
     if problem:
         raise Refuse(f"the classify run failed ({problem}): fix the cause, then rerun")
@@ -3664,6 +3668,20 @@ def stale_report() -> tuple[list[str], bool]:
     stale: list[str] = []
     unknown: list[str] = []
     current = 0
+    herdr_pi = str(state_dir() / "herdr-pi") + os.sep  # herdr-spawn's per-launch Herdr extensions
+
+    @functools.cache
+    def installed(name: str) -> tuple[str | None, str]:
+        """The digest of Herdr extension NAME as a launch would install it now, or why none."""
+        with tempfile.TemporaryDirectory() as d:
+            try:
+                p = subprocess.run(["herdr", "integration", "install", "pi"], env=os.environ | {"PI_CODING_AGENT_DIR": d},
+                                   capture_output=True, text=True, stdin=subprocess.DEVNULL)
+            except OSError as e:
+                return None, f"herdr integration install pi: {e}"[:200]
+            got = pr.digest(str(Path(d) / "extensions" / name))
+            return got, "" if got else f"herdr integration install pi: {(p.stderr or p.stdout).strip() or f'no {name}'}"[:200]
+
     for a in sorted(live, key=lambda a: a.pane_id):
         pane = a.pane_id
         who = f"{pane} {a.name or '(no name)'}"
@@ -3693,6 +3711,10 @@ def stale_report() -> tuple[list[str], bool]:
             why = (p.stderr.strip().splitlines() or [f"exit {p.returncode}"])[-1][:200]
         except (OSError, ValueError, KeyError, TypeError) as e:
             now, why = None, str(e)[:200]
+        if now is not None:  # its Herdr extension as a launch would install it now, never its own copy
+            fresh = {f: installed(Path(f).name) for f in was if f.startswith(herdr_pi)}
+            fails = [fail for got, fail in fresh.values() if got is None]
+            now, why = (None, fails[0]) if fails else (now | {f: got for f, (got, _) in fresh.items()}, why)
         if now is None:
             stale.append(f"stale: {who} role {role}: {show(role_file)} launches no more from {cwd} ({why})")
             continue
