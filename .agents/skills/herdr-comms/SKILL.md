@@ -99,8 +99,9 @@ those leave to the caller:
   prompt sent then is typed but never submitted (`agent_prompt_stalled`, #585).
   Nor is `idle` alone: Herdr reads Pi's screen only, and reads a booting Pi
   `idle` (its fallback) before Pi takes input (#871). So the spawn loads
-  Herdr's own Pi integration (`herdr integration install pi`, written to
-  `~/.cache/octo-feather/herdr-pi/`, never the user's Pi profile), which
+  Herdr's own Pi integration (`herdr integration install pi`, installed per
+  launch to `$(octo-feather-state)/herdr-pi/SESSION/`, never the user's Pi
+  profile nor a shared file; `herdr-close` removes it), which
   reports from inside Pi once its TUI runs. The spawn returns only once
   `herdr agent get` shows that report (`agent_session`, source `herdr:pi`),
   `herdr agent wait PANE --until idle` matches, and `herdr agent get` finds the
@@ -148,7 +149,9 @@ handles only (`herdr pane list --workspace`, each pane's `shell_pid` from
 `herdr pane process-info`, that pid's `/proc/PID/cgroup`); after the close it
 stops each one (`systemctl --user stop`: TERM, KILL 10 s on), which ends the
 detached children close alone leaves running, also when the agent's Pi already
-exited. It reads no other process: one elsewhere tagged with the closed tab's
+exited, and, the close succeeded, removes each closed pane's Herdr extension dir
+`$(octo-feather-state)/herdr-pi/SESSION/` (SESSION its Pi's, as park reads it;
+none without one). It reads no other process: one elsewhere tagged with the closed tab's
 `HERDR_TAB_ID` is untouched. A pane outside any agent scope (an agent spawned
 before scopes, a hand-started director, macOS) is unowned: closed, nothing
 swept, named in the report. Only the unit spawn named for that pane

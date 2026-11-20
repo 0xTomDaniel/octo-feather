@@ -1180,7 +1180,7 @@ def told_gone(t: Tell) -> None:
     want = "told: live1 zt1:p1; already told: none; not woken: parked zt2:p1; " + gone
     assert tell.startswith("step 6 tell supervisors: ok: "), tell
     assert tell.endswith(want), tell
-    pending = "step 7 teardown: pending: lane gh1 not archived; rerun on its close report"
+    pending = "step 7 teardown: pending: lane gh1 not archived; its archive starts this step"
     assert pending in t.out.splitlines(), t.out
     # Archived: step 7 runs the kit's herdr-close on space zt9, which Herdr has not: its close
     # fails, and Herdr's workspace_not_found (stderr) reads as already closed.

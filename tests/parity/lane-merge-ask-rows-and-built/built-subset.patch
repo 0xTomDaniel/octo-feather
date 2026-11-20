@@ -1,0 +1,14 @@
+Seeded defect: Built listing a subset of the status files' built ids passes (spec #acceptance-merge-ask-evidence).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index eebfe2b6..5c5d2210 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -522,7 +522,7 @@ def built_ids(s: Snapshot, lines: list[str], *, no_crit: bool) -> tuple[list[str
+         for k, v in cr.items()
+         if v.get("status") == "built" and v.get("pr") == pr
+     }
+-    if b and built != status:
++    if b and not built <= status:
+         miss.append(
+             f"Built: lists {' '.join(sorted(built)) or 'none'}, the status files hold built with "
+             f"PR #{pr}: {' '.join(sorted(status)) or 'none'}; list exactly those (never edit the "

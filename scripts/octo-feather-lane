@@ -165,12 +165,12 @@ on Linear), and no other line closes a GitHub issue. The section, up to the next
 
 Every row names one judged head H (7+ hex), a commit of the PR: the head qc and the code
 review both judged, in parallel (spec #lanes-one-head). H to H' may hold only (a) `qc: built
-... (judged <sha>)` commits changing only the --status files and (b) merges of BASE whose tree
-is git's automatic merge of their parents (no conflict resolved), after which the lane's own
-diff against BASE (BASE's merge base to the head, status files aside) is identical to its diff
-at H: same files, same content. Anything else fails naming the commit and file: run just qc
-and the review again. `Judged:` is the proof: `<H12> is the PR head`, or `<H12> to <H'12>:`
-the qc commits and files, and per main merge `lane diff identical (N files, sha256 <12 hex>)`.
+... (judged <sha>)` commits changing only the --status files and (b) merges of BASE that keep
+the verdict by the rule of spec #lanes-one-head, the lane's own diff against BASE read from
+BASE's merge base to the head, status files aside, hunk by hunk (what a file's hunks are:
+scripts/merge_ask.py, _lane_diff), so main's changes elsewhere in a lane file keep it. Anything else fails naming the commit and
+file: run just qc and the review again. `Judged:` is the proof: `<H12> is the PR head`, or
+`<H12> to <H'12>:` the qc commits and files, and per main merge `lane hunks identical (N files, sha256 <12 hex>)`.
 Ids are <spec slug>#<id> or a bare id one --status file names; pass --status once per spec.
 Every lane's PR head needs a current recorded full gate pass (the rule: spec #lanes-checkpoints): the record
 `octo-feather-gate passed` prints for it, or for a lane commit it stands for by the same H to H' check, whose
@@ -181,7 +181,7 @@ OCTO_FEATHER_QC_DIR as there), with what is missing, until a rerun of just qc gi
 The verdict comment must also carry its check classes (`Checks: none` or `Check:` lines, no
 `class: proxy`). Pass: the section on stdout, then `Decision sources`, one line per row: the decision source
 of the criterion's latest result in the qc reports at the judged head (as for insufficient evidence, above), or
-`no qc result at the judged head`, shown only (quality spec #qc-results); `Review check classes` (below); last, `Gate time`, the full gate on the final head (the passed
+`no qc result at the judged head`, shown only (quality spec #qc-results); `Review check classes` (below); then `Gate time`, the full gate on the final head (the passed
 full run, check-runs.jsonl in the state dir, on the PR head or the latest lane commit before it that has one)
 against gate-budget.toml at the PR head, in the report's lines (report, above; the trend: passed full runs on the
 head's history), flagged and shown only: the code reviewer judges it, no gate reads it, and the ask passes or
@@ -189,6 +189,18 @@ fails the same without it (spec issue-lifecycle #lanes-checkpoints; on a failure
 the items). `Review check classes` lists the comment's
 lines for the owner (send it all with herdr-say --parent). Failure: each missing item
 with its fix on stderr, exit 1.
+
+`Merge order` (spec issue-lifecycle #gates-merge-order), shown only, after `Gate time` on a pass, and on stderr
+after it, before the items, on a failure (before the refusal when nothing can be judged): the ask passes or fails
+the same without it. It names each other open PR on the PR's base (`gh pr list --state open --base <base>`), its
+head fetched (`git fetch origin pull/N/head`) when the repo lacks it, that this merge would set back: `- PR #N
+(<branch>): its head conflicts with this head in <files>` (git merge-tree of the two heads), and `- PR #N
+(<branch>): this merge stales its pinned run RUN/SUITE/CASE: <items>` for each `octo-feather-qa --verdict` pin its
+qc.toml demos name at its head (none without a qc.toml), the items that command names stale for it at BASE merged
+with this head (a git commit-tree, no ref moved) and not at BASE, each run in a scratch detached worktree
+(freshness: octo-feather-qa --help, Verdict). A read that fails, or a pin that command judges no freshness for, is
+one `- not read: ...` line; nothing named prints `- none: <n> other open pull requests on <base>, none this merge
+would stale or conflict with`.
 
 A lane that builds no criterion (spec #lanes-one-head) says `Built: none` and `Failed: none` with no
 criterion row (no table, or its header alone), and its PR holds no `qc: built` commit and no --status
@@ -296,7 +308,10 @@ a worker's result, in its own pane (HERDR_PANE_ID) and the lane worktree. It rea
 (`issue-view KEY --notes`) and takes the latest `Skills:` line of the body and its comments (by each note's last
 change; form: ticket, above). The worker's session: the latest spawn or worker-spawn line whose ticket is TICKET in
 the caller's hand-off log (found as octo-feather-handoff spawn --caller finds it: the lane record whose `supervisor`
-is the pane, else the director log), its `session` the Pi session file sessions/*/*_<session>.jsonl (PI_CODING_AGENT_DIR, else
+is the pane, else the director log), matched by lane key: the target's tracker skill's `lane-key` gives the line's
+ticket and TICKET (issue-view's key) one lane key, never a prefix stripped (herdr-spawn's ticket is the worker
+name's, so `implementer-gh40` is 40's, `implementer-eng-123` ENG-123's; a ticket lane-key refuses is no ticket's);
+its `session` the Pi session file sessions/*/*_<session>.jsonl (PI_CODING_AGENT_DIR, else
 ~/.pi/agent), read by the factory report's skill-reach reader (report, skill reach: a load is a read or bash call
 that opened <skill>/SKILL.md and did not fail, never a mention), the whole session. Prints
 `<ticket>: worker <name> (<pane>), Pi session <file>`, then per named skill `<ticket>: skill <skill>: loaded`, `not
@@ -592,7 +607,7 @@ before its end) and `director told: <each>`; exit 0, 1 with no or an unreadable 
                    archive: ...`
   step 7 teardown  only once $(octo-feather-state)/lanes/archive/<lane>.toml exists (`octo-feather-lane archive`
                    moves it there, then starts this step in its teardown unit), else `pending: lane <lane> not
-                   archived; rerun on its close report`; an archived record whose `pr` is not PR stops. In order, each stop keeping the
+                   archived; its archive starts this step`; an archived record whose `pr` is not PR stops. In order, each stop keeping the
                    rest: first step 3's live-run rule on a run whose recorded process works in the lane's
                    worktree (its cwd; any live run where /proc is absent), `teardown waits: <kind> run pid
                    <pid> of lane <lane> since <since> reads <worktree>`, nothing closed or removed; then
@@ -614,15 +629,18 @@ Each step prints one line as it finishes, `step <n> <name>: ok: <what>` or `step
 a stopped step runs no later step. The last line is the summary, each step's outcome (ok, stopped, not run):
 `post-merge <lane> PR #<n>: step 1 merged ok; step 2 main CI ok`, ending `; NOT told: <lane> <pane>, ... (step 6
 names each re-send)` when step 6 failed a send. Exit 0 when every step is ok, 1 when one (not merged, merged at another head, a red run named by its URL, no run within the bound, a watch that failed,
-a checkout kept, a supervisor not told, a teardown refusal), 3 when steps 1-6 are ok and step 7 is pending (the run at the merge; rerun
-at the close report), 1 with usage on stderr for bad arguments.
+a checkout kept, a supervisor not told, a teardown refusal), 3 when steps 1-6 are ok and step 7 is pending (the run at the merge; the
+archive starts step 7), 1 with usage on stderr for bad arguments.
 
   octo-feather-lane stale          the live agents on a stale launch set, and those with none recorded
 
 `stale` (issue 1079; stale and unknown: spec roles#launch-set; the record: pi-role --help, Launch set) reads
 each agent `herdr agent list` names (checked against Herdr's AgentInfo, a malformed answer named), its session from
 the `--session-id` of its Pi process (`herdr pane process-info`, as herdr-close --park reads it), and asks the
-recorded launcher for the set now with the recorded args and working directory. A current agent is not named.
+recorded launcher for the set now with the recorded args and working directory. Its Herdr extension (herdr-spawn's
+per-launch copy, under herdr-pi/ in the state dir) is compared with what a launch would install now, a fresh
+`herdr integration install pi` into a temp dir (one per report), never with the agent's own copy; that install
+failing is `launches no more`. A current agent is not named.
 Lines, kit paths relative to the launcher's kit, skill folders with a trailing /:
   stale: <pane> <name> role <role>: <path> changed|added|gone, ...
   stale: <pane> <name> role <role>: <role file> launches no more from <cwd> (<why>)
@@ -634,6 +652,46 @@ Lines, kit paths relative to the launcher's kit, skill folders with a trailing /
 It relaunches nothing. Exit 0; 1 when Herdr's agent list cannot be read or is malformed, its one line `stale
 agents: not read: <why>`. post-merge step 5 prints the same report.
 
+  octo-feather-lane start TICKET|--new TITLE --body-file FILE --goal TITLE --outcome TEXT --brief-file FILE
+                                   the director's lane start, one command, in its checkout of a target
+  octo-feather-lane start ... [--shown goal|brief] [--absent goal|brief]
+                                   its rerun after an unknown send, naming what the supervisor's pane shows
+  octo-feather-lane start -h|--help this entry alone, nothing read or made
+
+`start` (spec issue-lifecycle #acceptance-lane-start) first fetches the kit install's origin (the kit dir this command
+runs from, or OCTO_FEATHER_KIT_INSTALL: the install post-merge's step 3 refreshes) and refuses, exit 1 with nothing
+made, when main there has a commit the install lacks, naming the install, its commit, main's and the fix (post-merge's
+kit refresh, or a fast-forward of the install; #acceptance-lane-start-current-kit). Then it reads the lane key (the target's tracker skill's lane-key, as
+octo-feather-start resolves it), the ticket (issue-view), the repository (gh repo view) and the caller's
+$HERDR_PANE_ID (the director pane), each answer validated and refused naming its field before anything is made
+(arguments by argparse). The lane's parent ticket: TICKET, or with --new TITLE --body-file FILE instead (spec
+issue-lifecycle #acceptance-lane-start-files) one filed once the director pane, checkout and repository are read: the
+tracker skill's issue-create with that title and FILE, a top-level issue, never --parent; it prints `filed=<key>` at
+once, so a start that stops later is rerun naming that key as TICKET. A ticket issue-view shows with a parent (a
+sub-issue of another issue) is refused naming that parent, before anything is made (#acceptance-lane-start-sub-issue).
+It refuses a lane that exists (spec #acceptance-lane-start-exists): when any of lanes/<key>.toml,
+the worktree, the branch `<key>` or a Herdr workspace labelled <key> (herdr workspace list) is there and no stopped
+start left it, exit 1 naming each, nothing changed, no supervisor started; fetches origin and adds the worktree `<checkout>-<key>` beside the checkout on a
+new branch `<key>` from origin's main; starts the supervisor with the octo-feather-start beside this command
+(`--issue TICKET --cwd WORKTREE`); writes lanes/<supervisor name>.toml (comms spec #lane-record: supervisor,
+repository, issue, goal TITLE, started_at, waiting_on ""); sends the supervisor with herdr-say `/goal TEXT for <key>,
+delivered through implement-spec; done when ...`, then the brief: a header (lane key, parent issue, director pane,
+worktree, branch, main commit), then FILE's text; appends one director log line (comms spec
+#handoff-director-prod: issue, note); prints `key=<key> pane=<pane> issue=<TICKET>` (with --new, the filed key). Each step that fails stops it,
+exit 1, naming the step and what it made so far; a failed herdr-say is never retried within a run. A stopped start keeps
+lanes/<key>.start.json beside the record (its ticket, title, outcome and brief's sha256, then each done step's fact:
+main commit, supervisor pane, name and workspace, started_at, goal_sent, brief_sent, and goal_unknown or
+brief_unknown: a send begun, or one herdr-say ended neither delivered nor rejected); the same start run again
+(spec #acceptance-lane-start-rerun) continues from the step that stopped, skipping each done one, so the lane gets one
+worktree, one supervisor, one record, the goal and the brief once each and one director log line; a rerun with
+another title, outcome or brief is refused naming that file. A send herdr-say rejected (exit 64, 69, 75 or 77: nothing
+typed) is sent on the rerun. A send left unknown (any other failure, a timeout 124 or a stall among them; comms spec
+#delivery-unknown) is never sent again blind: the rerun refuses, exit 1, naming the step, the supervisor's pane and
+what to look at there; look, then rerun the same start with --shown STEP when the pane shows the message (counted
+sent), or --absent STEP when it does not and the pane is not compacting (sent once more). Naming either for a step
+with no unknown send is refused. Once the start finishes the file is gone, and a rerun
+is refused as any existing lane.
+
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
 import functools, hashlib, importlib.machinery, importlib.util, json, os, re, shlex, subprocess, sys, tempfile, time
@@ -641,15 +699,20 @@ import dataclasses
 import datetime as dtm
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import cast
+from typing import Any, cast
 
 # Kit modules, .py files beside this script, found through its own directory (symlinks resolved) on sys.path: from any
 # cwd and through a symlink (scripts/correction_lanes.py docstring). correction_lanes is the correction filer.
+import merge_ask
+from merge_ask import (BUDGET, CHECK_SHAPE, COMMENT_URL, HEAD_LINE, MARKER, OWNED,
+                       budget_lines, budget_parse, check_lines, markdown, numbered_jsonl, outside,
+                       passed_full, stamp, verdicts)
 import tracker_calls
 from correction_lanes import (DIRECTOR, DIRECTOR_LOG, KIT_REPO, MARK_WORD, Refused, correction_issues, corrections, counts,
                               lane_logs)
 from correction_lanes import file_corrections as correction_filer
 from handoff_log import encode, read_log
+from eval_grading import DEFAULT_TIMEOUT
 import post_merge   # the post-merge routine (merge, post-merge, archive, stale)
 from post_merge import kit_install   # the live kit install's rule; just install-check asks this script for it
 from tracker_calls import SHA, head_matches, issue_view, key_order, tracker, utc
@@ -664,7 +727,10 @@ class Refuse(Exception):
 
 gh = functools.partial(tracker_calls.gh, err=Refuse)   # the lane's gh calls raise its own Refuse
 pr_view = functools.partial(tracker_calls.pr_view, err=Refuse)
-ci_workflows = functools.partial(tracker_calls.ci_workflows, err=Refuse)
+check_runs = functools.partial(merge_ask.check_runs, err=Refuse)   # the carried checks' read (merge_ask, Interface)
+git = functools.partial(merge_ask.git, err=Refuse)   # the lane's git calls raise its own Refuse (merge_ask.git)
+resolution_files = functools.partial(merge_ask.resolution_files, err=Refuse)   # verdict, resolution (merge_ask)
+full_pass = functools.partial(merge_ask.full_pass, err=Refuse)   # ci-start's full pass (merge_ask, Interface)
 
 
 def lanes_dir() -> Path:
@@ -985,107 +1051,8 @@ def rollback(created: list[Path], archive: Path) -> None:
 
 # --- verdict and merge-ask (issue #48, spec issue-lifecycle #acceptance-merge-ask-evidence) ---
 
-MARKER = "<!-- octo-feather-review-verdict -->"
 # One comment per reviewed resolution of a main merge, naming the merge (the rule: issue-lifecycle #lanes-one-head).
 RESOLUTION_MARKER = "<!-- octo-feather-review-resolution: {} -->"
-RESOLUTION_HEAD = re.compile(r"^<!-- octo-feather-review-resolution: ([0-9a-f]{40}) -->")
-COMMENT_URL = re.compile(r"https://github\.com/([^/\s]+/[^/\s]+)/pull/(\d+)#issuecomment-(\d+)")
-VERDICT_LINE = re.compile(r"^Verdict: (clear|blocking)\s*$")
-HEAD_LINE = re.compile(r"^Head:\s*`?([0-9a-fA-F]{7,40})`?\s*$", re.M)
-QC_COMMIT = re.compile(r"^qc: built (.*?)(?: \(judged ([0-9a-f]+)\))?\s*$")
-JUDGED = re.compile(r"`?(?:judged\s+)?`?([0-9a-fA-F]{7,40})`?", re.I)
-
-
-CHECK_LINE = re.compile(r"^Check:[ \t]*(.*?)\s*$")
-CHECK_SHAPE = re.compile(r"`?([^`\s|]+?)`?:\s+(\S[^|]*?)\s*\|\s*reads:\s*(\S[^|]*?)\s*\|\s*class:\s*(\S+)")
-# The rule ends on its owner in parentheses, non-empty: `<rule> (<owner>)` (docs/adr/0008: the owned rule, never the docstring).
-OWNED = re.compile(r"(\S.*?)\s+\(([^()]*[^()\s][^()]*)\)")
-CHECKS_LINE = re.compile(r"^Checks:[ \t]*(.*?)\s*$")
-CHECK_FORM = ("`Checks: none` when the diff adds or changes nothing to classify (docs/adr/0008, Who builds what), else one line each "
-              "`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy` (docs/adr/0008)")
-
-
-# The Markdown this script reads, no more. scope: .agents/skills/code-review/SKILL.md (Verdict step) for a verdict
-# report; scope: octo-feather-lane --help (ticket) for a ticket body.
-FENCE = re.compile(r"`{3,}|~{3,}")
-
-
-def markdown(text: str, comments: bool = False) -> list[tuple[str, str]]:
-    """Each line of TEXT with its kind, `fence`, `quote`, `comment` or `text`, in the scope above. With COMMENTS
-    a line holding only comment is `comment` and any other line comes with its comments cut out."""
-    out, fence, quote, cmt = [], None, False, False   # cmt: an HTML comment is open
-    for l in text.replace("\r\n", "\n").split("\n"):
-        if fence:
-            s = l.rstrip(" \t")
-            if len(s) >= len(fence) and s == fence[0] * len(s):
-                fence = None
-            out.append((l, "fence")); continue
-        was, t = cmt, l
-        if comments:
-            t, cmt = cut_comments(l, cmt)
-            if (was or t != l) and not t.strip():
-                out.append((l, "comment")); continue
-        if not was and (f := FENCE.match(t)):
-            fence, quote = f.group(0), False
-            out.append((l, "fence")); continue
-        quote = (quote or (not was and t.startswith(">"))) and bool(t.strip())
-        out.append((t, "quote" if quote else "text"))
-    return out
-
-
-def cut_comments(l: str, open_: bool) -> tuple[str, bool]:
-    """(L with its HTML comments cut, whether one is open at its end), OPEN_ if one is open at its start."""
-    out, i = "", 0
-    while True:
-        if open_:
-            e = l.find("-->", i)
-            if e < 0:
-                return out, True
-            i, open_ = e + 3, False
-        s = l.find("<!--", i)
-        if s < 0:
-            return out + l[i:], False
-        out, i, open_ = out + l[i:s], s + 4, True
-
-
-def outside(text: str) -> list[str]:
-    """The lines markdown() reads as text, in order."""
-    return [l for l, kind in markdown(text) if kind == "text"]
-
-
-def verdicts(text: str) -> list[str]:
-    """Every `Verdict: clear|blocking` line in the verdict reader's scope, in order (scope: .agents/skills/code-review/SKILL.md (Verdict step))."""
-    return [m.group(1) for l in outside(text) if (m := VERDICT_LINE.match(l))]   # column 0: `> Verdict:` never matches
-
-
-def check_lines(text: str) -> tuple[list[str], list[str]]:
-    """(the report's check classification as normalized lines, why it is unusable) (docs/adr/0008)."""
-    checks, nones, why = [], [], []
-    for l in outside(text):
-        if m := CHECKS_LINE.match(l):
-            nones.append(m.group(1))
-        elif m := CHECK_LINE.match(l):
-            s = CHECK_SHAPE.fullmatch(m.group(1))
-            if not s:
-                why.append(f"check line `{l.strip()}` is not `Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`"); continue
-            path, rule, reads, cls = s.groups()
-            o = OWNED.fullmatch(rule)
-            if not o:
-                why.append(f"check line for {path} names no owner: write its rule as stated where it is owned, then the owner in "
-                           f"parentheses, `<rule> (<spec criterion, ADR or owner ruling>)` (docs/adr/0008)"); continue
-            rule = f"{o.group(1)} ({o.group(2).strip()})"
-            if cls.lower() not in ("exact", "proxy"):
-                why.append(f"check line for {path} has class {cls!r}; write `class: exact` or `class: proxy` (docs/adr/0008)"); continue
-            checks.append((f"Check: {path}: {rule} | reads: {reads} | class: {cls.lower()}", cls.lower()))
-    bad_none = [v for v in nones if v.strip("`").lower() != "none"]
-    if bad_none:
-        why.append(f"`Checks: {bad_none[0]}`; `Checks:` takes only `none`; name each check on its own `Check:` line")
-    if not checks and not nones and not why:
-        why.append(f"report classifies no check: add {CHECK_FORM}")
-    if checks and nones:
-        why.append("report has `Checks: none` and `Check:` lines; keep the `Check:` lines, one per added or changed check")
-    lines = [c for c, _ in checks] or (["Checks: none"] if nones and not bad_none else [])
-    return lines, why
 
 
 OWNER_LINE = re.compile(r"^Owner:[ \t]*(.*?)\s*$")
@@ -1148,59 +1115,6 @@ def pr_number(s: str) -> int:
     return int(s)
 
 
-# GitHub's answer to rules/branches on a plan without rulesets, as gh prints it on stderr `gh: <it> (HTTP 403)` (private
-# repo, free plan; 0xTomDaniel/exosurface read 2026-11-05): no ruleset can be in force.
-NO_RULESETS = "Upgrade to GitHub Pro or make this repository public to enable this feature."
-
-
-def required_none(repo: str | None, base: str) -> str:
-    """The base branch's required-check policy, read from GitHub, when it requires no check: the line naming both
-    sources. Refuse naming the required checks, or the source that could not be read (fail closed)."""
-    name = repo or "{owner}/{repo}"
-    shown = f"repos/{repo or '<this repo>'}"
-    def read(path: str) -> tuple[object, str]:
-        try:
-            p = subprocess.run(["gh", "api", f"repos/{name}/{path}"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
-        except FileNotFoundError:
-            raise Refuse("gh not on PATH: install the GitHub CLI and log in (just install-check)")
-        err = (p.stderr or p.stdout).strip().splitlines()
-        if p.returncode:
-            return None, err[-1][:200] if err else f"exit {p.returncode}"
-        try:
-            return json.loads(p.stdout), ""
-        except ValueError:
-            return None, f"no JSON ({p.stdout[:80]!r})"
-    br, why = read(f"branches/{base}")
-    try:
-        prot = cast("dict[str, object]", cast("dict[str, object]", br)["protection"])
-        rsc = cast("dict[str, list[dict[str, object]]]", prot["required_status_checks"])
-        req = sorted({str(c) for c in rsc["contexts"]} | {str(c["context"]) for c in rsc["checks"]})
-    except (KeyError, TypeError):
-        raise Refuse(f"the required checks of base {base} could not be read (gh api {shown}/branches/{base}: "
-                     f"{why or 'no protection.required_status_checks'}): fix gh auth status or read access, then rerun")
-    rules, why = read(f"rules/branches/{base}")
-    if why == f"gh: {NO_RULESETS} (HTTP 403)":
-        rsrc = f"gh api {shown}/rules/branches/{base}: rulesets unavailable on this plan, none in force"
-    elif isinstance(rules, list):
-        try:
-            for r in cast("list[dict[str, object]]", rules):
-                if r["type"] == "required_status_checks":
-                    params = cast("dict[str, list[dict[str, object]]]", r["parameters"])
-                    req += sorted(str(c["context"]) for c in params["required_status_checks"])
-        except (KeyError, TypeError):
-            raise Refuse(f"the rulesets of base {base} could not be read (gh api {shown}/rules/branches/{base}: "
-                         "a required_status_checks rule with no contexts): check the gh on PATH, then rerun")
-        rsrc = f"gh api {shown}/rules/branches/{base}: no required_status_checks rule"
-    else:
-        raise Refuse(f"the rulesets of base {base} could not be read (gh api {shown}/rules/branches/{base}: "
-                     f"{why or 'no rule list'}): fix gh auth status or read access, then rerun")
-    if req:
-        raise Refuse(f"base {base} requires checks {', '.join(dict.fromkeys(req))} (gh api {shown}/branches/{base}, "
-                     f"{shown}/rules/branches/{base}): push the head and wait for them")
-    return (f"base {base} requires no check (gh api {shown}/branches/{base}: no required status check; {rsrc}), "
-            "so required checks are none")
-
-
 def take_repo(args: list[str]) -> tuple[list[str], str | None]:
     if "--repo" not in args:
         return args, None
@@ -1208,196 +1122,6 @@ def take_repo(args: list[str]) -> tuple[list[str], str | None]:
     if i + 1 >= len(args) or not re.fullmatch(r"[\w.-]+/[\w.-]+", args[i + 1]):
         raise Refuse("--repo needs OWNER/NAME")
     return args[:i] + args[i + 2:], args[i + 1]
-
-
-def judged_sha(cell: str, commits: list[tuple[str, str]], head: str, pr: int) -> tuple[str | None, str | None]:
-    """(the PR commit a row's judged cell names, None) or (None, why)."""
-    m = JUDGED.fullmatch(cell.strip())
-    if not m:
-        return None, f"judged {cell or 'empty'!r}; write `judged <sha>`, the head qc and the review judged (7+ hex)"
-    sha = m.group(1).lower()
-    at = [oid for oid, _ in commits if oid.lower().startswith(sha)]
-    if len(at) != 1:
-        return None, (f"judged {sha} is {'ambiguous among' if at else 'not a commit of'} PR #{pr}; "
-                      f"name the head qc and the review judged (the sha in its `qc: built ... (judged <sha>)` commit, or the PR head {head[:12]})")
-    return at[0].lower(), None
-
-
-def git(*args: str, ok: tuple[int, ...] = (0,)) -> tuple[int, str]:
-    try:
-        p = subprocess.run(["git", *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
-    except FileNotFoundError:
-        raise Refuse("git not on PATH: install git")
-    if p.returncode not in ok:
-        err = (p.stderr or p.stdout).strip().splitlines()
-        raise Refuse(f"git {' '.join(args[:2])} failed ({err[-1][:200] if err else f'exit {p.returncode}'}): "
-                     "run merge-ask in the lane worktree with the PR head and the base fetched (git fetch origin)")
-    return p.returncode, p.stdout
-
-
-def lane_diff(x: str, base: str, status: set[str]) -> dict[str, str]:
-    """{path: raw diff line} of X's own diff against BASE (from their merge base), status files aside."""
-    mb = git("merge-base", x, base)[1].strip()
-    out = git("diff", "--raw", "--no-renames", "--no-abbrev", "-z", mb, x)[1].split("\0")
-    return {p: meta for meta, p in zip(out[0::2], out[1::2]) if p and p not in status}
-
-
-def resolution_files(merge: str) -> list[str]:
-    """The files MERGE's resolution changed: what `git show --remerge-diff` prints for it (issue-lifecycle #lanes-one-head)."""
-    return sorted(filter(None, git("show", "--remerge-diff", "--format=", "--name-only", "-z", merge)[1].split("\0")))
-
-
-def head_proof(judged: str, head: str, status_files: list[str], base: str, at: str = "judged head",
-               kept: str = "the qc verdict", rerun: str = "", resolved: dict[str, str] | None = None) -> tuple[str | None, list[str]]:
-    """(proof line, []) when the PR HEAD stands for the JUDGED head, else (None, why each part does not)
-    (what may lie between them: spec #lanes-one-head).
-    AT names what JUDGED is, KEPT what carries over, RERUN the fix (a full gate pass: full_pass). RESOLVED, for the
-    review verdict only: {merge sha: URL} of each clear resolution verdict, whose merge's resolution files may move."""
-    j, h = judged[:12], head[:12]
-    if head.lower() == judged.lower():
-        return f"{j} is the PR head", []
-    rerun = rerun or f"run just qc and the review again, in parallel, on {h}"
-    for sha in (judged, head):
-        if git("cat-file", "-e", f"{sha}^{{commit}}", ok=(0, 1, 128))[0]:
-            raise Refuse(f"commit {sha[:12]} is not in this repo: run merge-ask in the lane worktree after git fetch origin")
-    if git("rev-parse", "--verify", "-q", f"{base}^{{commit}}", ok=(0, 1))[0]:
-        raise Refuse(f"base {base} is not a commit here: git fetch origin, or pass --base REF (the PR's base branch)")
-    if git("merge-base", "--is-ancestor", judged, head, ok=(0, 1))[0]:
-        return None, [f"{at} {j} is not an ancestor of the PR head {h} (rebased or reset): {rerun}"]
-    top = os.path.realpath(git("rev-parse", "--show-toplevel")[1].strip())
-    status = set()
-    for f in status_files:
-        rel = os.path.relpath(os.path.realpath(f), top)
-        if rel.startswith(".."):
-            raise Refuse(f"--status {f} is outside this repo ({top}): run merge-ask in the lane worktree, naming its status file")
-        status.add(rel)
-    why, qc, merges, touched = [], [], [], set()
-    reviewed: dict[str, list[str]] = {}
-    for line in git("rev-list", "--reverse", "--parents", head, f"^{judged}", f"^{base}")[1].split("\n"):
-        if not line.strip():
-            continue
-        c, *parents = line.split(); s = git("log", "-1", "--format=%s", c)[1].strip()
-        if len(parents) == 1:
-            files = set(filter(None, git("diff-tree", "--no-commit-id", "--name-only", "-r", "-z", c)[1].split("\0")))
-            other = sorted(files - status)
-            if other:
-                why.append(f"commit {c[:12]} {s[:60]!r} after the {at} {j} changes {', '.join(other)}, not only the status "
-                           f"file{'s' * (len(status) > 1)} qc writes ({', '.join(sorted(status))}): {rerun}")
-            elif not ((q := QC_COMMIT.match(s)) and q.group(2)):
-                why.append(f"commit {c[:12]} {s[:60]!r} after the {at} {j} is not a `qc: built ... (judged <sha>)` commit: "
-                           f"only just qc writes the status file; drop it, then {rerun}")
-            else:
-                qc.append(c); touched |= files
-        elif len(parents) != 2 or not any(git("merge-base", "--is-ancestor", p, base, ok=(0, 1))[0] == 0 for p in parents[1:]):
-            why.append(f"merge {c[:12]} {s[:60]!r} brings in {', '.join(p[:12] for p in parents[1:])}, not {base}: "
-                       f"only a merge of main keeps {kept}; {rerun}")
-        else:
-            rc, out = git("merge-tree", "--write-tree", "--no-messages", *parents, ok=(0, 1))
-            auto, tree = out.split("\n", 1)[0].strip(), git("rev-parse", f"{c}^{{tree}}")[1].strip()
-            hint = ("" if resolved is None else f" without a clear resolution verdict naming it (review what `octo-feather-lane "
-                    f"resolution {c[:12]}` prints, then `octo-feather-lane verdict <PR> {c[:12]} <report> --resolution`)")
-            if (rc or auto != tree) and resolved is not None and c.lower() in resolved:
-                reviewed[c] = resolution_files(c)
-            elif rc:
-                why.append(f"merge {c[:12]} {s[:60]!r} resolved a conflict with {base}: {kept} does not carry over{hint}; {rerun}")
-            elif auto != tree:
-                diff = git("diff", "--name-only", auto, tree)[1].split()
-                why.append(f"merge {c[:12]} {s[:60]!r} changes {', '.join(diff)} beyond git's automatic merge{hint}: {rerun}")
-            else:
-                merges.append(c)
-    proof = f"{j} to {h}: " + (f"qc status commits {' '.join(c[:12] for c in qc)} change only {', '.join(sorted(touched))}" if qc else "no qc status commit")
-    if (merges or reviewed) and not why:
-        before, after = lane_diff(judged, base, status), lane_diff(head, base, status)
-        moved = sorted(p for p in before.keys() | after.keys() if before.get(p) != after.get(p)
-                       and not any(p in fs for fs in reviewed.values()))
-        if moved:
-            why.append(f"after merging {base}, the lane's own diff changed in {', '.join(moved)} (main touched a lane file, "
-                       f"or the lane's diff moved): {kept} does not carry over; {rerun}")
-        elif merges:
-            d = hashlib.sha256("\n".join(f"{p} {before[p]}" for p in sorted(before)).encode()).hexdigest()
-            proof += (f"; clean merge{'s' * (len(merges) > 1)} of main {' '.join(c[:12] for c in merges)}: "
-                      f"lane diff identical ({len(before)} file{'s' * (len(before) != 1)}, sha256 {d[:12]})"
-                      + (" outside the resolved files" if reviewed else ""))
-        if not moved:
-            proof += "".join(f"; resolution of merge {c[:12]} ({', '.join(fs)}) reviewed clear: {(resolved or {})[c.lower()]}"
-                             for c, fs in reviewed.items())
-    return (None, why) if why else (proof, [])
-
-
-def gate(*args: str) -> tuple[int, str]:
-    """scripts/octo-feather-gate's exit code and stdout (it owns the full pass record and the gate configuration)."""
-    p = subprocess.run([sys.executable, str(KIT / "scripts" / "octo-feather-gate"), *args], capture_output=True, text=True,
-                       stdin=subprocess.DEVNULL, check=False)
-    return p.returncode, p.stdout
-
-
-def full_pass(head: str, status_files: list[str], base: str) -> list[str]:
-    """[] when HEAD has a current recorded full gate pass, else why not. The rule: issue-lifecycle #lanes-checkpoints.
-    Current: recorded (octo-feather-gate passed) on a clean tree at HEAD, or at a lane commit head_proof proves HEAD
-    stands for, with the identity fields of HEAD itself (octo-feather-gate config: gate_config, list)."""
-    h = head[:12]
-    if git("cat-file", "-e", f"{head}^{{commit}}", ok=(0, 1, 128))[0]:
-        return [f"commit {h} is not in this repo: run merge-ask in the lane worktree after git fetch origin"]
-    fix = (f"run the full gate, just check, on {h} and record its pass (octo-feather-integrate --full records it; "
-           "octo-feather-gate --help)")
-    rc, out = gate("config", head)
-    try:
-        ident = cast("dict[str, object]", json.loads(out)) if rc == 0 else {}
-    except ValueError:
-        ident = {}
-    if not ident:
-        return [f"head {h}: its gate configuration is unreadable (octo-feather-gate config {h} exit {rc}): {fix}"]
-    revs = git("rev-list", "--topo-order", head, f"^{base}")[1].split()
-    why: list[str] = []
-    for c in [head] + [r for r in revs if r.lower() != head.lower()]:
-        rc, out = gate("passed", c)
-        try:
-            raw = json.loads(out) if rc == 0 else None
-        except ValueError:
-            raw = None
-        rec = cast("dict[str, object]", raw) if isinstance(raw, dict) else {}
-        if rec.get("tier") != "full" or str(rec.get("head", "")).lower() != c.lower():
-            continue
-        if rec.get("clean") is not True:
-            no = [f"it was recorded on a dirty tree (clean {json.dumps(rec.get('clean'))}): it proves nothing; {fix}"]
-        else:
-            try:
-                _, no = head_proof(c, head, status_files, base, at="full pass", kept="the full pass", rerun=fix)
-            except Refuse as e:
-                no = [str(e)]
-        no = no or [(f"its {k} {str(rec.get(k))[:12]} is not the head's current {str(v)[:12]} (octo-feather-gate config {h}): "
-                     f"stale; {fix}") for k, v in ident.items() if rec.get(k) != v]
-        if not no:
-            return []
-        why = why or [f"the full pass recorded at {c[:12]} does not carry over: {w}" for w in no]
-    return [f"head {h} has no current recorded full gate pass for that head and its gate configuration"
-            + (f"; {'; '.join(why)}" if why else f" (none recorded on {h} or the lane commits before it): {fix}")]
-
-
-def merge_ask_gate_time(head: str, base: str) -> list[str]:
-    """The full gate's wall time on the final head against gate-budget.toml at that head, with its trend and slowest
-    items (spec issue-lifecycle #lanes-checkpoints). Shown only: the code reviewer judges it, no gate reads it, and
-    merge-ask passes or fails the same without it."""
-    import datetime
-    now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
-    h = head[:12]
-    title = (f"Gate time (the full gate on the final head against {BUDGET} at {h}; the code reviewer judges it, "
-             "no gate reads it: issue-lifecycle #lanes-checkpoints):")
-    path = state_dir() / ReportSources.TREND
-    try:
-        got = cast("tuple[list[tuple[int, Run]], list[int]] | None", numbered_jsonl(path))
-        if got is None:
-            return [title, f"  no gate run recorded ({path}: none)"]
-        lane = [head] + [r for r in git("rev-list", "--topo-order", head, f"^{base}")[1].split() if r != head]
-        runs = passed_full(got[0], set(git("rev-list", "--max-count=1000", head)[1].split()))
-        last = next((r for c in lane for r in reversed(runs) if r.get("head") == c), None)
-        if last is None:
-            return [title, f"  no passed full gate run recorded on {h} or the lane commits before it ({path})"]
-        rc, text = git("show", f"{head}:{BUDGET}", ok=(0, 128))
-    except (OSError, UnicodeDecodeError, Refuse) as e:
-        return [title, f"  unread: {e}"]
-    budget, why = budget_parse(text if rc == 0 else None)
-    return [title, *budget_lines(last, runs[:runs.index(last)], budget, why, now, "  ")]
 
 
 def pr_commits(pr: int, head: str, base: str) -> list[tuple[str, str]]:
@@ -1413,9 +1137,7 @@ def pr_commits(pr: int, head: str, base: str) -> list[tuple[str, str]]:
     return [cast("tuple[str, str]", tuple(l.split("\0", 1))) for l in out.split("\n") if "\0" in l]
 
 
-def pr_base(ref: str, base: str | None) -> str:
-    """The base a PR's commits are read against: BASE (--base) when given, else REF, its base branch, on origin."""
-    return base or f"origin/{ref or 'main'}"
+pr_base = merge_ask.pr_base   # the base a PR's commits are read against (its docstring)
 
 
 def no_traceback(fn):
@@ -1489,7 +1211,7 @@ def merge_resolution(merge: str) -> tuple[str, list[str]]:
     if len(parents) < 2:
         raise Refuse(f"commit {sha[:12]} is not a merge: a resolution review covers a merge of main; any other change needs a full review")
     files = resolution_files(sha)
-    if not files:
+    if not files:   # which merge keeps the verdict with no review: spec #lanes-one-head
         raise Refuse(f"merge {sha[:12]} changes nothing beyond git's automatic merge: there is no resolution to review "
                      "(a clean merge keeps the review verdict by merge-ask's check alone)")
     return sha, files
@@ -1535,7 +1257,6 @@ def post_comment(pr: int, repo: str | None, comments: list, marker: str, body: s
 
 EVALS = KIT / "evals"
 JUDGMENT_MARKER = "<!-- octo-feather-model-judgment: {} -->"
-JUDGMENT_FIELDS = ("Judgment", "Question", "Model", "Answer", "Confidence", "Calibration", "PR head", "Review head")
 STATE_MAX = 20000   # state characters quoted in the comment (GitHub caps a comment at 65536)
 
 
@@ -1611,7 +1332,7 @@ def cmd_judge(args: list[str]) -> int:
     qa = qa_module()
     inp = {"question": q["question"], "labels": q["labels"], "criteria": {lb: q["label_help"][lb] for lb in q["labels"]},
            "cases": [{"id": "state", "state": state}], "classifiers": [model]}
-    bench, _, _, problem = qa.classify(qa.qc_sandbox(), inp, int(suite.get("timeout_s", qa.DEFAULT_TIMEOUT)), f"judge-{pr}-{qid}",
+    bench, _, _, problem = qa.classify(qa.qc_sandbox(), inp, int(suite.get("timeout_s", DEFAULT_TIMEOUT)), f"judge-{pr}-{qid}",
                                       purpose="judge")
     if problem:
         raise Refuse(f"the classify run failed ({problem}): fix the cause, then rerun")
@@ -1639,170 +1360,6 @@ def cmd_judge(args: list[str]) -> int:
     print(f"judge: {said} ({qid}: {choice}, confidence {conf_s}, model judgment by {model}; calibration: {cal})", file=sys.stderr)
     print(out)
     return 0
-
-
-def judgment_lines(comments: list) -> list[str]:
-    """One line per judgment comment on the PR, for the owner beside the review verdict. Read for display only:
-    no gate reads a judge's answer (spec judgment#rule-advisory)."""
-    out = []
-    for c in comments or []:
-        b = (c.get("body") or "").lstrip()
-        m = re.match(r"<!-- octo-feather-model-judgment: ([\w.-]+) -->", b)
-        if not m:
-            continue
-        hdr = b.split("\n### ", 1)[0].split("\n")
-        f = {k: v.strip() for k, v in (l.split(":", 1) for l in hdr if ":" in l) if k in JUDGMENT_FIELDS}
-        if any(k not in f for k in JUDGMENT_FIELDS) or not f["Judgment"].startswith("model judgment"):
-            out.append(f"- {m.group(1)}: unreadable judgment comment, ignored (rerun octo-feather-lane judge): {c.get('url') or '?'}"); continue
-        out.append(f"- {f['Question']}: {f['Answer']}, confidence {f['Confidence']} (model judgment by {f['Model']}, advisory: no gate reads it; "
-                   f"calibration: {f['Calibration']}; PR head {f['PR head'][:12]}, review head {f['Review head'][:12]}): {c.get('url') or '?'}")
-    return out
-
-
-def load_specs(files: list[str]) -> dict[str, dict]:
-    """{spec slug: criteria} from each --status file."""
-    if not files:
-        raise Refuse("name the lane's status file: --status docs/specs/<slug>.status.json (once per spec)")
-    specs = {}
-    for f in files:
-        try:
-            d = json.loads(Path(f).read_text())
-            slug = re.sub(r"\.spec\.html$", "", Path(d["spec"]).name); crit = d["criteria"]
-            assert isinstance(crit, dict) and all(isinstance(v, dict) for v in crit.values())
-        except (OSError, ValueError, KeyError, TypeError, AssertionError) as e:
-            raise Refuse(f"--status {f} is not a readable status file ({type(e).__name__}: {e}): name docs/specs/<slug>.status.json")
-        specs[slug] = crit
-    return specs
-
-
-def resolve(tok: str, specs: dict[str, dict]) -> tuple[str | None, str | None]:
-    """(spec#id, None) or (None, why)."""
-    tok = tok.strip().strip("`*")
-    if "#" in tok:
-        slug, cid = tok.split("#", 1); slug = re.sub(r"\.spec\.html$", "", slug.split("/")[-1])
-        if slug not in specs:
-            return None, f"{tok}: spec {slug} has no --status file (pass --status docs/specs/{slug}.status.json)"
-        return (f"{slug}#{cid}", None) if cid in specs[slug] else (None, f"{tok}: no criterion {cid} in {slug}'s status file")
-    hits = [s for s in specs if tok in specs[s]]
-    if len(hits) == 1:
-        return f"{hits[0]}#{tok}", None
-    return None, (f"{tok}: in {' and '.join(hits)}; write <spec>#{tok}" if hits else f"{tok}: no such criterion in the --status files")
-
-
-def section(body: str) -> list[str] | None:
-    lines = (body or "").replace("\r\n", "\n").split("\n")
-    for i, l in enumerate(lines):
-        if re.fullmatch(r"##\s+merge ask\s*", l.strip(), re.I):
-            end = next((j for j in range(i + 1, len(lines)) if re.match(r"#{1,2}\s", lines[j])), len(lines))
-            return [x.rstrip() for x in lines[i:end]]
-    return None
-
-
-def field(lines: list[str], name: str) -> tuple[int, str] | None:
-    for i, l in enumerate(lines):
-        m = re.match(rf"\s*{name}:\s*(.*)$", l, re.I)
-        if m:
-            return i, m.group(1).strip()
-    return None
-
-
-def bad_checks(rollup: list[dict]) -> tuple[list[str], list[str]]:
-    failed, pending = [], []
-    for c in rollup:
-        name = c.get("name") or c.get("context") or "?"
-        if c.get("__typename") == "StatusContext" or "state" in c and "conclusion" not in c:
-            s = (c.get("state") or "").upper()
-            (pending if s in ("PENDING", "EXPECTED", "") else failed if s != "SUCCESS" else []).append(f"{name} {s.lower() or 'pending'}")
-        elif (c.get("status") or "COMPLETED").upper() != "COMPLETED" or not c.get("conclusion"):
-            pending.append(f"{name} {(c.get('status') or 'pending').lower()}")
-        elif c["conclusion"].upper() not in ("SUCCESS", "NEUTRAL", "SKIPPED"):
-            failed.append(f"{name} {c['conclusion'].lower()}")
-    return failed, pending
-
-
-def check_runs(sha: str, repo: str | None, what: str) -> "list[dict[str, object]]":
-    """GitHub's check runs on commit SHA (REST check-runs, the latest of each), each {id, name, status, conclusion, html_url}.
-    WHAT names the commit in a refusal."""
-    out = gh(["api", f"repos/{repo or '{owner}/{repo}'}/commits/{sha}/check-runs?per_page=100"],
-             f"read the check runs of {sha[:12]}, {what} (gh auth status)")
-    try:
-        data = json.loads(out)
-        got = cast("list[object]", data["check_runs"])
-        if data.get("total_count", len(got)) > len(got):
-            raise ValueError("incomplete check runs")
-    except (ValueError, KeyError, TypeError):
-        raise Refuse(f"gh api check-runs of {sha[:12]} printed no check runs: check the gh on PATH ({out[:100]!r})")
-    return [cast("dict[str, object]", r) for r in got if isinstance(r, dict)]
-
-
-def current_checks(rollup: list[dict[str, object]], head: str, repo: str | None) -> list[dict[str, object]]:
-    """Project repeated checks through GitHub's actual head runs, retaining app/workflow/context identity."""
-    def obj(value: object) -> dict[str, object]:
-        if not isinstance(value, dict):
-            raise ValueError("expected an object")
-        return cast("dict[str, object]", value)
-
-    def number(value: object) -> int:
-        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
-            raise ValueError("expected a positive integer identity")
-        return value
-
-    def text(value: object) -> str:
-        if not isinstance(value, str) or not value:
-            raise ValueError("expected nonempty text")
-        return value
-
-    checks = [c for c in rollup if c.get("__typename") == "CheckRun"]
-    keys = [(str(c.get("name")), str(c.get("workflowName"))) for c in checks]
-    if len(keys) == len(set(keys)):
-        return rollup
-    runs = check_runs(head, repo, "the PR head")
-    out = gh(["api", f"repos/{repo or '{owner}/{repo}'}/actions/runs?head_sha={head}&per_page=100"],
-             f"read workflow identities on {head[:12]} (gh auth status)")
-    try:
-        data = obj(json.loads(out))
-        raw = data["workflow_runs"]
-        if not isinstance(raw, list):
-            raise ValueError("expected workflow runs")
-        workflows = [obj(w) for w in cast("list[object]", raw)]
-        if number(data.get("total_count", len(workflows))) > len(workflows):
-            raise ValueError("incomplete workflow runs")
-        suites: dict[int, int] = {}
-        latest: dict[int, tuple[int, int]] = {}
-        for w in workflows:
-            if w["head_sha"] != head:
-                raise ValueError("workflow on another head")
-            suite, workflow, rid = number(w["check_suite_id"]), number(w["workflow_id"]), number(w["id"])
-            suites[suite] = workflow
-            latest[workflow] = max(latest.get(workflow, (0, 0)), (rid, suite))
-        identities: dict[str, tuple[int, int, str]] = {}
-        grouped: dict[tuple[int, int, str], list[dict[str, object]]] = {}
-        for r in runs:
-            if r["head_sha"] != head:
-                raise ValueError("check on another head")
-            suite, app = number(obj(r["check_suite"])["id"]), number(obj(r["app"])["id"])
-            number(r["id"])
-            text(r["status"])
-            if r["conclusion"] is not None:
-                text(r["conclusion"])
-            key = (app, suites[suite], text(r["name"]))
-            identities[text(r["html_url"])] = key
-            grouped.setdefault(key, []).append(r)
-        projected = [c for c in rollup if c.get("__typename") != "CheckRun"]
-        seen: set[tuple[int, int, str]] = set()
-        for c in checks:
-            key = identities[text(c["detailsUrl"])]
-            if key in seen:
-                continue
-            seen.add(key)
-            candidates = [r for r in grouped[key] if number(obj(r["check_suite"])["id"]) == latest[key[1]][1]]
-            r = max(candidates, key=lambda r: number(r["id"]), default=None)
-            projected.append({"__typename": "CheckRun", "name": key[2],
-                              "status": r["status"] if r else "QUEUED",
-                              "conclusion": r["conclusion"] if r else None})
-    except (ValueError, KeyError, TypeError) as e:
-        raise Refuse(f"current check identities on {head[:12]} unavailable ({e}): reread GitHub's complete head checks") from e
-    return projected
 
 
 @no_traceback
@@ -1909,139 +1466,6 @@ def ci_full_run(head: str, repo: str | None) -> tuple[list[str], list[str]]:
     return why, ([] if why else lines)
 
 
-def carried_checks(rollup: "list[dict[str, object]]", head: str, judged: str | None, proof: str | None,
-                   repo: str | None) -> tuple[list[str], list[str]]:
-    """(why each check skipped on HEAD fails, a line per one that passes; when a skipped check counts: spec issue-lifecycle
-    #lanes-one-head). PROOF is head_proof's line for JUDGED to HEAD."""
-    skipped = sorted({str(c.get("name") or "?") for c in rollup if c.get("__typename") != "StatusContext" and "conclusion" in c
-                      and str(c.get("conclusion") or "").upper() == "SKIPPED"})
-    h = head[:12]
-    if not skipped:
-        return [], []
-    if not judged or judged == head.lower() or not proof:
-        return [(f"Checks: skipped on head {h}: {', '.join(skipped)}; a skipped check is no pass and no Judged proof carries "
-                 f"a judged head's CI to {h} (issue-lifecycle #lanes-one-head): run `octo-feather-lane ci-start <PR>` on the "
-                 "judged head, wait for its CI, then rerun")], []
-    j = judged[:12]
-    runs = check_runs(judged, repo, "the judged head")
-    why: list[str] = []; ok: list[str] = []
-    for name in skipped:
-        at = f"Checks: {name} skipped on head {h}, carried from the judged head {j} by the Judged proof, and"
-        r = max((r for r in runs if r.get("name") == name), key=lambda r: int(str(r.get("id") or 0)), default=None)
-        status, concl = str((r or {}).get("status") or "").lower(), str((r or {}).get("conclusion") or "").lower()
-        if r is None:
-            why.append(f"{at} {j} has no {name} run; run `octo-feather-lane ci-start <PR>` on {j}, wait for its CI, then rerun")
-        elif status != "completed":
-            why.append(f"{at} pending on {j}: {name} {status or 'pending'}; wait for it to finish, then rerun")
-        elif concl == "skipped":
-            why.append(f"{at} skipped on {j} too: CI never ran there; run `octo-feather-lane ci-start <PR>` on {j}, then rerun")
-        elif concl not in ("success", "neutral"):
-            why.append(f"{at} failing on {j}: {name} {concl or 'none'}; fix it (a red check is never pre-existing)")
-        else:
-            ok.append(f"- {name}: skipped on {h}; {concl} on {j}, the judged head")
-    return why, ok
-
-
-# GitHub's closing keywords: a PR body line with one closes that GitHub issue at merge (#N, owner/repo#N or the issue URL).
-CLOSES = re.compile(r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+(?:[\w.-]+/[\w.-]+#|https?://(?:www\.)?github\.com/[\w.-]+/[\w.-]+/issues/|#)(\d+)\b", re.I)
-
-
-def parent_line(body: str, branch: str) -> list[str]:
-    """Spec #gates-pr-line: the body carries the tracker skill's pr-line for the lane's parent (the key its
-    key-from-branch reads from the PR branch), and closes no other GitHub issue."""
-    try:
-        key = tracker("key-from-branch", branch, err=Refuse).strip()
-        want = tracker("pr-line", key, err=Refuse).strip()
-    except Refuse as e:
-        return [f"parent line: cannot name it for branch {branch!r} ({e}); push the lane from its lane branch (docs/adr/0011)"]
-    lines = [l.strip() for l in body.splitlines()]
-    got = [l for l in lines if l == want or (l.startswith(want) and not re.match(r"[\w-]", l[len(want):len(want) + 1]))]
-    out = [] if got else [f"parent line: missing; add the line `{want}` (the tracker skill's pr-line {key}) to the PR body"]
-    for l in lines:
-        for m in CLOSES.finditer(l):
-            if l in got and m.end() <= len(want):
-                continue  # the parent line's own closing link (GitHub: Closes #<parent>), never the rest of its line
-            out.append(f"parent line: `{l[:80]}` closes GitHub issue #{m.group(1)}, not the lane's parent line `{want}`; "
-                       "remove it (the supervisor's close moves each ticket to done with the tracker skill's issue-done)")
-    return out
-
-
-def no_criterion(lines: list[str], commits: list[tuple[str, str]], specs: dict[str, dict[str, dict[str, object]]], pr: int) -> bool:
-    """The lane builds no criterion (spec #lanes-one-head): `Built: none`, `Failed: none`, no criterion row,
-    no `qc: built` commit on the PR and no status entry built with it."""
-    b, f = field(lines, "Built"), field(lines, "Failed")
-    if not b or b[1].strip("`").lower() != "none" or not f or f[1].strip("`").lower() != "none":
-        return False
-    t = next((i for i, l in enumerate(lines) if re.fullmatch(r"\|\s*criterion\s*\|.*\|", l.strip(), re.I)), None)
-    for l in lines[t + 1:] if t is not None else []:
-        if not l.strip().startswith("|"):
-            break
-        if not all(re.fullmatch(r":?-+:?", c.strip()) for c in l.strip().strip("|").split("|")):
-            return False
-    if any(QC_COMMIT.match(s) for _, s in commits):
-        return False
-    return not any(v.get("status") == "built" and v.get("pr") == pr for cr in specs.values() for v in cr.values())
-
-
-def verdict_head(lines: list[str], comments: list, commits: list[tuple[str, str]], head: str, pr: int) -> tuple[str | None, str | None]:
-    """(the PR commit the linked review verdict comment names as its Head, None), or (None, why); (None, None)
-    when there is no such comment to read (the Review verdict check names that)."""
-    rv = field(lines, "Review verdict")
-    m = COMMENT_URL.fullmatch(rv[1].strip("<>` ")) if rv else None
-    c = next((c for c in comments if m and (c.get("url") or "").endswith(f"#issuecomment-{m.group(3)}")), None)
-    cb = (c or {}).get("body") or ""
-    if not cb.lstrip().startswith(MARKER):
-        return None, None
-    ch = HEAD_LINE.search(cb.split("\n### Findings", 1)[0])
-    at = [oid for oid, _ in commits if ch and oid.lower().startswith(ch.group(1).lower())]
-    if len(at) != 1:
-        return None, (f"Review verdict: the comment names head {ch.group(1) if ch else 'none'}, not one commit of PR #{pr}: "
-                      f"review the PR head {head[:12]}, then `octo-feather-lane verdict {pr} {head[:12]} <report>`")
-    return at[0].lower(), None
-
-
-def qc_latest(judged: str) -> dict[str, tuple[dict[str, object], str]]:
-    """Each criterion's (<spec>#<id>) latest result in the qc reports at the JUDGED head, with its report's name
-    (reports: octo-feather-qc --help, Report; OCTO_FEATHER_QC_DIR as there)."""
-    d = Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state_dir() / "qc")
-    latest: dict[str, tuple[dict[str, object], str]] = {}
-    for p in sorted(d.glob(f"{judged.lower()}-*.json"), key=lambda p: (p.name.split("-")[1], p.stat().st_mtime_ns)):
-        try:   # <head>-<UTC stamp>-<runid>.json, oldest first: a rerun's result replaces the earlier one
-            rep = json.loads(p.read_text(encoding="utf-8"))
-            spec, results = str(rep.get("spec")), list(rep.get("results") or [])
-        except (OSError, ValueError, AttributeError, TypeError):
-            continue
-        for r in results:
-            if isinstance(r, dict) and "id" in r:
-                latest[f"{spec}#{r['id']}"] = (cast("dict[str, object]", r), p.name)
-    return latest
-
-
-def qc_insufficient(judged: str, specs: set[str]) -> list[str]:
-    """Each criterion of the SPECS (slugs) whose latest result in the qc reports at the JUDGED head is insufficient evidence
-    (quality spec #qc-results), named with what is missing and its report (qc_latest)."""
-    latest: dict[str, tuple[str, str]] = {}   # <spec>#<id>: (what is missing, report), or ("", report) for pass or fail
-    for cid, (r, name) in qc_latest(judged).items():
-        if cid.split("#", 1)[0] in specs:
-            short = r.get("verdict") == "insufficient evidence"
-            latest[cid] = (("; ".join(map(str, cast("list[object]", r.get("missing") or []))) or "evidence incomplete") if short else "", name)
-    return [f"criterion {cid}: insufficient evidence at the judged head {judged[:12]} ({why}; qc report {name}): never triaged; "
-            "make what is missing available, then rerun just qc on it until it gives pass or fail"
-            for cid, (why, name) in sorted(latest.items()) if why]
-
-
-def resolution_verdicts(comments: "list[dict[str, object]]") -> dict[str, str]:
-    """{merge sha: URL} of each clear `verdict --resolution` comment among COMMENTS (spec #lanes-one-head)."""
-    out: dict[str, str] = {}
-    for c in comments:
-        body = str(c.get("body") or "")
-        rm = RESOLUTION_HEAD.match(body.lstrip()); hdr = body.split("\n### Findings", 1)[0]
-        vs = verdicts(hdr)
-        if rm and set(vs) == {"clear"} and not check_lines(hdr)[1]:
-            out[rm.group(1)] = str(c.get("url") or "")
-    return out
-
-
 @no_traceback
 def cmd_merge_ask(args: list[str]) -> int:
     args, repo = take_repo(args)
@@ -2055,235 +1479,34 @@ def cmd_merge_ask(args: list[str]) -> int:
             rest.append(args[i]); i += 1
     if len(rest) != 1:
         raise Refuse(f"usage: octo-feather-lane merge-ask PR [--status FILE...] [--base REF] [--repo O/R] (got {' '.join(args) or 'nothing'})")
-    pr = pr_number(rest[0]); specs = load_specs(files) if files else {}
-    d = pr_view(pr, "body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments", repo)
-    head = d["headRefOid"]; miss: list[str] = []
-    base = pr_base(cast("str | None", d["baseRefName"]) or "", base_arg)
-    try:
-        commits = pr_commits(pr, cast("str", head), base)
-    except Refuse as e:   # named with the other gaps; no commit of the PR is read
-        commits = []; miss.append(f"PR commits: {e}")
-    miss += parent_line(d["body"] or "", d["headRefName"] or "")
-    sec = section(d["body"])
-    if sec is None:
-        miss.append("`## Merge ask` section: none in the PR body; add it (format: octo-feather-lane with no arguments)")
-    lines = sec or []
-    no_crit = no_criterion(lines, commits, cast("dict[str, dict[str, dict[str, object]]]", specs), pr)
-    if not files and not no_crit:
-        load_specs(files)   # a lane that claims a criterion names its status files
+    pr = pr_number(rest[0])
+    d: dict[str, Any] = {}   # the PR as gh printed it
 
-    h = field(lines, "Head")
-    if not h or not h[1]:
-        miss.append(f"Head: missing; add `Head: {head}`")
-    elif not head_matches(h[1].strip("`"), head):
-        miss.append(f"Head: names {h[1]}, the PR's head is {head[:12]} (stale): judge {head[:12]} (qc, review) and rewrite the section for it")
-
-    if not field(lines, "Checks"):
-        miss.append("Checks: missing; add `Checks: <the head's checks, all passing>`")
-    rollup = d["statusCheckRollup"] or []
-    try:
-        rollup = current_checks(cast("list[dict[str, object]]", rollup), cast("str", head), repo)
-    except Refuse as e:
-        miss.append(f"Checks: {e}")
-    failed, pending = bad_checks(rollup)
-    no_ci = ""
-    if not rollup:   # the rule: --help, merge-ask Checks line
-        try:   # an unreadable no-CI fact is this one item failing closed, never an abort of the whole check
-            wf, src = ci_workflows(repo, cast("str", head))
-        except Refuse as e:
-            wf, src = None, str(e)
-        if wf is None:
-            miss.append(f"Checks: none reported on head {head[:12]}, and the no-CI fact could not be read ({src})")
-        elif wf:
-            miss.append(f"Checks: none reported on head {head[:12]}, its workflows {', '.join(wf)}; push the head and wait for CI")
-        else:
-            try:
-                no_ci = (f"no CI: no workflow file under .github/workflows at head {head[:12]} ({src}); "
-                         + required_none(repo, cast("str", pr_view(pr, "baseRefName", repo)["baseRefName"])))
-            except Refuse as e:
-                miss.append(f"Checks: none reported on head {head[:12]}, no workflow file there ({src}), but {e}")
-    if failed:
-        miss.append(f"Checks: failing on head {head[:12]}: {', '.join(failed)}; fix them (a red check is never pre-existing)")
-    if pending:
-        miss.append(f"Checks: pending on head {head[:12]}: {', '.join(pending)}; wait for them to finish, then rerun")
-
-    rows: dict[str, str] = {}; judged_at: set[str] = set()
-    t = next((i for i, l in enumerate(lines) if re.fullmatch(r"\|\s*criterion\s*\|\s*qc verdict\s*\|\s*judged\s*\|\s*evidence\s*\|", l.strip(), re.I)), None)
-    if t is None:
-        old = any(re.fullmatch(r"\|\s*criterion\s*\|\s*qc verdict\s*\|\s*evidence\s*\|", l.strip(), re.I) for l in lines)
-        if not no_crit: miss.append(f"criterion table: {'no judged column' if old else 'missing'}; add `| criterion | qc verdict | judged | evidence |` "
-                    "with one row per claimed criterion, judged naming the head just qc judged")
-    else:
-        for l in lines[t + 1:]:
-            if not l.strip().startswith("|"):
-                break
-            cells = [c.strip() for c in l.strip().strip("|").split("|")]
-            if all(re.fullmatch(r":?-+:?", c) for c in cells):
-                continue
-            if len(cells) != 4:
-                miss.append(f"criterion row `{l.strip()}`: needs 4 cells, criterion | qc verdict | judged <sha> | evidence"); continue
-            cid, why = resolve(cells[0], specs); v = cells[1].strip("`*").lower()
-            if not cid:
-                miss.append(f"criterion row: {why}"); continue
-            if cid in rows:
-                miss.append(f"criterion row {cid}: listed twice; keep one")
-            if v == "insufficient evidence":   # a result, never a failure to triage (quality spec #qc-results)
-                miss.append(f"criterion row {cid}: insufficient evidence is never triaged; rerun just qc on it until it gives pass or fail")
-            elif v not in ("pass", "fail"):
-                miss.append(f"criterion row {cid}: qc verdict {cells[1]!r}; write pass or fail, as the qc report says")
-            if not cells[3]:
-                miss.append(f"criterion row {cid}: no evidence; name the qc report and the command it ran")
-            sha, why = judged_sha(cells[2], commits, head, pr)
-            (judged_at.add(sha) if sha else miss.append(f"criterion row {cid}: {why}"))
-            rows[cid] = v
-        if not rows and not no_crit:
-            miss.append("criterion table: no rows; add one per claimed criterion")
-    judged = next(iter(judged_at)) if len(judged_at) == 1 else None
-    if len(judged_at) > 1:
-        miss.append(f"criterion table: rows name {len(judged_at)} judged heads ({', '.join(sorted(s[:12] for s in judged_at))}); "
-                    "qc and the review judge one head: run just qc, naming every criterion the lane builds, and the review on one integrated head")
-    if judged and specs:
-        miss += qc_insufficient(judged, {str(s) for s in specs})
-    jl = field(lines, "Judged")
-    resolved = resolution_verdicts(cast("list[dict[str, object]]", d["comments"] or []))
-    if no_crit:   # no qc: the review verdict's head is the judged head (spec #lanes-one-head)
-        judged, why = verdict_head(lines, d["comments"] or [], commits, head, pr)
-        miss += [why] if why else []
-        try:   # a resolved merge after it: the PR head is judged, the review verdict kept below by its resolution verdict
-            h_, fl = cast("str", head), cast("list[str]", files)
-            if judged and resolved and head_proof(judged, h_, fl, base)[1] and not head_proof(judged, h_, fl, base, resolved=resolved)[1]:
-                judged = h_.lower()
-        except Refuse:
-            pass   # named by the proof below
-    proof: str | None = None
-    if judged:
+    def read() -> tuple[dict[str, object], list[tuple[str, str]] | str]:
+        """The PR as gh prints it, and its commits or why they are unread (named with the other gaps)."""
+        d.update(pr_view(pr, "body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments", repo))
         try:
-            proof, why = head_proof(judged, head, files, base)
+            return d, pr_commits(pr, cast("str", d["headRefOid"]), pr_base(cast("str | None", d["baseRefName"]) or "", base_arg))
         except Refuse as e:
-            proof, why = None, [str(e)]
-        miss += [f"Judged: {w}" for w in why]
-        if proof and (not no_crit or jl or judged != head.lower()) and (not jl or jl[1].strip("`") != proof):
-            miss.append(f"Judged: {'names ' + repr(jl[1]) if jl else 'missing'}; add the check's proof line `Judged: {proof}`")
+            return d, str(e)
 
-    try:
-        why, carried = carried_checks(cast("list[dict[str, object]]", rollup), cast("str", head), judged, proof, repo)
-    except Refuse as e:
-        why, carried = [f"Checks: {e}"], []
-    miss += why
+    s = merge_ask.snapshot(pr, repo, cast("list[str]", files), read, Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state_dir() / "qc"),
+                           trend=state_dir() / ReportSources.TREND, err=Refuse, base=base_arg)
+    head = d["headRefOid"]
+    a = merge_ask.check(s)
+    if a.refusal:
+        print("\n".join(a.order), file=sys.stderr)   # shown only (spec #gates-merge-order)
+        raise Refuse(a.refusal)
+    if a.abort:   # a read the full pass needs failed
+        raise Refuse(a.abort)
+    miss = list(a.head); lines = a.section
 
-    miss += [f"Full pass: {w}" for w in full_pass(cast("str", head), cast("list[str]", files), base)]   # every lane, one building no criterion too
-
-    review_checks: list[str] = []
-    rproof: str | None = None; rwhy: list[str] = []
-    rv = field(lines, "Review verdict")
-    url = (rv[1].strip("<>` ") if rv else "")
-    m = COMMENT_URL.fullmatch(url)
-    if not rv:
-        miss.append(f"Review verdict: missing; run `octo-feather-lane verdict {pr} {(judged or head)[:12]} <report>` and add `Review verdict: <the URL it prints>`")
-    elif not m or int(m.group(2)) != pr:
-        miss.append(f"Review verdict: {url or 'empty'} is not a comment on PR #{pr}; link the URL `octo-feather-lane verdict` printed")
-    else:
-        c = next((c for c in d["comments"] or [] if (c.get("url") or "").endswith(f"#issuecomment-{m.group(3)}")), None)
-        cb = (c or {}).get("body") or ""
-        hdr = cb.split("\n### Findings", 1)[0]   # the helper's own header, never the quoted report
-        ch = HEAD_LINE.search(hdr); cvs = verdicts(hdr)
-        cv = cvs[-1] if len(set(cvs)) == 1 else None
-        rh = str(ch.group(1)).lower() if ch else None
-        rat: list[str] = [str(oid).lower() for oid, _ in commits if rh and str(oid).lower().startswith(rh)]
-        if judged and cast("str", cb).lstrip().startswith(MARKER) and len(rat) == 1 and rat[0] != judged:   # reviewed before the judged head
-            try:
-                rproof, rwhy = head_proof(rat[0], judged, cast("list[str]", files), base, at="reviewed head", kept="the review verdict", resolved=resolved,
-                                          rerun=f"review {judged[:12]} afresh in full, then `octo-feather-lane verdict {pr} {judged[:12]} <report>`")
-            except Refuse as e:
-                rproof, rwhy = None, [str(e)]
-        if c is None:
-            miss.append(f"Review verdict: comment {m.group(3)} not on PR #{pr}; link the URL `octo-feather-lane verdict` printed")
-        elif not cb.lstrip().startswith(MARKER):
-            miss.append(f"Review verdict: {url} is not a verdict comment (no marker); post it with `octo-feather-lane verdict`")
-        elif judged and (not ch or not judged.startswith(ch.group(1).lower())) and not rproof:
-            miss += [f"Review verdict: {w}" for w in rwhy] or [(
-                f"Review verdict: the comment names head {ch.group(1) if ch else 'none'}, not the judged head {judged[:12]}; "
-                f"review {judged[:12]}, then `octo-feather-lane verdict {pr} {judged[:12]} <report>`")]
-        elif cv != "clear":
-            miss.append(f"Review verdict: {cv or 'none or conflicting'}, not clear; fix the blocking findings, qc and review again")
-        else:
-            review_checks, why = check_lines(hdr)
-            proxy = [c for c in review_checks if c.endswith("| class: proxy")]
-            if why:
-                miss.append(f"Review verdict: the comment carries no usable check classification ({why[0]}): have the review report "
-                            f"hold {CHECK_FORM}, then `octo-feather-lane verdict {pr} {(judged or head)[:12]} <report>`")
-            elif proxy:
-                miss.append(f"Review verdict: clear with a proxy check ({proxy[0]}): a proxy check blocks (docs/adr/0008); "
-                            "delete or replace it, review again, and post the verdict with `octo-feather-lane verdict`")
-    rl = field(lines, "Reviewed")
-    if rproof and (not rl or rl[1].strip("`") != rproof):
-        miss.append(f"Reviewed: {'names ' + repr(rl[1]) if rl else 'missing'}; add the check's proof line `Reviewed: {rproof}`")
-
-    built = set()
-    b = field(lines, "Built")
-    if not b:
-        miss.append("Built: missing; add `Built: <ids qc flipped to built>` (or `Built: none`)")
-    elif b[1].strip("`").lower() != "none":
-        for tok in filter(None, re.split(r"[\s,]+", b[1])):
-            cid, why = resolve(tok, specs)
-            (built.add(cid) if cid else miss.append(f"Built: {why}"))
-    status = {f"{s}#{k}" for s, cr in specs.items() for k, v in cr.items() if v.get("status") == "built" and v.get("pr") == pr}
-    if b and built != status:
-        miss.append(f"Built: lists {' '.join(sorted(built)) or 'none'}, the status files hold built with PR #{pr}: "
-                    f"{' '.join(sorted(status)) or 'none'}; list exactly those (never edit the status file by hand)")
-    qc = [QC_COMMIT.match(s) for _, s in commits]
-    qc_ids = {x for q in qc if q for x in q.group(1).split() if x != "(none)"}
-    unpassed = sorted(c for c in built if c.split("#", 1)[1] not in qc_ids)
-    if no_crit:
-        pass   # builds no criterion: no qc run, no qc commit
-    elif not any(qc):
-        miss.append(f"Built: no `qc: built` commit on PR #{pr}; run just qc on the lane head (docs/adr/0022)")
-    elif unpassed:   # a subset: a later qc run may reset an earlier pass to planned
-        miss.append(f"Built: {' '.join(unpassed)} in no `qc: built` commit of PR #{pr} (they passed "
-                    f"{' '.join(sorted(qc_ids)) or 'none'}); built only by just qc: run just qc on the head for them, never edit the status file by hand")
-
-    fails: dict[str, str] = {}
-    f = field(lines, "Failed")
-    if not f:
-        miss.append("Failed: missing; add `Failed: none`, or `Failed:` then one `- <id>: <triage>` line per failed criterion")
-    elif f[1].lower() not in ("none", ""):
-        miss.append(f"Failed: {f[1]!r}; write `Failed: none`, or `Failed:` then one `- <id>: <triage>` line per failed criterion")
-    elif f[1] == "":
-        for l in lines[f[0] + 1:]:
-            fm = re.match(r"\s*[-*]\s+([^:\s]+):?\s*(.*)$", l)
-            if not fm:
-                break
-            cid, why = resolve(fm.group(1), specs)
-            if not cid:
-                miss.append(f"Failed: {why}"); continue
-            fails[cid] = fm.group(2).strip()
-            if not fails[cid]:
-                miss.append(f"Failed: {cid} has no triage; add `- {cid}: <repair ticket, judging fix, or outside the lane and why>` (spec #delivery-qa-triage)")
-        if not fails:
-            miss.append("Failed: empty list; write `Failed: none` or one `- <id>: <triage>` line per failed criterion")
-
-    if t is not None:
-        for cid in sorted(built - rows.keys()):
-            miss.append(f"criterion row {cid}: missing (it is in Built); add `| {cid} | pass | judged <sha> | <evidence> |`")
-        for cid in sorted(fails.keys() - rows.keys()):
-            miss.append(f"criterion row {cid}: missing (it is in Failed); add `| {cid} | fail | judged <sha> | <evidence> |`")
-        for cid, v in sorted(rows.items()):
-            if v == "pass" and cid not in built:
-                miss.append(f"criterion row {cid}: pass but not in Built; qc flips each pass to built, so rerun just qc or correct the row")
-            if v == "fail" and cid not in fails:
-                miss.append(f"criterion row {cid}: fail with no triage; add `- {cid}: <triage>` under Failed (spec #delivery-qa-triage)")
-            if v == "fail" and cid in built:
-                miss.append(f"criterion row {cid}: fail but in Built; rerun just qc on it")
-
-    sources: list[str] = []
-    if rows and judged:
-        latest = qc_latest(judged)
-        sources = [f"Decision sources (the latest qc result at the judged head {judged[:12]}; quality spec #qc-results):",
-                   *(f"- {cid}: {latest[cid][0].get('decision') or 'none named'}" if cid in latest
-                     else f"- {cid}: no qc result at the judged head" for cid in sorted(rows))]
-    gate_time = merge_ask_gate_time(cast("str", head), base)   # after the pass or fail was decided above
+    if not merge_ask.field(lines, "Checks"):
+        miss.append("Checks: missing; add `Checks: <the head's checks, all passing>`")
+    miss += [*a.checks, *a.judged, *a.carried, *a.full, *a.review]   # the full pass: every lane, one building no criterion too
+    no_ci, carried, gate_time = a.no_ci, a.carried_ok, a.gate_time   # the gate time: shown only
     if miss:
-        print("\n".join(gate_time), file=sys.stderr)
+        print("\n".join([*gate_time, "", *a.order]), file=sys.stderr)   # shown only (spec #gates-merge-order)
         raise Refuse(f"PR #{pr} merge ask incomplete ({len(miss)} item{'s' * (len(miss) > 1)}), head {head[:12]}:\n"
                      + "\n".join(f"  - {x}" for x in miss))
     print("\n".join(lines).strip())
@@ -2291,14 +1514,15 @@ def cmd_merge_ask(args: list[str]) -> int:
         print(f"\nChecks: {no_ci}")
     if carried:
         print("\nChecks carried from the judged head (issue-lifecycle #lanes-one-head):\n" + "\n".join(carried))
-    if sources:
-        print("\n" + "\n".join(sources))
-    if judged_lines := judgment_lines(d["comments"]):   # shown only, after the pass was decided above
+    if a.sources:
+        print("\n" + "\n".join(a.sources))
+    if a.judgments:   # shown only, after the pass was decided above
         print("\nModel judgments (advisory, spec judgment#rule-advisory: no gate reads them; this merge ask is ready or not without them):")
-        print("\n".join(judged_lines))
+        print("\n".join(a.judgments))
     print("\nReview check classes (from the verdict comment, docs/adr/0008):")
-    print("\n".join(f"- {c}" for c in review_checks))
+    print("\n".join(f"- {c}" for c in a.classes))
     print("\n" + "\n".join(gate_time))
+    print("\n" + "\n".join(a.order))   # shown only, after the pass was decided above (spec #gates-merge-order)
     return 0
 
 
@@ -3255,17 +2479,6 @@ def cmd_spend(args: list[str]) -> int:
 RUNNING = "working"   # the Herdr agent_status of an agent at work
 
 
-def stamp(s: object, now) -> str:
-    t = utc(s)
-    if t is None:
-        return f"{s!r} (not a UTC instant)" if s not in (None, "") else "(not recorded)"
-    secs = int((now - t).total_seconds())
-    sign, secs = ("", secs) if secs >= 0 else ("-", -secs)
-    d, h, m = secs // 86400, secs // 3600 % 24, secs // 60 % 60
-    age = (f"{d}d" if d else "") + (f"{h}h" if d or h else "") + f"{m}m"
-    return f"{t:%Y-%m-%dT%H:%M:%SZ} ({sign}{age} ago)"
-
-
 def herdr_agents() -> list[dict]:
     try:
         p = subprocess.run(["herdr", "agent", "list"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
@@ -3618,8 +2831,16 @@ def skills_check(key: str) -> int:
         lines = read_log(log)[0] if log.is_file() else []
     except OSError as e:
         raise Unchecked(f"cannot read {log} ({e}): fix its permissions, then rerun") from e
-    keys = {key.lower().lstrip("#"), name.lower()}
-    spawns = [r for r in lines if r.get("kind") in ho.SPAWN_KINDS and str(r.get("ticket", "")).lower() in keys]
+    # One rule for any tracker (#1169): a spawn line is TICKET's when the tracker skill's lane-key gives its ticket
+    # and TICKET one lane key (herdr-spawn's `ticket` is the worker name's, `implementer-gh40` gives gh40).
+    lane = tracker("lane-key", name, err=Unchecked).strip()
+    lanes: dict[str, str] = {}
+    for t in {str(r.get("ticket", "")) for r in lines if r.get("kind") in ho.SPAWN_KINDS}:
+        try:
+            lanes[t] = tracker("lane-key", t, err=Unchecked).strip()
+        except Unchecked:
+            lanes[t] = ""   # no issue key of this tracker: no ticket's spawn line
+    spawns = [r for r in lines if r.get("kind") in ho.SPAWN_KINDS and lanes[str(r.get("ticket", ""))] == lane]
     if not spawns or not isinstance(sid := spawns[-1].get("session"), str) or not re.fullmatch(r"[0-9A-Za-z-]+", sid):
         raise Unchecked(f"no spawn line for ticket {name} with a session in {log}: spawn the worker with herdr-spawn "
                         "(it records the line), or name the ticket its worker was spawned for")
@@ -3667,113 +2888,6 @@ def skills_check(key: str) -> int:
     print(f"{name}: fix: send {worker} back before integrate: herdr-say {wpane} 'Load {skills} (read each SKILL.md by "
           f"path), apply it to ticket {name}, then hand off again'; integrate once octo-feather-lane skills {name} no longer exits 1")
     return 1
-
-
-def numbered_jsonl(path: Path) -> tuple[list[tuple[int, dict]], list[int]] | None:
-    """A JSON lines file's object lines with their numbers, and the numbers of the lines that are not one; None with no file."""
-    if not path.exists():
-        return None
-    rows, bad = [], []
-    for i, l in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        if not l.strip():
-            continue
-        try:
-            d = json.loads(l)
-        except ValueError:
-            d = None
-        (rows.append((i, d)) if isinstance(d, dict) else bad.append(i))
-    return rows, bad
-
-
-BUDGET = "gate-budget.toml"   # the repo root's gate-time budget, kept by the factory (form: budget_text)
-BUDGET_TREND = 5                # trend runs shown when the repo has no budget file to set trend_runs
-SLOWEST = 5                     # slowest items shown
-
-
-Budget = dict[str, float]   # budget_seconds, growth_share, trend_runs (an int)
-Run = dict[str, object]     # one check-runs.jsonl line
-
-
-def budget_parse(text: str | None) -> tuple[Budget | None, str]:
-    """gate-budget.toml's three numbers, or None and why: absent (text None) or invalid. budget_seconds: the
-    full gate's wall-time budget; growth_share: the share of growth over the trend's median that is flagged;
-    trend_runs: how many passed full runs before the latest make the trend. Stdlib tomllib: the kit's scripts
-    stay stdlib-only (AGENTS.md)."""
-    import tomllib
-    if text is None:
-        return None, f"{BUDGET}: none"
-    try:
-        d: dict[str, object] = tomllib.loads(text)
-    except tomllib.TOMLDecodeError as e:
-        return None, f"{BUDGET}: {e}"
-    least = {"budget_seconds": 0.0, "growth_share": 0.0, "trend_runs": 1.0}
-    ok: Budget = {}
-    for k, low in least.items():
-        v = d.get(k)
-        if isinstance(v, (int, float)) and not isinstance(v, bool) and (v > low if k == "budget_seconds" else v >= low) \
-                and (k != "trend_runs" or isinstance(v, int)):
-            ok[k] = v
-    bad = [f"{k} {d.get(k)!r} is not a number of the right range" for k in least if k not in ok]
-    cpu = d.get("test_cpu_seconds")   # the per-test CPU budget, optional: the gate's own (tests/gate/conftest.py) reads it
-    if cpu is not None and (isinstance(cpu, bool) or not isinstance(cpu, (int, float)) or cpu <= 0):
-        bad.append(f"test_cpu_seconds {cpu!r} is not a number of the right range")
-    slots = {"heavy_items", "heavy_slots", "eval_slots", "slot_grace_seconds", "slot_bound_seconds"}   # octo-feather-slot reads and checks them
-    bad += [f"unknown key {k}" for k in sorted(set(d) - set(least) - {"test_cpu_seconds"} - slots)]
-    return (None, f"{BUDGET}: " + "; ".join(bad)) if bad else (ok, "")
-
-
-def total(d: Run) -> float:
-    t = d.get("total_s")
-    return float(t) if isinstance(t, (int, float)) else 0.0
-
-
-def passed_full(rows: list[tuple[int, Run]], heads: set[str]) -> list[Run]:
-    """check-runs.jsonl lines of passed full gate runs (tier full, exit 0, the runner's own fields) on HEADS, oldest first."""
-    runs = [d for _, d in rows if d.get("tier") == "full" and d.get("exit") == 0 and d.get("head") in heads
-            and utc(d.get("start")) is not None and isinstance(d.get("total_s"), (int, float))]
-    return sorted(runs, key=lambda d: str(d.get("start")))   # UTC instants of one form: text order is time order
-
-
-def secs(x: float) -> str:
-    return f"{round(x, 3):g}s"
-
-
-def budget_lines(last: Run, before: list[Run], budget: Budget | None, why: str, now: object, pad: str) -> list[str]:
-    """The full gate run LAST against BUDGET, with the trend (passed full runs BEFORE it, oldest first) and its
-    slowest items; flags OVER BUDGET and GROWN. Display only: no gate reads it (issue-lifecycle #lanes-checkpoints)."""
-    import statistics
-    t = total(last)
-    run = f"{pad}full gate: {secs(t)}, head {str(last.get('head'))[:12]}, started {stamp(last.get('start'), now)}"
-    if budget is None:
-        out = [f"{run}: no budget ({why})"]
-    else:
-        b = float(budget["budget_seconds"])
-        out = [f"{run}: " + (f"OVER BUDGET by {secs(t - b)}" if t > b else f"within budget, {secs(b - t)} to spare")
-               + f" (budget {secs(b)})"]
-    base = before[-int(budget["trend_runs"] if budget else BUDGET_TREND):]
-    if not base:
-        out.append(f"{pad}growth: no passed full run before it to compare")
-    else:
-        med = statistics.median(total(d) for d in base)
-        grow = (t - med) / med if med else 0.0
-        g = f"{pad}growth: {grow:+.1%} over the trend's median {secs(med)} (the {len(base)} passed full run{'s' * (len(base) > 1)} before it)"
-        if budget is None:
-            out.append(f"{g}; no set share ({why})")
-        else:
-            share = float(budget["growth_share"])
-            out.append(f"{g}; set share {share * 100:g}%: " + ("GROWN" if grow > share else "within"))
-    out.append(f"{pad}trend: " + ", ".join(f"{secs(total(d))} {str(d.get('head'))[:12]} {d.get('start')}" for d in [*base, last])
-               + " (passed full runs, oldest first)")
-    raw = last.get("steps")
-    steps: list[tuple[float, str]] = []
-    for x in cast("list[object]", raw) if isinstance(raw, list) else []:
-        st = cast("dict[str, object]", x) if isinstance(x, dict) else {}
-        sec = st.get("seconds")
-        if isinstance(sec, (int, float)):
-            steps.append((float(sec), str(st.get("name"))))
-    top = sorted(steps, key=lambda s: (-s[0], s[1]))[:SLOWEST]
-    out.append(f"{pad}slowest: " + (", ".join(f"{name} {secs(sec)}" for sec, name in top) or "no items recorded"))
-    return out
 
 
 class ReportSources:
@@ -3875,7 +2989,7 @@ class ReportSources:
         """Per open lane's repository, its latest passed full gate run on a commit of its default branch or of
         its lanes' PRs, against its gate-time budget (spec comms #report-field-gate-time)."""
         out: list[str] = []
-        trend = cast("tuple[list[tuple[int, Run]], list[int]] | None", self.trend)
+        trend = self.trend
         for repo in sorted(self.repo_heads):
             head = f"gate budget {repo}:"
             if self.trend_why:
@@ -3928,7 +3042,7 @@ def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None
             rollup = [c for c in d["statusCheckRollup"] or [] if isinstance(c, dict)]
             head = str(d["headRefOid"])[:12]
             out.append(f"  pr: #{pr} {d['state']} {'draft' if d['isDraft'] else 'ready'} head {head} checks: {check_results(rollup)}")
-            check_waits = [f"  waits: check {c} on head {head}" for c in bad_checks(rollup)[1]]
+            check_waits = [f"  waits: check {c} on head {head}" for c in merge_ask.bad_checks(cast("list[dict[str, object]]", rollup))[1]]
             pr_heads = {c["oid"] for c in d["commits"] or [] if isinstance(c, dict) and "oid" in c}
             src.repo_heads[repo] |= pr_heads
         except (Refuse, KeyError, TypeError, AttributeError) as e:
@@ -4031,7 +3145,7 @@ def run_routine(pr: int, head: str, lane: str, wait: int, repo: str | None) -> i
 def cmd_stale(args: list[str]) -> int:
     if args:
         raise Refuse(f"usage: octo-feather-lane stale (no arguments; got {' '.join(args)})")
-    lines, read = post_merge.stale_report()
+    lines, read = post_merge.stale_report(state_dir())
     print("\n".join(lines), flush=True)
     return 0 if read else 1
 
@@ -4273,7 +3387,8 @@ def pm_unit_start(name: str, pr: int, head: str, repo: str | None) -> int:
         why = f"{type(e).__name__}: {e}"
     if why:
         print(f"teardown: unit {unit} not started ({why})", flush=True)
-        return post_merge.unit_end(lanes_dir(), name, "start failed", why, show_line, repo=repo)
+        post_merge.unit_end(lanes_dir(), name, "start failed", why, show_line, repo=repo)
+        return 1   # no teardown runs, whether or not the director was told
     print(f"teardown: started unit {unit} ({how}, cwd {top}, limit {PM_UNIT_LIMIT}s, its lines in {log}); "
           "the director gets one message when it ends", flush=True)
     return 0
@@ -4293,6 +3408,19 @@ def pm_unit_run(pr: int, head: str, lane: str, repo: str | None) -> int:
             p.wait()
             result, status = "timeout", "killed KILL"
     return post_merge.unit_end(lanes_dir(), lane, result, status, show_line, repo=repo)
+
+
+def cmd_start(args: list[str]) -> int:
+    """`start` (--help): the logic in scripts/start_lane.py. -h or --help prints its --help entry
+    alone, before anything is read (issue 1159: agents/director.md points to it for the steps)."""
+    if "-h" in args or "--help" in args:
+        doc = __doc__ or ""
+        print(doc[doc.index("  octo-feather-lane start "):doc.index("\nOne subcommand per function")].rstrip())
+        return 0
+    import start_lane
+    start_lane.current_kit(kit_install(), Refuse)
+    print(start_lane.start(args, lanes_dir(), Refuse), flush=True)
+    return 0
 
 
 COMMANDS = {
@@ -4315,6 +3443,7 @@ COMMANDS = {
     "merge": cmd_merge,
     "post-merge": cmd_post_merge,
     "stale": cmd_stale,
+    "start": cmd_start,
 }
 
 

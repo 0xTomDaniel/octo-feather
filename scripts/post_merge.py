@@ -20,7 +20,7 @@ Interface:
         The archive's part of the director's message recorded; the teardown unit's end recorded,
         then the end or the stop told, its rerun keeping --repo REPO (octo-feather-lane --help,
         archive).
-    stale_report() -> (lines, read): step 5's report, `stale`'s output.
+    stale_report(state) -> (lines, read): step 5's report, `stale`'s output; STATE the state dir.
     kit_install(), top(), git_here(*args), records(lanes), now(): the install step 3 moves, the
         director's checkout, git in the current directory, the records' dir, a record's time.
     run(lane, pm, steps, show, records) -> Record
@@ -63,6 +63,7 @@ __all__ = [
 import contextlib
 import datetime as dt
 import fcntl
+import functools
 import importlib.machinery
 import importlib.util
 import json
@@ -1104,8 +1105,49 @@ def _load(name: str, path: Path) -> Any:  # noqa: ANN401 (a kit file loaded by p
     return mod
 
 
-def stale_report() -> tuple[list[str], bool]:  # noqa: C901 (one pass over the live agents)
-    """The stale report's lines (octo-feather-lane --help, stale) and whether Herdr was read."""
+@functools.cache
+def _herdr_installed(name: str, digest: Callable[[str], str | None]) -> tuple[str | None, str]:
+    """The DIGEST of Herdr extension NAME as a launch would install it now, or why none."""
+    with tempfile.TemporaryDirectory() as d:
+        try:
+            p = subprocess.run(
+                ["herdr", "integration", "install", "pi"],  # noqa: S607 (herdr from PATH)
+                env=os.environ | {"PI_CODING_AGENT_DIR": d},
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                check=False,
+            )
+        except OSError as e:
+            return None, f"herdr integration install pi: {e}"[:200]
+        got = digest(str(Path(d) / "extensions" / name))
+        out = (p.stderr or p.stdout).strip() or f"no {name}"
+        return got, "" if got else f"herdr integration install pi: {out}"[:200]
+
+
+def _herdr_fresh(
+    now: dict[str, object] | None,
+    why: str,
+    was: list[str],
+    state: Path,
+    digest: Callable[[str], str | None],
+) -> tuple[dict[str, object] | None, str]:
+    """NOW, a launch set's files (None: it launches no more, WHY), its Herdr extensions among WAS
+    (under STATE) read as the rule says (octo-feather-lane --help, stale); (None, why) when one
+    cannot be read."""
+    if now is None:
+        return None, why
+    herdr_pi = str(state / "herdr-pi") + os.sep
+    fresh = {f: _herdr_installed(Path(f).name, digest) for f in was if f.startswith(herdr_pi)}
+    fails = [fail for got, fail in fresh.values() if got is None]
+    if fails:
+        return None, fails[0]
+    return now | {f: got for f, (got, _) in fresh.items()}, why
+
+
+def stale_report(state: Path) -> tuple[list[str], bool]:  # noqa: C901 (one pass over the live agents)
+    """The stale report's lines (octo-feather-lane --help, stale) and whether Herdr was read; STATE
+    the state dir."""
     pr = _load("pi_role", KIT / "scripts" / "pi-role")
     scope = _load(
         "herdr_scope", KIT / ".agents" / "skills" / "herdr-comms" / "assets" / "herdr_scope.py"
@@ -1169,6 +1211,8 @@ def stale_report() -> tuple[list[str], bool]:  # noqa: C901 (one pass over the l
             why = (p.stderr.strip().splitlines() or [f"exit {p.returncode}"])[-1][:200]
         except (OSError, ValueError, KeyError, TypeError) as e:
             now_, why = None, str(e)[:200]
+        # its Herdr extension as a launch would install it now, never its own copy
+        now_, why = _herdr_fresh(now_, why, list(was), state, pr.digest)
         if now_ is None:
             stale.append(
                 f"stale: {who} role {role}: {show(role_file)} launches no more from {cwd} ({why})"
@@ -1188,9 +1232,9 @@ def stale_report() -> tuple[list[str], bool]:  # noqa: C901 (one pass over the l
     return [*stale, *unknown, summary], True
 
 
-def _stale(_pm: PostMerge) -> str:
+def _stale(pm: PostMerge) -> str:
     """Step 5: the stale report's lines, never a stop (--help, step 5)."""
-    return "; ".join(stale_report()[0])
+    return "; ".join(stale_report(pm.lanes.parent)[0])
 
 
 # --- step 6: tell running supervisors main moved (issue 398) ---
@@ -1489,15 +1533,15 @@ def _mise_prune(path: str) -> int:
 
 
 def _teardown(pm: PostMerge) -> str:  # noqa: C901, PLR0912, PLR0915 (the step's one pass, in order)
-    """Step 7: once the lane's record is archived for this PR (its close report), close its own
-    space (or only its supervisor tab in a shared one; neither while another open lane or the
-    director names that pane), remove its worktree, retarget PRs based on its branch, delete the
-    branch locally (merged only) and on origin. Any refusal stops the step, what ran before
-    named."""
+    """Step 7: once the lane's record is archived for this PR (its archive starts this step),
+    close its own space (or only its supervisor tab in a shared one; neither while another open
+    lane or the director names that pane), remove its worktree, retarget PRs based on its
+    branch, delete the branch locally (merged only) and on origin. Any refusal stops the step,
+    what ran before named."""
     lanes = pm.lanes
     path = lanes / "archive" / f"{pm.lane}.toml"
     if not path.exists():
-        msg = f"lane {pm.lane} not archived; rerun on its close report"
+        msg = f"lane {pm.lane} not archived; its archive starts this step"
         raise Pending(msg)
     try:
         rec: dict[str, object] = tomllib.loads(path.read_text(encoding="utf-8"))
@@ -1672,9 +1716,10 @@ def post_merge(pm: PostMerge, show: Callable[[str], None]) -> Ran:
 def archived(lanes: Path, name: str, rec: dict[str, object], printed: list[str]) -> None:
     """The archive's part of the director's message in lane NAME's post-merge record (--help,
     archive): the reflections' finding counts and the correction lane lines from what it
-    PRINTED, the tickets done and what is left open (sub-issues, PRs based on the lane's branch,
-    review rows rooted in its worktree) as the tracker, gh and the Spec Chat registries read them
-    now; a source it cannot read is named in its place."""
+    PRINTED, the tickets done and what is left open (sub-issues, PRs based on the lane's branch at
+    the archive, which the teardown then retargets, review rows rooted in its worktree) as the
+    tracker, gh and the Spec Chat registries read them now; a source it cannot read is named in
+    its place."""
     found = [re.match(r"reflection: (.+?), (\d+ findings?)", x) for x in printed]
     findings = tuple(f"{m.group(1)}: {m.group(2)}" for m in found if m)
     corrections = tuple(x for x in printed if x.startswith("correction lane"))
@@ -1711,7 +1756,7 @@ def archived(lanes: Path, name: str, rec: dict[str, object], printed: list[str])
             "check gh auth status",
         )
         prs = cast("list[dict[str, object]]", json.loads(out))
-        left += [f"PR #{x['number']} based on {branch} ({x['url']})" for x in prs]
+        left += [f"PR #{x['number']} based on {branch} at the archive ({x['url']})" for x in prs]
         tree = _git_ok("git worktree list failed", "worktree", "list", "--porcelain")
         wt = [
             e.split("\n", 1)[0].removeprefix("worktree ")
@@ -1794,7 +1839,7 @@ def _tell_stop(
 
 def _tell_end(lanes: Path, rec: Record, show: Callable[[str], None]) -> int:
     """The director's one message for the merge, once its teardown is ok, carrying the archive's
-    part (the close report's items); none for a record the archive recorded no part in."""
+    part (its close items); none for a record the archive recorded no part in."""
     c = rec.close
     if c is None:
         return 0
