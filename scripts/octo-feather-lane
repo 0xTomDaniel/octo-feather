@@ -146,12 +146,11 @@ on Linear), and no other line closes a GitHub issue. The section, up to the next
 
 Every row names one judged head H (7+ hex), a commit of the PR: the head qc and the code
 review both judged, in parallel (spec #lanes-one-head). H to H' may hold only (a) `qc: built
-... (judged <sha>)` commits changing only the --status files and (b) merges of BASE whose tree
-is git's automatic merge of their parents (no conflict resolved), after which the lane's own
-diff against BASE (BASE's merge base to the head, status files aside) is identical to its diff
-at H: same files, same content. Anything else fails naming the commit and file: run just qc
-and the review again. `Judged:` is the proof: `<H12> is the PR head`, or `<H12> to <H'12>:`
-the qc commits and files, and per main merge `lane diff identical (N files, sha256 <12 hex>)`.
+... (judged <sha>)` commits changing only the --status files and (b) merges of BASE that keep
+the verdict by the rule of spec #lanes-one-head, the lane's own diff against BASE read from
+BASE's merge base to the head, status files aside. Anything else fails naming the commit and
+file: run just qc and the review again. `Judged:` is the proof: `<H12> is the PR head`, or
+`<H12> to <H'12>:` the qc commits and files, and per main merge `lane diff identical (N files, sha256 <12 hex>)`.
 Ids are <spec slug>#<id> or a bare id one --status file names; pass --status once per spec.
 Every lane's PR head needs a current recorded full gate pass (the rule: spec #lanes-checkpoints): the record
 `octo-feather-gate passed` prints for it, or for a lane commit it stands for by the same H to H' check, whose
@@ -1289,7 +1288,7 @@ def merge_resolution(merge: str) -> tuple[str, list[str]]:
     if len(parents) < 2:
         raise Refuse(f"commit {sha[:12]} is not a merge: a resolution review covers a merge of main; any other change needs a full review")
     files = resolution_files(sha)
-    if not files:
+    if not files:   # which merge keeps the verdict with no review: spec #lanes-one-head
         raise Refuse(f"merge {sha[:12]} changes nothing beyond git's automatic merge: there is no resolution to review "
                      "(a clean merge keeps the review verdict by merge-ask's check alone)")
     return sha, files

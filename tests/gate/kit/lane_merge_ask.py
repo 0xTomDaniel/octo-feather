@@ -11,8 +11,8 @@ passes a complete section and prints it with each row's decision source (quality
 (fixture) naming each missing item, and each single gap: a failing, pending or unreported
 check (rule: --help, merge-ask Checks line). The parent line, Head, criterion rows, Built,
 Failed, the review verdict link and qc's evidence: test_merge_ask.py, in-process. One judged
-head (spec #acceptance-one-head): qc's status commit and a clean main merge keep the verdict
-with the check's proof line; anything else fails naming it.
+head (spec #acceptance-one-head; the rule: #lanes-one-head): what keeps the verdict, with the
+check's proof line; anything else fails naming it.
 Full pass (#acceptance-merge-ask-full-proof), gate time (#acceptance-merge-ask-gate-budget,
 shown only), skipped checks (#acceptance-ci-status-only, the rule: #lanes-one-head), a lane that
 builds no criterion, and a PR of 101 commits.
@@ -987,8 +987,9 @@ def one_judged_head(s: Scratch) -> None:
 
 
 def main_merges(s: Scratch) -> None:
-    """A clean main merge keeps the qc verdict, the check printing its proof line; a main merge
-    touching a lane file, resolving a conflict, or merging another branch: qc reruns."""
+    """Main merges (the rule: spec #lanes-one-head): one the rule lets keep the qc verdict
+    keeps it, the check printing its proof line; one touching a lane file, resolving a
+    conflict, or merging another branch: qc reruns."""
     ln = Lane(s)
     j, h = ln.j, ln.h
     m1 = ln.change(ln.b, "main: notes", "notes.txt", "main")
@@ -1201,8 +1202,8 @@ class Pr8:
 def no_criterion_lane(s: Scratch) -> None:
     """A lane building no criterion passes on head, checks, parent line and the review verdict
     alone, --status optional (its rules: test_merge_ask.py, in-process); a failing check still
-    fails; the verdict's head is the judged head: a code commit after it fails, a clean main
-    merge needs its proof line; a head with no recorded full pass refuses."""
+    fails; the verdict's head is the judged head: a code commit after it fails, a main merge spec
+    #lanes-one-head keeps needs its proof line; a head with no recorded full pass refuses."""
     p = Pr8(s)
     ln, n = p.ln, p.n
     p.put(n, p.body())
