@@ -1,0 +1,8 @@
+[
+  {"id": "impl-tdd-new-test", "role": "implementer", "should_trigger": true, "split": "train",
+   "task": "Add an end-to-end test for `lane tickets` on a ticket with no acceptance list."},
+  {"id": "sup-design-port-test", "role": "supervisor", "should_trigger": true, "split": "train",
+   "task": "Cut the ticket that ports tests/test_cli.sh to pytest, and brief its implementer."},
+  {"id": "sup-tdd-port-test", "role": "supervisor", "should_trigger": true, "split": "held-out",
+   "task": "Review fix: the reviewer wants the greet test moved to the CLI; write the implementer's brief."}
+]

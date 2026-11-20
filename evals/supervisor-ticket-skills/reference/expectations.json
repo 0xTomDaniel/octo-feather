@@ -1,0 +1,63 @@
+{
+  "missed-skill-sent-back": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "octo-feather-lane",
+        "args": [
+          "skills",
+          "1099"
+        ],
+        "exit": 1
+      },
+      {
+        "fact": "ran",
+        "program": "octo-feather-integrate",
+        "args": [],
+        "count": 0
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "w1:p4"
+        ]
+      },
+      {
+        "fact": "branch_paths",
+        "untouched": [
+          "scripts/",
+          "tests/"
+        ]
+      }
+    ]
+  },
+  "loaded-skill-integrated": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "octo-feather-lane",
+        "args": [
+          "skills",
+          "1094"
+        ],
+        "exit": 0
+      },
+      {
+        "fact": "ran",
+        "program": "octo-feather-integrate",
+        "args": [
+          "644"
+        ],
+        "exit": 0
+      },
+      {
+        "fact": "branch_paths",
+        "touched": [
+          "agents/supervisor.md",
+          "evals/skill-triggers/cases.json"
+        ]
+      }
+    ]
+  }
+}
