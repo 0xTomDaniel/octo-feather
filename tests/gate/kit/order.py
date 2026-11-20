@@ -17,10 +17,12 @@ import json
 import os
 import shutil
 import subprocess
-from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from testkit import ROOT, Scratch, main
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 SCRIPTS = ("a", "b", "c", "d", "e")
 SAME = ("m1", "m2")  # modules holding one same-named item each
