@@ -154,7 +154,7 @@ def merge_starts_routine(s: Scratch) -> None:
     assert out[1:4] == ["71: done", "70: done", "70: parent and 1 tickets done"], r.out
     for n, name in enumerate(STEPS[:6], 1):
         assert any(x.startswith(f"step {n} {name}: ok: ") for x in out), f"step {n}: {r.out}"
-    pending = "step 7 teardown: pending: lane gh7 not archived; rerun on its close report"
+    pending = "step 7 teardown: pending: lane gh7 not archived; its archive starts this step"
     assert pending in out, r.out
     assert out[-1].endswith("step 6 tell supervisors ok; step 7 teardown pending"), r.out
     assert lane.head() == m, f"kit install at {lane.head()}, not the merge commit"

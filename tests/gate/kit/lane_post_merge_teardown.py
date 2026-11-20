@@ -205,7 +205,9 @@ def not_archived(s: Scratch) -> None:
     w = World(s, "pending")
     w.lane(w.lanes / "gh12.toml", "zt5:p1", 12)
     r, s5 = w.run(3)
-    assert s5 == "step 7 teardown: pending: lane gh12 not archived; rerun on its close report", s5
+    assert s5 == (
+        "step 7 teardown: pending: lane gh12 not archived; its archive starts this step"
+    ), s5
     assert w.last(r) == f"{S4}; step 7 teardown pending", f"pending: {r.out}"
     assert not w.closes(), f"pending closed: {w.closes()}"
     w.kept("pending")

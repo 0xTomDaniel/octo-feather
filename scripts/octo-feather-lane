@@ -607,7 +607,7 @@ before its end) and `director told: <each>`; exit 0, 1 with no or an unreadable 
                    archive: ...`
   step 7 teardown  only once $(octo-feather-state)/lanes/archive/<lane>.toml exists (`octo-feather-lane archive`
                    moves it there, then starts this step in its teardown unit), else `pending: lane <lane> not
-                   archived; rerun on its close report`; an archived record whose `pr` is not PR stops. In order, each stop keeping the
+                   archived; its archive starts this step`; an archived record whose `pr` is not PR stops. In order, each stop keeping the
                    rest: first step 3's live-run rule on a run whose recorded process works in the lane's
                    worktree (its cwd; any live run where /proc is absent), `teardown waits: <kind> run pid
                    <pid> of lane <lane> since <since> reads <worktree>`, nothing closed or removed; then
@@ -629,8 +629,8 @@ Each step prints one line as it finishes, `step <n> <name>: ok: <what>` or `step
 a stopped step runs no later step. The last line is the summary, each step's outcome (ok, stopped, not run):
 `post-merge <lane> PR #<n>: step 1 merged ok; step 2 main CI ok`, ending `; NOT told: <lane> <pane>, ... (step 6
 names each re-send)` when step 6 failed a send. Exit 0 when every step is ok, 1 when one (not merged, merged at another head, a red run named by its URL, no run within the bound, a watch that failed,
-a checkout kept, a supervisor not told, a teardown refusal), 3 when steps 1-6 are ok and step 7 is pending (the run at the merge; rerun
-at the close report), 1 with usage on stderr for bad arguments.
+a checkout kept, a supervisor not told, a teardown refusal), 3 when steps 1-6 are ok and step 7 is pending (the run at the merge; the
+archive starts step 7), 1 with usage on stderr for bad arguments.
 
   octo-feather-lane stale          the live agents on a stale launch set, and those with none recorded
 

@@ -1533,15 +1533,15 @@ def _mise_prune(path: str) -> int:
 
 
 def _teardown(pm: PostMerge) -> str:  # noqa: C901, PLR0912, PLR0915 (the step's one pass, in order)
-    """Step 7: once the lane's record is archived for this PR (its close report), close its own
-    space (or only its supervisor tab in a shared one; neither while another open lane or the
-    director names that pane), remove its worktree, retarget PRs based on its branch, delete the
-    branch locally (merged only) and on origin. Any refusal stops the step, what ran before
-    named."""
+    """Step 7: once the lane's record is archived for this PR (its archive starts this step),
+    close its own space (or only its supervisor tab in a shared one; neither while another open
+    lane or the director names that pane), remove its worktree, retarget PRs based on its
+    branch, delete the branch locally (merged only) and on origin. Any refusal stops the step,
+    what ran before named."""
     lanes = pm.lanes
     path = lanes / "archive" / f"{pm.lane}.toml"
     if not path.exists():
-        msg = f"lane {pm.lane} not archived; rerun on its close report"
+        msg = f"lane {pm.lane} not archived; its archive starts this step"
         raise Pending(msg)
     try:
         rec: dict[str, object] = tomllib.loads(path.read_text(encoding="utf-8"))
@@ -1839,7 +1839,7 @@ def _tell_stop(
 
 def _tell_end(lanes: Path, rec: Record, show: Callable[[str], None]) -> int:
     """The director's one message for the merge, once its teardown is ok, carrying the archive's
-    part (the close report's items); none for a record the archive recorded no part in."""
+    part (its close items); none for a record the archive recorded no part in."""
     c = rec.close
     if c is None:
         return 0
