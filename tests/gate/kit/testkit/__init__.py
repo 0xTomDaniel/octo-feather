@@ -14,10 +14,12 @@ missing fixture fails naming it.
 
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import hashlib
 import json
 import os
+import resource
 import shutil
 import subprocess
 import sys
@@ -33,6 +35,10 @@ T = TypeVar("T")
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[3]
 FIXTURES = ROOT / "tests" / "fixtures"
+# scripts/ on sys.path once, here, so a scenario run as its file's command imports a kit module as
+# a pytest test does (how: pyproject.toml, [tool.pytest.ini_options] pythonpath's comment).
+if str(ROOT / "scripts") not in sys.path:
+    sys.path.insert(0, str(ROOT / "scripts"))
 # Each stand-in by the command it stands in for: gh (GitHub), herdr (Herdr), pi (Pi, at its
 # classifier boundary: tests/fixtures/classify-stub/pi's header says what it answers), busctl and
 # systemctl (the systemd user manager: systemd.py's header).
@@ -161,7 +167,8 @@ class Scratch:
         """This scratch filled with prepared NAME: a scratch BUILD fills once per gate run under
         GATE_RUN_DIR (the run's shared dir: tests/gate/test_gate.py), the first caller under an
         exclusive lock, every later one waiting on it, as tests/lib/prepared.py prepares template
-        installs; read-only by contract, copied here (its bin and tmp aside). Outside a gate run,
+        installs; read-only by contract, copied here (its bin and tmp aside); BUILD's CPU billed to
+        its own line, shared-NAME (GATE_SHARED_CPU: tests/gate/conftest.py). Outside a gate run,
         BUILD fills this scratch itself."""
         run = os.environ.get("GATE_RUN_DIR")
         if not run:
@@ -173,7 +180,9 @@ class Scratch:
             if not done.exists():
                 shutil.rmtree(tree, ignore_errors=True)  # a caller before failed part way
                 tree.mkdir()
+                cpu = _cpu()
                 build(Scratch(tree))
+                _bill(f"shared-{name}", _cpu() - cpu)
                 done.touch()
 
         def own(d: str, names: list[str]) -> set[str]:
@@ -241,6 +250,19 @@ class Scratch:
             "commit.gpgsign=false",
         ]
         return self.run(["git", "-C", str(repo), *ident, *args]).out
+
+
+def _cpu() -> float:
+    s, c = resource.getrusage(resource.RUSAGE_SELF), resource.getrusage(resource.RUSAGE_CHILDREN)
+    return s.ru_utime + s.ru_stime + c.ru_utime + c.ru_stime
+
+
+def _bill(line: str, cpu: float) -> None:
+    """Shared set-up's CPU on its own LINE, to the gate's GATE_SHARED_CPU file
+    (tests/gate/conftest.py)."""
+    if path := os.environ.get("GATE_SHARED_CPU"):
+        with contextlib.suppress(OSError), Path(path).open("a") as f:
+            f.write(json.dumps({"line": line, "cpu_s": round(cpu, 3)}) + "\n")
 
 
 def kit_deps(k: Path) -> None:

@@ -1,9 +1,9 @@
 Seeded defect: the max_tool_calls bound is taken two calls late, so a read after the batch that crossed it is credited.
-diff --git a/scripts/octo-feather-qa b/scripts/octo-feather-qa
-index 6e1952e9..5b104fc3 100755
---- a/scripts/octo-feather-qa
-+++ b/scripts/octo-feather-qa
-@@ -932,7 +932,7 @@ class Bound:
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index af457dc7..b64dd045 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -1053,7 +1053,7 @@ class Bound:
                  self.cap.add(cid)
          elif ev.get("type") == "tool_execution_end":
              self.flight.discard(cid)

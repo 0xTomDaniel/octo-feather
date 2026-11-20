@@ -579,6 +579,7 @@ from correction_lanes import (DIRECTOR, DIRECTOR_LOG, KIT_REPO, MARK_WORD, Refus
                               lane_logs)
 from correction_lanes import file_corrections as correction_filer
 from handoff_log import encode, read_log
+from eval_grading import DEFAULT_TIMEOUT
 from tracker_calls import tracker, utc
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -1572,7 +1573,7 @@ def cmd_judge(args: list[str]) -> int:
     qa = qa_module()
     inp = {"question": q["question"], "labels": q["labels"], "criteria": {lb: q["label_help"][lb] for lb in q["labels"]},
            "cases": [{"id": "state", "state": state}], "classifiers": [model]}
-    bench, _, _, problem = qa.classify(qa.qc_sandbox(), inp, int(suite.get("timeout_s", qa.DEFAULT_TIMEOUT)), f"judge-{pr}-{qid}",
+    bench, _, _, problem = qa.classify(qa.qc_sandbox(), inp, int(suite.get("timeout_s", DEFAULT_TIMEOUT)), f"judge-{pr}-{qid}",
                                       purpose="judge")
     if problem:
         raise Refuse(f"the classify run failed ({problem}): fix the cause, then rerun")
