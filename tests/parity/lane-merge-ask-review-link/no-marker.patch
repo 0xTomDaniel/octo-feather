@@ -1,0 +1,14 @@
+Seeded defect: a comment with no verdict marker is read as the review verdict.
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index eebfe2b6..08082e91 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -689,7 +689,7 @@ def review(  # noqa: C901  one branch per verdict gap, in the order printed
+                 f"Review verdict: comment {m.group(3)} not on PR #{pr}; link the URL "
+                 "`octo-feather-lane verdict` printed"
+             )
+-        elif not cb.lstrip().startswith(MARKER):
++        elif not cb.strip():
+             miss.append(
+                 f"Review verdict: {url} is not a verdict comment (no marker); post it with "
+                 "`octo-feather-lane verdict`"

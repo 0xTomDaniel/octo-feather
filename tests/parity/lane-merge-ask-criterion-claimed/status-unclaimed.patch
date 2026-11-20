@@ -1,0 +1,14 @@
+Seeded defect: a status entry built with the PR does not claim a criterion (spec #lanes-one-head).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index eebfe2b6..0e0ea693 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -829,7 +829,7 @@ def no_criterion(
+     if any(QC_COMMIT.match(sj) for _, sj in commits):
+         return False
+     return not any(
+-        v.get("status") == "built" and v.get("pr") == pr
++        v.get("status") == "built" and v.get("pr") == str(pr)
+         for cr in specs.values()
+         for v in cr.values()
+     )

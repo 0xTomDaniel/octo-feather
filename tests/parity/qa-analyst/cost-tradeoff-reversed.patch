@@ -1,14 +1,14 @@
 Seeded defect: analysis flags a cost tradeoff when the baseline costs more, not the current kit.
-diff --git a/scripts/octo-feather-qa b/scripts/octo-feather-qa
-index f213917..02ae57e 100755
---- a/scripts/octo-feather-qa
-+++ b/scripts/octo-feather-qa
-@@ -1841,7 +1841,7 @@ def analyze(cases: list[Result]) -> Result:
-         grew: Result = {}
-         for k in ("time", "tokens"):
-             c, bm = mean(r, k), mean(base, k)
--            if c is not None and bm is not None and c > bm * (1 + TRADEOFF):
-+            if c is not None and bm is not None and bm > c * (1 + TRADEOFF):
-                 grew[k] = {"baseline": bm, "current": c}
-         if same and grew:
-             cost.append({"case": name, "pass_rate": r["pass_rate"], **grew})
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index af457dc7..34390948 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -1859,7 +1859,7 @@ def compared(r: Result, base: Result, flags: Result) -> None:
+     grew: Result = {}
+     for k in ("time", "tokens"):
+         c, bm = mean(r, k), mean(base, k)
+-        if c is not None and bm is not None and c > bm * (1 + TRADEOFF):
++        if c is not None and bm is not None and bm > c * (1 + TRADEOFF):
+             grew[k] = {"baseline": bm, "current": c}
+     if same and grew:
+         flags["cost_tradeoffs"].append({"case": name, "pass_rate": r["pass_rate"], **grew})

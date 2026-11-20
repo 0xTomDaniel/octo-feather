@@ -1,0 +1,14 @@
+Seeded defect: a Judged line that does not name the head proof's line passes (spec #lanes-one-head).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index eebfe2b6..c3774db4 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -491,7 +491,7 @@ def judged_proof(
+     if (
+         proof
+         and (not no_crit or jl or judged != head.lower())
+-        and (not jl or jl[1].strip("`") != proof)
++        and not jl
+     ):
+         miss.append(
+             f"Judged: {'names ' + repr(jl[1]) if jl else 'missing'}; add the check's proof line "

@@ -1,0 +1,14 @@
+Seeded defect: a status context in ERROR passes (spec #lanes-one-head: every check on the head passes).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index 575dba8d..e0f00f92 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -412,7 +412,7 @@ def bad_checks(rollup: list[dict[str, object]]) -> tuple[list[str], list[str]]:
+         if c.get("__typename") == "StatusContext" or ("state" in c and "conclusion" not in c):
+             s = (c.get("state") or "").upper()
+             (
+-                pending if s in ("PENDING", "EXPECTED", "") else failed if s != "SUCCESS" else []
++                pending if s in ("PENDING", "EXPECTED", "") else failed if s not in ("SUCCESS", "ERROR") else []
+             ).append(f"{name} {s.lower() or 'pending'}")
+         elif (c.get("status") or "COMPLETED").upper() != "COMPLETED" or not c.get("conclusion"):
+             pending.append(f"{name} {(c.get('status') or 'pending').lower()}")

@@ -1,0 +1,14 @@
+Seeded defect: with no --status file, a code commit after the judged head keeps the verdict (spec #lanes-one-head).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index a5b4b9e4..52d9b96a 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -1329,7 +1329,7 @@ def head_proof(  # noqa: C901, PLR0912, PLR0913, PLR0915  one branch per commit
+         parents, s = k.parents, k.subject
+         if len(parents) == 1:
+             other = sorted(k.files - status)
+-            if other:
++            if other and status:
+                 why.append(
+                     f"commit {c[:12]} {s[:60]!r} after the {at} {j} changes {', '.join(other)}, "
+                     f"not only the status file{'s' * (len(status) > 1)} qc writes "
