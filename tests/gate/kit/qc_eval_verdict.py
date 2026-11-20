@@ -3,7 +3,8 @@
 sandbox's qa runs bind: docs/adr/0022, sandbox paragraph), at the seams posted on #992: a scratch
 target holding a kit's role, launch, skill, case and fixture files, a stored run under
 OCTO_FEATHER_QA_DIR at its first commit, judged through octo-feather-qc running a qc.toml demo of
-`octo-feather-qa --verdict RUN/s1/c1`, and through that command alone. No model, no live Herdr."""
+`octo-feather-qa --verdict RUN/s1/c1`. No model, no live Herdr. --verdict's freshness rules
+in-process: test_qc_eval_verdict.py, test_verdict_freshness (#1090)."""
 
 from __future__ import annotations
 
@@ -191,89 +192,5 @@ def insufficient(s: Scratch) -> None:
     assert f"run {RUN} has no readable s1/c1/result.json" in str(res["why"]), res
 
 
-def verdict(s: Scratch, r: Path, *pins: str, want: int) -> str:
-    ran = s.run([kit("octo-feather-qa"), "--verdict", *pins], want=want, cwd=r)
-    if want == 77:
-        assert ran.err.splitlines()[-1].startswith("octo-feather-qa: insufficient evidence: "), (
-            ran.err
-        )
-    return ran.out + "\n" + ran.err
-
-
-def cli_rules(s: Scratch) -> None:
-    """--verdict alone, in the judged repo: fresh PASS 0; a stored FAIL 1; each file the run reads
-    changed (a fixture, a launched skill and extension, the case's own entry in cases.json and in
-    expectations.json) 77 naming it; fresh 0 at heads changing only an unlaunched skill or adding a
-    sibling case; an unknown kit sha and a review case with no recorded verdict 77; usage 64."""
-    r, h1 = world(s)
-    sha = s.git(r, "rev-parse", "HEAD~1")
-    out = verdict(s, r, PIN, want=0)
-    want = f"PASS s1/c1: stored PASS, run {RUN}, kit {sha[:12]}, runs 2/2 passed; fresh at HEAD"
-    assert f"{want} {h1[:12]}" in out, out
-    store(s, sha, ("PASS", "FAIL"), run="20260101T000000Z-fa1fa1")
-    out = verdict(s, r, PIN, "20260101T000000Z-fa1fa1/s1/c1", want=1)
-    assert "FAIL s1/c1: stored FAIL, run 20260101T000000Z-fa1fa1, kit" in out, out
-    assert "runs 1/2 passed" in out, out
-    exps = "evals/s1/reference/expectations.json"
-    for files, named in (
-        ((("evals/fixtures/fx/a.txt", "fixture, changed\n"),), "evals/fixtures/fx tree changed"),
-        (
-            ((".agents/skills/s/SKILL.md", "the skill, changed\n"),),
-            ".agents/skills/s/SKILL.md changed",
-        ),
-        ((("extensions/e.ts", "changed\n"),), "extensions/e.ts changed"),
-        (
-            (("evals/s1/cases.json", json.dumps([dict(CASE, task="Other.")])),),
-            "evals/s1/cases.json case c1 changed",
-        ),
-        (((exps, json.dumps({"c1": {"facts": [*FACTS, *FACTS]}})),), f"{exps} case c1 changed"),
-    ):
-        change(s, r, h1, files)
-        out = verdict(s, r, PIN, want=77)
-        assert f"INSUFFICIENT s1/c1: stored PASS, run {RUN}" in out, out
-        assert named in out.splitlines()[-1], out
-    for files in (((".agents/skills/other/SKILL.md", "changed\n"),), SIBLING):
-        change(s, r, h1, files)
-        out = verdict(s, r, PIN, want=0)
-        assert want in out, out
-    # fx rewritten as base fixture `bs` plus a manifest (schema.md, Fixtures): the same tree, fresh;
-    # a byte of the base changed: fx's tree changed.
-    s.git(r, "reset", "-q", "--hard", h1)
-    (r / "evals/fixtures/bs").mkdir()
-    s.git(r, "mv", "evals/fixtures/fx/a.txt", "evals/fixtures/bs/a.txt")
-    (r / "evals/fixtures/fx/.eval-fixture.json").write_text(json.dumps({"base": "bs"}))
-    s.git(r, "add", "-A")
-    s.git(r, "commit", "-qm", "fx onto base bs")
-    out = verdict(s, r, PIN, want=0)
-    assert want in out, out
-    (r / "evals/fixtures/bs/a.txt").write_text("fixture, changed\n")
-    s.git(r, "commit", "-qam", "base byte")
-    out = verdict(s, r, PIN, want=77)
-    assert "evals/fixtures/fx tree changed" in out.splitlines()[-1], out
-    s.git(r, "reset", "-q", "--hard", h1)
-    store(s, "0" * 40, run="20260101T000000Z-0bad00")
-    out = verdict(s, r, "20260101T000000Z-0bad00/s1/c1", want=77)
-    assert f"kit sha {'0' * 40} of run 20260101T000000Z-0bad00 is not a commit" in out, out
-    rv = dict(CASE, id="rv", review={"question": "Good?"})
-    (r / "evals" / "s1" / "cases.json").write_text(json.dumps([CASE, rv]))
-    s.git(r, "commit", "-qam", "review case")
-    store(s, s.git(r, "rev-parse", "HEAD"), ("REVIEW",), case=rv, run="20260101T000000Z-4e4e4e")
-    rpin = "20260101T000000Z-4e4e4e/s1/rv"
-    out = verdict(s, r, rpin, want=77)
-    assert (
-        "no maintainer verdict recorded for review case s1/rv in run 20260101T000000Z-4e4e4e" in out
-    ), out
-    rf = s.root / "qa" / "reviews" / "s1" / "rv.jsonl"
-    rf.parent.mkdir(parents=True)
-    rf.write_text(
-        json.dumps({"run_id": "20260101T000000Z-4e4e4e", "verdict": "fail", "note": "n"}) + "\n"
-    )
-    out = verdict(s, r, rpin, want=1)
-    assert "FAIL s1/rv: stored FAIL, run 20260101T000000Z-4e4e4e" in out, out
-    assert "review; fresh at HEAD" in out, out
-    for bad in ((), ("x/y",), ("--runs", "2")):
-        verdict(s, r, *bad, want=64)
-
-
 if __name__ == "__main__":
-    main(same_verdict, insufficient, cli_rules)
+    main(same_verdict, insufficient)

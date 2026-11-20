@@ -1,14 +1,14 @@
 Seeded defect: a failed sandbox proof is a PASS, not a FAIL.
-diff --git a/scripts/octo-feather-qa b/scripts/octo-feather-qa
-index 6e1952e9..efea2521 100755
---- a/scripts/octo-feather-qa
-+++ b/scripts/octo-feather-qa
-@@ -1196,7 +1196,7 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
-     (out / "sandbox.json").write_text(json.dumps(rec, indent=2) + "\n")
-     if run is None:
-         bad = [l for l in rec.get("proof", []) if "FAIL" in l] or [rec.get("error", "sandbox did not start")]
--        return finish(out, suite, case, role_model, secs, "FAIL", [f"sandbox: proof failed, case not run: {'; '.join(bad)}"], [], None, kits)
-+        return finish(out, suite, case, role_model, secs, "PASS", [f"sandbox: proof failed, case not run: {'; '.join(bad)}"], [], None, kits)
-     (out / "transcript.jsonl").write_text(run.stdout)
-     (out / "stderr.txt").write_text(run.stderr)
-     lines = run.stdout.splitlines()
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index af457dc7..6e506d91 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -1413,7 +1413,7 @@ def grade(
+             rec.get("error", "sandbox did not start")
+         ]
+         return Run(
+-            "FAIL",
++            "PASS",
+             [f"sandbox: proof failed, case not run: {'; '.join(map(str, bad))}"],
+             model,
+             sandbox=sandbox,

@@ -35,6 +35,10 @@ T = TypeVar("T")
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[3]
 FIXTURES = ROOT / "tests" / "fixtures"
+# scripts/ on sys.path once, here, so a scenario run as its file's command imports a kit module as
+# a pytest test does (how: pyproject.toml, [tool.pytest.ini_options] pythonpath's comment).
+if str(ROOT / "scripts") not in sys.path:
+    sys.path.insert(0, str(ROOT / "scripts"))
 # Each stand-in by the command it stands in for: gh (GitHub), herdr (Herdr), pi (Pi, at its
 # classifier boundary: tests/fixtures/classify-stub/pi's header says what it answers), busctl and
 # systemctl (the systemd user manager: systemd.py's header).
