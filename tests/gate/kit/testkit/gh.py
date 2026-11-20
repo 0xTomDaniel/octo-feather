@@ -57,6 +57,12 @@ so the path never repeats, and the body sent is what the recording pins. So too 
 stands as its stdin's text, one JSON string (the log keeps one line per call: an issue's body
 from issue-create, multi-line), and a call made with GH_REPO set (gh's repo override, the one
 way the github-issues scripts name another repo) is the request after `GH_REPO=R `.
+A $FAKE_GH/recorded.json (recordings as tape.json's) answers only the requests it holds, each as
+tape.json would; every other call goes to the store: a real answer beside stored ones (the notes
+graphql query octo-feather-qc-ghsnap asks, tests/gate/kit/qc_gh.py notes_query). `api graphql -F
+n=N ...` held by no recording answers as GitHub does for an issue it cannot resolve (gh 2.102.0 on
+0xTomDaniel/octo-feather, the github-issues notes query for #999999, 2026-11-19): the store has no
+GraphQL.
 """
 
 import functools
@@ -180,9 +186,11 @@ def watch(a: list[str]) -> None:
 def replay(a: list[str]) -> None:
     """With a tape.json, the Nth call of this request replays its Nth recording, exiting."""
     p = STORE / "tape.json"
-    if not p.is_file():
-        return
     req = request(a)
+    if not p.is_file():
+        p = STORE / "recorded.json"
+        if not p.is_file() or not any(r["request"] == req for r in json.loads(p.read_text())):
+            return
     said = [r for r in json.loads(p.read_text()) if r["request"] == req]
     nth = log().count(req)  # this call already logged
     if nth > len(said):
@@ -275,6 +283,8 @@ def failed(path: str) -> None:
 
 def get(a: list[str]) -> None:
     """`api [--paginate --slurp] PATH`, a GET; the default branch's commits and raw files."""
+    if a[1] == "graphql" and (n := opt(a, "-F") or "").startswith("n="):
+        unresolved(n.removeprefix("n="))
     jq = opt(a, "--jq")
     path = a[1] if jq else a[-1]
     failed(path)
@@ -358,6 +368,16 @@ def issue_write(a: list[str]) -> None:
     (idir / f"{n}.json").write_text(json.dumps(d))
     sys.stdout.write(url + "\n" if url else "")
     sys.exit(0)
+
+
+def unresolved(n: str) -> None:
+    """gh's answer to a graphql issue query for issue N GitHub cannot resolve (module docstring)."""
+    sys.stdout.write(
+        '{"data":{"repository":{"issue":null}},"errors":[{"type":"NOT_FOUND","path":["repository",'
+        '"issue"],"locations":[{"line":1,"column":93}],"message":"Could not resolve to an Issue '
+        f'with the number of {n}."}}]}}'
+    )
+    die(f"gh: Could not resolve to an Issue with the number of {n}.")
 
 
 def main(a: list[str]) -> None:
