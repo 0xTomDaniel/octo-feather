@@ -16,3 +16,7 @@ Every lane's tickets are checked as tracer bullets by a kit command, so a layer-
 
 - #46
 
+
+## Skills
+
+Skills: none

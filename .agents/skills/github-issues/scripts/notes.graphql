@@ -1,0 +1,1 @@
+query($owner: String!, $name: String!, $n: Int!) { repository(owner: $owner, name: $name) { issue(number: $n) { url createdAt lastEditedAt body comments(first: 100) { pageInfo { hasNextPage } nodes { url createdAt lastEditedAt body } } } } }

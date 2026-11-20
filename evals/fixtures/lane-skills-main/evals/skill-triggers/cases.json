@@ -1,0 +1,4 @@
+[
+  {"id": "impl-tdd-new-test", "role": "implementer", "should_trigger": true, "split": "train",
+   "task": "Add an end-to-end test for `lane tickets` on a ticket with no acceptance list."}
+]

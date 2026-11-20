@@ -273,5 +273,11 @@
   "rev-principles-one-result": {"facts": [{"fact": "skill_read", "skill": "principle-subtract-before-you-add"}, {"fact": "skill_read", "skill": "principle-laziness-protocol"}, {"fact": "skill_read", "skill": "principle-minimize-reader-load"}]},
   "rev-principles-one-printer": {"facts": [{"fact": "skill_read", "skill": "principle-subtract-before-you-add"}, {"fact": "skill_read", "skill": "principle-laziness-protocol"}, {"fact": "skill_read", "skill": "principle-minimize-reader-load"}]},
   "rev-principles-near-retire": {"facts": [{"fact": "skill_not_read", "skill": "principle-subtract-before-you-add"}, {"fact": "skill_not_read", "skill": "principle-laziness-protocol"}, {"fact": "skill_not_read", "skill": "principle-minimize-reader-load"}]},
-  "rev-principles-near-shout": {"facts": [{"fact": "skill_not_read", "skill": "principle-subtract-before-you-add"}, {"fact": "skill_not_read", "skill": "principle-laziness-protocol"}, {"fact": "skill_not_read", "skill": "principle-minimize-reader-load"}]}
+  "rev-principles-near-shout": {"facts": [{"fact": "skill_not_read", "skill": "principle-subtract-before-you-add"}, {"fact": "skill_not_read", "skill": "principle-laziness-protocol"}, {"fact": "skill_not_read", "skill": "principle-minimize-reader-load"}]},
+  "sup-design-port-test": {"facts": [{"fact": "skill_read", "skill": "codebase-design"}]},
+  "sup-tdd-port-test": {"facts": [{"fact": "skill_read", "skill": "tdd"}]},
+  "sup-design-review-fix": {"facts": [{"fact": "skill_read", "skill": "codebase-design"}]},
+  "sup-tdd-review-fix": {"facts": [{"fact": "skill_read", "skill": "tdd"}]},
+  "sup-testplace-near-docs": {"facts": [{"fact": "skill_not_read", "skill": "codebase-design"}, {"fact": "skill_not_read", "skill": "tdd"}]},
+  "sup-testplace-near-status": {"facts": [{"fact": "skill_not_read", "skill": "codebase-design"}, {"fact": "skill_not_read", "skill": "tdd"}]}
 }
