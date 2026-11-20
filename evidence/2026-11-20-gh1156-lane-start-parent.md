@@ -31,3 +31,12 @@ sub-issue: exit 1, octo-feather-lane start: step read: ticket 907 is a sub-issue
 
 `just test tests/gate/kit/test_lane_start.py`: 6 passed. files, filed_stopped and sub_issue red on 947b3158's
 start_lane.py (3 failed, 3 passed).
+
+## After merging implementer-gh1157 (136385b5: #1157, #1158), head 9abc15eb
+
+The same run: PASS current-kit, start, supervisor, worktree, record, messages, director-log, exists, rerun-stopped,
+rerun, rerun-refused, files, sub-issue; `run PASS`, exit 0. The #1156 cases run after #1157's rerun (its issue 906), so
+`files` files 907 (`filed=907`, then `key=gh907 ...`) and `sub-issue` refuses 908, a sub-issue of 905. Evidence records
+20261120T043613Z-3d877ab0 (issue-lifecycle#acceptance-lane-start-files), 20261120T043613Z-6fae787b
+(issue-lifecycle#acceptance-lane-start-sub-issue). `just test tests/gate/kit/test_lane_start.py`: 9 passed (filed_stopped
+now stops at the goal's delivery and the rerun naming 906 continues the kept start).
