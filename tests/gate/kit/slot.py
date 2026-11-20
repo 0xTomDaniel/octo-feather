@@ -25,7 +25,8 @@ starts. The grace is shown over by a check whose own grace is 0 (OCTO_FEATHER_SL
 env: octo-feather-slot --help, the grace), never by a sleep: during the second gate's static
 check a grace-0 status still shows gh7 holding (its second gate took its slot before it, `hold
 --if-granted`), its run holding the lock, gh8 queued, nobody told; after it ends a status at the
-long grace keeps gh7, and a grace-0 settle hands to gh8 and tells it and the director.
+long grace, once heavy's own run line says none, keeps gh7, and a grace-0 settle hands to gh8
+and tells it and the director.
 
 Compatibility with the reader every unmerged worktree on the box still runs against the one slots
 dir: main's octo-feather-slot at 53dacfca (gh906's base, the last commit before the queue), its
@@ -295,11 +296,16 @@ def end(p: subprocess.Popen[str]) -> None:
     assert p.wait(timeout=WAIT_S) == 0
 
 
-def holder(s: Scratch, kind: str = "heavy") -> str:
-    """KIND's holder line and queue line of `octo-feather-slot status`."""
+def section(s: Scratch, kind: str = "heavy") -> list[str]:
+    """KIND's holder, run and queue lines of `octo-feather-slot status`."""
     lines = s.run([SLOT, "status"]).out.splitlines()
     at = next(i for i, ln in enumerate(lines) if ln.startswith(f"{kind} ("))
-    return "\n".join(ln for ln in lines[at + 1 : at + 4] if "holder:" in ln or "queue:" in ln)
+    return lines[at + 1 : at + 4]
+
+
+def holder(s: Scratch, kind: str = "heavy") -> str:
+    """KIND's holder line and queue line of `octo-feather-slot status`."""
+    return "\n".join(ln for ln in section(s, kind) if "holder:" in ln or "queue:" in ln)
 
 
 def passed(s: Scratch, lane: str = "gh8") -> str:
@@ -616,11 +622,11 @@ def test_recipe(name):
 
 
 def unheld(s: Scratch) -> str:
-    """The heavy holder and queue once no run holds the slot (within WAIT_S): a run's end is
-    recorded before its lock is freed, so it is recorded then."""
+    """The heavy holder and queue once no run holds the heavy slot (within WAIT_S): a run's end
+    is recorded before its lock is freed, so it is recorded then."""
     stop = time.time() + WAIT_S
-    while "run holding it now: none" not in s.run([SLOT, "status"]).out:
-        assert time.time() < stop, "the run's hold never ended"
+    while "  run holding it now: none" not in (heavy := section(s)):
+        assert time.time() < stop, "the run's heavy hold never ended: " + "\n".join(heavy)
         time.sleep(0.2)
     return holder(s)
 
