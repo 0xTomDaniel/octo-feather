@@ -4,7 +4,7 @@ whose Order holds the other open PRs as the reads gave them, each pin's lines as
 --verdict prints them (its --help, Verdict), the merge-order lines out. The command's wiring (the
 reads over real git, gh pr list and octo-feather-qa): lane_merge_order.py."""
 
-from merge_ask import Order, ParentLine, Pin, Sibling, Snapshot, check
+from merge_ask import Ask, Checks, Order, ParentLine, Pin, Reported, Sibling, Snapshot, check
 
 RUN = "20260101T000000Z-abc123/s1/c1"
 HEAD = (
@@ -32,11 +32,21 @@ MISSING = (
 )
 
 
+H = "0123456789ab" + "0" * 28
+# the head's checks as the PR's rollup reports them, all passing (test_merge_ask_checks.py)
+CHECKS = Checks(
+    H, None, Reported([{"__typename": "StatusContext", "context": "c", "state": "SUCCESS"}], None)
+)
+
+
 def order(o: Order) -> list[str]:
-    body = "Closes #6\n\n## Merge ask\n\nHead: 0123456789ab\n"
-    s = Snapshot(body, "gh6", ParentLine("6", "Closes #6"), o)
-    ask = check(s)
-    assert ask.gaps == check(Snapshot(body, "gh6", ParentLine("6", "Closes #6"))).gaps, ask
+    """The merge-order lines check shows for a lane PR with order O; its gaps the same without O."""
+    body = f"Closes #6\n\n## Merge ask\n\nHead: {H[:12]}\nBuilt: none\nFailed: none\n"
+    s = Snapshot(body, "gh6", ParentLine("6", "Closes #6"), CHECKS, pr=7, head=H, order=o)
+    ask, alone = check(s), check(Snapshot(body, "gh6", s.parent, CHECKS, pr=7, head=H))
+    assert isinstance(ask, Ask), ask
+    assert isinstance(alone, Ask), alone
+    assert (ask.gaps, ask.refusal, alone.order) == (alone.gaps, alone.refusal, []), ask
     return ask.order
 
 

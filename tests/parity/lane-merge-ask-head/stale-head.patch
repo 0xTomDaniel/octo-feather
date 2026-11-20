@@ -1,0 +1,14 @@
+Seeded defect: a Head line naming another commit than the PR's head passes (spec #acceptance-merge-ask-evidence).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index eebfe2b6..e1747f4f 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -344,7 +344,7 @@ def _check(s: Snapshot) -> Ask:
+     h = field(lines, "Head")
+     if not h or not h[1]:
+         first.append(f"Head: missing; add `Head: {head}`")
+-    elif not head_matches(h[1].strip("`"), head):
++    elif not SHA.fullmatch(h[1].strip("`")):
+         first.append(
+             f"Head: names {h[1]}, the PR's head is {head[:12]} (stale): judge {head[:12]} (qc, "
+             "review) and rewrite the section for it"

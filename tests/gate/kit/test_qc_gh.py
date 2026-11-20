@@ -11,6 +11,7 @@ from qc_gh import (
     killed,
     kit_on_kit,
     no_github,
+    notes_query,
     refused_args,
     snapshot_misses,
     snapshot_read,
@@ -74,3 +75,7 @@ def test_diff_too_large(case: Case) -> None:
 @pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)
 def test_kit_on_kit(case: Case) -> None:
     case(kit_on_kit)
+
+
+def test_notes_query(case: Case) -> None:
+    case(notes_query)

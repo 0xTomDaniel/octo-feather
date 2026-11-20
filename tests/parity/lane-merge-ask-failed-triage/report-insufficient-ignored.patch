@@ -1,0 +1,14 @@
+Seeded defect: insufficient evidence in the latest qc report at the judged head is not named (quality spec #qc-results).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index eebfe2b6..2983c03a 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -867,7 +867,7 @@ def qc_insufficient(
+     out: dict[str, tuple[str, str]] = {}  # <spec>#<id>: (what is missing, report), or ("", report)
+     for cid, (r, name) in latest.items():
+         if cid.split("#", 1)[0] in specs:
+-            short = r.get("verdict") == "insufficient evidence"
++            short = r.get("verdict") == "insufficient"
+             missing = "; ".join(map(str, cast("list[object]", r.get("missing") or [])))
+             out[cid] = ((missing or "evidence incomplete") if short else "", name)
+     return [

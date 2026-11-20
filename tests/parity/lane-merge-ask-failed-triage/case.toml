@@ -1,0 +1,12 @@
+# The parity lever's case for the command scenario failed_triage (tests/gate/kit/lane_merge_ask.py at old_at), moved
+# in-process to merge_ask.check in tests/gate/kit/test_merge_ask.py (#1149; tests/parity/lever.py --help).
+old = "tests/gate/kit/test_lane_merge_ask.py::test_merge_ask_failed_triage"
+old_at = "dba385a2"
+# The old item's scenario file; its testkit is unchanged.
+needs = ["tests/gate/kit/lane_merge_ask.py"]
+new = "tests/gate/kit/test_merge_ask.py::test_merge_ask_failed_triage"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): octo-feather-lane, run by the kit
+# venv's python, imports it: coverage.py measures it.
+[ran]
+"scripts/merge_ask.py" = "coverage"

@@ -1,0 +1,14 @@
+Seeded defect: a lane building no criterion takes no judged head from its review verdict (spec #lanes-one-head).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index eebfe2b6..d4f3541a 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -474,7 +474,7 @@ def judged_proof(
+     miss: list[str] = []
+     jl = field(lines, "Judged")
+     if no_crit:  # no qc: the review verdict's head is the judged head (spec #lanes-one-head)
+-        judged, why = verdict_head(lines, s.comments, s.commits, head, s.pr)
++        _, why = verdict_head(lines, s.comments, s.commits, head, s.pr)
+         miss += [why] if why else []
+         # a resolved merge after it: the PR head is judged, the review verdict kept below by its
+         # resolution verdict; a refused proof leaves it (named by the proof below)
