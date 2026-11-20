@@ -286,31 +286,56 @@
     "acceptance-lane-start": {
       "status": "built",
       "pr": 1166,
-      "record": "20261120T033230Z-2e6cbe69",
-      "commit": "0e83d6193043d122034f6630bda93051138d5887",
+      "record": "20261120T053136Z-aab54001",
+      "commit": "b5c23b5d724cb43d0d651b9b1b6bc823a80f2adc",
       "tests": [
         "tests/gate/kit/lane_start.py"
       ]
     },
     "acceptance-lane-start-files": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1166,
+      "record": "20261120T053136Z-ddf91ae0",
+      "commit": "b5c23b5d724cb43d0d651b9b1b6bc823a80f2adc",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
     },
     "acceptance-lane-start-sub-issue": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1166,
+      "record": "20261120T053136Z-4496cf7a",
+      "commit": "b5c23b5d724cb43d0d651b9b1b6bc823a80f2adc",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
     },
     "acceptance-lane-start-exists": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1166,
+      "record": "20261120T053136Z-cfb46e07",
+      "commit": "b5c23b5d724cb43d0d651b9b1b6bc823a80f2adc",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
     },
     "acceptance-lane-start-rerun": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1166,
+      "record": "20261120T053137Z-d28396d1",
+      "commit": "b5c23b5d724cb43d0d651b9b1b6bc823a80f2adc",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
     },
     "acceptance-lane-start-current-kit": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1166,
+      "record": "20261120T053137Z-810943f2",
+      "commit": "b5c23b5d724cb43d0d651b9b1b6bc823a80f2adc",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
     }
   }
 }
