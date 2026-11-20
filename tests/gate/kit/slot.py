@@ -19,10 +19,13 @@ status lists it; nothing passes before a run started under gh7's grant, nor whil
 past the grace; after the run ends and the grace passes gh8 holds it, off the queue, and its
 supervisor and the director were told. queue_free: queued onto a free kind, granted at once and
 told. The hand-over's follow_up and regranted: in-process, tests/gate/kit/test_slot_queue.py.
-back_to_back (quality #recipes-static-first, #1113): two gates of gh7 through the plugin, one
-after the other on a 2 s grace, gh8 queued; the second's static check outlasts the grace: gh7's
-second gate took its slot before it (`hold --if-granted`), so gh7 holds through it, and gh8 gets
-the slot and is told only a grace after the second gate ends.
+back_to_back (quality #recipes-static-first, #1113, #1163): two gates of gh7 through the plugin,
+one after the other on a grace of WAIT_S, gh8 queued, so no check passes the slot while a gate
+starts. The grace is shown over by a check whose own grace is 0 (OCTO_FEATHER_SLOT_GRACE in its
+env: octo-feather-slot --help, the grace), never by a sleep: during the second gate's static
+check a grace-0 status still shows gh7 holding (its second gate took its slot before it, `hold
+--if-granted`), its run holding the lock, gh8 queued, nobody told; after it ends a status at the
+long grace keeps gh7, and a grace-0 settle hands to gh8 and tells it and the director.
 
 Compatibility with the reader every unmerged worktree on the box still runs against the one slots
 dir: main's octo-feather-slot at 53dacfca (gh906's base, the last commit before the queue), its
@@ -612,13 +615,25 @@ def test_recipe(name):
 """
 
 
+def unheld(s: Scratch) -> str:
+    """The heavy holder and queue once no run holds the slot (within WAIT_S): a run's end is
+    recorded before its lock is freed, so it is recorded then."""
+    stop = time.time() + WAIT_S
+    while "run holding it now: none" not in s.run([SLOT, "status"]).out:
+        assert time.time() < stop, "the run's hold never ended"
+        time.sleep(0.2)
+    return holder(s)
+
+
 def back_to_back(s: Scratch) -> None:
     world(s)
-    s.env |= {"OCTO_FEATHER_SLOT_GRACE": str(GRACE)}
+    s.env |= {"OCTO_FEATHER_SLOT_GRACE": str(WAIT_S)}  # no check passes the slot on its own
+    over = {"OCTO_FEATHER_SLOT_GRACE": "0"}  # a check this makes: every grace over
     s.run([SLOT, "grant", "gh7", "--kind", "heavy"], env=DIRECTOR)
     s.run([SLOT, "queue", "gh8", "--kind", "heavy"], env=DIRECTOR)
     first = run_gate(s, suite(s, "first", 31), want=0, env=AGENT)
     assert "heavy slot: held: the heavy slot for lane gh7" in first, first
+    assert "holder: gh7 (granted " in unheld(s)  # its hold gone, its end recorded
     files = {f: str(s.root / f) for f in ("ready", "done")}
     second = suite(s, "second", 31)
     (second / "tests" / "gate").mkdir(parents=True)
@@ -631,8 +646,7 @@ def back_to_back(s: Scratch) -> None:
                 assert p.poll() is None, f"the second gate ended: {p.communicate()[0]}"
                 assert time.time() < stop, "the static check never started"
                 time.sleep(0.1)
-            time.sleep(GRACE + 1.5)  # the first gate's grace over, its check run
-            st = s.run([SLOT, "status"]).out
+            st = s.run([SLOT, "status"], env=over).out  # the first gate's grace over
             assert "holder: gh7 (granted " in st, st
             assert "  queue: 1. gh8 (queued " in st, st
             assert f"run holding it now: pid {p.pid} of lane gh7 since " in st, st
@@ -643,12 +657,16 @@ def back_to_back(s: Scratch) -> None:
     assert p.returncode == 0, out
     assert "heavy slot: held: the heavy slot for lane gh7" in out, out
     assert "32 passed" in out, out
-    st = holder(s)  # just after it ended: inside its grace
+    st = unheld(s)  # its end recorded: inside its grace
     assert "holder: gh7 (granted " in st, st
+    assert "  queue: 1. gh8 (queued " in st, st
     assert said(s) == [], said(s)
-    st = passed(s)
+    s.run([SLOT, "settle", "--kind", "heavy"], env=over)
+    st = holder(s)
+    assert "holder: gh8 (granted " in st, st
     assert "  queue: none" in st, st
-    want = [sent("w8:p1", TOLD.format(until=until(st))), sent("w1:p1", PASSED)]
+    why = "lane gh7's run ended, no run within the 0 s grace"
+    want = [sent("w8:p1", granted_to("gh8", "heavy", until(st), why)), sent("w1:p1", PASSED)]
     assert said_n(s, 2) == want, said(s)
 
 
