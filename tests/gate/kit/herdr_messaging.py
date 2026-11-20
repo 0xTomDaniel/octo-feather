@@ -26,10 +26,12 @@ already closed. Space ids `zt*`, which no real Herdr gives."""
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import time
@@ -48,6 +50,11 @@ def herdr_world(s: Scratch, agents: dict[str, dict[str, object]] | None = None) 
     d = s.root / "herdr"
     d.mkdir()
     (d / "agents.json").write_text(json.dumps(agents or {}))
+    return herdr_env(s, d)
+
+
+def herdr_env(s: Scratch, d: Path) -> Path:
+    """S's env on the Herdr world in D (herdr_world): D."""
     for k in [k for k in s.env if k.startswith(("HERDR_", "OCTO_FEATHER_"))]:
         del s.env[k]
     s.env["FAKE_HERDR"] = str(d)
@@ -478,7 +485,26 @@ def drop(d: Path, pane: str) -> None:
 def supervised(s: Scratch) -> tuple[Path, dict[str, str], dict[str, str]]:
     """Director w0:p1; lane gh7's supervisor started by octo-feather-start, its lane record
     naming it (with other keys and a comment), and its implementer spawned through herdr-spawn,
-    the spawn line in the lane log. The Herdr world, the supervisor's start and the worker's env."""
+    the spawn line in the lane log. The Herdr world, the supervisor's start and the worker's env.
+    Built once per gate run (build_supervised) and copied here, its paths moved to S's root (the
+    tabs' env, the logs' cwd), as several items start from it."""
+    s.prepare("herdr-supervised", build_supervised)
+    got = json.loads((s.root / "supervised.json").read_text())
+    if got["root"] != str(s.root):
+        old, new = got["root"].encode(), str(s.root).encode()
+        for f in s.root.rglob("*"):
+            if f.is_file() and not f.is_symlink() and old in (b := f.read_bytes()):
+                f.write_bytes(b.replace(old, new))
+        got = json.loads((s.root / "supervised.json").read_text())
+    d = herdr_env(s, s.root / "herdr")
+    s.env["HERDR_SESSION"] = got["session"]
+    return d, got["sup"], got["worker"]
+
+
+def build_supervised(s: Scratch) -> None:
+    """supervised's world in S, with supervised.json: S's root, its Herdr session, the
+    supervisor's start and the worker's env. Its tabs' shells (each a process Herdr names for a
+    pane, alive while S's Herdr dir is) ended and unnamed: a copy's own Herdr starts its own."""
     d = herdr_world(s, {"w0:p1": agent("w0:p1", "director", "idle")})
     s.env["HERDR_SESSION"] = f"parent-{os.getpid()}"  # only this scenario's processes count
     s.identity()
@@ -492,7 +518,15 @@ def supervised(s: Scratch) -> tuple[Path, dict[str, str], dict[str, str]]:
     spawn = [str(ASSETS / "herdr-spawn"), "--workspace", sup["workspace"], "--name"]
     spawn += ["implementer-gh7", "--label", "gh7", "--role", "implementer", "--cwd", str(s.root)]
     worker = dict(x.split("=", 1) for x in s.run(spawn, env=tab_env(d, sup["pane"])).out.split())
-    return d, sup, tab_env(d, worker["pane"])
+    got = {"root": str(s.root), "session": s.env["HERDR_SESSION"], "sup": sup}
+    got["worker"] = tab_env(d, worker["pane"])
+    agents = json.loads((d / "agents.json").read_text())
+    for g in agents.values():
+        if isinstance(pid := g.pop("shell_pid", None), int):
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(pid, signal.SIGKILL)
+    (d / "agents.json").write_text(json.dumps(agents))
+    (s.root / "supervised.json").write_text(json.dumps(got))
 
 
 def parent_resumed(s: Scratch) -> None:
@@ -774,18 +808,8 @@ def repoint_record(s: Scratch) -> None:
     #octo-lane-record-key-supervisor) over lane records a hand edit shaped: an indented
     `supervisor` key with a comment, a quoted key and single-quoted strings with no spaces, and no
     `supervisor` key at all: each record parses after, every key equal but `supervisor`, now the
-    resumed pane (comments are not kept); one holding a table or an array: the start still runs
-    the agent, warns that the record was not repointed, naming the key, and the record is byte
-    for byte unchanged; the director's record the same through `--director --resume`."""
-    d = herdr_world(s, {"w0:p1": agent("w0:p1", "director", "idle")})
-    s.env["HERDR_SESSION"] = f"repoint-{os.getpid()}"
-    s.identity()
-    s.git(s.root, "init", "-q", "-b", "main", "target")
-    state = state_dir(s)
-    (state / "lanes").mkdir(parents=True)
-    stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    with (state / "director.handoffs.jsonl").open("a") as f:  # no background reflection
-        f.write(json.dumps({"at": stamp, "kind": "reflection"}) + "\n")
+    resumed pane (comments are not kept). The records it refuses: repoint_refused."""
+    d, state = repoint_world(s)
     record = state / "lanes" / "gh7.toml"
     for case, text in RECORDS.items():
         record.write_text(text)
@@ -795,6 +819,15 @@ def repoint_record(s: Scratch) -> None:
         want = {k: v for k, v in tomllib.loads(text).items() if k != "supervisor"}
         assert got == {"supervisor": new, **want}, (case, record.read_text())
         show(f"resume over {case}: {record.read_text()!r}")
+
+
+def repoint_refused(s: Scratch) -> None:
+    """repoint_record's resume over a lane record holding a table or an array: the start still
+    runs the agent, warns that the record was not repointed, naming the key, and the record is
+    byte for byte unchanged; the director's hand-edited record (an indented `pane`) repointed
+    through `--director --resume`, every other key equal."""
+    d, state = repoint_world(s)
+    record = state / "lanes" / "gh7.toml"
     for bad, key in (('supervisor = "w1:p1"\n[extra]\nx = 1\n', "extra"), ("ids = [1]\n", "ids")):
         record.write_text(bad)
         cmd = [kit("octo-feather-start"), "--cwd", str(s.root / "target")]
@@ -809,6 +842,21 @@ def repoint_record(s: Scratch) -> None:
     drop(d, "w0:p1")
     new = start(s, "--director", "--resume", "D")["pane"]
     assert tomllib.loads(director.read_text()) == {"pane": new, "name": "d"}, director.read_text()
+
+
+def repoint_world(s: Scratch) -> tuple[Path, Path]:
+    """The resumes' world: director w0:p1 live, a target repo, the state dir's lanes/ and a
+    reflection just run (none in the background). The Herdr world and the state dir."""
+    d = herdr_world(s, {"w0:p1": agent("w0:p1", "director", "idle")})
+    s.env["HERDR_SESSION"] = f"repoint-{os.getpid()}"
+    s.identity()
+    s.git(s.root, "init", "-q", "-b", "main", "target")
+    state = state_dir(s)
+    (state / "lanes").mkdir(parents=True)
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    with (state / "director.handoffs.jsonl").open("a") as f:  # no background reflection
+        f.write(json.dumps({"at": stamp, "kind": "reflection"}) + "\n")
+    return d, state
 
 
 ODD_ANSWERS = ('{"result": {"agent": null}}', '{"result": {"agent": {}}}', "not json", "{}")
@@ -1093,9 +1141,9 @@ class Tell:
             f.write_text("")
 
 
-def told_live(t: Tell) -> None:
-    """tell_supervisors' first phase: live, parked and another repo's lanes; a rerun; a merge
-    with no rule file."""
+def tell_lanes(t: Tell) -> None:
+    """Lanes gh7 (the PR's own), live1, parked (two parked lines, the latest naming its pane)
+    of o/r and other of x/y; gh7, live1 and other live in Herdr."""
     t.lane("gh7", "zt0:p1", "o/r", 7)
     t.lane("live1", "zt1:p1", "o/r", 11)
     t.lane("parked", "zt2:p1", "o/r", 12)
@@ -1103,6 +1151,11 @@ def told_live(t: Tell) -> None:
     t.parked("parked", "zt2:p0", "2026-10-28T00:00:00Z")
     t.parked("parked", "zt2:p1", "2026-10-29T00:00:00Z")
     t.live("zt0:p1", "zt1:p1", "zt3:p1")
+
+
+def told_live(t: Tell) -> None:
+    """tell_supervisors on tell_lanes: the sends; a rerun; a merge with no rule file."""
+    tell_lanes(t)
     earlier = '{"at": "2026-10-29T00:00:00+00:00", "kind": "prod", "issue": 11, "note": "earlier"}'
     t.dlog.write_text(earlier + "\n")
     tell, last = t.run(3, 7, "--lane", "gh7", "--repo", "o/r")
@@ -1133,7 +1186,7 @@ def told_live(t: Tell) -> None:
 
 
 def told_kit(t: Tell) -> None:
-    """tell_supervisors' kit PR phase: the sends and the director log emptied first."""
+    """tell_kit's sends, on tell_lanes: the sends and the director log emptied first."""
     t.store("o/kit", "Kit rule")
     t.clear()
     t.run(3, 7, "--lane", "gh7", "--repo", "o/kit")
@@ -1142,8 +1195,8 @@ def told_kit(t: Tell) -> None:
 
 
 def told_failed(t: Tell) -> None:
-    """tell_supervisors' failed send phase, on the o/r PR again: live2 added, live1 blocked on
-    a dialog (the kit's herdr-say exits 75)."""
+    """tell_failed's sends, on tell_lanes and the o/r PR: live2 added, live1 blocked on a dialog
+    (the kit's herdr-say exits 75)."""
     t.store("o/r", "Add foo")
     t.clear()
     t.lane("live2", "zt4:p1", "o/r", 14)
@@ -1162,7 +1215,7 @@ def told_failed(t: Tell) -> None:
 
 
 def told_gone(t: Tell) -> None:
-    """tell_supervisors' issue 458 phase: every lane record and hand-off log replaced first."""
+    """tell_gone's sends: every lane record and hand-off log replaced first."""
     for f in t.lanes.iterdir():
         f.unlink()
     t.clear()
@@ -1219,22 +1272,37 @@ def tell_supervisors(s: Scratch) -> None:
     lane, a parked one (its latest parked line names its pane) and another repo's lane (never
     looked up) none; one canonical prod line per lane told, after the director's own; step 6 ok,
     step 7 pending, exit 3. A rerun sends and logs nothing new (already told). A merge touching no
-    rule file says none, and is told again. A kit PR (o/kit, the install's own repo): every lane
-    runs kit roles, so another repo's live lane is told too, one prod line each (step 3 refreshes
-    the install first: its recipes no-ops by the real just, uv and pnpm argv_recorder.sh). A send
-    that fails (its supervisor blocked on a dialog, herdr-say's 75): named, no prod line for it,
-    the others still tried and told, the step stopped, exit 1; a rerun tells only that one. Issue
-    458: --lane gh1 with a live, a parked and two gone lanes (one never parked, one whose latest
-    parked line names an older pane): only the live one told, the rest listed, step 6 ok, step 7
-    pending (not archived). Archived: step 7 runs, the kit's herdr-close failing and Herdr's
-    workspace_not_found read as already closed. Any other herdr failure (Herdr unreachable on the
-    parked lane's lookup) stops step 6, named, the other lanes still handled. One
-    world, the old test's order: each phase resets only what it names."""
+    rule file says none, and is told again. The old test's other phases, each its own world:
+    tell_kit, tell_failed, tell_gone."""
+    told_live(Tell(s))
+
+
+def tell_kit(s: Scratch) -> None:
+    """post-merge step 6 on a kit PR (o/kit, the install's own repo): every lane runs kit roles,
+    so another repo's live lane is told too, one prod line each (step 3 refreshes the install
+    first: its recipes no-ops by the real just, uv and pnpm argv_recorder.sh)."""
     t = Tell(s)
-    told_live(t)
+    tell_lanes(t)
     told_kit(t)
+
+
+def tell_failed(s: Scratch) -> None:
+    """post-merge step 6 with a send that fails (its supervisor blocked on a dialog, herdr-say's
+    75): named, no prod line for it, the others still tried and told, the step stopped, exit 1; a
+    rerun tells only that one."""
+    t = Tell(s)
+    tell_lanes(t)
     told_failed(t)
-    told_gone(t)
+
+
+def tell_gone(s: Scratch) -> None:
+    """post-merge step 6, issue 458: --lane gh1 with a live, a parked and two gone lanes (one
+    never parked, one whose latest parked line names an older pane): only the live one told, the
+    rest listed, step 6 ok, step 7 pending (not archived). Archived: step 7 runs, the kit's
+    herdr-close failing and Herdr's workspace_not_found read as already closed. Any other herdr
+    failure (Herdr unreachable on the parked lane's lookup) stops step 6, named, the other lanes
+    still handled."""
+    told_gone(Tell(s))
 
 
 COMPLETION = "DONE commit abc123: the completion"
@@ -1323,6 +1391,9 @@ if __name__ == "__main__":
         say_stalled,
         post_merge_busy,
         tell_supervisors,
+        tell_kit,
+        tell_failed,
+        tell_gone,
         worker_route,
         parent_gone,
         director_worker_resume,
@@ -1335,5 +1406,6 @@ if __name__ == "__main__":
         results_listing,
         director_prune,
         repoint_record,
+        repoint_refused,
         herdr_malformed,
     )
