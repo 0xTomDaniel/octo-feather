@@ -808,18 +808,8 @@ def repoint_record(s: Scratch) -> None:
     #octo-lane-record-key-supervisor) over lane records a hand edit shaped: an indented
     `supervisor` key with a comment, a quoted key and single-quoted strings with no spaces, and no
     `supervisor` key at all: each record parses after, every key equal but `supervisor`, now the
-    resumed pane (comments are not kept); one holding a table or an array: the start still runs
-    the agent, warns that the record was not repointed, naming the key, and the record is byte
-    for byte unchanged; the director's record the same through `--director --resume`."""
-    d = herdr_world(s, {"w0:p1": agent("w0:p1", "director", "idle")})
-    s.env["HERDR_SESSION"] = f"repoint-{os.getpid()}"
-    s.identity()
-    s.git(s.root, "init", "-q", "-b", "main", "target")
-    state = state_dir(s)
-    (state / "lanes").mkdir(parents=True)
-    stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    with (state / "director.handoffs.jsonl").open("a") as f:  # no background reflection
-        f.write(json.dumps({"at": stamp, "kind": "reflection"}) + "\n")
+    resumed pane (comments are not kept). The records it refuses: repoint_refused."""
+    d, state = repoint_world(s)
     record = state / "lanes" / "gh7.toml"
     for case, text in RECORDS.items():
         record.write_text(text)
@@ -829,6 +819,15 @@ def repoint_record(s: Scratch) -> None:
         want = {k: v for k, v in tomllib.loads(text).items() if k != "supervisor"}
         assert got == {"supervisor": new, **want}, (case, record.read_text())
         show(f"resume over {case}: {record.read_text()!r}")
+
+
+def repoint_refused(s: Scratch) -> None:
+    """repoint_record's resume over a lane record holding a table or an array: the start still
+    runs the agent, warns that the record was not repointed, naming the key, and the record is
+    byte for byte unchanged; the director's hand-edited record (an indented `pane`) repointed
+    through `--director --resume`, every other key equal."""
+    d, state = repoint_world(s)
+    record = state / "lanes" / "gh7.toml"
     for bad, key in (('supervisor = "w1:p1"\n[extra]\nx = 1\n', "extra"), ("ids = [1]\n", "ids")):
         record.write_text(bad)
         cmd = [kit("octo-feather-start"), "--cwd", str(s.root / "target")]
@@ -843,6 +842,21 @@ def repoint_record(s: Scratch) -> None:
     drop(d, "w0:p1")
     new = start(s, "--director", "--resume", "D")["pane"]
     assert tomllib.loads(director.read_text()) == {"pane": new, "name": "d"}, director.read_text()
+
+
+def repoint_world(s: Scratch) -> tuple[Path, Path]:
+    """The resumes' world: director w0:p1 live, a target repo, the state dir's lanes/ and a
+    reflection just run (none in the background). The Herdr world and the state dir."""
+    d = herdr_world(s, {"w0:p1": agent("w0:p1", "director", "idle")})
+    s.env["HERDR_SESSION"] = f"repoint-{os.getpid()}"
+    s.identity()
+    s.git(s.root, "init", "-q", "-b", "main", "target")
+    state = state_dir(s)
+    (state / "lanes").mkdir(parents=True)
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    with (state / "director.handoffs.jsonl").open("a") as f:  # no background reflection
+        f.write(json.dumps({"at": stamp, "kind": "reflection"}) + "\n")
+    return d, state
 
 
 ODD_ANSWERS = ('{"result": {"agent": null}}', '{"result": {"agent": {}}}', "not json", "{}")
@@ -1369,5 +1383,6 @@ if __name__ == "__main__":
         results_listing,
         director_prune,
         repoint_record,
+        repoint_refused,
         herdr_malformed,
     )

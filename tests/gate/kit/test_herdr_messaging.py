@@ -15,6 +15,7 @@ from herdr_messaging import (
     post_merge_busy,
     queued_completion,
     repoint_record,
+    repoint_refused,
     result_compacting,
     result_resumed,
     results_listing,
@@ -130,6 +131,10 @@ def test_director_prune(case: Case) -> None:
 
 def test_repoint_record(case: Case) -> None:
     case(repoint_record)
+
+
+def test_repoint_refused(case: Case) -> None:
+    case(repoint_refused)
 
 
 def test_herdr_malformed(case: Case) -> None:
