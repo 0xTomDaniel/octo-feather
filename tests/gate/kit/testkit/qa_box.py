@@ -1,7 +1,8 @@
 """The factory-evals test's box (#506, #998): tests/qa.sh and each tests/qa-*.sh (their scenarios:
 tests/gate/kit/qa_sections.py) run scripts/octo-feather-qa and scripts/check-evals on it as
 commands, no model, no live Herdr. Needs unprivileged user namespaces (`unshare -rm`): each case
-runs in the qc sandbox.
+runs in the qc sandbox. test_qa_grading.py runs a stub suite's cases in-process at the grading
+module's interface instead (Qa.graded, #1089), no sandbox.
 
 A Qa is one item's world in its Scratch: a throwaway HOME, TMPDIR and run dir (OCTO_FEATHER_QA_DIR,
 out/), the trig stub suite (good/, copied to evals/), run, line, bad, last, and the stub suites
@@ -31,15 +32,19 @@ import re
 import shutil
 import subprocess
 import sys
-from typing import TYPE_CHECKING, NamedTuple, NoReturn
+import tempfile
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from typing import TYPE_CHECKING, NamedTuple, NoReturn, cast
+
+from eval_grading import Result, Run, Where, check_evals, grade, plan, watch
 
 from testkit import FIXTURES, HERE, ROOT, Scratch, kit
 from testkit.jsonwalk import at, get
 from testkit.qc_box import mise_dir
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
-    from pathlib import Path
+    from collections.abc import Mapping, Sequence
 
 Q, C = kit("octo-feather-qa"), kit("check-evals")
 G = "git -c user.name=t -c user.email=t@t.invalid -c commit.gpgsign=false"
@@ -204,6 +209,25 @@ class Want(NamedTuple):
     line: str = ""
     how: str = "grep"
     n: int | None = None
+
+
+def graded_check(runs: Mapping[str, Run], wants: Sequence[Want]) -> None:
+    """Each of WANTS, by its LINE (`VERDICT SUITE/CASE`), in RUNS: that case's verdict, and its
+    TEXT in its deciding facts as the command's line joins them (`; `), by HOW (Want)."""
+    for w in wants:
+        verdict, _, key = w.line.partition(" ")
+        r = runs[key.partition("/")[2]]
+        said = "; ".join(r.deciding)
+        got = f"{w.why}: {r.verdict} {key}: {said} (stop {r.stop})"
+        assert r.verdict == verdict, got
+        how = w.how.removeprefix("no ")
+        if w.n is not None:
+            ok = count(w.text, said) == w.n
+        elif how == "fixed":
+            ok = w.text in said
+        else:
+            ok = grep(w.text, said, *(["-E"] if how == "egrep" else []))
+        assert ok != w.how.startswith("no "), got
 
 
 TRIG = [
@@ -500,6 +524,51 @@ class Qa:
         )  # fmt: skip
         tree(j, self.t / "jg-good")
 
+    def graded(self, d: Path, name: str, ids: Sequence[str] = ()) -> dict[str, Run]:
+        """Each case of stub suite NAME in evals dir D (IDS: only those), in-process at the grading
+        module's interface (scripts/eval_grading.py, its docstring): its case repo in this scratch,
+        `plan`, the real `watch` running scripts/pi-role on the case's role with Pi's stand-in
+        first on PATH, then `grade`; no sandbox and no octo-feather-qa process. The cases run at
+        once, each in its own dir and private tmp. Each Run by case id."""
+        s = d / name
+        su = cast("Result", load(s / "suite.json"))
+        ex = cast("dict[str, Result]", load(s / "reference" / "expectations.json"))
+        cs = [c for c in cast("list[Result]", load(s / "cases.json")) if not ids or c["id"] in ids]
+
+        def one(c: Result) -> tuple[str, Run]:
+            at = Path(tempfile.mkdtemp(prefix=f"case-{c['id']}-", dir=self.t))
+            repo, head = self.case_repo(d, c, at)
+            planned = plan(su, c, ex[c["id"]]["facts"], (repo, head), kit=ROOT)
+            task = str(c["task"]).replace("{repo}", str(repo)).replace("{head}", head)
+            cmd = [kit("pi-role"), str(ROOT / "agents" / f"{c['role']}.md"), "--mode", "json",
+                   "--session-dir", str(at / "tmp" / "session"), "-p", task]  # fmt: skip
+            (at / "tmp").mkdir()
+            where = Where(str(repo), dict(self.s.env), str(at / "tmp"))
+            with (at / "transcript.jsonl").open("w+b") as out:
+                rc = watch(planned, cmd, where=where, out=out)
+                out.seek(0)
+                said = out.read().decode(errors="replace")
+            ran = subprocess.CompletedProcess(cmd, rc, said, "")
+            return str(c["id"]), grade(planned, ran, model="stub/stub-model")
+
+        with ThreadPoolExecutor() as pool:
+            return dict(pool.map(one, cs))
+
+    def case_repo(self, d: Path, c: Result, at: Path) -> tuple[Path, str]:
+        """AT/repo, case C's fixture (evals dir D's, materialized by check-evals' fixture_tree
+        through the module) committed on main, on C's branch if it names one, a uv.lock synced
+        (uv sync --locked, offline from the caller's cache); and its HEAD."""
+        src = check_evals().fixture_tree(d, str(c["fixture"]), at)
+        repo = at / "repo"
+        shutil.copytree(src, repo, symlinks=True)
+        for a in (["init", "-q", "-b", "main"], ["add", "-A"], ["commit", "-qm", "fixture"]):
+            self.s.git(repo, *a)
+        if c.get("branch"):
+            self.s.git(repo, "checkout", "-q", "-b", str(c["branch"]))
+        if (repo / "uv.lock").is_file():
+            self.s.run(["uv", "sync", "--locked", "-q"], cwd=repo)
+        return repo, self.s.git(repo, "rev-parse", "HEAD")
+
 
 def pinned(tool: str, mise: str | None) -> str:
     """The kit's pin of TOOL, through mise where there is one (run bare from a pane, the TOOL on
@@ -664,9 +733,9 @@ def fl_cases() -> Cases:
 
 
 def before_tool(q: Qa) -> tuple[list[Want], list[tuple[str, str]]]:
-    """tests/qa-before-tool.sh: the tb suite (tool_called_before before edit_under; rules:
-    schema.md, Facts, Before targets) in tb/, its pristine tb-good/: its run's lines, then each
-    shape edit and the refusal check-evals names."""
+    """The tb suite (tool_called_before before edit_under; rules: schema.md, Facts, Before
+    targets) in tb/, its pristine tb-good/: its cases' wants (test_qa_grading.py), then each shape
+    edit and the refusal check-evals names (tests/qa-before-tool.sh)."""
     tb = q.t / "tb"
     tree(q.t / "good" / "fixtures", tb / "fixtures")
     suite(tb, "tb", "stub tool before", 10, 60)
@@ -703,8 +772,8 @@ def before_tool(q: Qa) -> tuple[list[Want], list[tuple[str, str]]]:
 
 
 def cap_batch(q: Qa) -> list[Want]:
-    """tests/qa-cap-batch.sh: the cb suite in cb/, bound 3 (the stub's first bash call is 1, the
-    codemode call 2, its first nested call 3, the bound; the read nested 5th): its run's lines."""
+    """test_qa_grading.py's cb suite in cb/, bound 3 (the stub's first bash call is 1, the
+    codemode call 2, its first nested call 3, the bound; the read nested 5th): its cases' wants."""
     cb = q.t / "cb"
     tree(q.t / "good" / "fixtures", cb / "fixtures")
     suite(cb, "cb", "stub cap batch", 3, 60)
@@ -715,17 +784,17 @@ def cap_batch(q: Qa) -> list[Want]:
     ]  # fmt: skip
     cases(cb / "cb", cs)
     return [
-        Want(r"skill_read tdd: loaded at tool call 5 of 5 (read .*/tdd/SKILL.md) \[stop: decided, 5 tool calls, ",
+        Want(r"skill_read tdd: loaded at tool call 5 of 5 (read .*/tdd/SKILL.md)$",
              "inbatch: the read in flight when the batch crossed the bound was not graded", "PASS cb/inbatch"),
-        Want(r"skill_read tdd: no load of tdd/SKILL.md .* in 4 tool calls \[stop: max_tool_calls, 4 tool calls, ",
+        Want(r"skill_read tdd: no load of tdd/SKILL.md .* in 4 tool calls$",
              "afterbatch: a read started after the batch was credited, or the run did not stop at the bound", "FAIL cb/afterbatch"),
     ]  # fmt: skip
 
 
 def declared(q: Qa) -> list[Want]:
-    """tests/qa-declared.sh: the dec suite in dec/ (declared, schema.md, Final JSON: `ok` also
-    reads tdd early and still passes, the watcher kept it running; `early` lingers past
-    timeout_s): its run's lines."""
+    """test_qa_grading.py's dec suite in dec/ (declared, schema.md, Final JSON: `ok` also reads
+    tdd early and still passes, the watcher kept it running; `early` lingers past timeout_s): its
+    cases' wants."""
     dec = q.t / "dec"
     q.fixture_fx(dec)
     suite(dec, "dec", "stub declared", 10, 8)
@@ -755,7 +824,7 @@ def declared(q: Qa) -> list[Want]:
 
 
 def field_lines() -> list[Want]:
-    """tests/qa-field-lines.sh: the fl suite's run's lines (its cases: Qa.fl)."""
+    """test_qa_grading.py: the fl suite's cases' wants (its cases: Qa.fl)."""
     ls = [
         ("PASS", "fnone", 'field_lines Check: `Checks: none`; field_lines Check: `Checks: none`; every line in {"class": ["exact"]}; field_lines Blocked: 1 line(s) [{"text": "the scan (no criterion asks for it)"}]; branch_paths: changed src/a.py, src/b.py; none under scripts/, justfile; each of src/ changed'),
         ("FAIL", "fbullet", "field_lines Check: report classifies no check"),
@@ -792,7 +861,8 @@ RT = [
 
 
 def rt() -> list[Want]:
-    """tests/qa-rt.sh: the rt suite's run of cases RT, its lines (its cases: Qa.rt)."""
+    """The rt suite's cases RT, their wants (its cases: Qa.rt): setup's in tests/qa-rt.sh, the
+    others' in test_qa_grading.py."""
     return [
         Want("", "rt partial: want FAIL", "FAIL rt/partial"),
         Want("", "rt roleedit: want FAIL", "FAIL rt/roleedit"),
@@ -817,8 +887,8 @@ RT_TARGETS = ["order", "fsonly", "contract", "declared"]
 
 
 def rt_targets() -> tuple[list[Want], dict[tuple[str, str], tuple[str, str]]]:
-    """tests/qa-rt-targets.sh: the rt suite's run of cases RT_TARGETS, its lines, and order's
-    grading by (skill, before): (status, evidence it holds) (its cases: Qa.rt)."""
+    """test_qa_grading.py: the rt suite's cases RT_TARGETS, their wants, and order's grading by
+    (skill, before): (status, evidence it holds) (its cases: Qa.rt)."""
     return [
         Want("", "rt order: want FAIL", "FAIL rt/order"),
         Want("", "rt declared: want PASS", "PASS rt/declared"),

@@ -4,9 +4,8 @@
 # One section of the factory-evals test per gate item (#506): tests/qa.sh and each tests/qa-*.sh.
 # Proves: one PASS/FAIL line per case naming the deciding transcript facts, exit 1 on any failure and 0 when all
 # pass, train and held-out score lines, per-run artifacts outside the repo, --suite/--case selection, --sample stratified
-# and deterministic, role-skill coverage ({tracker} resolved per fixture), the run stops once its facts are decided, a pi
-# that dies without an answer fails its case, each case runs in the qc sandbox and a failed sandbox proof is a FAIL,
-# refusal inside a check run.
+# and deterministic, role-skill coverage ({tracker} resolved per fixture), each case runs in the qc sandbox and a failed
+# sandbox proof is a FAIL, refusal inside a check run. Stop once decided and a dead pi's FAIL: tests/gate/kit/test_qa_grading.py.
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`), as tests/qc.sh does.
 # Its scenario `qa` in tests/gate/kit/qa_sections.py.
 exec python3 "$(dirname "$0")/gate/kit/qa_sections.py" qa

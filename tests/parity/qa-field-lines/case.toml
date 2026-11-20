@@ -4,8 +4,8 @@ old = "tests/qa-field-lines.sh"
 old_at = "0ba3d1db"
 # Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
 needs = ["tests/lib/qa.sh", "tests/gate/kit/testkit/pi_agent.py"]
-# The same script, as its gate item: its id kept.
-new = "tests/gate/test_gate.py::test_script[tests/qa-field-lines.sh]"
+# The in-process test it moved to (#1089): plan, watch and grade of scripts/eval_grading.py.
+new = "tests/gate/kit/test_qa_grading.py::test_qa_field_lines"
 
 # How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: scripts/eval_grading.py, the module the Python kit script octo-feather-qa imports, run by the kit venv's python: coverage.py measures it.
 [ran]
