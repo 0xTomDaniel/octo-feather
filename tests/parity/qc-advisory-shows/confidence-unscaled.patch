@@ -1,0 +1,14 @@
+Seeded defect: the advisory line shows the answer with a confidence other than the model gave (quality spec #qc-results).
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+index 6e951de0..d87765d2 100755
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -574,7 +574,7 @@ def advised(a: dict[str, Any]) -> str:
+     cal = "uncalibrated" if not a.get("calibration") else ("threshold accepted" if a["calibration"]["threshold"]["accepted"] is True
+                                                        else "threshold proposed, not accepted")
+     return (f"advisory model judgment (no gate reads it): {a['answer']}, confidence "
+-            f"{f'{c:.3f}' if isinstance(c, (int, float)) else 'unreported'} ({by}; {cal})")
++            f"{f'{c * 100:.1f}' if isinstance(c, (int, float)) else 'unreported'} ({by}; {cal})")
+ 
+ 
+ def tail(out: str, lines: int = 40) -> str:

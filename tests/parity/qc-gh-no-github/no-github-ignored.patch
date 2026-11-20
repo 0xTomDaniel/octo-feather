@@ -1,0 +1,14 @@
+Seeded defect: --no-github is ignored: the snapshot is fetched anyway, and a failed fetch aborts the run (octo-feather-qc --help, GitHub evidence).
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+index 6e951de0..e4076c3f 100755
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -184,7 +184,7 @@ def github_snapshot(skip, runid):
+     m = re.search(r"github\.com[:/]+([^/\s]+/[^/\s]+?)(?:\.git)?/?$", url)
+     if not m:
+         return {"off": "github: none (no GitHub remote)"}
+-    if skip:
++    if skip and False:
+         return {"off": f"github: SKIPPED (--no-github; {m.group(1)} not fetched, the judge has no GitHub evidence)"}
+     snap = Path(tempfile.mkdtemp(prefix=f"qc-ghsnap-{runid}-"))
+     try:   # killed mid-fetch (SIGTERM, see main): the partial snapshot goes too
