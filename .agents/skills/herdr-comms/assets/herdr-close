@@ -6,7 +6,8 @@
 #
 # Closing a tab or space kills its panes, but a detached command child (setsid)
 # survives, reparented: plain close then ends each closed pane's own agent
-# scope, never reading another process (herdr_scope.py close; the rule:
+# scope, never reading another process, and removes its Pi session's Herdr
+# extension dir herdr-spawn installed (herdr_scope.py close; the rule:
 # herdr-comms SKILL.md, Close an agent or a lane space).
 # A tab id is <space>:<tab>; an id without a colon is a space. A pane id
 # (<space>:p<n>) is mapped to its tab (herdr agent get)

@@ -7,8 +7,9 @@ processes stand in for each pane's Pi: the argv and working directory Herdr read
 herdr-spawn starts it.
 
 stale_agents (the demo): implementers spawned before and after a role-file change, and a director
-started by hand. stale_herdr_extension: Herdr's Pi integration file, which herdr-spawn adds to the
-launch, changed after a spawn. stale_malformed: Herdr's agent list not of AgentInfo's shape."""
+started by hand. stale_herdr_extension: a later spawn under a Herdr that installs another Pi
+integration (the extension herdr-spawn installs per launch and adds to it). stale_malformed:
+Herdr's agent list not of AgentInfo's shape."""
 
 from __future__ import annotations
 
@@ -79,8 +80,33 @@ class Factory:
         out = self.s.run([str(spawn), *args, "--cwd", str(self.wt)]).out
         pane = dict(x.split("=", 1) for x in out.split())["pane"]
         env = cast("dict[str, str]", self.agents()[pane]["env"])
-        self.agents({pane: {"pi_pid": self.pi("--session-id", env["OCTO_FEATHER_SESSION_ID"])}})
+        # Pi's environment holds the tab's (herdr-close --park reads its session there).
+        own = {k: env[k] for k in ("OCTO_FEATHER_SESSION_ID", "OCTO_FEATHER_ROLE")}
+        pi = self.pi("--session-id", env["OCTO_FEATHER_SESSION_ID"], env=own)
+        self.agents({pane: {"pi_pid": pi}})
         return pane
+
+    def session(self, pane: str) -> str:
+        """The session herdr-spawn gave PANE's agent."""
+        return cast("dict[str, str]", self.agents()[pane]["env"])["OCTO_FEATHER_SESSION_ID"]
+
+    def extensions(self, pane: str) -> list[Path]:
+        """Each --extension file the agent start in PANE passed Pi (the Herdr world's log)."""
+        log = (self.d / "log").read_text().splitlines()
+        mine = (x for x in log if x.startswith("agent start ") and f" --pane {pane} " in x)
+        start = next(mine).split(" ")
+        return [Path(start[i + 1]) for i, x in enumerate(start[:-1]) if x == "--extension"]
+
+    def herdr_pi(self) -> Path:
+        """Where herdr-spawn installs Herdr's Pi extension per launch: the state dir's herdr-pi/."""
+        return Path(self.s.run([str(self.kit / "scripts" / "octo-feather-state")]).out) / "herdr-pi"
+
+    def herdr_extension(self, pane: str) -> Path:
+        """The one Herdr extension PANE's launch passed Pi, under its own session's dir there."""
+        own = self.herdr_pi() / self.session(pane)
+        got = [x for x in self.extensions(pane) if x.parent == own]
+        assert len(got) == 1, (pane, own, self.extensions(pane))
+        return got[0]
 
     def stale(self, want: int = 0) -> str:
         out = self.s.run([str(self.kit / "scripts" / "octo-feather-lane"), "stale"], want=want)
@@ -120,17 +146,22 @@ def stale_agents(s: Scratch) -> None:
 
 
 def stale_herdr_extension(s: Scratch) -> None:
-    """Herdr's Pi integration file herdr-spawn passes the agent, replaced after its launch (as a
-    later spawn under an upgraded Herdr writes it): the agent is stale naming that file."""
+    """Agent A launched, then B launched under a Herdr stand-in that installs a different Pi
+    integration (an upgraded Herdr): A's own extension copy is unchanged, A is stale naming it
+    (what a launch would install now differs), B is current."""
     f = Factory(s)
     try:
-        pane = f.launch("implementer-a")
+        a = f.launch("implementer-a")
         assert f.stale().splitlines() == ["stale agents: 0 stale, 0 unknown, 1 current of 1 live"]
-        ext = Path(s.env["HOME"]) / ".cache" / "octo-feather" / "herdr-pi" / "herdr-agent-state.ts"
-        ext.write_text(ext.read_text() + "// a newer Herdr's integration\n")
+        ext = f.herdr_extension(a)
+        was = ext.read_text()
+        (f.d / "integration").write_text("// a newer Herdr's integration\n")
+        b = f.launch("implementer-b")
+        assert ext.read_text() == was, "a later launch rewrote A's own extension copy"
+        assert f.herdr_extension(b).read_text() == "// a newer Herdr's integration\n"
         assert f.stale().splitlines() == [
-            f"stale: {pane} implementer-a role implementer: {ext} changed",
-            "stale agents: 1 stale, 0 unknown, 0 current of 1 live",
+            f"stale: {a} implementer-a role implementer: {ext} changed",
+            "stale agents: 1 stale, 0 unknown, 1 current of 2 live",
         ]
     finally:
         f.close()

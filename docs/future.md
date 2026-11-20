@@ -60,7 +60,7 @@ After Thursday 10-22, copy `octo-feather-spec-status` into each template (`templ
 
 ## `octo-feather-spec-status reaccept`
 
-After Thursday 10-22: `octo-feather-spec-status reaccept STATUS COMMIT --reset ID...` applies an accepted revision mechanically (reset the listed ids to `planned`, add new ids as `planned`, drop removed ones, move `accepted_commit`), so the supervisor stops editing the status file by hand (audit F03). The affected ids stay the revision's explicit list: comparing criterion text cannot find a requirement changed through a governing clause.
+Applying an accepted revision is built: `octo-feather-spec-status init` over the existing status file (issue-lifecycle #spec-status-file). Still deferred: `reaccept STATUS COMMIT --reset ID...`, resetting a revision's explicitly listed changed criteria to `planned` (audit F03); comparing criterion text cannot find a requirement changed through a governing clause.
 
 ## Status file deleted beside its spec
 

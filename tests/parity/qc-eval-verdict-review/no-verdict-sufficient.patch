@@ -1,0 +1,14 @@
+Seeded defect: --verdict takes a review case with no recorded maintainer verdict as sufficient.
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index 404ccdfd..c22c4e55 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -2359,7 +2359,7 @@ def pinned(root: Path, top: str, head: str, arg: str) -> tuple[str, str, list[st
+     review = isinstance(res.get("review"), dict)
+     if review:
+         mine = [x for x in review_records(root / "reviews", suite, cid) if x.get("run_id") == rid]
+-        if not mine:
++        if False:
+             missing.append(
+                 f"no maintainer verdict recorded for review case {suite}/{cid} in run "
+                 f"{rid} (--review)"

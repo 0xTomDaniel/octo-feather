@@ -27,13 +27,24 @@ Fetch-only entries (#96): a Skillfile line `#fetch-only github skill NAME SOURCE
 like a github entry but not vendored. --extract NAME DEST writes its folder into
 DEST/<path>, offline; not cached: exit 1 naming `just vendored-fetch`. The kit's tests
 run Spec Chat only through its fetch-only entry, never the box's clone (whose HEAD
-differs per box and is absent in CI).
+differs per box and is absent in CI). Fetch-only lines of one repo name one sha: the
+gate fails naming both lines when they differ.
+
+Carried copies (#1168): a Skillfile line `#carry NAME SRC DEST` declares DEST (a file
+or folder in the repo) a byte copy of SRC (a file or folder under fetch-only entry
+NAME's path) at NAME's pin. The gate fails, offline, on a carried file that differs,
+is missing, or is extra in a carried folder, naming it and `--update NAME`.
+--update NAME writes every carried copy of NAME from the authenticated pin (offline,
+never the box's clone): differing and missing files written, extras removed; a
+rerun changes nothing.
 
 Cache: ${XDG_CACHE_HOME:-~/.cache}/octo-feather/skillfile/{bin/,git/<owner>/<repo>/<sha>.git}.
-Usage: check-vendored [--repo DIR] [--fetch | --extract NAME DEST]
+Usage: check-vendored [--repo DIR] [--fetch | --extract NAME DEST | --update NAME]
 Tested by tests/check-vendored.sh.
 """
 import argparse, difflib, hashlib, json, os, platform, re, shutil, signal, stat, subprocess, sys, tempfile
+from pathlib import Path
+from typing import cast
 
 TAG = "check-vendored"
 VERSION = "v1.9.2"
@@ -53,11 +64,12 @@ ap = argparse.ArgumentParser()
 ap.add_argument("--repo")
 ap.add_argument("--fetch", action="store_true")
 ap.add_argument("--extract", nargs=2, metavar=("NAME", "DEST"))
+ap.add_argument("--update", metavar="NAME")
 a = ap.parse_args()
 root = os.path.abspath(a.repo or os.path.join(os.path.dirname(__file__), ".."))
 cache = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "octo-feather", "skillfile")
 TIMEOUT = float(os.environ.get("OCTO_FEATHER_FETCH_TIMEOUT") or 120)
-tag = "vendored-fetch" if a.fetch else "extract" if a.extract else TAG
+tag = "vendored-fetch" if a.fetch else "extract" if a.extract else "update" if a.update else TAG
 
 
 def die(msg):
@@ -69,6 +81,7 @@ class Unauthentic(Exception):
 
 
 FETCH_ONLY = "#fetch-only"
+CARRY = "#carry"
 
 
 def entries():
@@ -343,7 +356,157 @@ def offline_prefix():
     return []
 
 
-def gate(ents, vendored):
+Entry = tuple[str, str, str, str]
+
+
+def carries() -> list[Entry]:
+    """Skillfile `#carry NAME SRC DEST` lines as entries: ("carry", name, src, dest)."""
+    with open(os.path.join(root, "Skillfile")) as fh:
+        rows = [line.split() for line in fh]
+    return [("carry", f[1], f[2], f[3]) for f in rows if f[:1] == [CARRY] and len(f) == 4]
+
+
+def pins_agree(ents: list[Entry]) -> int:
+    """Fetch-only lines of one repo name one sha; each disagreement printed. Returns the count."""
+    by_repo: dict[str, list[tuple[str, str]]] = {}
+    for kind, name, source, _ in ents:
+        if kind == "fetch-only":
+            by_repo.setdefault(source.split("@", 1)[0], []).append((name, source))
+    bad = 0
+    for repo, items in by_repo.items():
+        if len({s for _, s in items}) > 1:
+            shown = ", ".join(f"{n} at {s.split('@', 1)[1][:7]}" for n, s in items)
+            print(f"{TAG}: Skillfile fetch-only lines of {repo} name different shas ({shown}); "
+                  f"move them together to one sha", file=sys.stderr)
+            bad += 1
+    return bad
+
+
+Want = dict[str, tuple[bytes, str]]  # dest-relative path ("" for a file carry) -> (bytes, git mode)
+
+
+def carried(ents: list[Entry], name: str) -> tuple[str, str, list[tuple[str, str, Want]]]:
+    """(source, path, [(src, dest, want)]) for each `#carry NAME` line, from NAME's authenticated pin.
+    Raises Unauthentic."""
+    hit = [(s, p) for kind, n, s, p in ents if kind == "fetch-only" and n == name]
+    if not hit:
+        die(f"`{CARRY} {name}` needs a `{FETCH_ONLY} github skill {name} ...` line in {os.path.join(root, 'Skillfile')}")
+    source, path = hit[0]
+    modes: dict[str, str] = {}
+    tree = upstream(source, path, modes)
+    out: list[tuple[str, str, Want]] = []
+    for kind, n, src, dest in ents:
+        if kind != "carry" or n != name:
+            continue
+        if src in tree:
+            want: Want = {"": (tree[src], modes[src])}
+        else:
+            want = {rel[len(src) + 1:]: (data, modes[rel]) for rel, data in tree.items() if rel.startswith(src + "/")}
+        if not want:
+            die(f"`{CARRY} {name} {src} {dest}`: {source} has no {path}/{src}")
+        out.append((src, dest, want))
+    return source, path, out
+
+
+def on_disk(dest: Path, *, folder: bool) -> tuple[dict[str, bytes], dict[str, str]]:
+    """(rel path -> bytes of each regular file, rel path -> why for anything else) of a carried copy;
+    a file copy keys "" ."""
+    if not folder:
+        return ({"": dest.read_bytes()} if dest.is_file() and not dest.is_symlink() else {}), {}
+    have: dict[str, bytes] = {}
+    odd: dict[str, str] = {}
+    if dest.is_symlink():
+        return have, {".": "is a symlink"}
+    for p in sorted(dest.rglob("*")) if dest.is_dir() else []:
+        rel = p.relative_to(dest).as_posix()
+        if p.is_symlink():
+            odd[rel] = f"is a symlink (to {p.readlink()})"
+        elif p.is_file():
+            have[rel] = p.read_bytes()
+        elif not p.is_dir():
+            odd[rel] = "is a special file"
+    return have, odd
+
+
+def check_carried(ents: list[Entry]) -> int:
+    """Every carried copy equals its pin's bytes; each drift printed naming file and fix. Returns the count."""
+    bad = pins_agree(ents)
+    for name in dict.fromkeys(n for kind, n, _, _ in ents if kind == "carry"):
+        fix = f"run `scripts/check-vendored --update {name}`, then `just check`"
+        try:
+            source, path, copies = carried(ents, name)
+        except Unauthentic as e:
+            print(f"{TAG}: {name}: carried copies cannot be checked: {e}; {FETCH}", file=sys.stderr)
+            bad += 1
+            continue
+        pin = f"{source.split('@')[0]}@{source.split('@')[1][:7]}"
+        for src, dest, want in copies:
+            have, odd = on_disk(Path(root, dest), folder="" not in want)
+            for rel, why in sorted(odd.items()):
+                print(f"{TAG}: {name}: {dest}/{rel} {why}; a carried folder holds only the pin's files; {fix}",
+                      file=sys.stderr)
+                bad += 1
+            for rel in sorted(set(want) | set(have)):
+                shown, origin = (dest, f"{pin} {path}/{src}") if rel == "" else (f"{dest}/{rel}", f"{pin} {path}/{src}/{rel}")
+                if rel not in have:
+                    print(f"{TAG}: {name}: {shown} is missing; it is a carried copy of {origin}; {fix}", file=sys.stderr)
+                elif rel not in want:
+                    print(f"{TAG}: {name}: {shown} is not in {pin} {path}/{src}; {fix}", file=sys.stderr)
+                elif have[rel] != want[rel][0]:
+                    print(f"{TAG}: {name}: {shown} differs from {origin}; {fix}", file=sys.stderr)
+                else:
+                    continue
+                bad += 1
+    return bad
+
+
+def update(ents: list[Entry], name: str) -> None:
+    """Write every carried copy of NAME from its authenticated pin. Offline."""
+    if pins_agree(ents):
+        die("the fetch-only lines above disagree; nothing written")
+    if not any(kind == "carry" and n == name for kind, n, _, _ in ents):
+        die(f"no `{CARRY} {name} SRC DEST` line in {os.path.join(root, 'Skillfile')}")
+    try:
+        source, _, copies = carried(ents, name)
+    except Unauthentic as e:
+        die(f"{name}: {e}; {FETCH}")
+        return
+    changed = 0
+    for _, dest, want in copies:
+        full = Path(root, dest)
+        if "" not in want:
+            have, odd = on_disk(full, folder=True)
+            for rel in sorted(set(have) | set(odd)):
+                if rel not in want and rel != ".":
+                    gone = full / rel
+                    if gone.is_dir() and not gone.is_symlink():
+                        shutil.rmtree(gone)
+                    else:
+                        gone.unlink()
+                    print(f"update: removed {dest}/{rel}")
+                    changed += 1
+            for d in sorted((p for p in full.rglob("*") if p.is_dir() and not p.is_symlink()), reverse=True):
+                if not any(d.iterdir()):
+                    d.rmdir()
+        for rel, (data, mode) in sorted(want.items()):
+            p = full / rel if rel else full
+            perm = 0o755 if mode == "100755" else 0o644
+            if p.is_file() and not p.is_symlink() and p.read_bytes() == data and p.stat().st_mode & 0o111 == perm & 0o111:
+                continue
+            if p.is_dir() and not p.is_symlink():
+                shutil.rmtree(p)
+            elif p.is_symlink():
+                p.unlink()
+            p.parent.mkdir(parents=True, exist_ok=True)
+            p.write_bytes(data)
+            p.chmod(perm)
+            print(f"update: wrote {dest}" + (f"/{rel}" if rel else ""))
+            changed += 1
+    print(f"update: {name} carried copies at {source.split('@')[0]}@{source.split('@')[1][:7]} "
+          f"({changed} file(s) changed); then `just check`")
+
+
+def gate(ents, vendored, carry_bad: int = 0):
     _, binary, want = binary_path()
     if not sha256_ok(binary, want):
         die(f"skillfile {VERSION} is not cached at {binary} (or fails its pinned sha256); {FETCH}")
@@ -417,6 +580,9 @@ def gate(ents, vendored):
             die(f"{bad} vendored file(s) drift from pin plus patch: change vendored text only through "
                 f".skillfile/patches/skills/<name>/<file>.patch, or <name>.patch for a single-file entry "
                 f"(first line names its ADR), else revert the file")
+        if carry_bad:
+            die(f"{carry_bad} carried copy finding(s) above: carried copies change only through "
+                f"`scripts/check-vendored --update NAME` from the pin")
         print(f"vendored: ok ({len(vendored)} skills equal authenticated upstream at pin plus patches; skillfile {VERSION}, offline)")
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -447,5 +613,11 @@ if not vendored:
     die("no github entries in Skillfile")
 if a.extract:
     extract(*a.extract)
+elif a.update:
+    update(cast("list[Entry]", ents) + carries(), a.update)
+elif a.fetch:
+    fetch(vendored + [e for e in ents if e[0] == "fetch-only"])
 else:
-    fetch(vendored + [e for e in ents if e[0] == "fetch-only"]) if a.fetch else gate(ents, vendored)
+    gate(ents, vendored, check_carried(cast("list[Entry]", ents) + carries()))
+    if carry := carries():
+        print(f"carried: ok ({len(carry)} carried copies equal their fetch-only pin: {', '.join(e[3] for e in carry)})")
