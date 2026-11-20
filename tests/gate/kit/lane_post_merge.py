@@ -386,7 +386,8 @@ def superseded(s: Scratch) -> None:
     head contains the merge commit (gh compare ahead or identical): ok only on its success, naming
     both; still running, it is watched to its end; cancelled in turn, it defers again; red, it
     stops naming both; none within the bound (only an older one, and one on a diverged head)
-    stops as red; another run red beside the cancelled one stops first, no later-run read."""
+    stops as red; another run red beside the cancelled one stops first, no later read of the
+    cancelled one's workflow."""
     lane = Lane(s)
     m = lane.m
     m12 = m[:12]
@@ -467,7 +468,9 @@ def superseded(s: Scratch) -> None:
         "https://github.com/o/r/actions/runs/24;"
     )
     assert want in r.out, f"red beside cancelled: {r.out}"
-    assert not [x for x in s.gh.log() if "--branch" in x], f"red beside cancelled: {s.gh.log()}"
+    assert not [x for x in s.gh.log() if "--workflow check" in x], (
+        f"red beside cancelled: {s.gh.log()}"
+    )
 
 
 def kit_refresh(s: Scratch) -> None:

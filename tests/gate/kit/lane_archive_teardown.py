@@ -25,6 +25,7 @@ from typing import TYPE_CHECKING
 
 from herdr_messaging import agent, lines
 from lane_merge import H, World
+from lane_post_merge import run1
 from testkit import HERE, Scratch, kit, main, reflector
 
 if TYPE_CHECKING:
@@ -279,6 +280,57 @@ def archive_waits(s: Scratch) -> None:
     assert said[1].startswith("lane gh7 closed: PR #7 "), said
 
 
+def red_main(s: Scratch) -> None:
+    """issue-lifecycle#acceptance-red-main-stops (the ticket's demo): the merge commit's push run
+    fails: `merge` stops at step 2 naming the run, the director told once, the kit install unmoved.
+    `archive` reruns step 2: refused, `archive waits: step 2 main CI stopped: ...`, every lane file
+    in place, no unit, the director not told again; the same with a later push run on main
+    containing the merge still red. Once gh lists a later green push run of that workflow
+    containing the merge, `archive` passes steps 2-6 (step 2 naming the red run and the green
+    one), archives and starts the teardown; the director's next message is the end."""
+    t = Lane(s)
+    m = t.w.lane.m
+    m12 = m[:12]
+    s.gh.store("run/11.json", run1("check", "completed", "failure", 11, m))
+    t.merged(1)
+    stop = f"main CI red on {m12}: check failure https://github.com/o/r/actions/runs/11"
+    said = t.said()
+    assert len(said) == 1, said
+    assert f"step 2 main CI stopped: {stop}" in said[0], said
+    assert t.w.lane.head() == t.w.lane.b, "kit install moved"
+    before = t.tree()
+    sa, sb = "a" * 40, "b" * 40
+    for sha, status in ((sa, "ahead"), (sb, "ahead")):
+        s.gh.store(f"api/repos/o/r/compare/{m}...{sha}.json", {"status": status})
+    for later in ((), (run1("check", "completed", "failure", 12, sa),)):
+        for x in later:
+            s.gh.store(f"run/{x['databaseId']}.json", x)
+        r = t.run(1, "archive", "gh7")
+        assert f"archive waits: step 2 main CI stopped: {stop}" in r.err, r.err
+        assert "nothing archived" in r.err, r.err
+        assert "director already told" in r.out, r.out
+        assert t.tree() == before, "a lane file moved"
+        assert len(t.said()) == 1, t.said()
+        assert t.w.lane.head() == t.w.lane.b, "kit install moved"
+        assert "systemd-run" not in t.text(t.syslog), "unit started"
+    s.gh.store("run/13.json", run1("check", "completed", "success", 13, sb))
+    r = t.run(0, "archive", "gh7")
+    green = (
+        f"step 2 main CI: ok: {stop.replace(' failure', '')}, green since in "
+        f"https://github.com/o/r/actions/runs/13 on {sb[:12]} (contains {m12})"
+    )
+    assert green in r.out.split("\n"), r.out
+    for n, name in enumerate(("kit refresh", "checkout", "stale agents", "tell supervisors"), 3):
+        assert any(x.startswith(f"step {n} {name}: ok: ") for x in r.out.split("\n")), r.out
+    assert f"archived: {t.w.lanes}/archive/gh7.toml sha256=" in r.out, r.out
+    assert r.out.split("\n")[-1].startswith(f"teardown: started unit {UNIT} "), r.out
+    assert t.w.lane.head() == m, "install not refreshed"
+    t.ended()
+    said = t.said()
+    assert len(said) == 2, said
+    assert said[1].startswith("lane gh7 closed: PR #7 "), said
+
+
 def unit_fails(s: Scratch, how: str = "fails") -> None:
     """A unit that fails (the worktree dirty: step 7 stops, the unit exits 1) or is killed at its
     runtime limit (`killed`): its end recorded by its stop hook, as `post-merge --lane gh7` shows;
@@ -317,4 +369,4 @@ def unit_killed(s: Scratch) -> None:
 
 
 if __name__ == "__main__":
-    main(archive_tears_down, no_manager, archive_waits, unit_fails, unit_killed)
+    main(archive_tears_down, no_manager, archive_waits, red_main, unit_fails, unit_killed)
