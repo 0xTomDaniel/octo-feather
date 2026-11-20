@@ -37,7 +37,7 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import TYPE_CHECKING, NamedTuple, NoReturn, cast
 
-from eval_grading import Result, Run, Where, check_evals, grade, plan, watch
+from eval_grading import Result, Run, Where, grade, plan, watch
 
 from testkit import FIXTURES, HERE, ROOT, Scratch, kit
 from testkit.jsonwalk import at, get
@@ -534,10 +534,12 @@ class Qa:
         su = cast("Result", load(s / "suite.json"))
         ex = cast("dict[str, Result]", load(s / "reference" / "expectations.json"))
         cs = [c for c in cast("list[Result]", load(s / "cases.json")) if not ids or c["id"] in ids]
+        fx = Path(tempfile.mkdtemp(prefix=f"fixtures-{name}-", dir=self.t)) / "x"
+        self.sh(C, "--export", str(fx), str(d))  # D's fixtures materialized, by the command
 
         def one(c: Result) -> tuple[str, Run]:
             at = Path(tempfile.mkdtemp(prefix=f"case-{c['id']}-", dir=self.t))
-            repo, head = self.case_repo(d, c, at)
+            repo, head = self.case_repo(fx / str(c["fixture"]), c, at)
             planned = plan(su, c, ex[c["id"]]["facts"], (repo, head), kit=ROOT)
             task = str(c["task"]).replace("{repo}", str(repo)).replace("{head}", head)
             cmd = [kit("pi-role"), str(ROOT / "agents" / f"{c['role']}.md"), "--mode", "json",
@@ -554,11 +556,10 @@ class Qa:
         with ThreadPoolExecutor() as pool:
             return dict(pool.map(one, cs))
 
-    def case_repo(self, d: Path, c: Result, at: Path) -> tuple[Path, str]:
-        """AT/repo, case C's fixture (evals dir D's, materialized by check-evals' fixture_tree
-        through the module) committed on main, on C's branch if it names one, a uv.lock synced
-        (uv sync --locked, offline from the caller's cache); and its HEAD."""
-        src = check_evals().fixture_tree(d, str(c["fixture"]), at)
+    def case_repo(self, src: Path, c: Result, at: Path) -> tuple[Path, str]:
+        """AT/repo, case C's fixture SRC (as `check-evals --export` materialized it) committed on
+        main, on C's branch if it names one, a uv.lock synced (uv sync --locked, offline from the
+        caller's cache); and its HEAD."""
         repo = at / "repo"
         shutil.copytree(src, repo, symlinks=True)
         for a in (["init", "-q", "-b", "main"], ["add", "-A"], ["commit", "-qm", "fixture"]):
@@ -792,9 +793,9 @@ def cap_batch(q: Qa) -> list[Want]:
 
 
 def declared(q: Qa) -> list[Want]:
-    """test_qa_grading.py's dec suite in dec/ (declared, schema.md, Final JSON: `ok` also reads
-    tdd early and still passes, the watcher kept it running; `early` lingers past timeout_s): its
-    cases' wants."""
+    """The dec suite in dec/ (declared, schema.md, Final JSON: `ok` also reads tdd early and still
+    passes, the watcher kept it running; `early` lingers past timeout_s): its cases' wants, early's
+    and earlyrb's in tests/qa-declared.sh, the others' in test_qa_grading.py."""
     dec = q.t / "dec"
     q.fixture_fx(dec)
     suite(dec, "dec", "stub declared", 10, 8)
@@ -887,8 +888,9 @@ RT_TARGETS = ["order", "fsonly", "contract", "declared"]
 
 
 def rt_targets() -> tuple[list[Want], dict[tuple[str, str], tuple[str, str]]]:
-    """test_qa_grading.py: the rt suite's cases RT_TARGETS, their wants, and order's grading by
-    (skill, before): (status, evidence it holds) (its cases: Qa.rt)."""
+    """The rt suite's cases RT_TARGETS, their wants (declared's in tests/qa-rt-targets.sh, the
+    others' in test_qa_grading.py), and order's grading by (skill, before): (status, evidence it
+    holds) (its cases: Qa.rt)."""
     return [
         Want("", "rt order: want FAIL", "FAIL rt/order"),
         Want("", "rt declared: want PASS", "PASS rt/declared"),
