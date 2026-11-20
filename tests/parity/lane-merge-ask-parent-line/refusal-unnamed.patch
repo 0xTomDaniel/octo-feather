@@ -1,0 +1,14 @@
+Seeded defect: the refusal for a branch the tracker skill names no parent for drops the quoted branch (its text must stay byte-identical).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index 38e44c8f..4eef8be7 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -88,7 +88,7 @@ def parent_line(s: Snapshot) -> list[str]:
+     if isinstance(s.parent, NoParent):
+         return [
+             (
+-                f"parent line: cannot name it for branch {s.branch!r} ({s.parent.why}); "
++                f"parent line: cannot name it for branch {s.branch} ({s.parent.why}); "
+                 "push the lane from its lane branch (docs/adr/0011)"
+             )
+         ]

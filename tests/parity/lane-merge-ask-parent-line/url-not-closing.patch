@@ -1,0 +1,14 @@
+Seeded defect: an issue URL after a closing keyword (Resolves https://github.com/o/r/issues/9) is not a closing link (spec #gates-pr-line).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index 38e44c8f..300fd4b5 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -29,7 +29,7 @@ from tracker_calls import tracker
+ # as #N, as owner/repo#N or by the issue URL.
+ CLOSES = re.compile(
+     r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+"
+-    r"(?:[\w.-]+/[\w.-]+#|https?://(?:www\.)?github\.com/[\w.-]+/[\w.-]+/issues/|#)(\d+)\b",
++    r"(?:[\w.-]+/[\w.-]+#|#)(\d+)\b",
+     re.IGNORECASE,
+ )
+ 

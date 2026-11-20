@@ -8,8 +8,8 @@ in place, and refuses a wrong head, a report with no verdict or no check classes
 a proxy check with a clear verdict and a failed write, leaving no comment behind. `merge-ask`
 passes a complete section and prints it with each row's decision source (quality
 #acceptance-qc-fallback), also through the qc judge's offline gh; fails PR #16's real body
-(fixture) naming each missing item, and each single gap: the parent line (spec
-#acceptance-pr-tracks), a stale head, a failing, pending or unreported check (rule: --help,
+(fixture) naming each missing item, and each single gap: a stale head (the parent line's
+rule: test_merge_ask.py, in-process), a failing, pending or unreported check (rule: --help,
 merge-ask Checks line), rows, Built against the status file and the qc commits, the verdict
 link, an untriaged fail. One judged head (spec #acceptance-one-head): qc's status commit and a
 clean main merge keep the verdict with the check's proof line; anything else fails naming it.
@@ -80,10 +80,6 @@ FAILURE = check(0, conclusion="FAILURE")
 
 def no_checks(d: dict[str, Any]) -> None:
     d["statusCheckRollup"] = []
-
-
-def branch(name: str) -> Edit:
-    return lambda d: d.update(headRefName=name)
 
 
 def pr_head(sha: str, subject: str) -> Edit:
@@ -698,40 +694,6 @@ def failed_triage(s: Scratch) -> None:
         failed="Failed:\n- acceptance-c: repair ticket #9",
     )
     ln.bad("Failed: 'some'; write", failed="Failed: some")
-
-
-def parent_line(s: Scratch) -> None:
-    """The parent line (spec #gates-pr-line): the tracker skill's pr-line for the key the PR
-    branch names, and no other line closes an issue: only the parent's own closing link is
-    exempt, never the rest of its line; an issue URL closes too. A Linear lane (spec
-    #acceptance-pr-tracks): Tracks ENG-123 for branch eng-123, no Closes line."""
-    ln = Lane(s)
-    gh_parent = "not the lane's parent line `Closes #6`"
-    missing = "parent line: missing; add the line"
-    ln.bad(f"{missing} `Closes #6` (the tracker skill's pr-line 6)", parent="")
-    ln.bad(f"{missing} `Closes #6`", parent="Closes #60")
-    also = "parent line: `Also fixes #9` closes GitHub issue #9"
-    ln.bad(f"{also}, {gh_parent}", parent="Closes #6\nAlso fixes #9")
-    same = "parent line: `Closes #6, fixes #9` closes GitHub issue #9"
-    ln.bad(f"{same}, {gh_parent}", parent="Closes #6, fixes #9")
-    own = "parent line: `Closes #6 closes o/r#6` closes GitHub issue #6"
-    ln.bad(own, parent="Closes #6 closes o/r#6")
-    url = "https://github.com/o/r/issues/9"
-    ln.bad(
-        f"parent line: `Resolves {url}` closes GitHub issue #9", parent=f"Closes #6\nResolves {url}"
-    )
-    ln.bad("parent line: cannot name it for branch 'main'", branch("main"))
-    ln.write(".octo-feather.toml", 'tracker = "linear"\n')
-    eng = branch("eng-123")
-    ln.setpr(eng, parent="Tracks ENG-123")
-    assert first(ln.ask()) == "## Merge ask"
-    ln.bad(f"{missing} `Tracks ENG-123` (the tracker skill's pr-line ENG-123)", eng)
-    linear = "not the lane's parent line `Tracks ENG-123`"
-    closes = "parent line: `Closes #6` closes GitHub issue #6"
-    ln.bad(f"{closes}, {linear}", eng, parent="Tracks ENG-123\nCloses #6")
-    on_line = "parent line: `Tracks ENG-123; Closes #6` closes GitHub issue #6"
-    ln.bad(f"{on_line}, {linear}", eng, parent="Tracks ENG-123; Closes #6")
-    ln.bad(f"{missing} `Tracks ENG-123`", eng, parent="Tracks ENG-1234")
 
 
 def single_gaps(s: Scratch) -> None:
@@ -1509,7 +1471,6 @@ if __name__ == "__main__":
         merge_ask_passes,
         gate_time,
         failed_triage,
-        parent_line,
         single_gaps,
         no_ci,
         no_ci_unread,

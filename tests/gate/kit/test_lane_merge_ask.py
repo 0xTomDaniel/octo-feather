@@ -23,7 +23,6 @@ from lane_merge_ask import (
     no_criterion_lane,
     offline_gh,
     one_judged_head,
-    parent_line,
     review_link,
     rows_and_built,
     single_gaps,
@@ -68,10 +67,6 @@ def test_merge_ask_gate_time(case: Case) -> None:
 
 def test_merge_ask_failed_triage(case: Case) -> None:
     case(failed_triage)
-
-
-def test_merge_ask_parent_line(case: Case) -> None:
-    case(parent_line)
 
 
 def test_merge_ask_single_gaps(case: Case) -> None:
