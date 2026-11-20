@@ -569,7 +569,7 @@ def test_merge_ask_main_merges() -> None:
     changing a file beyond git's automatic merge, or merging another branch: qc reruns."""
     proof = (
         f"{J[:12]} to {R[:12]}: qc status commits {H[:12]} change only {STATUS}; clean merge of "
-        f"main {R[:12]}: lane diff identical (1 file, sha256 970d7aa3e679)"
+        f"main {R[:12]}: lane hunks identical (1 file, sha256 970d7aa3e679)"
     )
     clean = merged(Merge(onto=True))
     assert gaps_of(clean) == [
@@ -580,9 +580,9 @@ def test_merge_ask_main_merges() -> None:
     moved = merged(Merge(onto=True), diff=":100644 100644 a c M")
     assert gaps_of(moved) == [
         (
-            "Judged: after merging origin/main, the lane's own diff changed in app.py (main "
-            "touched a lane file, or the lane's diff moved): the qc verdict does not carry over; "
-            f"{rerun}"
+            "Judged: after merging origin/main, the lane's own hunks changed in app.py (main "
+            "changed the lane's own lines, or the lane's diff moved): the qc verdict does not "
+            f"carry over; {rerun}"
         )
     ]
     resolved = "Merge main, conflict resolved"
@@ -605,6 +605,25 @@ def test_merge_ask_main_merges() -> None:
         (
             f"Judged: merge {R[:12]} 'Merge side' brings in {M[:12]}, not origin/main: only a "
             f"merge of main keeps the qc verdict; {rerun}"
+        )
+    ]
+
+
+def test_merge_ask_main_changed_lane_hunks() -> None:
+    """issue-lifecycle#acceptance-one-head: a clean merge of main that changed the lane's own
+    changes refuses, naming the file. J's lane diff of app.py is two hunks (their form:
+    merge_ask._lane_diff); main made the second edit too, so at R the lane's hunk is gone."""
+    two = "100644 100644 M\n@@\n-1\n+one\n@@\n-20\n+lane"
+    rerun = f"run just qc and the review again, in parallel, on {R[:12]}"
+    shrunk = merged(Merge(onto=True), diff="100644 100644 M\n@@\n-1\n+one")
+    g = shrunk.git
+    assert g is not None
+    shrunk = replace(shrunk, git=replace(g, diffs={**g.diffs, J: {"app.py": two}}))
+    assert gaps_of(shrunk) == [
+        (
+            "Judged: after merging origin/main, the lane's own hunks changed in app.py (main "
+            "changed the lane's own lines, or the lane's diff moved): the qc verdict does not "
+            f"carry over; {rerun}"
         )
     ]
 
@@ -667,7 +686,7 @@ def test_merge_ask_no_criterion_lane() -> None:
     nm = sha("9")
     merged = pr8(nm, (nm, "Merge main"))
     p = (
-        f"{N[:12]} to {nm[:12]}: no qc status commit; clean merge of main {nm[:12]}: lane diff "
+        f"{N[:12]} to {nm[:12]}: no qc status commit; clean merge of main {nm[:12]}: lane hunks "
         "identical (0 files, sha256 e3b0c44298fc)"
     )
     assert gaps_of(merged) == [f"Judged: missing; add the check's proof line `Judged: {p}`"]

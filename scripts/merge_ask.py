@@ -236,7 +236,7 @@ class Git:
     commits; WALKS, each one's own `git rev-list --reverse C ^BASE` (git's order, oldest first,
     which every walk between two of them keeps; read only when the PR holds a merge, else the
     one chain's prefix); DIFFS, each one's lane diff (its own diff from its merge base with
-    BASE, {path: raw diff line}, status files aside), read only when the PR holds a merge.
+    BASE, {path: its hunks (_lane_diff)}, status files aside), read only when the PR holds a merge.
     STATUS: the --status files relative to the repo's top, Unread naming one outside it."""
 
     base: str
@@ -561,10 +561,50 @@ def _git_facts(head: str, base: str, files: list[str], err: type[Exception]) -> 
         for c in commits:
             mb = run("merge-base", c, base).strip()
             out = run("diff", "--raw", "--no-renames", "--no-abbrev", "-z", mb, c).split("\0")
-            diffs[c] = {
-                f: m for m, f in zip(out[0::2], out[1::2], strict=False) if f and f not in aside
-            }
+            raw = {f: m for m, f in zip(out[0::2], out[1::2], strict=False) if f and f not in aside}
+            diffs[c] = _lane_diff(raw, _patch(mb, c, err))
     return Git(base, here, topo, commits, walks, diffs, status)
+
+
+def _patch(old: str, new: str, err: type[Exception]) -> str:
+    """`git diff -U0` of OLD to NEW, its bytes decoded losslessly (a file need not be UTF-8), the
+    user's diff settings that change its form set aside."""
+    args = ["diff", "-U0", "--no-renames", "--no-color", "--no-ext-diff", "--no-textconv"]
+    args += ["--src-prefix=a/", "--dst-prefix=b/", old, new]
+    p = subprocess.run(  # bytes: git() decodes its text strictly
+        ["git", *args],  # noqa: S607 (git from PATH)
+        capture_output=True,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
+    if p.returncode:
+        git(*args, err=err)  # git's refusal, named as every read here names it
+    return p.stdout.decode(errors="surrogateescape")
+
+
+def _lane_diff(raw: dict[str, str], patch: str) -> dict[str, str]:
+    """Each file's hunks in the lane's diff (spec #lanes-one-head: hunk by hunk wherever main's
+    changes elsewhere in a file moved its lines), from RAW, {path: its `git diff --raw` line},
+    and PATCH, git diff -U0 of the same commits: its modes and status, then each hunk's removed
+    and added lines, git's `@@` line numbers aside. A binary file, or one whose path git quotes,
+    is its raw line, blob ids and all, as before."""
+    sections: dict[str, list[str] | None] = {}  # None: binary
+    for part in re.split(r"^diff --git ", patch, flags=re.MULTILINE)[1:]:
+        head, *body = part.split("\n")
+        at = next((i for i, ln in enumerate(body) if ln.startswith("@@")), len(body))
+        binary = any(ln.startswith(("Binary files ", "GIT binary patch")) for ln in body[:at])
+        hunks = ["@@" if ln.startswith("@@") else ln for ln in body[at:] if ln]
+        had = sections.get(head, [])  # a type change is two sections
+        sections[head] = None if binary or had is None else [*had, *hunks]
+    out: dict[str, str] = {}
+    for f, m in raw.items():
+        hunks = sections.get(f"a/{f} b/{f}")
+        if hunks is None:
+            out[f] = m
+            continue
+        src, dst, _, _, st = m.lstrip(":").split()
+        out[f] = "\n".join([f"{src} {dst} {st}", *hunks])
+    return out
 
 
 def _merge(c: str, ours: str, theirs: str, base: str, err: type[Exception]) -> Merge:
@@ -1394,17 +1434,19 @@ def head_proof(  # noqa: C901, PLR0912, PLR0913, PLR0915  one branch per commit 
         )
         if moved:
             why.append(
-                f"after merging {base}, the lane's own diff changed in {', '.join(moved)} (main "
-                f"touched a lane file, or the lane's diff moved): {kept} does not carry over; "
-                f"{rerun}"
+                f"after merging {base}, the lane's own hunks changed in {', '.join(moved)} (main "
+                f"changed the lane's own lines, or the lane's diff moved): {kept} does not carry "
+                f"over; {rerun}"
             )
         elif merges:
             d = hashlib.sha256(
-                "\n".join(f"{p} {before[p]}" for p in sorted(before)).encode()
+                "\n".join(f"{p} {before[p]}" for p in sorted(before)).encode(
+                    errors="surrogateescape"
+                )
             ).hexdigest()
             proof += (
                 f"; clean merge{'s' * (len(merges) > 1)} of main {' '.join(c[:12] for c in merges)}"
-                f": lane diff identical ({len(before)} file{'s' * (len(before) != 1)}, sha256 "
+                f": lane hunks identical ({len(before)} file{'s' * (len(before) != 1)}, sha256 "
                 f"{d[:12]})" + (" outside the resolved files" if reviewed else "")
             )
         if not moved:

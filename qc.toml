@@ -131,6 +131,10 @@ covers = ["scripts/octo-feather-lane", "scripts/merge_ask.py"]
 [demo."issue-lifecycle#acceptance-ci-status-only"]
 covers = ["scripts/octo-feather-lane", ".github/workflows/check.yml", "templates/python/.github/workflows/check.yml", "templates/typescript/.github/workflows/check.yml"]
 
+# Proven by tests/gate/kit/test_lane_merge_ask_hunks.py's tagged item (the rule: issue-lifecycle #lanes-one-head).
+[demo."issue-lifecycle#acceptance-one-head-hunks"]
+covers = ["scripts/octo-feather-lane", "scripts/merge_ask.py"]
+
 # Proven by tests/gate/kit/test_lane_review_resolution.py's tagged item (the rule: issue-lifecycle #lanes-one-head).
 [demo."issue-lifecycle#acceptance-review-resolution"]
 covers = ["scripts/octo-feather-lane", "agents/code-reviewer.md", "agents/supervisor.md"]

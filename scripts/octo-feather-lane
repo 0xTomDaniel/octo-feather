@@ -148,9 +148,10 @@ Every row names one judged head H (7+ hex), a commit of the PR: the head qc and 
 review both judged, in parallel (spec #lanes-one-head). H to H' may hold only (a) `qc: built
 ... (judged <sha>)` commits changing only the --status files and (b) merges of BASE that keep
 the verdict by the rule of spec #lanes-one-head, the lane's own diff against BASE read from
-BASE's merge base to the head, status files aside. Anything else fails naming the commit and
+BASE's merge base to the head, status files aside, hunk by hunk (what a file's hunks are:
+scripts/merge_ask.py, _lane_diff), so main's changes elsewhere in a lane file keep it. Anything else fails naming the commit and
 file: run just qc and the review again. `Judged:` is the proof: `<H12> is the PR head`, or
-`<H12> to <H'12>:` the qc commits and files, and per main merge `lane diff identical (N files, sha256 <12 hex>)`.
+`<H12> to <H'12>:` the qc commits and files, and per main merge `lane hunks identical (N files, sha256 <12 hex>)`.
 Ids are <spec slug>#<id> or a bare id one --status file names; pass --status once per spec.
 Every lane's PR head needs a current recorded full gate pass (the rule: spec #lanes-checkpoints): the record
 `octo-feather-gate passed` prints for it, or for a lane commit it stands for by the same H to H' check, whose
