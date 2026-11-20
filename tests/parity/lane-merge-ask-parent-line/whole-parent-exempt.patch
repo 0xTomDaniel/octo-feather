@@ -1,0 +1,14 @@
+Seeded defect: the parent line's whole line is exempt, a second closing link on it (Closes #6, fixes #9) passes (spec #gates-pr-line).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index 38e44c8f..bc9df0fa 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -112,7 +112,7 @@ def parent_line(s: Snapshot) -> list[str]:
+     )
+     for ln in lines:
+         for m in CLOSES.finditer(ln):
+-            if ln in got and m.end() <= len(want):
++            if ln in got:
+                 # the parent line's own closing link (GitHub: Closes #<parent>), never the rest
+                 # of its line
+                 continue
