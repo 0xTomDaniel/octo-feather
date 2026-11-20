@@ -6,3 +6,7 @@ Only change private database schema; no externally visible behavior.
 
 - [ ] issue-lifecycle#acceptance-tracer-tickets: add internal table only.
 - [ ] demo: `printf "schema ready\n"` prints schema ready.
+
+## Skills
+
+Skills: none
