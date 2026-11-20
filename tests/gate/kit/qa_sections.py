@@ -1832,41 +1832,16 @@ def fake_qa(q: Qa) -> None:
 
 
 def review(s: Scratch) -> None:
-    """tests/qa-review.sh."""
+    """tests/qa-review.sh: the command's wiring of --review and a review case's shape (the run
+    side, awaiting review, the verdict and note: test_qa_stored.py, test_qa_review)."""
     q, t = Qa(s), s.root
     rv = t / "rv"
     data.essay(q, "The notes say hi.")
-    # Run: awaiting review, never a pass (exit 1), its output shown and kept.
-    q.run(1, Q, "--evals", str(rv))
-    q.check(data.review()["run"])
-    d1 = q.last()
-    id1 = d1.name
-    want = data.review(id1)
-    c = d1 / "rv" / "essay"
-    k, r = load(c / "review.json"), load(c / "result.json")
-    assert k == data.REVIEW_KEPT, k
-    assert at(r, "verdict") == "REVIEW", r
-    assert at(r, "review") == {"question": "Do the notes answer the brief?"}, r
-    # Shown awaiting review until a verdict is recorded; then the verdict and note.
-    q.run(0, Q, "--review", str(d1), "rv/essay")
-    q.check(want["show"])
-    q.run(0, Q, "--review", str(d1), "rv/essay", "pass", "Clear and short.")
-    q.check(want["record"])
-    q.run(0, Q, "--review", str(d1), "rv/essay")
-    q.check(want["shown"])
-    if len((t / "out" / "reviews" / "rv" / "essay.jsonl").read_text().splitlines()) != 1:
-        fail("the verdict is not one line in the reviews file")
-    # The next run: the latest verdict and note beside its new output.
-    data.essay(q, "The notes say hello.")
-    q.run(1, Q, "--evals", str(rv), "--runs", "2")
-    q.check(want["next"])
-    # Usage: a bad verdict, a blank note, a case that is no review case: 64.
-    q.run(64, Q, "--review", str(d1), "rv/essay", "maybe", "x")
-    q.run(64, Q, "--review", str(d1), "rv/essay", "fail", " ")
-    q.run(0, Q, "--evals", str(t / "evals"), "--case", "reads")
-    out = q.run(64, Q, "--review", str(q.last()), "trig/reads", "pass", "x")
-    if not grep("not a review case", out):
-        fail(f"a graded case took a verdict: {out}")
+    # Usage: no stored run case there, or too few arguments: 64.
+    out = q.run(64, Q, "--review", str(t / "nowhere"), "rv/essay")
+    if not grep("no stored run case", out):
+        fail(f"--review of no stored run: {out}")
+    q.run(64, Q, "--review", str(t / "nowhere"))
     # Shape: a review case needs its question, and has no facts.
     ev = q.fresh(rv)
     edit(ev / "rv" / "cases.json", 'c[0]["review"] = {}', "c")
@@ -1880,7 +1855,7 @@ def review(s: Scratch) -> None:
         "rv",
     )
     say(
-        "qa-review: ok (awaiting review with its output, verdict and note recorded and shown, the next run shows them beside its new output, shape refusals)"
+        "qa-review: ok (--review usage 64, shape refusals; the review case's run side: test_qa_stored.py)"
     )
 
 

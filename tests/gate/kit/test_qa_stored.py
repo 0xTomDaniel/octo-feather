@@ -16,6 +16,7 @@ import pytest
 from testkit import Scratch
 from testkit import qa_box as data
 from testkit.jsonwalk import at, keys, seq
+from eval_grading import UsageError, review
 from testkit.qa_box import Qa, Want, load, printed
 
 if TYPE_CHECKING:
@@ -138,3 +139,40 @@ def test_qa_baseline(q: Qa) -> None:
     assert at(sm, "baseline", "kit_sha") == c1, sm
     assert at(sm, "kit_sha") == c2, sm
     assert (at(sm, "passed"), at(sm, "total")) == (1, 1), sm
+
+
+@pytest.mark.criterion("quality#acceptance-qa-review")
+def test_qa_review(q: Qa) -> None:
+    """A review case (octo-feather-qa --help, Review): awaiting review, never a pass, its output
+    shown and kept; shown awaiting review until a verdict is recorded, then the verdict and note;
+    the next run shows the latest verdict and note beside its new output; a bad verdict, a blank
+    note, a case that is no review case refused."""
+    rv = q.t / "rv" / "rv"
+    data.essay(q, "The notes say hi.")
+    ev = q.evaluation(rv)
+    printed("\n".join(ev.lines), data.review()["run"])
+    d1 = ev.run_dir
+    id1 = d1.name
+    want = data.review(id1)
+    c = d1 / "rv" / "essay"
+    k, r = load(c / "review.json"), load(c / "result.json")
+    assert k == data.REVIEW_KEPT, k
+    assert at(r, "verdict") == "REVIEW", r
+    assert at(r, "review") == {"question": "Do the notes answer the brief?"}, r
+    # Shown awaiting review until a verdict is recorded; then the verdict and note.
+    printed("\n".join(review(d1, "rv/essay")), want["show"])
+    printed("\n".join(review(d1, "rv/essay", "pass", "Clear and short.")), want["record"])
+    printed("\n".join(review(d1, "rv/essay")), want["shown"])
+    reviews = q.t / "out" / "reviews" / "rv" / "essay.jsonl"
+    assert len(reviews.read_text().splitlines()) == 1, "the verdict is not one line"
+    # The next run: the latest verdict and note beside its new output.
+    data.essay(q, "The notes say hello.")
+    printed("\n".join(q.evaluation(rv, runs=2).lines), want["next"])
+    # Refused: a bad verdict, a blank note, a case that is no review case.
+    with pytest.raises(UsageError, match="the verdict is pass or fail"):
+        review(d1, "rv/essay", "maybe", "x")
+    with pytest.raises(UsageError, match="the note is not blank"):
+        review(d1, "rv/essay", "fail", " ")
+    graded = q.evaluation(q.t / "evals" / "trig", ["reads"]).run_dir
+    with pytest.raises(UsageError, match="not a review case"):
+        review(graded, "trig/reads", "pass", "x")
