@@ -28,8 +28,13 @@
       ]
     },
     "acceptance-test-cpu-budget": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1184,
+      "record": "20261120T085029Z-edf157c1",
+      "commit": "19f970a6e8ed5d4dddbf71976f5bc44ff17dd496",
+      "tests": [
+        "tests/gate/kit/test_cpu_budget.py"
+      ]
     },
     "acceptance-qc-listed": {
       "status": "planned",
