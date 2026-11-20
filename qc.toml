@@ -292,27 +292,30 @@ covers = ["agents/supervisor.md", "evals/supervisor-delegation", "evals/supervis
 covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11-13-gh840-supervisor-autonomy.md"]
 
 # Judged from pinned stored eval runs (rule: scripts/octo-feather-qa --help, Verdict); owner-access-blocker-message is a
-# review case, its maintainer verdict recorded on the run. Which case proves which Then clause, and the generated run
-# evidence: evidence/2026-11-18-gh978-eval-verdict.md; herdr-say's delivery is proven by the tagged tests in
+# review case, its maintainer verdict recorded on the run. Which case proves which Then clause:
+# evidence/2026-11-18-gh978-eval-verdict.md; the pinned run's generated evidence:
+# evidence/2026-11-20-gh1132-supervisor-repin.md; herdr-say's delivery is proven by the tagged tests in
 # tests/gate/kit/test_herdr_messaging.py.
 [demo."comms#acceptance-real-blocker"]
-command = "scripts/octo-feather-qa --verdict 20261120T001636Z-8a2c20/supervisor-autonomy/owner-access-blocker-and-ready-work 20261120T001636Z-8a2c20/supervisor-autonomy/owner-access-blocker-message"
+command = "scripts/octo-feather-qa --verdict 20261120T035126Z-eda400/supervisor-autonomy/owner-access-blocker-and-ready-work 20261120T035126Z-eda400/supervisor-autonomy/owner-access-blocker-message"
 covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evals/fixtures/lane-shout-wip", "evals/fixtures/lane-shout-main", "scripts/octo-feather-qa", "evidence/2026-11-13-gh840-supervisor-autonomy.md", "evidence/2026-11-18-gh978-eval-verdict.md", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/herdr_messaging.py"]
 
 # Two halves. The supervisor half, judged from pinned stored eval runs (rule: scripts/octo-feather-qa --help, Verdict):
 # sent back and nothing integrated on a missed named skill, integrated on none; the cases' stand-in for `skills` and the
-# run evidence: evidence/2026-11-20-gh644-1161-supervisor-ticket-skills.md. The command half, offline (#1169, #1170):
+# first run's evidence: evidence/2026-11-20-gh644-1161-supervisor-ticket-skills.md; the pinned run's generated evidence:
+# evidence/2026-11-20-gh1132-supervisor-repin.md. The command half, offline (#1169, #1170):
 # scripts/octo-feather-lane skills 1094 in a scratch lane whose worker implementer-gh1094 the real herdr-spawn spawned
 # (testkit Herdr), so its spawn line is herdr-spawn's own: exit 1 and the send-back with eval-cases not loaded, exit 0
 # once loaded (tests/gate/kit/lane_skills.py demo, also a gate item).
 [demo."issue-lifecycle#acceptance-ticket-skills"]
-command = "scripts/octo-feather-qa --verdict 20261120T024345Z-2fd725/supervisor-ticket-skills/missed-skill-sent-back 20261120T024345Z-2fd725/supervisor-ticket-skills/loaded-skill-integrated && python3 tests/gate/kit/lane_skills.py demo"
+command = "scripts/octo-feather-qa --verdict 20261120T035126Z-eda400/supervisor-ticket-skills/missed-skill-sent-back 20261120T035126Z-eda400/supervisor-ticket-skills/loaded-skill-integrated && python3 tests/gate/kit/lane_skills.py demo"
 covers = ["agents/supervisor.md", "scripts/octo-feather-lane", "scripts/octo-feather-handoff", ".agents/skills/herdr-comms/assets/herdr-spawn", ".agents/skills/github-issues/scripts/lane-key", "tests/gate/kit/lane_skills.py", "tests/gate/kit/testkit/herdr.py", "evals/supervisor-ticket-skills", "evals/fixtures/lane-skills-main", "evals/fixtures/lane-skills-1099", "evals/fixtures/lane-skills-1094", "tests/gate/kit/testkit/recordings/lane-skills.json", "tests/fixtures/lane-skills", "scripts/octo-feather-qa", "evidence/2026-11-20-gh644-1161-supervisor-ticket-skills.md"]
 
 # Judged from pinned stored eval runs (rule: scripts/octo-feather-qa --help, Verdict). Which case proves which Then
-# clause, and the generated run evidence: evidence/2026-11-18-gh978-eval-verdict.md.
+# clause: evidence/2026-11-18-gh978-eval-verdict.md; the pinned run's generated evidence:
+# evidence/2026-11-20-gh1132-supervisor-repin.md.
 [demo."roles#acceptance-general-worker-no-implementation"]
-command = "scripts/octo-feather-qa --verdict 20261120T001636Z-8a2c20/supervisor-general-worker/diagnosis-diff-goes-to-implementer 20261120T001636Z-8a2c20/supervisor-general-worker/implementer-result-integrated-not-candidate 20261120T001636Z-8a2c20/supervisor-general-worker/reviewed-implementer-result-integrated"
+command = "scripts/octo-feather-qa --verdict 20261120T035126Z-eda400/supervisor-general-worker/diagnosis-diff-goes-to-implementer 20261120T035126Z-eda400/supervisor-general-worker/implementer-result-integrated-not-candidate 20261120T035126Z-eda400/supervisor-general-worker/reviewed-implementer-result-integrated"
 covers = ["agents/supervisor.md", "evals/supervisor-general-worker", "evals/fixtures/lane-shout-general-diff", "evals/fixtures/lane-shout-qc-fixed", "evals/fixtures/lane-shout-qc-red", "scripts/octo-feather-qa", "evidence/2026-11-17-gh840-supervisor-general-worker.md", "evidence/2026-11-18-gh978-eval-verdict.md"]
 
 # Two halves (evidence/2026-11-13-gh840-supervisor-fresh-worker.md, How this meets the criterion): the supervisor starts
