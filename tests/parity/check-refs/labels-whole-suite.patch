@@ -1,0 +1,14 @@
+Seeded defect: the judgment label data exemption covers the whole suite, not only its label files (check_refs, owner ruling 2026-10-25).
+diff --git a/scripts/check_rules.py b/scripts/check_rules.py
+index c7e25c88..22004717 100755
+--- a/scripts/check_rules.py
++++ b/scripts/check_rules.py
+@@ -106,7 +106,7 @@ PROJECTION = re.compile(
+     r"(^|/)(CLAUDE(\.local)?\.md|AGENTS\.override\.md|\.claude|\.codex)(/|$)", re.IGNORECASE
+ )
+ UNSCANNED = r"(docs/|\.skillfile/|AGENTS\.md$|README\.md$|NOTICE$|LICENSE$|justfile$)"
+-LABELS = r"evals/judgment-[^/]+/(cases\.json|reference/expectations\.json|REPORT\.md)$"
++LABELS = r"evals/judgment-[^/]+/"
+ RETIRED = re.compile(r"\b(meta-)?[o]perators?\b|\b[h]umans?\b", re.IGNORECASE)
+ LANE = re.compile(r"octo-feather/g[h]<|g[h]<[^>]*>-<")
+ SKILL_TOOL = re.compile(r"Skill tool|Skill call")

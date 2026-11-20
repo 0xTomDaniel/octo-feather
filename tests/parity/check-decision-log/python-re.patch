@@ -1,0 +1,14 @@
+Seeded defect: patterns run in Python re, not node RegExp, so \S passes U+FEFF (check_decision_logs, #142).
+diff --git a/scripts/decision_log.py b/scripts/decision_log.py
+index f16b8918..12184911 100755
+--- a/scripts/decision_log.py
++++ b/scripts/decision_log.py
+@@ -198,7 +198,7 @@ def line_problems(  # noqa: C901  the line's problems in the order the command p
+         length_validator = cast("Validator", jsonschema.Draft202012Validator(length))
+         if isinstance(value, str) and not list(length_validator.iter_errors(value)):
+             name = next(k for k, p in props.items() if p is field_schema)
+-            if not match(name, value):
++            if not __import__("re").search(regex, value):
+                 yield jsonschema.ValidationError(f"{name} does not match {regex}")
+ 
+     draft = jsonschema.Draft202012Validator

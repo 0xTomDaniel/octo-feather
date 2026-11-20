@@ -1,0 +1,14 @@
+Seeded defect: only the em dash is searched, so an en dash in kit text passes (check_dashes, #121 D7).
+diff --git a/scripts/check_rules.py b/scripts/check_rules.py
+index ca230556..9f740e8a 100755
+--- a/scripts/check_rules.py
++++ b/scripts/check_rules.py
+@@ -40,7 +40,7 @@ class Report:
+ 
+ 
+ # En and em dash, as bytes, so this file passes the scan it holds.
+-DASHES = (b"\xe2\x80\x93", b"\xe2\x80\x94")
++DASHES = (b"\xe2\x80\x94",)
+ 
+ 
+ def check_dashes(root: Path, tracked: Sequence[str]) -> Report:
