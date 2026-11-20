@@ -8,6 +8,7 @@ from lane_archive_teardown import (
     archive_tears_down,
     archive_waits,
     no_manager,
+    red_main,
     unit_fails,
     unit_killed,
 )
@@ -28,6 +29,11 @@ def test_lane_archive_teardown_no_manager(case: Case) -> None:
 
 def test_lane_archive_waits(case: Case) -> None:
     case(archive_waits)
+
+
+@pytest.mark.criterion("issue-lifecycle#acceptance-red-main-stops", source=SOURCE)
+def test_lane_archive_red_main(case: Case) -> None:
+    case(red_main)
 
 
 def test_lane_archive_teardown_unit_fails(case: Case) -> None:

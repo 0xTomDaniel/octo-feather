@@ -529,8 +529,14 @@ before its end) and `director told: <each>`; exit 0, 1 with no or an unreadable 
                    run of its workflow (`gh run list --branch <base> --event push --workflow <name>`, a higher run
                    id) whose headSha contains the merge commit (`gh api repos/<repo>/compare/<merge>...<headSha>`
                    ahead or identical): watched to its end, ok on success naming both runs, red stops; cancelled in
-                   turn, its own successor counts; none within --wait stops as red. The no-CI fact: while gh lists
-                   no run, `gh api repos/<repo>/git/trees/<merge commit>` (then .github, then workflows) finds no
+                   turn, its own successor counts; none within --wait stops as red. A red run (any other
+                   conclusion) stops at once, `main CI red on <m>: <wf> <conclusion> <url>`, each rerun with that
+                   same line (the director told once), until a later push run of its workflow on the base (that
+                   list, read once, never waited for) containing the merge commit concluded success: the first
+                   such makes it ok, `main CI red on <m>: <wf> <url>, green since in <url> on <sha12> (contains
+                   <m>)`, then the other runs' line; the archive reruns it (#gates-main-moved). The no-CI
+                   fact: while gh lists no run, `gh api repos/<repo>/git/trees/<merge commit>` (then .github,
+                   then workflows) finds no
                    .github/workflows/*.yml or *.yaml file; then step 2 is ok at once, `no CI: no workflow file
                    ...`, with no wait. merge-ask reads the same fact at the PR head
   step 3 kit refresh  the live kit install (this script's kit dir, or env OCTO_FEATHER_KIT_INSTALL): only when
@@ -4141,12 +4147,23 @@ def pm_ci(pm: PostMerge) -> str:
         if not failed and any(x["status"] != "completed" for x in runs):
             time.sleep(PM_POLL)
     red = [x for x in runs if x["conclusion"] not in ("success", "cancelled")]
-    if red:
-        raise Refuse(f"main CI red on {m}: " + ", ".join(f"{x['workflowName']} {x['conclusion'] or 'no conclusion'} {x['url']}" for x in red)
-                     + f"; fix {pm.base} first, nothing after this step runs")
+    # a red run is green since in the first later push run of its workflow containing the merge that succeeded
+    # (--help, step 2): none for any red run stops with the same line each time, the director told once
+    seen, greens = dict[str, bool](), list[str]()
+    for x in red:
+        new = next((r for r in sorted(pm_later(pm, x), key=lambda r: int(r["databaseId"]))
+                    if r["conclusion"] == "success" and pm_contains(pm, r["headSha"], seen)), None)
+        if new is None:
+            raise Refuse(f"main CI red on {m}: " + ", ".join(f"{x['workflowName']} {x['conclusion'] or 'no conclusion'} {x['url']}" for x in red)
+                         + f"; fix {pm.base} first, nothing after this step runs")
+        greens.append(f"{x['workflowName']} {x['url']}, green since in {new['url']} on {new['headSha'][:12]} (contains {m})")
     # a run cancelled by a newer push (concurrency cancel-in-progress) defers to that push's run (--help, step 2)
-    shown = [f"{x['workflowName']} {x['url']}" if x["conclusion"] != "cancelled" else pm_superseded(pm, x) for x in runs]
-    return (f"{len(runs)} push run{'s' * (len(runs) != 1)} on {m} concluded success: " + ", ".join(shown))
+    shown = [f"{x['workflowName']} {x['url']}" if x["conclusion"] != "cancelled" else pm_superseded(pm, x) for x in runs
+             if x not in red]
+    ok = f"{len(shown)} push run{'s' * (len(shown) != 1)} on {m} concluded success: " + ", ".join(shown)
+    if not greens:
+        return ok
+    return f"main CI red on {m}: " + "; ".join(greens) + (f"; {ok}" if shown else "")
 
 
 PM_BASE_FIELDS = PM_FIELDS + ",headSha"
@@ -4161,18 +4178,23 @@ def pm_contains(pm: PostMerge, sha: str, seen: dict[str, bool]) -> bool:
     return seen[sha]
 
 
+def pm_later(pm: PostMerge, run: dict[str, str]) -> list[dict[str, str]]:
+    """The push runs of RUN's workflow on the base after it (a higher run id), on another head (rule: --help, step 2)."""
+    out = gh(["run", "list", "--branch", pm.base, "--event", "push", "--workflow", run["workflowName"], "--limit", "20",
+              "--json", PM_BASE_FIELDS, *pm.r()], f"check gh auth status and the repo of PR #{pm.pr}, then rerun")
+    try:
+        later = [{f: "" if r[f] is None else str(r[f]) for f in PM_BASE_FIELDS.split(",")} for r in json.loads(out)]
+    except (ValueError, KeyError, TypeError):
+        raise Refuse(f"gh run list printed no run list ({out[:100]!r}): check the gh on PATH (gh --version)")
+    return [r for r in later if r["workflowName"] == run["workflowName"] and int(r["databaseId"]) > int(run["databaseId"])
+            and r["headSha"] != pm.merge]
+
+
 def pm_superseded(pm: PostMerge, gone: dict[str, str]) -> str:
     """A cancelled push run on the merge commit: the run that superseded it, waited for (rule: --help, post-merge step 2)."""
     m, deadline, seen, first, failed = pm.merge[:12], time.monotonic() + pm.wait, dict[str, bool](), gone, ""
     while True:
-        out = gh(["run", "list", "--branch", pm.base, "--event", "push", "--workflow", gone["workflowName"], "--limit", "20",
-                  "--json", PM_BASE_FIELDS, *pm.r()], f"check gh auth status and the repo of PR #{pm.pr}, then rerun")
-        try:
-            later = [{f: "" if r[f] is None else str(r[f]) for f in PM_BASE_FIELDS.split(",")} for r in json.loads(out)]
-        except (ValueError, KeyError, TypeError):
-            raise Refuse(f"gh run list printed no run list ({out[:100]!r}): check the gh on PATH (gh --version)")
-        later = [r for r in later if r["workflowName"] == gone["workflowName"] and int(r["databaseId"]) > int(gone["databaseId"])
-                 and r["headSha"] != pm.merge and pm_contains(pm, r["headSha"], seen)]
+        later = [r for r in pm_later(pm, gone) if pm_contains(pm, r["headSha"], seen)]
         if not later:
             if time.monotonic() >= deadline:
                 raise Refuse(f"main CI red on {m}: {gone['workflowName']} cancelled {gone['url']}, and no later push run of "
