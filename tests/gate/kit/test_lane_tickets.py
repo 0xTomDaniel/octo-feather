@@ -4,6 +4,7 @@ docstring), each run as that file's command through `case` (tests/gate/kit/conft
 from collections.abc import Callable
 
 from lane_tickets import (
+    comment_overrides,
     creates,
     drafts,
     errors,
@@ -14,7 +15,9 @@ from lane_tickets import (
     rules,
     scopes,
     scripts,
+    skills_lines,
     tickets_github,
+    transition,
 )
 
 Case = Callable[..., None]
@@ -62,3 +65,15 @@ def test_linear(case: Case) -> None:
 
 def test_mcp_demos(case: Case) -> None:
     case(mcp_demos)
+
+
+def test_skills_lines(case: Case) -> None:
+    case(skills_lines)
+
+
+def test_transition(case: Case) -> None:
+    case(transition)
+
+
+def test_comment_overrides(case: Case) -> None:
+    case(comment_overrides)
