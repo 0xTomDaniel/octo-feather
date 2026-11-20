@@ -7,7 +7,8 @@
 # Closing a tab or space kills its panes, but a detached command child (setsid)
 # survives, reparented: plain close then ends each closed pane's own agent
 # scope, never reading another process (herdr_scope.py close; the rule:
-# herdr-comms SKILL.md, Close an agent or a lane space).
+# herdr-comms SKILL.md, Close an agent or a lane space). A close records itself
+# in the caller's hand-off log (herdr_scope.py close; same rule).
 # A tab id is <space>:<tab>; an id without a colon is a space. A pane id
 # (<space>:p<n>) is mapped to its tab (herdr agent get)
 # and that tab is closed; one it cannot map fails with nothing closed. Run it
