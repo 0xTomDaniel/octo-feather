@@ -277,7 +277,10 @@ a worker's result, in its own pane (HERDR_PANE_ID) and the lane worktree. It rea
 (`issue-view KEY --notes`) and takes the latest `Skills:` line of the body and its comments (by each note's last
 change; form: ticket, above). The worker's session: the latest spawn or worker-spawn line whose ticket is TICKET in
 the caller's hand-off log (found as octo-feather-handoff spawn --caller finds it: the lane record whose `supervisor`
-is the pane, else the director log), its `session` the Pi session file sessions/*/*_<session>.jsonl (PI_CODING_AGENT_DIR, else
+is the pane, else the director log), matched by lane key: the target's tracker skill's `lane-key` gives the line's
+ticket and TICKET (issue-view's key) one lane key, never a prefix stripped (herdr-spawn's ticket is the worker
+name's, so `implementer-gh40` is 40's, `implementer-eng-123` ENG-123's; a ticket lane-key refuses is no ticket's);
+its `session` the Pi session file sessions/*/*_<session>.jsonl (PI_CODING_AGENT_DIR, else
 ~/.pi/agent), read by the factory report's skill-reach reader (report, skill reach: a load is a read or bash call
 that opened <skill>/SKILL.md and did not fail, never a mention), the whole session. Prints
 `<ticket>: worker <name> (<pane>), Pi session <file>`, then per named skill `<ticket>: skill <skill>: loaded`, `not
@@ -3593,8 +3596,16 @@ def skills_check(key: str) -> int:
         lines = read_log(log)[0] if log.is_file() else []
     except OSError as e:
         raise Unchecked(f"cannot read {log} ({e}): fix its permissions, then rerun") from e
-    keys = {key.lower().lstrip("#"), name.lower()}
-    spawns = [r for r in lines if r.get("kind") in ho.SPAWN_KINDS and str(r.get("ticket", "")).lower() in keys]
+    # One rule for any tracker (#1169): a spawn line is TICKET's when the tracker skill's lane-key gives its ticket
+    # and TICKET one lane key (herdr-spawn's `ticket` is the worker name's, `implementer-gh40` gives gh40).
+    lane = tracker("lane-key", name, err=Unchecked).strip()
+    lanes: dict[str, str] = {}
+    for t in {str(r.get("ticket", "")) for r in lines if r.get("kind") in ho.SPAWN_KINDS}:
+        try:
+            lanes[t] = tracker("lane-key", t, err=Unchecked).strip()
+        except Unchecked:
+            lanes[t] = ""   # no issue key of this tracker: no ticket's spawn line
+    spawns = [r for r in lines if r.get("kind") in ho.SPAWN_KINDS and lanes[str(r.get("ticket", ""))] == lane]
     if not spawns or not isinstance(sid := spawns[-1].get("session"), str) or not re.fullmatch(r"[0-9A-Za-z-]+", sid):
         raise Unchecked(f"no spawn line for ticket {name} with a session in {log}: spawn the worker with herdr-spawn "
                         "(it records the line), or name the ticket its worker was spawned for")
