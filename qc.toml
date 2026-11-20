@@ -350,3 +350,38 @@ covers = ["scripts/octo-feather-handoff", ".agents/skills/herdr-comms/assets/her
 [demo."issue-lifecycle#acceptance-lane-start"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
 covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/tracker_calls.py", "scripts/octo-feather-start", ".agents/skills/herdr-comms/assets/herdr-spawn", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
+
+# Proven by test_lane_start.py's tagged item; the demo is the same lane-start drive's `files` case: `octo-feather-lane
+# start --new "Scratch lane" --body-file body.md --goal ... --outcome ... --brief-file brief.md` in the scratch clone prints
+# filed=907 then key=gh907 ...; the gh stand-in's log shows one issue create, no --parent; issue-view 907 no parent.
+[demo."issue-lifecycle#acceptance-lane-start-files"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
+covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/tracker_calls.py", ".agents/skills/github-issues/scripts/issue-create", ".agents/skills/github-issues/scripts/issue-view", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
+
+# Proven by test_lane_start.py's tagged item; the demo is the lane-start drive's `sub-issue` case: ticket 908, a
+# sub-issue of 905, refused naming 905; no worktree, branch, workspace or record for gh908.
+[demo."issue-lifecycle#acceptance-lane-start-sub-issue"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
+covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", ".agents/skills/github-issues/scripts/issue-view", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
+# Proven by tests/gate/kit/test_lane_start.py's exists item; the demo is the lane-start drive's exists case
+# (features/lane-start.md): the same start again on the started lane gh905 exits 1 naming its record, worktree,
+# branch and workspace, each read back as it was, no workspace, tab or agent started.
+[demo."issue-lifecycle#acceptance-lane-start-exists"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
+covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/tracker_calls.py", "scripts/octo-feather-start", ".agents/skills/herdr-comms/assets/herdr-spawn", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
+
+# Proven by tests/gate/kit/test_lane_start.py's rerun item; the demo is the lane-start drive's rerun cases: the testkit
+# Herdr failing the goal's delivery once, `octo-feather-lane start 906 ...` stops naming step goal, the same start
+# again finishes (one worktree, supervisor and record, goal then brief once each, one spawn and one prod line), a
+# third is refused naming the record.
+[demo."issue-lifecycle#acceptance-lane-start-rerun"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
+covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/tracker_calls.py", "scripts/octo-feather-start", ".agents/skills/herdr-comms/assets/herdr-spawn", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
+
+# Proven by tests/gate/kit/test_lane_start.py's tagged item (behind_kit); the demo is the lane-start drive's current-kit
+# case: OCTO_FEATHER_KIT_INSTALL a scratch kit clone one commit behind its origin's main, `octo-feather-lane start 905
+# --goal ... --outcome ... --brief-file brief.md` with the testkit's stand-ins exits 1 naming the install and that it is
+# behind main, nothing made; then the install fast-forwarded as named and the start runs.
+[demo."issue-lifecycle#acceptance-lane-start-current-kit"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
+covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
