@@ -30,6 +30,8 @@ Demo, `scripts/octo-feather-qa --suite skill-triggers --case sup-design-port-tes
 
 Finding for pinned reruns: in the train port cases the load comes late (calls 9 to 13, the suite's max_tool_calls is 12); the supervisor reads the fixture and implement-spec first. A rerun stopping at the cap before the load reads as a FAIL. Supervisor ruling 2026-11-19: cases and suite budget unchanged; the pinned three-run rerun at merge time decides, and the budget changes only if late loads fail there.
 
+This change staled the five pinned supervisor cases of comms#acceptance-real-blocker and roles#acceptance-general-worker-no-implementation (the supervisor's launch set changed). Rerun at lane head 6c440d36: run 20261120T001636Z-8a2c20, --runs 3 --baseline origin/main (777e2f07), every fact case PASS 3/3 on both kits, the review case awaiting a fresh code-reviewer; pinned in qc.toml, generated evidence in evidence/2026-11-18-gh978-eval-verdict.md.
+
 The blocks below are `octo-feather-qa --analyze RUN_DIR --evidence` output, `### To fill` stubs dropped (filled above).
 
 ## Eval evidence: run 20261119T195921Z-3dd0f7

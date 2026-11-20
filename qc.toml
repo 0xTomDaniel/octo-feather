@@ -194,20 +194,20 @@ covers = ["scripts/octo-feather-qa", "scripts/check-evals"]
 # Reflectors stubbed, tracker faked: no model call, no tracker write.
 [demo."comms#acceptance-reflect-files-correction"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
-covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane", "tests/fixtures/tracker-gh/gh"]
+covers = ["scripts/octo-feather-reflect", "scripts/correction_lanes.py", "scripts/tracker_calls.py", "scripts/octo-feather-lane", "tests/fixtures/tracker-gh/gh"]
 
 # The route owner's tracker: the drive files a kit-routed class in the kit's and a `target:`-routed one in the target's.
 [demo."comms#acceptance-reflect-files-route-owner"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
-covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane", "tests/fixtures/tracker-gh/gh"]
+covers = ["scripts/octo-feather-reflect", "scripts/correction_lanes.py", "scripts/tracker_calls.py", "scripts/octo-feather-lane", "tests/fixtures/tracker-gh/gh"]
 
 [demo."issue-lifecycle#acceptance-writer-route-lane"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
-covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane"]
+covers = ["scripts/octo-feather-reflect", "scripts/correction_lanes.py", "scripts/tracker_calls.py", "scripts/octo-feather-lane"]
 
 [demo."comms#acceptance-correction-intake"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
-covers = ["scripts/octo-feather-lane", "scripts/octo-feather-reflect"]
+covers = ["scripts/octo-feather-lane", "scripts/octo-feather-reflect", "scripts/correction_lanes.py", "scripts/tracker_calls.py"]
 
 # Proven by its tagged test, tests/gate/kit/test_handoff_ended.py (Herdr stand-in; the scenario prints the lane hand-off log).
 [demo."comms#acceptance-worker-ended"]
@@ -215,11 +215,11 @@ covers = ["scripts/octo-feather-handoff", "scripts/handoff_log.py", "agents/supe
 
 # Proven by its tagged test, tests/gate/kit/test_lane_correction.py (gh stand-in's store; the scenario prints each archive's output).
 [demo."comms#acceptance-reflect-recurrence-comments"]
-covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane", "tests/gate/kit/lane_correction.py"]
+covers = ["scripts/octo-feather-reflect", "scripts/correction_lanes.py", "scripts/tracker_calls.py", "scripts/octo-feather-lane", "tests/gate/kit/lane_correction.py"]
 
 # Proven by its tagged test, tests/gate/kit/test_lane_correction.py (gh stand-in's store; the scenario prints each reflect --director's output).
 [demo."issue-lifecycle#acceptance-reflection-missed-lane"]
-covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane", "tests/gate/kit/lane_correction.py"]
+covers = ["scripts/octo-feather-reflect", "scripts/correction_lanes.py", "scripts/tracker_calls.py", "scripts/octo-feather-lane", "tests/gate/kit/lane_correction.py"]
 
 [demo."comms#acceptance-report-owner-caught-headline"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run factory-report"
@@ -261,6 +261,20 @@ covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-qc", "scripts/
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 queued-completion"
 covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-queued", "tests/gate/kit/testkit/herdr.py", "agents/implementer.md", "agents/code-reviewer.md", "evals/worker-uncertain-send", "evidence/2026-11-13-gh840-worker-uncertain-send.md"]
 
+# The three drives below run the kit's commands over the testkit Herdr (features/parent-resumed.md, result-file.md,
+# result-missing.md); scenario twins in tests/gate/kit/herdr_messaging.py.
+[demo."comms#acceptance-parent-resumed"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 parent-resumed"
+covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-handoff", "scripts/octo-feather-start", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/parent-resumed.md"]
+
+[demo."comms#acceptance-result-file"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 result-file"
+covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-handoff", "scripts/octo-feather-queued", "agents/supervisor.md", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/result-file.md"]
+
+[demo."comms#acceptance-result-missing"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 result-missing"
+covers = ["scripts/octo-feather-handoff", "agents/supervisor.md", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/result-missing.md"]
+
 # No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-delegation --runs 3 --baseline
 # origin/main), which needs the eval slot and a real model route: not a qc demo. The agent fallback judge reads its run
 # in evidence/2026-11-13-gh840-supervisor-delegation.md (pass rates on both kits).
@@ -282,13 +296,13 @@ covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11
 # evidence: evidence/2026-11-18-gh978-eval-verdict.md; herdr-say's delivery is proven by the tagged tests in
 # tests/gate/kit/test_herdr_messaging.py.
 [demo."comms#acceptance-real-blocker"]
-command = "scripts/octo-feather-qa --verdict 20261119T021750Z-a6f960/supervisor-autonomy/owner-access-blocker-and-ready-work 20261119T021750Z-a6f960/supervisor-autonomy/owner-access-blocker-message"
+command = "scripts/octo-feather-qa --verdict 20261120T001636Z-8a2c20/supervisor-autonomy/owner-access-blocker-and-ready-work 20261120T001636Z-8a2c20/supervisor-autonomy/owner-access-blocker-message"
 covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evals/fixtures/lane-shout-wip", "evals/fixtures/lane-shout-main", "scripts/octo-feather-qa", "evidence/2026-11-13-gh840-supervisor-autonomy.md", "evidence/2026-11-18-gh978-eval-verdict.md", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/herdr_messaging.py"]
 
 # Judged from pinned stored eval runs (rule: scripts/octo-feather-qa --help, Verdict). Which case proves which Then
 # clause, and the generated run evidence: evidence/2026-11-18-gh978-eval-verdict.md.
 [demo."roles#acceptance-general-worker-no-implementation"]
-command = "scripts/octo-feather-qa --verdict 20261119T021750Z-a6f960/supervisor-general-worker/diagnosis-diff-goes-to-implementer 20261119T021750Z-a6f960/supervisor-general-worker/implementer-result-integrated-not-candidate 20261119T021750Z-a6f960/supervisor-general-worker/reviewed-implementer-result-integrated"
+command = "scripts/octo-feather-qa --verdict 20261120T001636Z-8a2c20/supervisor-general-worker/diagnosis-diff-goes-to-implementer 20261120T001636Z-8a2c20/supervisor-general-worker/implementer-result-integrated-not-candidate 20261120T001636Z-8a2c20/supervisor-general-worker/reviewed-implementer-result-integrated"
 covers = ["agents/supervisor.md", "evals/supervisor-general-worker", "evals/fixtures/lane-shout-general-diff", "evals/fixtures/lane-shout-qc-fixed", "evals/fixtures/lane-shout-qc-red", "scripts/octo-feather-qa", "evidence/2026-11-17-gh840-supervisor-general-worker.md", "evidence/2026-11-18-gh978-eval-verdict.md"]
 
 # Two halves (evidence/2026-11-13-gh840-supervisor-fresh-worker.md, How this meets the criterion): the supervisor starts

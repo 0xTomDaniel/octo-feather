@@ -14,7 +14,7 @@ Drive criterion: `comms#acceptance-reflect-files-correction`
 
 ## How to get to it (user POV)
 
-- Nobody files one by hand: `octo-feather-lane archive <name>` (after both reflections), `octo-feather-lane reflect <name>` and `octo-feather-lane reflect --director` file the correction lanes due through the tracker skill and print each key; the supervisor's close report names them and the director starts each lane. `octo-feather-lane --help` for the output lines; the rule: issue-lifecycle spec `#lanes-correction`; the issue's title marker and body: `scripts/octo-feather-reflect`.
+- Nobody files one by hand: `octo-feather-lane archive <name>` (after both reflections), `octo-feather-lane reflect <name>` and `octo-feather-lane reflect --director` file the correction lanes due through the tracker skill and print each key; the supervisor's close report names them and the director starts each lane. `octo-feather-lane --help` for the output lines; the rule: issue-lifecycle spec `#lanes-correction`; the issue's title marker and body: `scripts/correction_lanes.py`.
 
 ## Driving it with verify-octo-feather
 
@@ -26,7 +26,7 @@ Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather d
 
 The drive seeds a scratch state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/correction-lane/state`): lanes gh900 and gh901 archived, each log holding one `duplicated-rule` code-review finding, and lane gh902 open with no hand-off log, all three records naming the kit's repository `0xTomDaniel/octo-feather` (lanes of the kit, so the filed issue quotes their findings in full); an empty director log. The tracker is the kit's offline fake gh (`tests/fixtures/tracker-gh`, first on PATH, its store `scratch/correction-lane/gh.json`, its `repos` the kit's real `gh repo view` answer) under the real github-issues scripts. `HERDR_SOCKET_PATH` points at no server and the reflector saves no Pi session.
 
-- **File** (`file-live`). Run `octo-feather-lane archive gh902`. Observe exit 0, `correction lane: filed <key> in github-issues 0xTomDaniel/octo-feather for duplicated-rule (...)` (the route owner's tracker: a kit route or none, comms spec `#reflection-correction`), and the fake tracker's store (`file-live.obs.tracker`, printed as `filed:` lines) holding that issue in `0xTomDaniel/octo-feather`, its title carrying the class's marker (`MARK`, `scripts/octo-feather-reflect`) and its body both seeded findings, the class and a route line; gh902 moved to archive/.
+- **File** (`file-live`). Run `octo-feather-lane archive gh902`. Observe exit 0, `correction lane: filed <key> in github-issues 0xTomDaniel/octo-feather for duplicated-rule (...)` (the route owner's tracker: a kit route or none, comms spec `#reflection-correction`), and the fake tracker's store (`file-live.obs.tracker`, printed as `filed:` lines) holding that issue in `0xTomDaniel/octo-feather`, its title carrying the class's marker (`MARK`, `scripts/correction_lanes.py`) and its body both seeded findings, the class and a route line; gh902 moved to archive/.
 
 ## Gotchas
 
