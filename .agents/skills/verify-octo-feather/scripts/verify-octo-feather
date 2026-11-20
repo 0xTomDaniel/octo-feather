@@ -32,7 +32,7 @@ import tomllib
 
 ME = "verify-octo-feather"
 FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-eval-verdict", "qc-stale", "gate-tiers", "merge-ask-proof", "pilot-pr", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "template-edge", "qa-runs", "qa-baseline", "qa-analyst", "qa-evidence", "qa-review", "qa-history", "run-slots", "queued-completion",
-            "parent-resumed", "result-file", "result-missing")
+            "parent-resumed", "result-file", "result-missing", "lane-start")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -3556,6 +3556,89 @@ def drive_result_missing(f: Feature) -> None:
     say(f"result-missing evidence: {f.d}")
 
 
+LANE_TITLE = "Lane start as one command"
+LANE_GOAL = ("/goal a scratch proof for gh905, delivered through implement-spec; done when an owner gate is pending "
+             "(review link or merge ask sent) or PR merged and lane torn down")
+LANE_BRIEF = "Build the lane start.\nSpec: docs/specs/issue-lifecycle.spec.html\n"
+
+
+def drive_lane_start(f: Feature) -> None:
+    """issue-lifecycle#acceptance-lane-start: the director (w0:p1) runs `octo-feather-lane start 905 --goal TITLE
+    --outcome TEXT --brief-file brief.md` in its scratch target clone, whose origin's main moved past the clone; Herdr
+    is the kit's testkit Herdr and GitHub the testkit's fake gh (tests/gate/kit/testkit/gh.py: repo o/r, open issue
+    905), first on PATH, the real octo-feather-start and herdr-spawn behind the command. Then reads, as the director
+    would: the supervisor in Herdr, the worktree's branch and head, the lane record, what the supervisor received, the
+    director log. Cases: features/lane-start.md."""
+    w = comms_world(f, "lane-start")
+    w.put({"w0:p1": comms_agent("w0:p1", "director")})
+    (w.state / "lanes" / "gh7.toml").unlink()
+    (w.state / "lanes" / "gh7.handoffs.jsonl").unlink()
+    (w.sc / "bin" / "gh").symlink_to(Path(f.s.repo) / "tests" / "gate" / "kit" / "testkit" / "gh.py")
+    store = w.sc / "gh"
+    (store / "issue").mkdir(parents=True)
+    (store / "log").write_text("")
+    (store / "repo.json").write_text(json.dumps({"nameWithOwner": "o/r"}))
+    none: list[object] = []
+    issue: dict[str, object] = {"number": 905, "title": LANE_TITLE, "body": "b", "state": "OPEN",
+                                "url": "https://github.com/o/r/issues/905", "parent": None,
+                                "blockedBy": {"nodes": none}, "subIssues": {"totalCount": 0, "nodes": none}}
+    (store / "issue" / "905.json").write_text(json.dumps(issue))
+    base = w.base | {"FAKE_GH": str(store), "GH_TOKEN": "verify-token"}
+    clean = {k: v for k, v in os.environ.items() if not k.startswith(COMMS_LEAKS) and k != "GH_REPO"} | base
+    origin, seed, checkout = w.sc / "origin.git", w.sc / "seed", w.sc / "src" / "target"
+    ident = ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]
+    for argv in (["git", "init", "-q", "--bare", "-b", "main", str(origin)], ["git", "clone", "-q", str(origin), str(seed)],
+                 ["git", "-C", str(seed), *ident, "commit", "-q", "--allow-empty", "-m", "first"],
+                 ["git", "-C", str(seed), "push", "-q", "origin", "main"],
+                 ["git", "clone", "-q", str(origin), str(checkout)],
+                 ["git", "-C", str(seed), *ident, "commit", "-q", "--allow-empty", "-m", "main moved"],
+                 ["git", "-C", str(seed), "push", "-q", "origin", "main"],
+                 [str(Path(f.s.repo) / "scripts" / "pi-role"), "--set-identity", "t", "t@t"]):
+        subprocess.run(argv, env=clean, check=True, capture_output=True)
+    main = output(["git", "-C", str(seed), "rev-parse", "HEAD"])[1].strip()
+    brief = w.sc / "brief.md"
+    brief.write_text(LANE_BRIEF)
+    say(f"target {checkout}: origin's main {main[:12]}, the clone's main one commit behind")
+    director = base | {"OCTO_FEATHER_ROLE": "director", "HERDR_PANE_ID": "w0:p1", "HERDR_WORKSPACE_ID": "w0"}
+    comms_env(f, director)
+    f.run("start", "sh", "-c", 'cd "$1" && exec octo-feather-lane start 905 --goal "$2" --outcome "$3" --brief-file "$4"',
+          "sh", str(checkout), LANE_TITLE, "a scratch proof", str(brief))
+    out = (f.d / "start.stdout").read_text()
+    pane = next((x.removeprefix("pane=") for x in out.split() if x.startswith("pane=")), "")
+    f.check("start", lambda c: c.code == 0 and c.out == f"key=gh905 pane={pane} issue=905\n" and pane.startswith("w"))
+    f.run("supervisor", "herdr", "agent", "get", "gh905")
+    calls = (w.world / "log").read_text().splitlines()
+    f.obs("supervisor", "workspace-create", "\n".join(x for x in calls if x.startswith("workspace create ")))
+    f.check("supervisor", lambda c: c.code == 0 and c.j["result"]["agent"]["pane_id"] == pane
+            and c.j["result"]["agent"]["workspace_id"] == pane.split(":", maxsplit=1)[0]
+            and c.o["workspace-create"].startswith("workspace create --label gh905 ")
+            and len(c.o["workspace-create"].splitlines()) == 1)
+    wt = checkout.with_name("target-gh905")
+    f.run("worktree", "git", "-C", str(wt), "log", "-1", "--format=%H %D")
+    f.check("worktree", lambda c: c.code == 0 and c.out == f"{main} HEAD -> gh905, origin/main, origin/HEAD\n")
+    record = w.state / "lanes" / "gh905.toml"
+    f.run("record", "cat", str(record))
+    f.check("record", lambda c: c.code == 0 and re.fullmatch(
+        f'supervisor = "{re.escape(pane)}"\nrepository = "o/r"\nissue = "gh905"\ngoal = "{LANE_TITLE}"\n'
+        'started_at = "\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ"\nwaiting_on = ""\n', c.out) is not None)
+    head = (f"Lane facts (octo-feather-lane start):\nLane key: gh905\nParent issue: 905 {LANE_TITLE} "
+            f"(https://github.com/o/r/issues/905)\nDirector pane: w0:p1\nWorktree: {wt}\nBranch: gh905\n"
+            f"Main commit: {main}\n\n")
+    f.run("messages", "cat", str(w.world / "prompts"))
+    f.check("messages", lambda c: c.code == 0 and c.out == f"{pane}\t{LANE_GOAL}\n{pane}\t{head}{LANE_BRIEF}\n")
+    f.run("director-log", "cat", str(w.state / "director.handoffs.jsonl"))
+
+    def log_ok(c: Case) -> bool:
+        lines = [json.loads(x) for x in c.out.splitlines()]
+        prods = [x for x in lines if x.get("kind") == "prod"]
+        spawns = [x for x in lines if x.get("kind") == "spawn"]
+        return (c.code == 0 and len(prods) == 1 and prods[0]["issue"] == "gh905" and set(prods[0]) == {"at", "kind", "issue", "note"}
+                and [(x["name"], x["pane"]) for x in spawns] == [("gh905", pane)])
+    f.check("director-log", log_ok)
+    f.env, f.pre = {}, []
+    say(f"lane-start evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
@@ -3597,6 +3680,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "parent-resumed": drive_parent_resumed,
     "result-file": drive_result_file,
     "result-missing": drive_result_missing,
+    "lane-start": drive_lane_start,
 }
 
 

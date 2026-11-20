@@ -516,6 +516,20 @@ Lines, kit paths relative to the launcher's kit, skill folders with a trailing /
 It relaunches nothing. Exit 0; 1 when Herdr's agent list cannot be read or is malformed, its one line `stale
 agents: not read: <why>`. post-merge step 5 prints the same report.
 
+  octo-feather-lane start TICKET --goal TITLE --outcome TEXT --brief-file FILE
+                                   the director's lane start, one command, in its checkout of a target
+
+`start` (spec issue-lifecycle #acceptance-lane-start) reads the lane key (the target's tracker skill's lane-key, as
+octo-feather-start resolves it), the ticket (issue-view), the repository (gh repo view) and the caller's
+$HERDR_PANE_ID (the director pane); fetches origin and adds the worktree `<checkout>-<key>` beside the checkout on a
+new branch `<key>` from origin's main; starts the supervisor with the octo-feather-start beside this command
+(`--issue TICKET --cwd WORKTREE`); writes lanes/<supervisor name>.toml (comms spec #lane-record: supervisor,
+repository, issue, goal TITLE, started_at, waiting_on ""); sends the supervisor with herdr-say `/goal TEXT for <key>,
+delivered through implement-spec; done when ...`, then the brief: a header (lane key, parent issue, director pane,
+worktree, branch, main commit), then FILE's text; appends one director log line (comms spec
+#handoff-director-prod: issue, note); prints `key=<key> pane=<pane> issue=<TICKET>`. Each step that fails stops it,
+exit 1, naming the step and what it made so far; a failed herdr-say is never retried.
+
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
 import functools, hashlib, importlib.machinery, importlib.util, json, os, re, shlex, subprocess, sys, tempfile, time
@@ -4482,6 +4496,13 @@ def cmd_post_merge(args: list[str]) -> int:
     return 1
 
 
+def cmd_start(args: list[str]) -> int:
+    """`start` (--help): the logic in scripts/start_lane.py."""
+    import start_lane
+    print(start_lane.start(args, lanes_dir(), Refuse), flush=True)
+    return 0
+
+
 COMMANDS = {
     "archive": cmd_archive,
     "reflect": cmd_reflect,
@@ -4500,6 +4521,7 @@ COMMANDS = {
     "intake": cmd_intake,
     "post-merge": cmd_post_merge,
     "stale": cmd_stale,
+    "start": cmd_start,
 }
 
 
