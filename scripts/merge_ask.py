@@ -232,10 +232,10 @@ class Git:
     """The lane's git facts over BASE, read once. HERE: the PR head is a commit in this repo.
     TOPO: `git rev-list --topo-order HEAD ^BASE`, Unread when git refused it. COMMITS: each of those
     commits; WALKS, each one's own `git rev-list --reverse C ^BASE` (git's order, oldest first,
-    which every walk between two of them keeps); DIFFS, each one's lane diff (its own diff from
-    its merge base with BASE, {path: raw diff line}, status files aside), read only when the PR
-    holds a merge. STATUS: the --status files relative to the repo's top, Unread naming one
-    outside it."""
+    which every walk between two of them keeps; read only when the PR holds a merge, else the
+    one chain's prefix); DIFFS, each one's lane diff (its own diff from its merge base with
+    BASE, {path: raw diff line}, status files aside), read only when the PR holds a merge.
+    STATUS: the --status files relative to the repo's top, Unread naming one outside it."""
 
     base: str
     here: bool = True
@@ -546,9 +546,15 @@ def _git_facts(head: str, base: str, files: list[str], err: type[Exception]) -> 
             )
         else:
             commits[c] = Commit(tuple(parents), subject)
-        walks[c] = tuple(run("rev-list", "--reverse", c, f"^{base}").split())
+    merged = any(len(k.parents) > 1 for k in commits.values())
+    for i, c in enumerate(commits):  # one chain of commits has one walk order: its own
+        walks[c] = (
+            tuple(run("rev-list", "--reverse", c, f"^{base}").split())
+            if merged
+            else tuple(commits)[: i + 1]
+        )
     diffs: dict[str, dict[str, str]] = {}
-    if any(len(k.parents) > 1 for k in commits.values()):  # a lane diff is read for a merge only
+    if merged:  # a lane diff is read for a merge only
         aside: frozenset[str] = status if isinstance(status, frozenset) else frozenset()
         for c in commits:
             mb = run("merge-base", c, base).strip()
