@@ -41,7 +41,11 @@ class Run:
         hold = f"{SLOT} hold --kind {kind} {' '.join(items)}; :"  # `; :` keeps sh, the parent
         env = {**s.env, "HERDR_PANE_ID": pane}
         self.p = subprocess.Popen(
-            ["sh", "-c", hold], cwd=cwd, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+            ["/bin/sh", "-c", hold],
+            cwd=cwd,
+            env=env,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
             text=True,
         )
         assert self.p.stdout is not None
