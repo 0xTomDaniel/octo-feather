@@ -154,14 +154,6 @@
       },
       {
         "fact": "ran",
-        "program": "octo-feather-lane",
-        "args": [
-          "done"
-        ],
-        "count": 0
-      },
-      {
-        "fact": "ran",
         "program": "herdr-say",
         "args": [
           "--parent"

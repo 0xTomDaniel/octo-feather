@@ -66,6 +66,20 @@ lane's eval slot. Command for the slot holder:
 
 `scripts/octo-feather-qa --suite supervisor-notifications --case merge-approved-lane-merge-archive --runs 3 --baseline 13191f3f`
 
-Expected at base 13191f3f: FAIL on `ran gh pr merge` count 0 (github-pr named `gh pr merge`), `ran octo-feather-lane
-done` count 0 and `ran herdr-say --parent` count 0 (the close report). `scripts/check-evals`: `evals: ok (20 suites,
+Expected at base 13191f3f: FAIL on `ran octo-feather-lane merge 12 {head}` (absent: github-pr named
+`gh pr merge`), `ran gh pr merge` count 0 and `ran herdr-say --parent` count 0 (the close report). `scripts/check-evals`: `evals: ok (20 suites,
 533 cases)`.
+
+## tdd pass (sent back by `octo-feather-lane skills 1139`)
+
+- Seam: `octo-feather-lane seam 1139 comms#acceptance-close-message octo-feather-qa`: exit 0 (recorded 2026-11-19).
+- Case facts against the anti-patterns: `ran octo-feather-lane done` count 0 dropped as implementation-coupled (done is
+  `merge`'s own idempotent step, not in the criterion). Kept: merge and archive ran (the criterion's commands), no
+  `gh pr merge` (a second merge path), no `herdr-say --parent` (the close report), no `herdr-close` of the supervisor's
+  own space, tab or pane (hand teardown). Each graded from the sandbox's run record, never the role's self-report.
+  Right reason at base 13191f3f: its github-pr names `gh pr merge` (merge fact absent, gh pr merge count 1) and its
+  role sends a close report (herdr-say --parent count 1).
+- Three tests: each drives the `octo-feather-lane` CLI and asserts the step 7 line as a literal taken from `--help`,
+  not recomputed from post_merge.py. Red check: with post_merge.py's old line restored, `just check-tests
+  test_lane_post_merge_teardown.py::test_lane_post_merge_teardown_not_archived test_lane_merge.py::test_lane_merge_starts_routine`:
+  2 failed on that line; with the new one, passed.
