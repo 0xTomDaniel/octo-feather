@@ -4,7 +4,7 @@ docstring), each run as that file's command through `case` (tests/gate/kit/conft
 from collections.abc import Callable
 
 import pytest
-from lane_start import files, filed_stopped, refused, started, sub_issue, unicode_title
+from lane_start import filed_stopped, files, refused, started, sub_issue, unicode_title
 
 Case = Callable[..., None]
 

@@ -17,6 +17,7 @@ import json
 import os
 import re
 import subprocess
+import sys
 from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn, cast
@@ -158,7 +159,8 @@ def file_parent(new: New, err: type[Exception]) -> str:
     if not key or len(key.split()) != 1:
         msg = f"step file: issue-create printed {out[:200]!r}, no issue key: check the tracker"
         raise err(msg)
-    print(f"filed={key}", flush=True)
+    sys.stdout.write(f"filed={key}\n")
+    sys.stdout.flush()
     return key
 
 

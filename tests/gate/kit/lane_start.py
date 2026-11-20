@@ -23,6 +23,20 @@ clone, so the lane branch must come from origin's main as fetched, not the check
            record or prompt): a missing --brief-file (argparse's usage error); `gh repo view`
            printing nameWithOwner null and an unknown field; issue-view printing a title that is no
            string (each edge validated before anything is made).
+
+Seams (ticket #1156, recorded before any test): the same command and stand-ins.
+
+  files    with --new TITLE --body-file FILE instead of a ticket (issue-lifecycle
+           #acceptance-lane-start-files): the gh log holds one `issue create` with that title and
+           body file and no --parent; issue-view 906 reads back that title and body and no parent;
+           the lane started under gh906 (its record, its worktree); `filed=906` printed before
+           `key=gh906 ...`.
+  filed_stopped  a --new start that stops after filing (the worktree's path taken) printed
+           `filed=906` all the same; that cleared (the path and the branch git made), rerun naming
+           906, the lane starts under gh906 and no second issue is filed.
+  sub_issue  ticket 907, a sub-issue of 905 (issue-lifecycle #acceptance-lane-start-sub-issue):
+           exit 1 naming 905; no worktree, branch, workspace, record or prompt for gh907, no issue
+           filed.
 """
 
 from __future__ import annotations
@@ -221,11 +235,15 @@ def files(s: Scratch) -> None:
     out = s.run(cmd, cwd=checkout, env=DIRECTOR).out.splitlines()
     assert out[0] == "filed=906", out
     assert re.fullmatch(r"key=gh906 pane=\S+ issue=906", out[1]), out
-    assert len(out) == 2, out  # noqa: PLR2004
+    assert len(out) == 2, out
     show(f"printed: {out}")
     assert creates(s) == [f"issue create --title {NEW} --body-file {body}"], s.gh.log()
     show(f"gh log: {creates(s)}")
-    view = json.loads(s.run([str(ROOT / ".agents" / "skills" / "github-issues" / "scripts" / "issue-view"), "906"]).out)
+    view = json.loads(
+        s.run(
+            [str(ROOT / ".agents" / "skills" / "github-issues" / "scripts" / "issue-view"), "906"]
+        ).out
+    )
     assert (view["title"], view["body"], view["parent"]) == (NEW, BODY, None), view
     show(f"issue-view 906: title {view['title']!r}, body {view['body']!r}, parent None")
     state = s.home / ".local" / "state" / "octo-feather"

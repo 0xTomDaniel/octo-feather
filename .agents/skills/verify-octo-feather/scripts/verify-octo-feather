@@ -3655,7 +3655,7 @@ def lane_start_files(f: Feature, sc: Path, store: Path, checkout: Path, clean: d
           ' --brief-file "$5"', "sh", str(checkout), LANE_NEW, str(body), "a scratch proof", str(brief))
     f.obs("files", "gh-creates", "\n".join(x for x in (store / "log").read_text().splitlines() if x.startswith("issue create")))
     view = Path(f.s.repo) / ".agents" / "skills" / "github-issues" / "scripts" / "issue-view"
-    f.obs("files", "issue-view-906", subprocess.run([str(view), "906"], env=clean, capture_output=True, text=True).stdout)
+    f.obs("files", "issue-view-906", subprocess.run([str(view), "906"], env=clean, capture_output=True, text=True, check=False).stdout)
     f.obs("files", "worktree", output(["git", "-C", str(checkout.with_name("target-gh906")), "rev-parse", "--abbrev-ref", "HEAD"])[1])
 
     def ok(c: Case) -> bool:
