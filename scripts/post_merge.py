@@ -16,9 +16,10 @@ Interface:
         on a record the archive recorded its part in, the end's message; a stop, the stop's. Then
         the summary line. CODE: 0 every step ok, 3 the rest ok and one pending, 1 a stop or the
         director not told. Refused (Unreadable) when the record cannot be read, nothing run.
-    archived(lanes, name, rec, printed), unit_end(lanes, lane, result, status, show) -> code
+    archived(lanes, name, rec, printed), unit_end(lanes, lane, result, status, show, repo) -> code
         The archive's part of the director's message recorded; the teardown unit's end recorded,
-        then the end or the stop told (octo-feather-lane --help, archive).
+        then the end or the stop told, its rerun keeping --repo REPO (octo-feather-lane --help,
+        archive).
     stale_report() -> (lines, read): step 5's report, `stale`'s output.
     kit_install(), top(), git_here(*args), records(lanes), now(): the install step 3 moves, the
         director's checkout, git in the current directory, the records' dir, a record's time.
@@ -468,14 +469,21 @@ def _runs(pm: PostMerge) -> list[dict[str, str]]:
 
 
 def _watch(pm: PostMerge, run_id: str) -> subprocess.CompletedProcess[str]:
-    """`gh run watch RUN_ID --exit-status`: its end."""
-    return subprocess.run(
-        ["gh", "run", "watch", run_id, "--exit-status", *pm.r()],  # noqa: S607 (gh from PATH)
-        capture_output=True,
-        text=True,
-        stdin=subprocess.DEVNULL,
-        check=False,
-    )
+    """`gh run watch RUN_ID --exit-status`: its end; Refused when gh is gone."""
+    try:
+        return subprocess.run(
+            ["gh", "run", "watch", run_id, "--exit-status", *pm.r()],  # noqa: S607 (gh from PATH)
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            check=False,
+        )
+    except FileNotFoundError as e:
+        msg = (
+            f"gh run watch {run_id}: gh not on PATH: install the GitHub CLI and log in (just "
+            "install-check), then rerun"
+        )
+        raise Refused(msg) from e
 
 
 def _watched(pm: PostMerge, runs: list[dict[str, str]]) -> list[dict[str, str]]:
@@ -1648,7 +1656,7 @@ def post_merge(pm: PostMerge, show: Callable[[str], None]) -> Ran:
     if all(o.endswith(" ok") for o in outcomes):
         unsent = _tell_end(pm.lanes, rec, show)
     else:
-        unsent = _tell_stop(pm.lanes, rec, stop, show) if stop else 0
+        unsent = _tell_stop(pm.lanes, rec, stop, show, pm.repo) if stop else 0
     show(f"post-merge {pm.lane} PR #{pm.pr}: {'; '.join(outcomes)}{told}")
     if unsent:
         return Ran(rec, 1)
@@ -1721,10 +1729,18 @@ def archived(lanes: Path, name: str, rec: dict[str, object], printed: list[str])
     update(records(lanes), name, lambda r: replace(r, close=close))
 
 
-def unit_end(lanes: Path, lane: str, result: str, status: str, show: Callable[[str], None]) -> int:
+def unit_end(  # noqa: PLR0913 (the unit's end and the run's --repo)
+    lanes: Path,
+    lane: str,
+    result: str,
+    status: str,
+    show: Callable[[str], None],
+    *,
+    repo: str | None,
+) -> int:
     """The teardown unit's end (its stop hook): recorded in the lane's record; every step ok, the
-    director's message (_tell_end), else the stop told once. Its exit code; Refused when the lane
-    has no record."""
+    director's message (_tell_end), else the stop told once, its rerun keeping --repo REPO. Its
+    exit code; Refused when the lane has no record."""
     rec = update(
         records(lanes),
         lane,
@@ -1748,23 +1764,30 @@ def unit_end(lanes: Path, lane: str, result: str, status: str, show: Callable[[s
         else None
     )
     if stop:  # the routine told it (_tell_stop): told again here only when that send failed
-        return _tell_stop(lanes, rec, stop, show)
+        return _tell_stop(lanes, rec, stop, show, repo)
     why = f"teardown unit {unit} ended {result} ({status}) before its routine finished"
     msg = (
-        f"post-merge {lane} PR #{rec.pr} stopped: {why}; fix it, then rerun `octo-feather-lane "
-        f"post-merge {rec.pr} {rec.head} --lane {lane}` (the unit's lines: "
-        f"{records(lanes) / (lane + '.teardown.log')})"
+        f"post-merge {lane} PR #{rec.pr} stopped: {why}; fix it, then rerun `{_rerun(rec, repo)}` "
+        f"(the unit's lines: {records(lanes) / (lane + '.teardown.log')})"
     )
     return tell_director(lanes, lane, why, msg, show)
 
 
-def _tell_stop(lanes: Path, rec: Record, stop: Step, show: Callable[[str], None]) -> int:
+def _rerun(rec: Record, repo: str | None) -> str:
+    """The command that reruns REC's routine, keeping the run's --repo REPO."""
+    cmd = ["octo-feather-lane", "post-merge", str(rec.pr), rec.head, "--lane", rec.lane]
+    return shlex.join([*cmd, *(["--repo", repo] if repo else [])])
+
+
+def _tell_stop(
+    lanes: Path, rec: Record, stop: Step, show: Callable[[str], None], repo: str | None
+) -> int:
     """A stopped step of the routine told the director once: a rerun stopping with the same line
-    sends nothing."""
+    sends nothing. The rerun named keeps the run's --repo REPO."""
     why = f"step {stop.number} {stop.name} stopped: {stop.line}"
     msg = (
-        f"post-merge {rec.lane} PR #{rec.pr} stopped: {why}; fix it, then rerun `octo-feather-lane "
-        f"post-merge {rec.pr} {rec.head} --lane {rec.lane}`"
+        f"post-merge {rec.lane} PR #{rec.pr} stopped: {why}; fix it, then rerun "
+        f"`{_rerun(rec, repo)}`"
     )
     return tell_director(lanes, rec.lane, why, msg, show)
 
@@ -1829,8 +1852,20 @@ def tell_director(lanes: Path, lane: str, key: str, msg: str, show: Callable[[st
         show(f"director already told ({key[:100]}): nothing sent")
     else:
         show(
-            f"director NOT told: {why or 'no post-merge record'}; re-send by hand: herdr-say "
-            f"{shlex.quote(str(pane))} {shlex.quote(msg)}"
+            f"director NOT told: {why or 'no post-merge record'}; re-send by hand: "
+            f"{_resend(pane, path, msg)}"
         )
         return 1
     return 0
+
+
+def _resend(pane: object, path: Path, msg: str) -> str:
+    """The command that re-sends MSG to the director by hand: to PANE, or, with no pane from
+    director.toml at PATH, to DIRECTOR_PANE and where to find it."""
+    if isinstance(pane, str) and pane:
+        return f"herdr-say {shlex.quote(pane)} {shlex.quote(msg)}"
+    return (
+        f"herdr-say DIRECTOR_PANE {shlex.quote(msg)}, DIRECTOR_PANE the director's Herdr pane id "
+        f"(`pane` in {path}, which the director writes at its launch; else the director's agent "
+        "in herdr agent list)"
+    )
