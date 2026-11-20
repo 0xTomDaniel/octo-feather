@@ -1,14 +1,14 @@
 Seeded defect: declared_includes reads a top-level string as a list of its characters.
-diff --git a/scripts/octo-feather-qa b/scripts/octo-feather-qa
-index 6e1952e9..c7f93ae6 100755
---- a/scripts/octo-feather-qa
-+++ b/scripts/octo-feather-qa
-@@ -342,7 +342,7 @@ def judge_includes(fact, final, last):
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index af457dc7..e24cc102 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -313,7 +313,7 @@ def judge_includes(fact: Fact, seen: Seen, *, final: bool) -> Status:
      if st:
          return st, txt
      got = obj.get(f)
 -    if not isinstance(got, list):
 +    if not isinstance(got, (list, str)):
-         return "fail", f"{head}: top-level {f!r} is {json.dumps(got)[:80] if f in obj else 'missing'}, want a list"
-     has = lambda it: any(isinstance(x, dict) and all(k in x and x[k] == v for k, v in it.items()) for x in got)
-     missing = [it for it in items if not has(it)]
+         return (
+             "fail",
+             (
