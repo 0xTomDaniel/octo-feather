@@ -4,7 +4,7 @@ as that file's command through `case` (tests/gate/kit/conftest.py)."""
 from collections.abc import Callable
 
 import pytest
-from cpu_budget import changed, e2e
+from cpu_budget import changed, passes
 
 Case = Callable[..., None]
 
@@ -15,5 +15,5 @@ def test_changed(case: Case) -> None:
 
 
 @pytest.mark.criterion("quality#acceptance-test-cpu-budget")
-def test_e2e(case: Case) -> None:
-    case(e2e)
+def test_passes(case: Case) -> None:
+    case(passes)

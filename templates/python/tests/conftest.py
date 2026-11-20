@@ -45,8 +45,11 @@ cpu_shared property ({NAME: seconds}, JSON; the trend step's cpu_shared) carries
 shows each item's CPU and wall seconds, each shared line, and names each item over test_cpu_seconds in the root's
 gate-budget.toml (its form: octo-feather-lane --help, report) but one carrying pytest's `e2e` marker (quality spec
 #acceptance-test-cpu-budget). Such an item the change adds or changes (since the merge base with the default
-branch), as `octo-feather-gate changed` (when on PATH) names one, fails the run, named with its CPU and the budget;
-one unchanged is reported only, as is a shared line. Stdlib getrusage, not a plugin: pytest-monitor (last release
+branch), as `octo-feather-gate changed` (when on PATH) names one, is measured again once, alone: after the run, in a
+pytest of its own (-n 0 under xdist) from the same root and environment, GATE_CPU_AGAIN set there so it judges
+nothing. Over again (or no CPU measured), it fails the run, named with both CPU times and the budget; under, the run
+passes and names it over once, with both. One unchanged is reported only, as is a shared line; no item over the
+budget, no second run. Stdlib getrusage, not a plugin: pytest-monitor (last release
 2023) measures the pytest process only, into its own sqlite, without xdist; pytest-timing (new in 2026) records CPU into its own report, with no
 per-test budget.
 
@@ -90,6 +93,7 @@ ITEMS = "OCTO_FEATHER_GATE_ITEMS"
 CPU = "cpu_s"
 NODE = "node"   # a step's pytest node id, unique where its junit name is not
 BUDGET, BUDGET_KEY = "gate-budget.toml", "test_cpu_seconds"
+AGAIN = "GATE_CPU_AGAIN"   # set in the run that measures a changed over-budget item again alone
 SHARED, SHARED_PROP = "GATE_SHARED_CPU", "cpu_shared"   # shared set-up's own CPU lines (this file's docstring)
 CLAIM = re.compile(r"^([a-z0-9][a-z0-9._-]*)#([A-Za-z0-9][A-Za-z0-9._-]*)$")
 LAST = "octo_feather_last_seconds"   # the controller's read, in each xdist worker's workerinput
@@ -455,7 +459,8 @@ class _CpuShown:
         self.root = root
         self.items: dict[str, dict[str, Any]] = {}
         self.shared: list[tuple[str, float, str]] = []   # (line, CPU seconds, the item that built it)
-        self.failing: list[str] = []   # changed items over the budget: the run fails
+        self.again_cpu: dict[str, float | None] = {}   # each changed item over the budget: its CPU run again alone
+        self.failing: list[str] = []   # changed items over the budget twice: the run fails
         self.changed_why = ""
 
     def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
@@ -484,10 +489,32 @@ class _CpuShown:
             return None
         return set(p.stdout.split())
 
+    def again(self, config: pytest.Config, node: str) -> float | None:
+        """NODE run again alone, serially, in a pytest of its own from the same root and environment: its CPU
+        seconds from that run's junit xml, or None when it gave none."""
+        with tempfile.TemporaryDirectory() as t:
+            xml = Path(t) / "junit.xml"
+            cmd = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", f"--junitxml={xml}", node]
+            if config.pluginmanager.hasplugin("xdist"):
+                cmd[3:3] = ["-n", "0"]
+            env = {k: v for k, v in os.environ.items() if not k.startswith("OCTO_FEATHER_QC_")} | {AGAIN: "1"}
+            subprocess.run(cmd, cwd=self.root, env=env, capture_output=True, check=False)
+            try:
+                cases = list(ET.parse(xml).getroot().iter("testcase"))
+            except (OSError, ET.ParseError):
+                return None
+        return next((_cpu_s(c).get(CPU) for c in cases if _node(c).get(NODE) == node), None)
+
     def pytest_sessionfinish(self, session: pytest.Session) -> None:
-        over = self.over()
-        args = self.changed() if over else set[str]()
-        self.failing = [n for n, _ in over if args and (n in args or n.split("::")[0] in args)]
+        over, b = self.over(), self.budget()[0]
+        if not over or b is None or os.environ.get(AGAIN):   # a run measuring one item again judges nothing
+            return
+        args = self.changed() or set[str]()
+        for n, _ in over:
+            if n in args or n.split("::")[0] in args:
+                self.again_cpu[n] = cpu = self.again(session.config, n)
+                if cpu is None or cpu > b:
+                    self.failing.append(n)
         if self.failing and session.exitstatus == 0:
             session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
@@ -523,12 +550,24 @@ class _CpuShown:
             return
         over = [(n, r) for n, r in shown if not r["e2e"] and r["cpu"] > b]
         for n, r in over:
-            verdict = "changed: the gate fails" if n in self.failing else "report-only"
-            tr.write_line(f"OVER CPU BUDGET: {n} {_secs(r['cpu'])} CPU, budget {_secs(b)} ({verdict})")
+            cpu = self.again_cpu.get(n)
+            alone = "no CPU measured" if cpu is None else f"{_secs(cpu)} CPU"
+            if n in self.failing:
+                tr.write_line(f"OVER CPU BUDGET: {n} {_secs(r['cpu'])} CPU, alone again {alone}, budget {_secs(b)} "
+                              "(changed, over twice: the gate fails)")
+            elif n in self.again_cpu:
+                tr.write_line(f"OVER CPU BUDGET: {n} {_secs(r['cpu'])} CPU, alone again {alone}, budget {_secs(b)} "
+                              "(changed, over once: passes)")
+            else:
+                tr.write_line(f"OVER CPU BUDGET: {n} {_secs(r['cpu'])} CPU, budget {_secs(b)} (report-only)")
         if self.changed_why:
             tr.write_line(f"cpu budget: changed test items judged by octo-feather-gate: {self.changed_why}")
-        tail = f"{len(self.failing)} of them changed: FAIL" if self.failing else "report-only"
-        tr.write_line(f"cpu budget: {_secs(b)} per non-e2e test ({BUDGET} {BUDGET_KEY}): {len(over)} over, {tail}")
+        once = len(self.again_cpu) - len(self.failing)
+        tail = ([f"{len(self.failing)} changed over twice"] if self.failing else []) + (
+            [f"{once} changed over once"] if once else [])
+        verdict = "FAIL" if self.failing else "report-only" if not once else "passes"
+        tr.write_line(f"cpu budget: {_secs(b)} per non-e2e test ({BUDGET} {BUDGET_KEY}): {len(over)} over, "
+                      + "".join(f"{t}, " for t in tail) + verdict)
 
 
 @pytest.hookimpl(trylast=True)   # after the junitxml plugin has written its file

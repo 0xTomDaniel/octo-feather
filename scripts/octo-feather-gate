@@ -34,8 +34,12 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
   octo-feather-gate changed
       The test items the change adds or changes, one pytest argument per line: a tests/*.sh as its
       test_gate.py node id, any other changed file as its path (a pytest item's file); test_gate.py
-      itself is no item's; a changed kit scenario file, tests/gate/kit/NAME.py, also names the
-      test_NAME.py beside it, whose items run it (tests/gate/kit/testkit). Changed: differing
+      itself is no item's; a test file (test_*.py) that directly imports a changed in-repo file
+      is named too (one level, by ast: a kit scenario NAME.py names test_NAME.py; imports are
+      resolved from the dirs holding test files or a conftest.py, never the configured
+      pythonpath, scripts/). Its misses: a file reached only through another import (testkit, as
+      a scenario imports it), and what a test runs by path, never imports: tests/lib/*
+      (prepared.py, its .sh helpers), fixtures, a tests/*.sh item's helpers. Changed: differing
       from the merge base of HEAD with the default branch, to the working tree, untracked files
       too: the change's net changes, so a file changed and restored is none, the same on CI (a
       checkout with the default branch's history). The default branch from local refs, no
@@ -79,6 +83,7 @@ tool. Stdlib only, but map, which reads coverage data.
 from __future__ import annotations
 
 import argparse
+import ast
 import datetime as dt
 import hashlib
 import json
@@ -374,6 +379,35 @@ def default_branch() -> str | None:
     return None
 
 
+def imported(root: Path, test: str, dirs: list[str]) -> set[str]:
+    """The in-repo files TEST imports directly (ast, one level, imports anywhere in it), each module
+    resolved as pytest's prepend import mode finds it: TEST's own dir first, then DIRS, every dir
+    holding a test file or a conftest.py; the configured pythonpath (the kit's scripts/, product
+    modules) is left out."""
+    try:
+        tree = ast.parse((root / test).read_text(encoding="utf-8"))
+    except (OSError, SyntaxError, ValueError):
+        return set()
+    names = {
+        a.name.split(".")[0] for n in ast.walk(tree) if isinstance(n, ast.Import) for a in n.names
+    }
+    names |= {
+        n.module.split(".")[0]
+        for n in ast.walk(tree)
+        if isinstance(n, ast.ImportFrom) and n.module and not n.level
+    }
+    out: set[str] = set()
+    for m in names:
+        for d in (str(Path(test).parent), *dirs):
+            hit = [
+                f for f in (Path(d, f"{m}.py"), Path(d, m, "__init__.py")) if (root / f).is_file()
+            ]
+            if hit:
+                out.add(hit[0].as_posix())
+                break
+    return out
+
+
 def changed_items() -> None:
     """The test items the change adds or changes (--help, changed), as pytest arguments."""
     ref = default_branch() if ok("rev-parse", "--verify", "-q", "HEAD") else None
@@ -383,10 +417,12 @@ def changed_items() -> None:
         return
     files = changed_since(base) - {NODE[:-2]}
     root = Path(git("rev-parse", "--show-toplevel").strip())
-    for f in list(files):  # a kit scenario file changes the pytest file whose items run it
-        m = re.fullmatch(r"(tests/gate/kit/)(?!test_)([^/]*\.py)", f)
-        if m and (root / m.group(1) / f"test_{m.group(2)}").is_file():
-            files.add(f"{m.group(1)}test_{m.group(2)}")
+    listed = lines(git("ls-files", "--cached", "--others", "--exclude-standard"))
+    tests = [f for f in listed if re.fullmatch(r"(.*/)?test_[^/]*\.py", f) and f != NODE[:-2]]
+    dirs = sorted(
+        {str(Path(f).parent) for f in listed if re.fullmatch(r"(.*/)?(test_|conftest)[^/]*\.py", f)}
+    )
+    files |= {t for t in tests if (root / t).is_file() and imported(root, t, dirs) & files}
     out = [
         f"{NODE}test_script[{f}]" if re.fullmatch(r"tests/[^/]*\.sh", f) else f
         for f in sorted(files)
