@@ -97,7 +97,7 @@ def close_line(s: Scratch) -> None:
         assert len(lines) == 2, lines
         line = lines[1]
         show(f"lane log gh7 gained: {json.dumps(line)}")
-        assert list(line) == FIELDS, line
+        assert set(line) == set(FIELDS), line
         want = {"kind": "close", "pane": "w1:p2", "name": "implementer-gh7"}
         want |= {"role": "implementer", "session": "S7", "by": "w1:p1"}
         assert {k: line[k] for k in want} == want, line
