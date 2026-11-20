@@ -11,20 +11,32 @@
       "pr": null
     },
     "acceptance-revision-preserve": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1190,
+      "record": "20261120T104631Z-67916c35",
+      "commit": "0da84a14b585d8b8825133d2faa5cfc21a288d66",
+      "tests": []
     },
     "acceptance-revision-remove": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1190,
+      "record": "20261120T104634Z-963db9c5",
+      "commit": "0da84a14b585d8b8825133d2faa5cfc21a288d66",
+      "tests": []
     },
     "acceptance-revision-repeat": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1190,
+      "record": "20261120T104638Z-de3caf59",
+      "commit": "0da84a14b585d8b8825133d2faa5cfc21a288d66",
+      "tests": []
     },
     "acceptance-revision-invalid": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1190,
+      "record": "20261120T104642Z-d3b1a222",
+      "commit": "0da84a14b585d8b8825133d2faa5cfc21a288d66",
+      "tests": []
     },
     "acceptance-chat-not-acceptance": {
       "status": "planned",
