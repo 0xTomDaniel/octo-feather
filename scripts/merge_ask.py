@@ -21,9 +21,11 @@ Interface:
         (ParentLine) or its refusal (NoParent), the head's GitHub check facts (Checks), each read
         only when its rule needs it, a failed read kept as Unread, and the qc reports in QC_DIR
         at each commit of the PR. An unreadable status file raises ERR. Spec #gates-merge-order
-        (Order): every other open PR on the PR's base branch (gh pr list), its head fetched (git
-        fetch origin pull/N/head) when this repo lacks it, git merge-tree of the two heads, the
-        octo-feather-qa --verdict pins its qc.toml demos name at its head, and that command's
+        (Order): every other open PR on the PR's base branch (gh pr list, its answer validated
+        against schemas/gh-pr-list.schema.json), its head fetched (git fetch origin
+        pull/N/head) when this repo lacks it, git merge-tree of the two heads, the
+        octo-feather-qa --verdict pins its qc.toml demos name at its head (the qc.toml
+        validated by octo-feather-contract; one that fails is not read), and that command's
         lines for them at the base (pr_base: BASE, --base, else origin/<base branch>) and at the
         base merged with the head (a commit-tree, no ref moved), each run in a scratch detached
         worktree. The lane's git facts over the base (Git: each PR commit's parents, subject,
@@ -94,7 +96,7 @@ import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import NamedTuple, TypedDict, cast
 
 import tomllib
 from tracker_calls import KIT, gh, tracker, utc
@@ -2390,9 +2392,9 @@ def _stale(line: str) -> list[str] | None:
 
 
 def merge_order(o: Order) -> list[str]:
-    """Spec #gates-merge-order: each other open PR whose pinned runs fresh on the base go stale
-    with this lane merged in (the items octo-feather-qa names stale only then), and each whose
-    head conflicts with this lane's head; shown only, never a gap."""
+    """The merge-order lines for O: what they name and that they are never a gap, issue-lifecycle
+    spec #gates-merge-order; a pin's newly stale items, those octo-feather-qa names stale only
+    with this lane merged in."""
     out: list[str] = []
     for p in o.prs:
         who = f"PR #{p.number} ({p.branch})"
@@ -2429,6 +2431,23 @@ class _UnreadError(Exception):
 
 
 QA = KIT / "scripts" / "octo-feather-qa"
+CONTRACT = KIT / "scripts" / "octo-feather-contract"
+GH_PRS = KIT / "schemas" / "gh-pr-list.schema.json"
+# The kit's locked jsonschema, by octo-feather-contract's route (its docstring): this module stays
+# standard library only, so the validation runs in the kit's project environment, never the network.
+KIT_PYTHON = ["uv", "run", "--project", str(KIT), "--locked", "--offline", "--no-dev", "--quiet"]
+VALIDATE = """import json, sys, jsonschema
+schema = json.loads(open(sys.argv[1], encoding="utf-8").read())
+v = jsonschema.validators.validator_for(schema)
+v.check_schema(schema)
+try:
+    doc = json.loads(sys.stdin.read())
+except ValueError as e:
+    sys.exit(f"not JSON: {e}")
+for e in v(schema).iter_errors(doc):
+    print(f"{'.'.join(map(str, e.absolute_path)) or 'the answer'}: {e.message}", file=sys.stderr)
+    sys.exit(1)
+"""
 SHELL_OPS = {";", "&&", "||", "|", "&", "(", ")"}
 IDENT = {
     f"GIT_{who}_{k}": v
@@ -2468,22 +2487,37 @@ def _pins(command: str) -> list[str]:
     return out
 
 
+class _Demo(TypedDict, total=False):
+    """A qc.toml demo entry as the contract's schema (schemas/qc.v*.schema.json) admits it: the
+    key the merge order reads."""
+
+    command: str
+
+
+def _said(p: subprocess.CompletedProcess[str], prefix: str = "") -> str:
+    """P's stderr lines, PREFIX cut from each, joined; its exit when it printed none."""
+    lines = [ln.removeprefix(prefix) for ln in p.stderr.strip().splitlines()]
+    return "; ".join(lines)[:300] or f"exit {p.returncode}"
+
+
 def _demo_pins(oid: str) -> list[str]:
-    """The pins of every qc.toml demo at commit OID; none without a qc.toml there."""
+    """The pins of every qc.toml demo at commit OID, the contract validated first by
+    octo-feather-contract; none without a qc.toml there."""
     rc, text = _git("show", f"{oid}:qc.toml", ok=(0, 128))
     if rc:
         return []
-    try:
-        demos: object = tomllib.loads(text).get("demo", {})
-        cmds = [
-            cast("dict[str, object]", c).get("command")
-            for c in cast("dict[str, object]", demos).values()
-            if isinstance(c, dict)
-        ]
-        return list(dict.fromkeys(p for c in cmds if isinstance(c, str) for p in _pins(c)))
-    except (tomllib.TOMLDecodeError, ValueError, AttributeError) as e:
-        msg = f"qc.toml at {oid[:12]} not parsed ({e})"
-        raise _UnreadError(msg) from e
+    with tempfile.TemporaryDirectory(prefix="merge-ask-qc-") as tmp:
+        path = Path(tmp) / "qc.toml"
+        path.write_text(text, encoding="utf-8")
+        p = subprocess.run([str(CONTRACT), str(path)], capture_output=True, text=True, check=False)
+    if p.returncode:
+        why = _said(p, f"octo-feather-contract: {path}: ")
+        msg = f"qc.toml at {oid[:12]} fails octo-feather-contract ({why})"
+        raise _UnreadError(msg)
+    # valid against its format's schema above: [demo] a table of tables, each command a string
+    demos = cast("dict[str, _Demo]", tomllib.loads(text).get("demo", {}))
+    cmds = [d["command"] for d in demos.values() if "command" in d]
+    return list(dict.fromkeys(p for c in cmds for p in _pins(c)))
 
 
 def _merge_tree(ours: str, theirs: str) -> tuple[str, list[str]]:
@@ -2531,8 +2565,25 @@ def _verdicts(rev: str, pins: list[str]) -> list[str]:
     return lines
 
 
-def _open_prs(pr: int, base_branch: str, repo: str | None) -> list[tuple[int, str, str]]:
-    """(number, head branch, head oid) of every open PR but PR on BASE_BRANCH, by number."""
+class _GhPR(TypedDict):
+    """A gh pr list row, as schemas/gh-pr-list.schema.json admits it."""
+
+    number: int
+    headRefName: str
+    headRefOid: str
+
+
+class _Open(NamedTuple):
+    """An open PR the merge order reads."""
+
+    number: int
+    branch: str
+    oid: str
+
+
+def _open_prs(pr: int, base_branch: str, repo: str | None) -> list[_Open]:
+    """Every open PR but PR on BASE_BRANCH, by number; gh's answer validated first against
+    schemas/gh-pr-list.schema.json."""
     fields = "number,headRefName,headRefOid"
     args = ["pr", "list", "--state", "open", "--base", base_branch, "--limit", "200"]
     out = gh(
@@ -2540,13 +2591,25 @@ def _open_prs(pr: int, base_branch: str, repo: str | None) -> list[tuple[int, st
         "check gh auth status, then rerun",
         err=_UnreadError,
     )
+    env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
     try:
-        rows = cast("list[dict[str, object]]", json.loads(out))
-        got = [(int(str(r["number"])), str(r["headRefName"]), str(r["headRefOid"])) for r in rows]
-    except (ValueError, KeyError, TypeError) as e:
-        msg = f"gh pr list printed no pull requests ({out[:100]!r})"
+        p = subprocess.run(
+            [*KIT_PYTHON, "python", "-c", VALIDATE, str(GH_PRS)],
+            input=out,
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
+    except OSError as e:
+        msg = f"cannot run uv for the kit's locked jsonschema ({e})"
         raise _UnreadError(msg) from e
-    return sorted(x for x in got if x[0] != pr)
+    if p.returncode:
+        msg = f"gh pr list's answer fails schemas/gh-pr-list.schema.json ({_said(p)})"
+        raise _UnreadError(msg)
+    rows = cast("list[_GhPR]", json.loads(out))  # valid above
+    got = [_Open(r["number"], r["headRefName"], r["headRefOid"]) for r in rows]
+    return sorted(x for x in got if x.number != pr)
 
 
 def _sibling(

@@ -70,14 +70,20 @@ def test_merge_order_names_stales_and_conflicts() -> None:
 
 
 def test_merge_order_unread_and_none() -> None:
-    """A pin octo-feather-qa judged no freshness for and a failed read each print one line naming
-    it; nothing named prints none, with the count of other open PRs."""
+    """A pin octo-feather-qa judged no freshness for and a failed read (a fetch, a qc.toml the
+    contract rejects) each print one line naming it, never a gap; nothing named prints none, with
+    the count of other open PRs."""
     prs = [Sibling(12, "gh12", [], [Pin(RUN, MISSING, MISSING)])]
     fetch = "PR #15 (gh15) head 0123456789ab: git fetch -q failed (couldn't find remote ref)"
-    assert order(Order("main", prs, [fetch])) == [
+    qc = (
+        "PR #16 (gh16) head 0123456789ab: qc.toml at 0123456789ab fails octo-feather-contract "
+        "(demo.demo#acceptance-z: missing covers)"
+    )
+    assert order(Order("main", prs, [fetch, qc])) == [
         HEAD,
         f"- not read: PR #12 (gh12) pinned run {RUN}: octo-feather-qa said {MISSING}",
         f"- not read: {fetch}",
+        f"- not read: {qc}",
     ]
     none = "none this merge would stale or conflict with"
     assert order(Order("main", [], [])) == [
