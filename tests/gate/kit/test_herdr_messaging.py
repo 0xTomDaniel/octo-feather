@@ -15,6 +15,7 @@ from herdr_messaging import (
     post_merge_busy,
     queued_completion,
     repoint_record,
+    repoint_refused,
     result_compacting,
     result_resumed,
     results_listing,
@@ -24,6 +25,9 @@ from herdr_messaging import (
     spawn_fails_closed,
     spawn_one_bound,
     spawn_ready_late,
+    tell_failed,
+    tell_gone,
+    tell_kit,
     tell_supervisors,
     worker_route,
 )
@@ -66,6 +70,18 @@ def test_post_merge_busy(case: Case) -> None:
 
 def test_post_merge_tell_supervisors(case: Case) -> None:
     case(tell_supervisors)
+
+
+def test_post_merge_tell_kit(case: Case) -> None:
+    case(tell_kit)
+
+
+def test_post_merge_tell_failed(case: Case) -> None:
+    case(tell_failed)
+
+
+def test_post_merge_tell_gone(case: Case) -> None:
+    case(tell_gone)
 
 
 @pytest.mark.e2e
@@ -130,6 +146,10 @@ def test_director_prune(case: Case) -> None:
 
 def test_repoint_record(case: Case) -> None:
     case(repoint_record)
+
+
+def test_repoint_refused(case: Case) -> None:
+    case(repoint_refused)
 
 
 def test_herdr_malformed(case: Case) -> None:

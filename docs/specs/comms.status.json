@@ -228,12 +228,22 @@
       "pr": 279
     },
     "acceptance-close-message": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1153,
+      "record": "20261120T204737Z-bafe83df",
+      "commit": "b4c7a023ef4890966cefd93edde4140ea9a291fa",
+      "tests": [
+        "tests/gate/kit/lane_archive_teardown.py"
+      ]
     },
     "acceptance-shared-supervisor-kept": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1153,
+      "record": "20261120T204737Z-2bc282ab",
+      "commit": "b4c7a023ef4890966cefd93edde4140ea9a291fa",
+      "tests": [
+        "tests/gate/kit/lane_archive_teardown.py"
+      ]
     }
   }
 }
