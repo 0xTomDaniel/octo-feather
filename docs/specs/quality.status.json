@@ -30,8 +30,8 @@
     "acceptance-test-cpu-budget": {
       "status": "built",
       "pr": 1184,
-      "record": "20261120T092226Z-3d74de14",
-      "commit": "94953f6b1269b8c4143bb6d94ad9e552dab44ee6",
+      "record": "20261120T095012Z-794b1bd3",
+      "commit": "b35abd9766253051006c1e6f1cc07578ef42c5b5",
       "tests": [
         "tests/gate/kit/test_cpu_budget.py"
       ]
