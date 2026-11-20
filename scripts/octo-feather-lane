@@ -416,12 +416,39 @@ read prints as `unread: <source>: <reason>` where its facts would be; a log's un
 counted and named by line number. The last line is `unread: none` or `unread: <source>, ...`.
 Exit 0; 1 on any argument.
 
-  octo-feather-lane post-merge PR HEAD --lane NAME [--wait SECONDS] [--repo O/R]
-                                   the director's post-merge routine for lane NAME, its steps in order
+  octo-feather-lane merge PR HEAD [--wait SECONDS] [--repo O/R]
+                                   the supervisor's merge of its lane's PR at the approved HEAD, then
+                                   `done` on the lane's parent and the post-merge routine for the lane
 
-`post-merge` is the one command the director runs after a lane merges, at the merge report and at the close
-report (owner ruling 2026-10-29 on issue 206; docs/adr/0008 Duties). Rerun it freely: each step is idempotent, and
-step 6 tells no lane twice.
+`merge` (issue 1133; issue-lifecycle #gates-main-moved) performs the merge an approval already allowed, adding no
+merge policy. In order, each refusal before the merge exit 1 on stderr, nothing merged and nothing recorded:
+  lane     the open lane record ($(octo-feather-state)/lanes/*.toml) whose `pr` is PR, its name the lane's, its
+           `issue` the parent; none, two or more, or one with no `issue` refuses naming the fix
+  allowed  merge_allowed, the one place the merge asks whether it may go: today `gh pr view PR` reads it OPEN and
+           its head is HEAD (7+ hex prefix); a PR closed or merged, or at another head, refuses
+  merge    `gh pr merge PR --merge --match-head-commit <the PR's full head>`, printing `merged: PR #<n> at head
+           <sha12> (lane <name>)`; a gh failure refuses, naming it
+  done     `done <issue>` (below), its lines; a failure is named on stderr and the routine still runs
+  routine  the post-merge routine for the lane, PR and HEAD (below), its lines and summary as `post-merge` prints
+           them, its record written
+Exit 0 when merged, done, and steps 1-6 ok (step 7 pending or ok); 1 otherwise. A merged lane's routine resumes
+with `post-merge PR HEAD --lane <name>`.
+
+  octo-feather-lane post-merge PR HEAD --lane NAME [--wait SECONDS] [--repo O/R]
+                                   the post-merge routine for lane NAME, its steps in order
+  octo-feather-lane post-merge --lane NAME
+                                   lane NAME's post-merge record
+
+`post-merge` is the routine after a lane merges (owner ruling 2026-10-29 on issue 206; docs/adr/0008 Duties): `merge`
+(above) runs it; the director reruns it after a stop, and at the close report for step 7. One run of a lane at a
+time: a second waits for the first (a lock per lane). Each run records each step it runs, its outcome, line and
+time, in the lane's record, $(octo-feather-state)/post-merge/<lane>.json (its form: scripts/post_merge.py). A rerun for the same merge (its PR, and a
+head one of the two is a prefix of) runs no step recorded ok before the first one not ok: each prints its recorded
+line as `step <n> <name>: ok: <what> (recorded <time>, not rerun)`, and the routine resumes at the first step not
+ok; a record of another merge is replaced. Each step is idempotent, and step 6 tells no lane twice. With only
+--lane NAME it prints the lane's record: `post-merge record <lane>: PR #<n>, head <head>, merge commit <sha> (<file>)`,
+then per step `step <n> <name>: <outcome> at <time>: <line>` or `step <n> <name>: not run`; exit 0, 1 with no or an
+unreadable record.
   step 1 merged    `gh pr view PR`: the PR is MERGED, its head is HEAD (7+ hex prefix), and it has a merge commit
   step 2 main CI   `gh run list --commit <merge commit> --event push`: waits up to --wait SECONDS (default 300)
                    for a run to appear, then `gh run watch <id> --exit-status` on each run until every run gh
@@ -446,7 +473,7 @@ step 6 tells no lane twice.
                    kit's own locked mise tools, never the user's global ones; only with a mise.toml there), `just vendored-fetch`, `uv sync --locked` (env UV_PYTHON_DOWNLOADS=never: a
                    pinned Python (.python-version) not installed stops, naming `uv python install --no-bin <pin>`),
                    `pnpm install --frozen-lockfile`, `just install-check <the current repo's top>`. No service
-                   restart; a rerun reruns these
+                   restart; each run of step 3 reruns these
   step 4 checkout  the director's own checkout of the target: the main checkout of the repo post-merge runs in (`git
                    worktree list`, first entry), for any target repo; when it is the kit install, step 3 is its
                    one move (`checkout <path> is the kit install, which step 3 moves`). Step 3's rules on it, nothing
@@ -496,7 +523,7 @@ Each step prints one line as it finishes, `step <n> <name>: ok: <what>` or `step
 a stopped step runs no later step. The last line is the summary, each step's outcome (ok, stopped, not run):
 `post-merge <lane> PR #<n>: step 1 merged ok; step 2 main CI ok`, ending `; NOT told: <lane> <pane>, ... (step 6
 names each re-send)` when step 6 failed a send. Exit 0 when every step is ok, 1 when one (not merged, merged at another head, a red run named by its URL, no run within the bound, a watch that failed,
-a checkout kept, a supervisor not told, a teardown refusal), 3 when steps 1-6 are ok and step 7 is pending (the merge report run; rerun
+a checkout kept, a supervisor not told, a teardown refusal), 3 when steps 1-6 are ok and step 7 is pending (the run at the merge; rerun
 at the close report), 1 with usage on stderr for bad arguments.
 
   octo-feather-lane stale          the live agents on a stale launch set, and those with none recorded
@@ -532,6 +559,7 @@ from correction_lanes import (DIRECTOR, DIRECTOR_LOG, KIT_REPO, MARK_WORD, Refus
                               lane_logs)
 from correction_lanes import file_corrections as correction_filer
 from handoff_log import read_log
+import post_merge   # the post-merge routine's run order (post-merge)
 from tracker_calls import tracker, utc
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -4448,38 +4476,146 @@ def take_opt(args: list[str], flag: str) -> tuple[list[str], str | None]:
     return args[:i] + args[i + 2:], args[i + 1]
 
 
+def pm_outcome(step: "post_merge.Body[PostMerge, str]") -> "post_merge.Body[PostMerge, tuple[post_merge.Outcome, str]]":
+    """STEP as post_merge.run takes it: its line, and ok, or stopped on a Refuse or gh's unexpected data, or pending."""
+    def outcome(pm: PostMerge) -> "tuple[post_merge.Outcome, str]":
+        try:
+            return "ok", step(pm)
+        except Refuse as e:
+            return "stopped", str(e)
+        except Pending as e:
+            return "pending", str(e)
+        except (KeyError, TypeError, AttributeError, ValueError) as e:
+            return "stopped", f"unexpected data from gh ({type(e).__name__}: {e}): check the gh on PATH, then rerun"
+    return outcome
+
+
+def pm_records() -> Path:
+    """The post-merge records' dir: $(octo-feather-state)/post-merge (scripts/post_merge.py)."""
+    return lanes_dir().parent / "post-merge"
+
+
+def pm_routine(pm: PostMerge) -> int:
+    """The routine for PM's lane through post_merge.run, resumed from its record: each step's line, then the summary;
+    post-merge's exit code (--help, post-merge)."""
+    def show(s: post_merge.Step, how: str) -> None:
+        print(f"step {s.number} {s.name}: {s.outcome}: {s.line}" + (f" (recorded {s.at}, not rerun)" if how == "recorded" else ""),
+              flush=True)
+    try:
+        ran = post_merge.run(pm.lane, pm, [(name, pm_outcome(step)) for name, step in POST_MERGE_STEPS], show,
+                             pm_records()).steps
+    except post_merge.Unreadable as e:
+        raise Refuse(str(e))
+    outcomes = [f"step {s.number} {s.name} {s.outcome}" for s in ran]
+    outcomes += [f"step {n} {name} not run" for n, (name, _) in enumerate(POST_MERGE_STEPS, 1) if n > len(ran)]
+    told = f"; NOT told: {', '.join(pm.not_told)} (step 6 names each re-send)" if pm.not_told else ""
+    print(f"post-merge {pm.lane} PR #{pm.pr}: {'; '.join(outcomes)}{told}", flush=True)
+    if all(o.endswith((" ok", " pending")) for o in outcomes):
+        return 0 if all(o.endswith(" ok") for o in outcomes) else 3
+    return 1
+
+
+def pm_show(lane: str) -> int:
+    """`post-merge --lane NAME`: the lane's record (--help, post-merge)."""
+    try:
+        rec = post_merge.read(pm_records(), lane)
+    except post_merge.Unreadable as e:
+        raise Refuse(str(e))
+    if rec is None:
+        raise Refuse(f"no post-merge record for lane {lane} in {pm_records()}: its routine never ran "
+                     f"(octo-feather-lane merge, or post-merge PR HEAD --lane {lane})")
+    print(f"post-merge record {lane}: PR #{rec.pr}, head {rec.head}, merge commit {rec.merge or 'unknown'} "
+          f"({pm_records() / (lane + '.json')})")
+    by = {s.number: s for s in rec.steps}
+    for n, (name, _) in enumerate(POST_MERGE_STEPS, 1):
+        s = by.get(n)
+        print(f"step {n} {name}: {s.outcome} at {s.at}: {s.line}" if s else f"step {n} {name}: not run")
+    return 0
+
+
+def pm_wait(wait: str | None) -> int:
+    if wait is not None and not wait.isdigit():
+        raise Refuse(f"--wait needs whole seconds, got {wait!r}")
+    return int(wait or 300)
+
+
 def cmd_post_merge(args: list[str]) -> int:
     args, repo = take_repo(args)
     args, lane = take_opt(args, "--lane")
     args, wait = take_opt(args, "--wait")
+    if not args and lane and NAME.fullmatch(lane) and wait is None and repo is None:
+        return pm_show(lane)
     if len(args) != 2 or not lane or not NAME.fullmatch(lane):
         raise Refuse("usage: octo-feather-lane post-merge PR HEAD --lane NAME [--wait SECONDS] [--repo O/R] "
-                     f"(the merged PR, the head it was merged at, the lane's name; got {' '.join(args) or 'nothing'})")
+                     f"(the merged PR, the head it was merged at, the lane's name; got {' '.join(args) or 'nothing'}), "
+                     "or post-merge --lane NAME (its record)")
     if not SHA.fullmatch(args[1]):
         raise Refuse(f"HEAD must be the pinned head the PR merged at, 7 to 40 hex, got {args[1]!r}")
-    if wait is not None and not wait.isdigit():
-        raise Refuse(f"--wait needs whole seconds, got {wait!r}")
-    pm = PostMerge(pr_number(args[0]), args[1].lower(), lane, int(wait or 300), repo)
-    outcomes: list[str] = []
-    for n, (name, step) in enumerate(POST_MERGE_STEPS, 1):
-        if all(o.endswith(" ok") for o in outcomes):
-            try:
-                line, outcome = f"ok: {step(pm)}", "ok"
-            except Refuse as e:
-                line, outcome = f"stopped: {e}", "stopped"
-            except Pending as e:
-                line, outcome = f"pending: {e}", "pending"
-            except (KeyError, TypeError, AttributeError, ValueError) as e:
-                line, outcome = f"stopped: unexpected data from gh ({type(e).__name__}: {e}): check the gh on PATH, then rerun", "stopped"
-            print(f"step {n} {name}: {line}", flush=True)
-            outcomes.append(f"step {n} {name} {outcome}")
-        else:
-            outcomes.append(f"step {n} {name} not run")
-    told = f"; NOT told: {', '.join(pm.not_told)} (step 6 names each re-send)" if pm.not_told else ""
-    print(f"post-merge {lane} PR #{pm.pr}: {'; '.join(outcomes)}{told}", flush=True)
-    if all(o.endswith((" ok", " pending")) for o in outcomes):
-        return 0 if all(o.endswith(" ok") for o in outcomes) else 3
-    return 1
+    return pm_routine(PostMerge(pr_number(args[0]), args[1].lower(), lane, pm_wait(wait), repo))
+
+
+# --- merge: the supervisor's merge, then done and the post-merge routine (issue 1133; rules: --help, merge) ---
+
+def merge_lane(pr: int) -> tuple[str, dict[str, object]]:
+    """The open lane record whose `pr` is PR: its name and record; none or two refuses."""
+    import tomllib
+    lanes, hits = lanes_dir(), list[tuple[str, dict[str, object]]]()
+    for p in sorted(lanes.glob("*.toml")):
+        try:
+            rec: dict[str, object] = tomllib.loads(p.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+            raise Refuse(f"cannot read lane record {p} ({e}): fix it, then rerun; nothing merged")
+        if rec.get("pr") == pr:
+            hits.append((p.stem, rec))
+    if not hits:
+        raise Refuse(f"no open lane record in {lanes} has pr = {pr}: set `pr = {pr}` in the lane's record "
+                     "(octo-feather-lane --help, report), then rerun; nothing merged")
+    if len(hits) > 1:
+        raise Refuse(f"lane records {', '.join(n + '.toml' for n, _ in hits)} in {lanes} all have pr = {pr}: "
+                     "keep it only in the lane's own, then rerun; nothing merged")
+    name, rec = hits[0]
+    if not isinstance(rec.get("issue"), (int, str)) or isinstance(rec.get("issue"), bool) or not str(rec.get("issue")).strip():
+        raise Refuse(f"lane record {lanes / (name + '.toml')} has no `issue` (the parent ticket key): set it, then rerun; "
+                     "nothing merged")
+    return name, rec
+
+
+def merge_allowed(pr: int, head: str, repo: str | None) -> str:
+    """Whether this merge may go, the one place the merge asks it (--help, merge): today the PR is open and its head is
+    HEAD. The PR's full head, the one the merge pins; refuses naming why."""
+    d = cast("dict[str, object]", pr_view(pr, "state,headRefOid", repo))
+    oid = str(d["headRefOid"])
+    if d["state"] != "OPEN":
+        raise Refuse(f"PR #{pr} is {d['state']}, not open: nothing merged; a merged PR's routine resumes with "
+                     f"`octo-feather-lane post-merge {pr} {head} --lane <lane>`")
+    if not head_matches(head, oid) or not SHA.fullmatch(oid):
+        raise Refuse(f"PR #{pr}'s head is {oid[:12]}, not the approved head {head}: nothing merged; "
+                     "what would merge is not what was approved, ask for the merge again at its head")
+    return oid.lower()
+
+
+def cmd_merge(args: list[str]) -> int:
+    args, repo = take_repo(args)
+    args, wait = take_opt(args, "--wait")
+    if len(args) != 2:
+        raise Refuse("usage: octo-feather-lane merge PR HEAD [--wait SECONDS] [--repo O/R] "
+                     f"(the lane's PR and the head the owner approved; got {' '.join(args) or 'nothing'})")
+    if not SHA.fullmatch(args[1]):
+        raise Refuse(f"HEAD must be the approved head, 7 to 40 hex, got {args[1]!r}")
+    pr, head, secs = pr_number(args[0]), args[1].lower(), pm_wait(wait)
+    lane, rec = merge_lane(pr)
+    oid = merge_allowed(pr, head, repo)
+    gh(["pr", "merge", str(pr), "--merge", "--match-head-commit", oid, *(["-R", repo] if repo else [])],
+       f"nothing merged unless gh pr view {pr} reads MERGED; check it, then rerun")
+    print(f"merged: PR #{pr} at head {oid[:12]} (lane {lane})", flush=True)
+    parent, rc = str(rec["issue"]), 0
+    try:
+        cmd_done([parent])
+    except Refuse as e:
+        print(f"octo-feather-lane merge: done {parent}: {e}", file=sys.stderr, flush=True)
+        rc = 1
+    routine = pm_routine(PostMerge(pr, head, lane, secs, repo))
+    return rc or (0 if routine in (0, 3) else 1)
 
 
 COMMANDS = {
@@ -4498,6 +4634,7 @@ COMMANDS = {
     "spend": cmd_spend,
     "report": cmd_report,
     "intake": cmd_intake,
+    "merge": cmd_merge,
     "post-merge": cmd_post_merge,
     "stale": cmd_stale,
 }
