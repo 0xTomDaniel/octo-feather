@@ -4,7 +4,7 @@ docstring), each run as that file's command through `case` (tests/gate/kit/conft
 from collections.abc import Callable
 
 import pytest
-from lane_start import started
+from lane_start import refused, started, unicode_title
 
 Case = Callable[..., None]
 
@@ -14,3 +14,11 @@ Case = Callable[..., None]
 )
 def test_lane_start_started(case: Case) -> None:
     case(started)
+
+
+def test_lane_start_unicode_title(case: Case) -> None:
+    case(unicode_title)
+
+
+def test_lane_start_refused(case: Case) -> None:
+    case(refused)

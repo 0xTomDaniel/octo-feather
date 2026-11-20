@@ -521,7 +521,8 @@ agents: not read: <why>`. post-merge step 5 prints the same report.
 
 `start` (spec issue-lifecycle #acceptance-lane-start) reads the lane key (the target's tracker skill's lane-key, as
 octo-feather-start resolves it), the ticket (issue-view), the repository (gh repo view) and the caller's
-$HERDR_PANE_ID (the director pane); fetches origin and adds the worktree `<checkout>-<key>` beside the checkout on a
+$HERDR_PANE_ID (the director pane), each answer validated and refused naming its field before anything is made
+(arguments by argparse); fetches origin and adds the worktree `<checkout>-<key>` beside the checkout on a
 new branch `<key>` from origin's main; starts the supervisor with the octo-feather-start beside this command
 (`--issue TICKET --cwd WORKTREE`); writes lanes/<supervisor name>.toml (comms spec #lane-record: supervisor,
 repository, issue, goal TITLE, started_at, waiting_on ""); sends the supervisor with herdr-say `/goal TEXT for <key>,

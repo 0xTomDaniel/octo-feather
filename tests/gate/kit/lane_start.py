@@ -14,7 +14,15 @@ clone, so the lane branch must come from origin's main as fetched, not the check
            launch; the supervisor received the goal, then the brief (its generated header, then
            the file's text) and nothing else; the director log holds one prod line for the lane
            (beside the spawn line herdr-spawn writes for the director's spawn); it printed
-           `key=gh905 pane=<pane> issue=905`. Each observation printed, for the qc demo.
+           `key=gh905 pane=<pane> issue=905`; Herdr names the supervisor's working directory
+           that worktree. Each observation printed, for the qc demo.
+  unicode_title  options before the ticket and in `--opt=value` form (argparse's grammar), a title
+           with an emoji, a quote and a backslash: the record parses (tomllib) and its goal is the
+           title exactly.
+  refused  each exits 1 naming what it rejects and makes nothing (no worktree, branch, workspace,
+           record or prompt): a missing --brief-file (argparse's usage error); `gh repo view`
+           printing nameWithOwner null and an unknown field; issue-view printing a title that is no
+           string (each edge validated before anything is made).
 """
 
 from __future__ import annotations
@@ -87,6 +95,10 @@ def started(s: Scratch) -> None:
 
     agents = json.loads((d / "agents.json").read_text())
     sup = agents[pane]
+    wt = checkout.with_name("target-gh905")
+    got_agent = json.loads(s.run(["herdr", "agent", "get", "gh905"]).out)["result"]["agent"]
+    assert (got_agent["pane_id"], got_agent["cwd"]) == (pane, str(wt)), got_agent
+    show(f"herdr agent get gh905: pane {pane}, cwd {got_agent['cwd']}")
     calls = (d / "log").read_text().splitlines()
     assert [c for c in calls if c.startswith("workspace create ")] == [
         c for c in calls if c.startswith("workspace create --label gh905 ")
@@ -99,7 +111,6 @@ def started(s: Scratch) -> None:
         f"workspace gh905 ({sup['workspace_id']}) holds supervisor gh905 at {pane}, tab supervisor"
     )
 
-    wt = checkout.with_name("target-gh905")
     assert s.git(wt, "rev-parse", "--abbrev-ref", "HEAD") == "gh905"
     assert s.git(wt, "rev-parse", "HEAD") == main_, "the branch is not at origin's main"
     show(f"worktree {wt.name} on branch gh905 at origin's main {main_[:12]}")
@@ -136,5 +147,55 @@ def started(s: Scratch) -> None:
     show(f"director log: one prod line {prods[0]}")
 
 
+def unicode_title(s: Scratch) -> None:
+    _, checkout, _ = world(s)
+    brief = s.root / "brief.md"
+    brief.write_text(BRIEF)
+    title = 'Ship \U0001f680 "quoted" back\\slash'
+    cmd = [kit("octo-feather-lane"), "start", f"--goal={title}", f"--brief-file={brief}"]
+    s.run([*cmd, "--outcome", OUTCOME, "905"], cwd=checkout, env=DIRECTOR)
+    state = s.home / ".local" / "state" / "octo-feather"
+    rec = tomllib.loads((state / "lanes" / "gh905.toml").read_text(encoding="utf-8"))
+    assert rec["goal"] == title, rec
+    show(f"lanes/gh905.toml goal reads back {rec['goal']!r}")
+
+
+def nothing_made(s: Scratch, d: Path, checkout: Path) -> None:
+    """No worktree, branch, workspace, record or prompt for gh905."""
+    assert not checkout.with_name("target-gh905").exists()
+    assert s.git(checkout, "branch", "--list", "gh905") == ""
+    calls = (d / "log").read_text().splitlines() if (d / "log").exists() else []
+    assert not [c for c in calls if c.startswith(("workspace create", "tab create"))], calls
+    assert not (d / "prompts").exists()
+    assert not (s.home / ".local" / "state" / "octo-feather" / "lanes" / "gh905.toml").exists()
+
+
+def refused(s: Scratch) -> None:
+    d, checkout, _ = world(s)
+    brief = s.root / "brief.md"
+    brief.write_text(BRIEF)
+    cmd = [kit("octo-feather-lane"), "start", "905", "--goal", TITLE, "--outcome", OUTCOME]
+    err = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1).err
+    assert "the following arguments are required: --brief-file" in err, err
+    nothing_made(s, d, checkout)
+    show(f"no --brief-file: exit 1, {err}")
+
+    cmd += ["--brief-file", str(brief)]
+    s.gh.store("repo.json", {"nameWithOwner": None, "unexpected": True})
+    err = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1).err
+    assert "gh repo view printed" in err, err
+    assert "want exactly nameWithOwner" in err, err
+    nothing_made(s, d, checkout)
+    show(f"gh repo view malformed: exit 1, {err}")
+
+    s.gh.store("repo.json", {"nameWithOwner": "o/r"})
+    issue = json.loads((s.gh.dir / "issue" / "905.json").read_text()) | {"title": 7}
+    s.gh.store("issue/905.json", issue)
+    err = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1).err
+    assert "issue-view 905 printed title is no string" in err, err
+    nothing_made(s, d, checkout)
+    show(f"issue-view malformed: exit 1, {err}")
+
+
 if __name__ == "__main__":
-    main(started)
+    main(started, unicode_title, refused)

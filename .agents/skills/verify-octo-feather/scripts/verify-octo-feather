@@ -3609,11 +3609,12 @@ def drive_lane_start(f: Feature) -> None:
     f.run("supervisor", "herdr", "agent", "get", "gh905")
     calls = (w.world / "log").read_text().splitlines()
     f.obs("supervisor", "workspace-create", "\n".join(x for x in calls if x.startswith("workspace create ")))
+    wt = checkout.with_name("target-gh905")
     f.check("supervisor", lambda c: c.code == 0 and c.j["result"]["agent"]["pane_id"] == pane
+            and c.j["result"]["agent"]["cwd"] == str(wt)
             and c.j["result"]["agent"]["workspace_id"] == pane.split(":", maxsplit=1)[0]
             and c.o["workspace-create"].startswith("workspace create --label gh905 ")
             and len(c.o["workspace-create"].splitlines()) == 1)
-    wt = checkout.with_name("target-gh905")
     f.run("worktree", "git", "-C", str(wt), "log", "-1", "--format=%H %D")
     f.check("worktree", lambda c: c.code == 0 and c.out == f"{main} HEAD -> gh905, origin/main, origin/HEAD\n")
     record = w.state / "lanes" / "gh905.toml"

@@ -10,7 +10,7 @@ Drive criterion: `issue-lifecycle#acceptance-lane-start`
 ## Sub-features
 
 - `start` the director's `octo-feather-lane start 905 --goal TITLE --outcome TEXT --brief-file brief.md` in its target clone prints `key=gh905 pane=<pane> issue=905`.
-- `supervisor` Herdr finds agent gh905 at that pane, in the one workspace the start created, labelled gh905.
+- `supervisor` Herdr finds agent gh905 at that pane, working in the worktree, in the one workspace the start created, labelled gh905.
 - `worktree` `<checkout>-gh905` is on branch gh905 at origin's main as fetched, not the clone's older main.
 - `record` `lanes/gh905.toml` holds the lane record's keys at launch, in order.
 - `messages` the supervisor received the goal, then the brief (its generated header, then the file's text), nothing else.
@@ -29,7 +29,7 @@ Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather d
 The world, under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/lane-start/`: the kit's testkit Herdr (`tests/gate/kit/testkit/herdr.py`) holding the director at `w0:p1`, the box's systemd user manager stood in (`tests/gate/kit/testkit/systemd.py`), and the testkit's fake gh (`tests/gate/kit/testkit/gh.py`, repo o/r, open issue 905), each first on PATH; a scratch HOME and session state (`director.toml` naming `w0:p1`, a director reflection just logged so the start runs none); a bare origin, the director's clone `src/target`, then one more commit on origin's main. The director's env: OCTO_FEATHER_ROLE=director, HERDR_PANE_ID=w0:p1, HERDR_WORKSPACE_ID=w0. No live Herdr pane or GitHub is touched.
 
 - **Start** (`start`). Run in the clone. Observe exit 0 and stdout exactly `key=gh905 pane=<pane> issue=905`.
-- **Supervisor** (`supervisor`). `herdr agent get gh905`. Observe its pane the printed one, its workspace that pane's, and the Herdr log's one `workspace create --label gh905`.
+- **Supervisor** (`supervisor`). `herdr agent get gh905`. Observe its pane the printed one, its `cwd` the worktree `src/target-gh905`, its workspace that pane's, and the Herdr log's one `workspace create --label gh905`.
 - **Worktree** (`worktree`). `git -C src/target-gh905 log -1 --format='%H %D'`. Observe origin's main as fetched, `HEAD -> gh905`, at `origin/main`.
 - **Record** (`record`). `cat` the record. Observe supervisor, repository `o/r`, issue `gh905`, goal the title, a UTC started_at, waiting_on `""`.
 - **Messages** (`messages`). `cat` the world's `prompts`. Observe the goal line, then the brief: `Lane facts (octo-feather-lane start):`, lane key, parent issue (key, title, URL), director pane, worktree, branch, main commit, a blank line, then brief.md.

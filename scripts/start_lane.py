@@ -11,12 +11,15 @@ the kit's scripts); how a command finds this module: scripts/correction_lanes.py
 
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import json
 import os
+import re
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
+from typing import NoReturn, cast
 
 from correction_lanes import DIRECTOR_LOG
 from handoff_log import encode
@@ -25,12 +28,17 @@ from tracker_calls import gh, tracker
 KIT = Path(__file__).resolve().parent.parent
 START = KIT / "scripts" / "octo-feather-start"
 SAY = KIT / ".agents" / "skills" / "herdr-comms" / "assets" / "herdr-say"
-FLAGS = ("--goal", "--outcome", "--brief-file")
-USAGE = "usage: octo-feather-lane start TICKET --goal TITLE --outcome TEXT --brief-file FILE"
 GOAL = (
     "/goal {outcome} for {key}, delivered through implement-spec; done when an owner gate is"
     " pending (review link or merge ask sent) or PR merged and lane torn down"
 )
+# A lane key names a branch, a worktree and a record file: one plain token (roles spec #lane-key).
+KEY = re.compile(r"[a-z0-9][a-z0-9._-]*")
+REPO = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+")
+# issue-view's fields (skills spec #tracker-script-issue-view), exactly.
+VIEW_STR = ("key", "title", "body", "state", "url")
+VIEW_LISTS = ("children", "blocked_by")
+VIEW = {*VIEW_STR, *VIEW_LISTS, "parent"}
 
 
 @dataclass(frozen=True)
@@ -45,13 +53,23 @@ class Ask:
 
 
 @dataclass(frozen=True)
+class Issue:
+    """The ticket as issue-view prints it, validated at this edge (issue_view)."""
+
+    key: str
+    title: str
+    url: str
+    parent: str | None  # read for #1156's sub-issue refusal; unused here
+
+
+@dataclass(frozen=True)
 class Lane:
     """The lane's facts, read before anything is made."""
 
     key: str
     director: str
     checkout: Path
-    issue: str  # the parent issue as the brief header names it
+    issue: Issue
     repository: str
 
     @property
@@ -60,31 +78,119 @@ class Lane:
 
 
 def parse(args: list[str], err: type[Exception]) -> Ask:
-    """ARGS as an Ask; ERR naming the usage or the unreadable brief file."""
-    opts: dict[str, str] = {}
-    rest: list[str] = []
-    it = iter(args)
-    for a in it:
-        if a in FLAGS:
-            v = next(it, None)
-            if v is None or a in opts:
-                msg = f"{USAGE} ({a} needs one value)"
-                raise err(msg)
-            opts[a] = v
-        else:
-            rest.append(a)
-    if len(rest) != 1 or set(opts) != set(FLAGS) or not all(v.strip() for v in opts.values()):
-        msg = f"{USAGE} (got {' '.join(args) or 'nothing'})"
-        raise err(msg)
-    if "\n" in opts["--goal"]:
-        msg = "--goal is the lane title, one line (comms spec #lane-record, goal)"
-        raise err(msg)
+    """ARGS as an Ask (argparse); ERR naming argparse's usage error or the unreadable brief."""
+
+    class Parser(argparse.ArgumentParser):
+        def error(self, message: str) -> NoReturn:
+            msg = f"{self.format_usage().strip()} ({message})"
+            raise err(msg)
+
+    p = Parser(prog="octo-feather-lane start", add_help=False)
+    p.add_argument("ticket", metavar="TICKET")
+    p.add_argument("--goal", required=True, metavar="TITLE")
+    p.add_argument("--outcome", required=True, metavar="TEXT")
+    p.add_argument("--brief-file", required=True, metavar="FILE", type=Path)
+    ns = p.parse_args(args)
+    ticket, goal, outcome = cast("str", ns.ticket), cast("str", ns.goal), cast("str", ns.outcome)
+    brief_file = cast("Path", ns.brief_file)
+    for name, v in (("TICKET", ticket), ("--goal", goal), ("--outcome", outcome)):
+        if not v.strip():
+            p.error(f"{name} is empty")
+        try:
+            v.encode("utf-8")
+        except UnicodeEncodeError:
+            p.error(f"{name} is not UTF-8 text")
+    if "\n" in goal:
+        p.error("--goal is the lane title, one line (comms spec #lane-record, goal)")
     try:
-        brief = Path(opts["--brief-file"]).read_text(encoding="utf-8")
+        brief = brief_file.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
-        msg = f"--brief-file {opts['--brief-file']} unreadable ({e}): name the brief's file"
+        msg = f"--brief-file {brief_file} unreadable ({e}): name the brief's file"
         raise err(msg) from e
-    return Ask(rest[0], opts["--goal"], opts["--outcome"], brief)
+    return Ask(ticket, goal, outcome, brief)
+
+
+def toml_str(s: str) -> str:
+    """S as a TOML basic string: written by hand, the stdlib has no TOML writer (tomli-w exists;
+    kit scripts stay stdlib only, AGENTS.md). TOML escapes only the quote, the backslash and
+    control characters; every other character, astral ones included, is written as itself."""
+    out: list[str] = []
+    for ch in s:
+        if ch in ('"', "\\"):
+            out.append("\\" + ch)
+        elif ord(ch) < 0x20 or ord(ch) == 0x7F:  # noqa: PLR2004 (TOML's control characters)
+            out.append(f"\\u{ord(ch):04X}")
+        else:
+            out.append(ch)
+    return '"' + "".join(out) + '"'
+
+
+def json_object(raw: str, what: str, err: type[Exception]) -> dict[str, object]:
+    """RAW parsed as one JSON object; ERR naming WHAT when it is not."""
+    try:
+        got: object = json.loads(raw)
+    except ValueError as e:
+        msg = f"step read: {what} printed no JSON ({e}): {raw[:200]!r}"
+        raise err(msg) from e
+    if not isinstance(got, dict):
+        msg = f"step read: {what} printed no JSON object: {raw[:200]!r}"
+        raise err(msg)
+    return cast("dict[str, object]", got)
+
+
+def issue_view(raw: str, ticket: str, err: type[Exception]) -> Issue:
+    """issue-view TICKET's RAW output as an Issue. A hand-written check, not a schema library:
+    kit scripts stay standard-library-only (quality spec #edge-validation-kit). Exactly its
+    fields, each typed; ERR naming the field it rejects."""
+    what = f"issue-view {ticket}"
+    d = json_object(raw, what, err)
+    lists = {k: d.get(k) for k in VIEW_LISTS}
+    bad = (
+        f"fields {sorted(d)}, want exactly {sorted(VIEW)}"
+        if set(d) != VIEW
+        else next((f"{k} is no string" for k in VIEW_STR if not isinstance(d[k], str)), None)
+        or next((f"{k} is empty" for k in ("key", "title", "url") if not d[k]), None)
+        or (
+            "parent is neither null nor a string"
+            if d["parent"] is not None and not isinstance(d["parent"], str)
+            else None
+        )
+        or next(
+            (
+                f"{k} is no list of strings"
+                for k, v in lists.items()
+                if not isinstance(v, list)
+                or not all(isinstance(x, str) for x in cast("list[object]", v))
+            ),
+            None,
+        )
+    )
+    if bad:
+        msg = f"step read: {what} printed {bad}: check the tracker skill's issue-view, then rerun"
+        raise err(msg)
+    parent = d["parent"]
+    return Issue(
+        str(d["key"]), str(d["title"]), str(d["url"]), parent if isinstance(parent, str) else None
+    )
+
+
+def repository(err: type[Exception]) -> str:
+    """owner/name of the checkout's repo, `gh repo view --json nameWithOwner` validated at this
+    edge: exactly that field, an owner/name string (hand-written: #edge-validation-kit)."""
+    out = gh(
+        ["repo", "view", "--json", "nameWithOwner"],
+        "check the checkout's origin and gh auth status",
+        err=err,
+    )
+    d = json_object(out, "gh repo view", err)
+    name = d.get("nameWithOwner")
+    if set(d) != {"nameWithOwner"} or not isinstance(name, str) or not REPO.fullmatch(name):
+        msg = (
+            f"step read: gh repo view printed {json.dumps(d)[:200]}, want exactly nameWithOwner,"
+            " an owner/name string: check the gh on PATH, then rerun"
+        )
+        raise err(msg)
+    return name
 
 
 def run(err: type[Exception], step: str, cmd: list[str], cwd: Path | None = None) -> str:
@@ -101,28 +207,20 @@ def run(err: type[Exception], step: str, cmd: list[str], cwd: Path | None = None
 
 
 def read(ask: Ask, err: type[Exception]) -> Lane:
-    """Step 1: the lane's facts, nothing made."""
+    """Step 1: the lane's facts, each validated, nothing made."""
     director = os.environ.get("HERDR_PANE_ID", "")
     if not director:
         msg = "step read: no HERDR_PANE_ID: run the lane start from the director's pane"
         raise err(msg)
     checkout = Path(run(err, "read", ["git", "rev-parse", "--show-toplevel"]))
     key = tracker("lane-key", ask.ticket, err=err).strip()
-    raw = tracker("issue-view", ask.ticket, err=err)
-    try:
-        view = json.loads(raw)
-        issue = f"{view['key']} {view['title']} ({view['url']})"
-    except (ValueError, KeyError, TypeError) as e:
-        msg = f"step read: issue-view {ask.ticket} printed no issue ({raw[:200]!r})"
-        raise err(msg) from e
-    fix = "check the checkout's origin and gh auth status"
-    out = gh(["repo", "view", "--json", "nameWithOwner"], fix, err=err)
-    try:
-        repository = str(json.loads(out)["nameWithOwner"])
-    except (ValueError, KeyError, TypeError) as e:
-        msg = f"step read: gh repo view printed no nameWithOwner ({out[:200]!r})"
-        raise err(msg) from e
-    return Lane(key, director, checkout, issue, repository)
+    if not KEY.fullmatch(key):
+        msg = (
+            f"step read: lane-key {ask.ticket} printed {key[:100]!r}, no lane key (roles #lane-key)"
+        )
+        raise err(msg)
+    issue = issue_view(tracker("issue-view", ask.ticket, err=err), ask.ticket, err)
+    return Lane(key, director, checkout, issue, repository(err))
 
 
 def start(args: list[str], lanes: Path, err: type[Exception]) -> str:
@@ -159,10 +257,8 @@ def start(args: list[str], lanes: Path, err: type[Exception]) -> str:
     keys |= {"goal": ask.goal, "started_at": at, "waiting_on": ""}
     try:
         lanes.mkdir(parents=True, exist_ok=True)
-        # Written by hand: the stdlib has no TOML writer (tomli-w exists; kit scripts stay
-        # stdlib only, AGENTS.md); a record is flat strings, whose JSON escapes TOML shares.
         with record.open("x", encoding="utf-8") as f:
-            f.write("".join(f"{k} = {json.dumps(v)}\n" for k, v in keys.items()))
+            f.write("".join(f"{k} = {toml_str(v)}\n" for k, v in keys.items()))
     except OSError as e:
         msg = f"step record: {record} not written ({e}); {made}"
         raise err(msg) from e
@@ -172,7 +268,8 @@ def start(args: list[str], lanes: Path, err: type[Exception]) -> str:
     run(err, f"goal ({made})", [str(SAY), pane, goal])
     header = (
         f"Lane facts (octo-feather-lane start):\nLane key: {lane.key}\n"
-        f"Parent issue: {lane.issue}\nDirector pane: {lane.director}\nWorktree: {wt}\n"
+        f"Parent issue: {lane.issue.key} {lane.issue.title} ({lane.issue.url})\n"
+        f"Director pane: {lane.director}\nWorktree: {wt}\n"
         f"Branch: {lane.key}\nMain commit: {main}\n\n"
     )
     made += ", goal sent"

@@ -17,8 +17,9 @@ prints {"result": "delivered"}; `agent prompt P ...` to any other P fails `pane_
 With FAKE_HERDR set, it stands for Herdr's agents instead (#666): a world in that dir, each call one
 line in its `log`. `agents.json` maps each pane id to its agent, {name, pane_id, workspace_id,
 tab_id, agent_status}, and `ready_at` (an epoch time: `unknown` until then, a Pi still booting);
-a scenario may write it. `tab create --workspace W [--label L] [--env K=V]...` makes tab W:tN,
-pane W:pN (N past every earlier tab's), keeping L and the env (its agent's `label`, `env`);
+a scenario may write it. `tab create --workspace W [--label L] [--cwd D] [--env K=V]...` makes tab
+W:tN, pane W:pN (N past every earlier tab's), keeping L, D and the env (its agent's `label`, `cwd`,
+as Herdr's AgentInfo names the pane's working directory, and `env`);
 `workspace create --label L` makes workspace wN, N past every agent's workspace, its seed tab
 made as a tab create's (Herdr's envelope: workspace.workspace_id, tab.tab_id);
 `tab get T` prints T's label; `tab close T` drops T's agents; `workspace close W` drops W's agents,
@@ -176,6 +177,8 @@ class World:
         self.agents[pane] = {"name": "", "pane_id": pane, "workspace_id": w, "tab_id": tab}
         self.agents[pane]["agent_status"] = "none"
         self.agents[pane]["label"] = next(iter(opts(a, "--label")), "")
+        if cwd := opts(a, "--cwd"):
+            self.agents[pane]["cwd"] = cwd[0]
         self.agents[pane]["env"] = dict(kv.split("=", 1) for kv in opts(a, "--env"))
         self.save()
         return pane, tab
