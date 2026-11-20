@@ -299,6 +299,14 @@ covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11
 command = "scripts/octo-feather-qa --verdict 20261120T001636Z-8a2c20/supervisor-autonomy/owner-access-blocker-and-ready-work 20261120T001636Z-8a2c20/supervisor-autonomy/owner-access-blocker-message"
 covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evals/fixtures/lane-shout-wip", "evals/fixtures/lane-shout-main", "scripts/octo-feather-qa", "evidence/2026-11-13-gh840-supervisor-autonomy.md", "evidence/2026-11-18-gh978-eval-verdict.md", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/herdr_messaging.py"]
 
+# Judged from pinned stored eval runs (rule: scripts/octo-feather-qa --help, Verdict): the supervisor half, sent back
+# and nothing integrated on a missed named skill, integrated on none. The command half (the log's finding line) is proved
+# by tests/gate/kit/test_lane_skills.py (the gate). The cases' stand-in for `skills` and the run evidence:
+# evidence/2026-11-20-gh644-1161-supervisor-ticket-skills.md.
+[demo."issue-lifecycle#acceptance-ticket-skills"]
+command = "scripts/octo-feather-qa --verdict 20261120T024345Z-2fd725/supervisor-ticket-skills/missed-skill-sent-back 20261120T024345Z-2fd725/supervisor-ticket-skills/loaded-skill-integrated"
+covers = ["agents/supervisor.md", "scripts/octo-feather-lane", "scripts/octo-feather-handoff", "evals/supervisor-ticket-skills", "evals/fixtures/lane-skills-main", "evals/fixtures/lane-skills-1099", "evals/fixtures/lane-skills-1094", "tests/gate/kit/testkit/recordings/lane-skills.json", "tests/fixtures/lane-skills", "scripts/octo-feather-qa", "evidence/2026-11-20-gh644-1161-supervisor-ticket-skills.md"]
+
 # Judged from pinned stored eval runs (rule: scripts/octo-feather-qa --help, Verdict). Which case proves which Then
 # clause, and the generated run evidence: evidence/2026-11-18-gh978-eval-verdict.md.
 [demo."roles#acceptance-general-worker-no-implementation"]
