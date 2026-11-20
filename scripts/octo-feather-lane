@@ -535,7 +535,13 @@ before its end) and `director told: <each>`; exit 0, 1 with no or an unreadable 
                    ...`, with no wait. merge-ask reads the same fact at the PR head
   step 3 kit refresh  the live kit install (this script's kit dir, or env OCTO_FEATHER_KIT_INSTALL): only when
                    `gh repo view` names the PR's repo and the install's origin alike, else `kit install unchanged:
-                   PR in <repo>, install is <repo>`. Stops, nothing changed, on what issue-lifecycle
+                   PR in <repo>, install is <repo>`. The live-run rule (issue-lifecycle #gates-main-moved): a
+                   live run of the box's slots (heavy: gate and qc runs; eval: octo-feather-qa; live while its
+                   lock is held: octo-feather-slot --help, Files) whose recorded process works in the install
+                   (its cwd) or runs a program from it (its executable, argv[0] or script) is waited for, up to
+                   --wait, re-read each second; then step 3 stops, nothing moved, `kit refresh waits: <kind> run
+                   pid <pid> of lane <lane> since <since> reads <install>`. Where /proc is absent (macOS), or a
+                   process is not read, any live run counts. Stops, nothing changed, on what issue-lifecycle
                    #gates-main-moved refuses, checked on the install and on step 4's checkout before either moves
                    (an install that is step 4's checkout as that checkout), named `kit install|checkout <path> is
                    dirty (...)`, `is on <branch|a detached HEAD>, not <base>` or `has diverged ...`; after `git
@@ -580,7 +586,10 @@ before its end) and `director told: <each>`; exit 0, 1 with no or an unreadable 
   step 7 teardown  only once $(octo-feather-state)/lanes/archive/<lane>.toml exists (`octo-feather-lane archive`
                    moves it there, then starts this step in its teardown unit), else `pending: lane <lane> not
                    archived; rerun on its close report`; an archived record whose `pr` is not PR stops. In order, each stop keeping the
-                   rest: the lane's own space (the archived `supervisor` pane id's prefix, when no open lane
+                   rest: first step 3's live-run rule on a run whose recorded process works in the lane's
+                   worktree (its cwd; any live run where /proc is absent), `teardown waits: <kind> run pid
+                   <pid> of lane <lane> since <since> reads <worktree>`, nothing closed or removed; then
+                   the lane's own space (the archived `supervisor` pane id's prefix, when no open lane
                    record's supervisor and not director.toml's `pane` has it) closed with `herdr-close <space>`,
                    else only its tab with `herdr-close <supervisor pane>`; one Herdr no longer finds is `already
                    closed`. Neither closed, nothing in another record changed, when an open lane record but
@@ -635,6 +644,7 @@ from correction_lanes import (DIRECTOR, DIRECTOR_LOG, KIT_REPO, MARK_WORD, Refus
 from correction_lanes import file_corrections as correction_filer
 from handoff_log import encode, read_log
 import post_merge   # the post-merge routine's run order (post-merge)
+import slot_queue   # the box's slot runs, read by post-merge steps 3 and 7 (the live-run rule)
 from tracker_calls import tracker, utc
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -4229,6 +4239,7 @@ def pm_kit(pm: PostMerge) -> str:
     pr_repo, kit_repo = pm_repo(pm.repo, f"the repo of PR #{pm.pr}"), pm_repo(origin, f"the kit install's origin {origin}")
     if pr_repo.lower() != kit_repo.lower():
         return f"kit install unchanged: PR in {pr_repo}, install is {kit_repo}"
+    pm_wait_runs(pm, kit, "kit refresh", "nothing moved", program=True)
     top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
     if top.returncode:
         raise Refuse("the current directory is in no git repo: run post-merge in the target repo (just install-check checks it), then rerun")
@@ -4305,6 +4316,52 @@ def pm_checkout(pm: PostMerge) -> str:
     if os.path.realpath(top) == os.path.realpath(kit_install()):
         return f"checkout {top} is the kit install, which step 3 moves: no second move"
     return pm_follow(pm, top, "checkout", branch=pm.base, always_fetch=False)
+
+
+# The live-run rule (issue 1136; issue-lifecycle #gates-main-moved; --help, steps 3 and 7).
+PM_RUN_POLL = 1   # seconds between reads of the slot runs while a step waits
+
+
+def pm_reads(pid: int, path: Path, program: bool) -> bool:
+    """Whether process PID works in PATH (its cwd) or, with PROGRAM, runs a program from it (its executable, its
+    argv[0], or its script: its first argument after argv[0] that is no option). One not read counts, and so does
+    any where /proc is absent (macOS): the conservative answer."""
+    if not Path("/proc/self").exists():
+        return True
+    proc = Path("/proc") / str(pid)
+    try:
+        cwd = (proc / "cwd").readlink()
+        seen = [cwd]
+        if program:
+            argv = (proc / "cmdline").read_bytes().decode(errors="replace").split("\0")
+            script = next((a for a in argv[1:] if a and not a.startswith("-")), "")
+            seen += [(proc / "exe").readlink(), *(cwd / a for a in (argv[0], script) if a)]
+    except OSError:
+        return True
+    roots = {os.path.normpath(path), os.path.realpath(path)}
+    return any(c == r or c.startswith(r.rstrip("/") + "/")
+               for x in seen for c in (os.path.normpath(x), os.path.realpath(x)) for r in roots)
+
+
+def pm_wait_runs(pm: PostMerge, path: Path, what: str, kept: str, program: bool) -> None:
+    """WHAT waits up to the routine's --wait while a live run of the box's slots (a lock held: scripts/slot_queue.py,
+    runs) reads PATH (pm_reads), then stops naming it, KEPT."""
+    deadline = time.monotonic() + pm.wait
+    while True:
+        try:
+            live = [(k, r) for k in ("heavy", "eval")
+                    for r in slot_queue.box(k, KIT / "gate-budget.toml", os.environ).runs()]
+        except slot_queue.Refused as e:
+            raise Refuse(f"{what} cannot read the box's slot runs ({e}): fix it, then rerun; {kept}")
+        hit = next(((k, r) for k, r in live if pm_reads(r.pid, path, program)), None)
+        if hit is None:
+            return
+        left = deadline - time.monotonic()
+        if left <= 0:
+            k, r = hit
+            raise Refuse(f"{what} waits: {k} run pid {r.pid} of lane {r.lane} since {r.since} reads {path}; "
+                         f"{kept}: rerun once it ends")
+        time.sleep(min(PM_RUN_POLL, left))
 
 
 def pm_python_missing(kit: Path) -> str | None:
@@ -4550,18 +4607,23 @@ def pm_git_ok(what: str, *args: str) -> str:
     return p.stdout
 
 
-def pm_worktree(branch: str) -> str:
-    """Remove the clean worktree on BRANCH; the kit install, the main worktree and a review row's root are kept."""
+def pm_worktree_of(branch: str) -> tuple[int, str] | None:
+    """The worktree on BRANCH in the current repo: its place in `git worktree list` (0 the main one) and path."""
     listing = pm_git_ok("git worktree list failed", "worktree", "list", "--porcelain").strip().split("\n\n")
     entries = [{k: v for k, _, v in (x.partition(" ") for x in e.splitlines())} for e in listing]
     hit = [i for i, e in enumerate(entries) if e.get("branch") == f"refs/heads/{branch}"]
-    if not hit:
+    return (hit[0], entries[hit[0]]["worktree"]) if hit else None
+
+
+def pm_worktree(branch: str) -> str:
+    """Remove the clean worktree on BRANCH; the kit install, the main worktree and a review row's root are kept."""
+    if not (at := pm_worktree_of(branch)):
         return f"worktree of {branch} already removed"
-    path = entries[hit[0]]["worktree"]
+    path = at[1]
     real = os.path.realpath(path)
     if real == os.path.realpath(kit_install()):
         raise Refuse(f"worktree {path} kept: it is the kit install; put the install back on main by hand")
-    if hit[0] == 0:
+    if at[0] == 0:
         raise Refuse(f"worktree {path} kept: it is the main worktree; check out another branch there, then rerun")
     for root, slug, reg in pm_review_roots():
         if root == real:
@@ -4625,6 +4687,9 @@ def pm_teardown(pm: PostMerge) -> str:
         elif others[-1] == sup:
             holders.append(p.stem)
     shared = any(isinstance(x, str) and x.split(":", 1)[0] == space for x in others)
+    branch = tracker("lane-key", str(rec.get("issue")), err=Refuse).strip()
+    if at := pm_worktree_of(branch):   # the live-run rule (--help, step 7)
+        pm_wait_runs(pm, Path(at[1]), "teardown", "nothing closed or removed", program=False)
     done: list[str] = []
     try:
         if holders or director:
@@ -4632,7 +4697,6 @@ def pm_teardown(pm: PostMerge) -> str:
             done.append(f"kept: supervisor {sup} {' and '.join(why)}")
         else:
             done.append(pm_close(sup if shared else space, space, shared))
-        branch = tracker("lane-key", str(rec.get("issue")), err=Refuse).strip()
         done.append(pm_worktree(branch))
         out = gh(["pr", "list", "--base", branch, "--state", "open", "--json", "number", *pm.r()],
                  "check gh auth status, then rerun")
