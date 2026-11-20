@@ -1,0 +1,14 @@
+Seeded defect: install-check takes a target mise.toml tool whose pin is not installed as ok (the tool line: MISSING naming the install).
+diff --git a/justfile b/justfile
+index c7058f09..10c20c6f 100644
+--- a/justfile
++++ b/justfile
+@@ -604,7 +604,7 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH') $CALLER
+             row = rows[0] if rows else {}
+             if tool not in own: continue
+             have, want = row.get("version"), row.get("requested_version")
+-            if row.get("installed"): print(f"mise   {tool} {have} ok ({d}/mise.lock)")
++            if True: print(f"mise   {tool} {have} ok ({d}/mise.lock)")
+             else: print(f"mise   {tool} {want} MISSING ({d}/mise.lock); {fix}"); bad = 1
+     sys.exit(bad)' "$root" "$(git -C "$1" rev-parse --show-toplevel 2>/dev/null || echo "$1")" "$(locked DIR)" || bad=1
+     # agent-browser at the pin in agent-browser-version, the vendored agent-browser skill's release (spec remote#host-tools).

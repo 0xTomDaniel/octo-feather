@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Integration test for the check-skills gate (skills #acceptance-skill-frontmatter, #acceptance-only-listed):
 # in a throwaway git copy of the kit's tracked files, a planted skill that Pi does not load, or whose
 # frontmatter has no name as Pi's parser reads it, makes `just check-skills` fail

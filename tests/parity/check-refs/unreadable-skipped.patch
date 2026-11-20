@@ -1,0 +1,14 @@
+Seeded defect: a tracked file the scan cannot read is skipped, so the check passes on it (check_refs fails open, ruling R1).
+diff --git a/scripts/check_rules.py b/scripts/check_rules.py
+index c7e25c88..425f4ec0 100755
+--- a/scripts/check_rules.py
++++ b/scripts/check_rules.py
+@@ -247,7 +247,7 @@ def check_refs(root: Path, tracked: Sequence[str]) -> Report:
+             bad = True
+ 
+     fail([("out", os.fsencode(p)) for p in tracked if PROJECTION.search(p)], PROJECTION_FIX)
+-    unread = [(p, e) for p in own if isinstance(e := texts[p], OSError)]
++    unread: list[tuple[str, OSError]] = []
+     for path, e in unread:
+         why = f"cannot read {path} ({e.strerror or e}); fix the scan, the check cannot pass"
+         lines.append(("err", f"check-refs: retired-words scanner error: {why}".encode()))

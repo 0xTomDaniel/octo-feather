@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Stub pi for tests/install-check-models.sh: no model, no network.
+"""Stub pi for the install-check items (tests/gate/kit/testkit/install_check.py): no model.
 
 Logs each argv as one JSON line to $PI_STUB_LOG. --version prints $PI_STUB_VERSION. It plays the
 model proxy for the provider of the model asked: its key and baseUrl from providers.PROVIDER in

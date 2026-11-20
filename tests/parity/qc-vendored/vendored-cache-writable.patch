@@ -1,0 +1,14 @@
+Seeded defect: the warm vendored-skill cache is bound writable, so a judge can change it (bound read-only).
+diff --git a/scripts/octo-feather-qc-sandbox b/scripts/octo-feather-qc-sandbox
+index 97ef12ba..9d8a6337 100755
+--- a/scripts/octo-feather-qc-sandbox
++++ b/scripts/octo-feather-qc-sandbox
+@@ -1128,7 +1128,7 @@ def setup(judge: list[str]) -> NoReturn:
+     if os.path.isdir(CACHE):
+         deny.append(CACHE)
+         if os.path.isdir(VC):
+-            allow_r.append(VC)
++            allow_w.append(VC)
+     if os.path.isdir(PI):
+         deny.append(PI)
+         for n in pient:

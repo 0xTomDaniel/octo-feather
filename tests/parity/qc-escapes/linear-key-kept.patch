@@ -1,0 +1,13 @@
+Seeded defect: the sandbox scrubs no LINEAR_API_KEY from the judge's env (remote#acceptance-linear-key-qc).
+diff --git a/scripts/octo-feather-qc-sandbox b/scripts/octo-feather-qc-sandbox
+index 97ef12ba..cfeff6d5 100755
+--- a/scripts/octo-feather-qc-sandbox
++++ b/scripts/octo-feather-qc-sandbox
+@@ -147,7 +147,6 @@ SCRUB = (
+     "GITHUB_TOKEN",
+     "GH_ENTERPRISE_TOKEN",
+     "SSH_AUTH_SOCK",
+-    "LINEAR_API_KEY",
+ )
+ # Pi's built-in provider hosts, for a provider auth.json names without a models.json baseUrl (the network allowlist, S).
+ PI_HOSTS = {

@@ -1,0 +1,12 @@
+# The parity lever's case for the command scenario follow_up (tests/gate/kit/slot.py at old_at), moved in-process to
+# SlotQueue in tests/gate/kit/test_slot_queue.py (#1110; tests/parity/lever.py --help).
+old = "tests/gate/kit/test_slot.py::test_follow_up"
+old_at = "ea1a922e"
+# The old item's scenario file; its testkit is unchanged.
+needs = ["tests/gate/kit/slot.py"]
+new = "tests/gate/kit/test_slot_queue.py::test_follow_up"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): octo-feather-slot, run by the kit
+# venv's python, imports it: coverage.py measures it.
+[ran]
+"scripts/slot_queue.py" = "coverage"

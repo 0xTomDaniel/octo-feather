@@ -1,0 +1,14 @@
+Seeded defect: the leak rule never reads a case's task.
+diff --git a/scripts/check-evals b/scripts/check-evals
+index 714686c6..ce7a4928 100755
+--- a/scripts/check-evals
++++ b/scripts/check-evals
+@@ -576,7 +576,7 @@ def check_suite(d, evals, errs):
+                 errs.append(f"{at}: field should_trigger: true, but no skill_read or skill_read_before fact grades it")
+             if not c["should_trigger"] and "skill_not_read" not in kinds:
+                 errs.append(f"{at}: field should_trigger: false, but no skill_not_read fact grades it")
+-        if isinstance(c.get("task"), str):
++        if isinstance(c.get("task"), bytes):
+             for leak in leaks(c["task"], exp):
+                 errs.append(f"{at}: field task: shows the agent its grade ({leak}); graded facts stay hidden")
+     for k in sorted(set(exps) - set(ids)):

@@ -190,11 +190,12 @@
     },
     "acceptance-gate-recipes-first": {
       "status": "built",
-      "pr": 1024,
-      "record": "20261118T230040Z-35853761",
-      "commit": "c5e058283077212072f53d9d2fe4cbde7439b9ff",
+      "pr": 1126,
+      "record": "20261119T233555Z-3c6f5842",
+      "commit": "aa46d8140af7f4ee0b6fd00df4e31df3e3f07c8a",
       "tests": [
-        "tests/gate/kit/test_gate_recipes_first.py"
+        "tests/gate/kit/test_gate_recipes_first.py",
+        "tests/gate/kit/test_slot.py"
       ]
     },
     "acceptance-one-execution": {

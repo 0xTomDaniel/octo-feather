@@ -151,91 +151,14 @@ check-scripts:
       [[ ! -f "$f" || -x "$f" ]] || { echo "check-scripts: not executable: $f; chmod +x $f" >&2; exit 1; }
     done
 
-# No CLAUDE.md, no .claude/.codex projections, no octo-lite product names, no lane branch default.
-# Exempt: docs/ (ADRs name what was rejected), AGENTS.md, README.md, NOTICE,
-# LICENSE, this justfile (docs/ also covers docs/specs/) and
-# .skillfile/ patches, which quote the upstream lines they remove. The lane branch default
-# exempts only docs/adr/0011 (below).
+# Pi-only references: no Claude/Codex projections, retired words, lane branch defaults, Skill tool,
+# octo-lite product names; scopes and exemptions: check_refs in scripts/check_rules.py.
 check-refs:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd "$root"
-    bad=0
-    if git ls-files | grep -iE '(^|/)(CLAUDE(\.local)?\.md|AGENTS\.override\.md|\.claude|\.codex)(/|$)'; then
-      echo "check-refs: Claude/Codex instruction files or projections above are not allowed; Pi is the only runtime, AGENTS.md the only instruction file (docs/adr/0001)" >&2; bad=1; fi
-    mapfile -t files < <(git ls-files | grep -vE '^(docs/|\.skillfile/|AGENTS\.md$|README\.md$|NOTICE$|LICENSE$|justfile$)')
-    # Retired words stay retired in all kit text, docs/ and this justfile included
-    # (the pattern brackets a letter so it does not match itself). Exempt files:
-    #   GLOSSARY.md: lists the retired words.
-    #   vendored skills (Skillfile github entries) and .skillfile/: upstream wording and quotes of it.
-    #   docs/specs/.viz/, docs/specs/.style/: Spec Chat's vendored runtime and style (NOTICE).
-    #   LICENSE: the upstream Apache-2.0 text.
-    #   judgment suites' label data (evals/judgment-*/ cases.json, reference/expectations.json, REPORT.md): frozen
-    #   quotes of history the cases are taken from; the rest of each suite stays scanned (owner ruling 2026-10-25).
-    #   The lane-branch scan below skips them too.
-    labels='evals/judgment-[^/]+/(cases\.json|reference/expectations\.json|REPORT\.md)$'
-    # Exempt quotes of frozen or upstream text, not kit naming: each a (file, exact quote)
-    # pair in the table below, removed only in that file, then the rest of its line is scanned.
-    vend="$(awk '$1 == "github" {printf "%s|", $3}' Skillfile)"
-    mapfile -t own < <(git ls-files | grep -vE "^(\.agents/skills/(${vend%|})/|\.skillfile/|docs/specs/\.(viz|style)/|GLOSSARY\.md\$|LICENSE\$|$labels)")
-    # Fails closed: grep exit 0 or 1 and perl exit 0 are the only scans; match is perl output, no match none,
-    # any other exit a scanner error that fails the check.
-    retired='\b(meta-)?[o]perators?\b|\b[h]umans?\b'
-    rc=0; hits="$(grep -nHiE "$retired" "${own[@]}")" || rc=$?
-    if (( rc > 1 )); then
-      echo "check-refs: retired-words scanner error: grep exited $rc (message above); fix the scan, the check cannot pass" >&2; bad=1; hits=""; fi
-    rc=0; found="$(RETIRED="$retired" perl -ne '
-        BEGIN { %ok = (
-          # Frozen spec anchor kept from octo-lite (docs/adr/0021): its definition, the index map, its citers
-          # (the director role and the anchors list of the comms spec call log).
-          "docs/specs/comms.spec.html"    => [qr{data-anchor="handoff-[o]perator(-wrap)?"}],
-          "docs/specs/index.spec.html"    => [qr{data-anchor="map-handoff-[o]perator"}, qr{#handoff-[o]perator(?=[<"])}],
-          "agents/director.md"            => [qr{`#handoff-[o]perator`}],
-          "docs/specs/comms.calls.jsonl"  => [qr{"handoff-[o]perator"}],
-          # The #acceptance-retired-words criterion names the words it bans.
-          "docs/specs/overview.spec.html" => [qr{uses the retired word [o]perator or [h]uman}],
-          # The corrector quotes vendored pstack correct.
-          "agents/corrector.md"           => [qr{"The [o]perator" there is the owner}],
-          # NOTICE attribution names the octo-lite file the director came from.
-          "NOTICE"                        => [qr{\(was agents/meta-[o]perator\.md\)}],
-          # Spec Chat names the owner side of a spool (its directory and event actor) so on disk: the one SPOOL_SIDE value per file.
-          "scripts/octo-feather-accepted" => [qr{^SPOOL_SIDE = "[h]uman"(?=\s)}],
-          "tests/accepted.sh"             => [qr{^SPOOL_SIDE=[h]uman(?=;)}],
-          # A recorded real gh answer (#1069): a 2026-11-04 director finding, quoted word for word in issue comment 6997429551.
-          "tests/gate/kit/testkit/recordings/reflection-missed-372.json" => [qr{an unresolved [h]uman decision, and do completion}],
-        ) }
-        my ($f, $s) = /^(.*?):\d+:(.*)$/s;
-        $s =~ s/$_//g for @{ $ok{$f} || [] };
-        if ($s =~ /$ENV{RETIRED}/i) { print }' <<<"$hits")" || rc=$?
-    if (( rc != 0 )); then
-      echo "check-refs: retired-words scanner error: perl exited $rc (message above); fix the scan, the check cannot pass" >&2; bad=1
-    elif [[ -n "$found" ]]; then
-      printf '%s\n' "$found"
-      echo "check-refs: retired words above; use director for the top agent and owner for the person (GLOSSARY.md)" >&2; bad=1; fi
-    # Lane branch strings: the owner's #71 shapes (#121 N1 N2), owned by docs/adr/0011, not scanned (nor the judgment label data above).
-    # The patterns bracket a letter so this justfile does not match itself.
-    mapfile -t lane < <(git ls-files | grep -vE "^(docs/adr/0011-|$labels)")
-    if grep -nHE -e 'octo-feather/g[h]<' -e 'g[h]<[^>]*>-<' "${lane[@]}"; then
-      echo "check-refs: lane branch default above; the lane branch is \`gh<N>\`: write only a pointer, docs/adr/0011" >&2; bad=1; fi
-    # Pi has no Skill tool: a skill loads by reading its SKILL.md by path. Fixed strings, in skills (vendored too) and role files (#107).
-    if git ls-files -z .agents/skills agents | xargs -0 grep -nHF -e 'Skill tool' -e 'Skill call'; then
-      echo "check-refs: Skill tool named above; Pi has none: write 'read the \`<name>\` skill (\`../<name>/SKILL.md\`)', vendored skills through .skillfile/patches (#107)" >&2; bad=1; fi
-    if grep -nHE 'octo-lite-|\.octo-lite|octo-lite:' "${files[@]}"; then
-      echo "check-refs: octo-lite product names above; rename to octo-feather (attribution stays in NOTICE)" >&2; bad=1; fi
-    [[ "$bad" == 0 ]] && echo "refs: ok (${#files[@]} files)"
-    exit "$bad"
+    @python3 "$root/scripts/check-refs"
 
-# Dash rule and its upstream carve-outs: #121 D7. Scans tracked files minus docs/specs/.viz/, docs/specs/.style/,
-# LICENSE, the Skillfile's github entries in .agents/skills/ and .skillfile/.
+# Dash rule and its upstream carve-outs: #121 D7 (check_dashes in scripts/check_rules.py).
 check-dashes:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd "$root"
-    vend="$(awk '$1 == "github" {printf "%s|", $3}' Skillfile)"
-    mapfile -t files < <(git ls-files | grep -vE "^(docs/specs/\.(viz|style)/|\.agents/skills/(${vend%|})/|\.skillfile/|LICENSE\$)")
-    if grep -nHF -e "$(printf '\xe2\x80\x93')" -e "$(printf '\xe2\x80\x94')" "${files[@]}"; then
-      echo "check-dashes: replace the em/en dashes above with a colon, comma or parentheses" >&2; exit 1; fi
-    echo "dashes: ok (${#files[@]} files)"
+    @python3 "$root/scripts/check-dashes"
 
 # The gate's side of skills spec #loading-refuse (scripts/check-skills); every role file exists.
 check-skills:
@@ -303,8 +226,8 @@ check-templates:
 # measured on the 4-vCPU box, quiet, 105 items (#510): 2 workers 410 s, 4 269 s, 6 225-238 s, 8 213-231 s, ~730-800
 # CPU s each (the CPU floor ~190 s); no item over 60 s at 6 or 8 (CI sets 4). A gate run inside an item (a test's
 # throwaway copy running `just check`) is sequential and stops at its first failure (-n 0 -x), recipes first, so a red
-# copy fails on its recipe, never fans out a nested gate (#208). Every run, nested or not, runs the recipes first and
-# asks the heavy slot only once they are green; a red one ends it there (tests/gate/heavy_slot.py, #1019).
+# copy fails on its recipe, never fans out a nested gate (#208). Every run, nested or not, runs the recipes first; a red
+# one ends it there; when it asks the heavy slot: tests/gate/heavy_slot.py (quality #recipes-static-first).
 # Every gate recipe and kit test as a pytest item, parallel, timed, one trend line per run; extra arguments go to pytest.
 check-tests *args:
     #!/usr/bin/env bash
@@ -904,8 +827,8 @@ state:
 new-repo $lang $dest *$flags:
     octo-feather-new-repo "$@"
 
-# Opt-in, never part of `just check`: tests/qc.sh with the box's real herdr (QC_TEST_HERDR=real) for the
+# Opt-in, never part of `just check`: tests/qc-namespace.sh with the box's real herdr (QC_TEST_HERDR=real) for the
 # sandbox pane proof: a judge's pane runs in its PID namespace, reaches no live session and dies with the run.
 # Offline like the gate; a throwaway HOME with its own "live" session, the box's sessions untouched. Needs herdr on PATH.
 qc-real-herdr:
-    QC_TEST_HERDR=real "$root/tests/qc.sh"
+    QC_TEST_HERDR=real "$root/tests/qc-namespace.sh"

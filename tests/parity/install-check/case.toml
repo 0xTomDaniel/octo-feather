@@ -1,10 +1,16 @@
-# The parity lever's case for tests/install-check.sh, its Linear lines retargeted from the product's fake linear to the testkit's stand-in over tapes (#927; tests/parity/lever.py --help).
+# The parity lever's case for tests/install-check.sh, its Linear lines retargeted from the product's fake linear to the testkit's stand-in over tapes (#927), then its setup and assertions moved from tests/lib/install-check.sh's bash into typed Python on the testkit's stand-ins (#996; tests/parity/lever.py --help).
 old = "tests/install-check.sh"
-old_at = "44a2045f"
+old_at = "ee42108a"
 # Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
-needs = ["tests/lib/install-check.sh", "tests/fixtures/install-check"]
+needs = [
+    "tests/lib/install-check.sh",
+    "tests/fixtures/install-check",
+    "tests/fixtures/linear-install-check",
+]
 new = "tests/gate/test_gate.py::test_script[tests/install-check.sh]"
 
-# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: a bash tracker script run as its program.
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: a bash tracker script run as
+# its program; run: just read the justfile to run the recipe the defect patches.
 [ran]
 ".agents/skills/linear/scripts/install-check" = "exec .agents/skills/linear/scripts/install-check"
+"justfile" = "run just install-check"
