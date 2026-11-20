@@ -1,0 +1,14 @@
+Seeded defect: the .viz carve-out widened to all of docs/specs/, so spec files go unscanned (check_dashes, #121 D7).
+diff --git a/scripts/check_rules.py b/scripts/check_rules.py
+index ca230556..f183bcc5 100755
+--- a/scripts/check_rules.py
++++ b/scripts/check_rules.py
+@@ -47,7 +47,7 @@ def check_dashes(root: Path, tracked: Sequence[str]) -> Report:
+     skillfile = (root / "Skillfile").read_text(encoding="utf-8")
+     entries = (line.split() for line in skillfile.splitlines())
+     vendored = tuple(f".agents/skills/{e[2]}/" for e in entries if e[:1] == ["github"] and e[2:])
+-    skip = ("docs/specs/.viz/", "docs/specs/.style/", ".skillfile/", *vendored)
++    skip = ("docs/specs/", "docs/specs/.style/", ".skillfile/", *vendored)
+     files = [p for p in tracked if p != "LICENSE" and not p.startswith(skip)]
+     lines: list[tuple[Stream, bytes]] = []
+     hit = unread = False

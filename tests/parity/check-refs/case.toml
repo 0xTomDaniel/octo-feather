@@ -1,0 +1,13 @@
+# The parity lever's case for tests/check-refs.sh's planted cases, moved in-process to check_refs in
+# tests/gate/kit/test_check_refs.py (#1115; tests/parity/lever.py --help). old_at: the deepen commit, the old test
+# unmodified since the pin and green on the moved code.
+old = "tests/check-refs.sh"
+old_at = "580adf97"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none.
+needs = []
+new = "tests/gate/kit/test_check_refs.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): open: scripts/check-refs, run by
+# the copy's justfile under python3, imports it.
+[ran]
+"scripts/check_rules.py" = "open scripts/check_rules.py"

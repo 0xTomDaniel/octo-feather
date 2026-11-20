@@ -1,0 +1,14 @@
+Seeded defect: the retired-words pattern loses its second word, so that word passes everywhere (check_refs, overview #acceptance-retired-words).
+diff --git a/scripts/check_rules.py b/scripts/check_rules.py
+index c7e25c88..e3793a4b 100755
+--- a/scripts/check_rules.py
++++ b/scripts/check_rules.py
+@@ -107,7 +107,7 @@ PROJECTION = re.compile(
+ )
+ UNSCANNED = r"(docs/|\.skillfile/|AGENTS\.md$|README\.md$|NOTICE$|LICENSE$|justfile$)"
+ LABELS = r"evals/judgment-[^/]+/(cases\.json|reference/expectations\.json|REPORT\.md)$"
+-RETIRED = re.compile(r"\b(meta-)?[o]perators?\b|\b[h]umans?\b", re.IGNORECASE)
++RETIRED = re.compile(r"\b(meta-)?[o]perators?\b", re.IGNORECASE)
+ LANE = re.compile(r"octo-feather/g[h]<|g[h]<[^>]*>-<")
+ SKILL_TOOL = re.compile(r"Skill tool|Skill call")
+ OCTO_LITE = re.compile(r"octo-lit[e]-|\.octo-lit[e]|octo-lit[e]:")
