@@ -57,12 +57,20 @@ github  skill  agent-browser    vercel-labs/agent-browser@c3880a7de9be3b075c8779
 
 # Fetch-only (#96): pinned and fetched like the entries above, never installed or vendored
 # (a comment to skillfile). The kit's tests run Spec Chat only from here, written out by
-# `scripts/check-vendored --extract spec-chat DEST`, never from the box's clone. To move it:
-# change the sha, `just vendored-fetch`, `just check`.
+# `scripts/check-vendored --extract spec-chat DEST`, never from the box's clone. To move it: change the sha
+# here and on spec-chat-installer, `just vendored-fetch`, `scripts/check-vendored --update spec-chat`,
+# `just check`.
 #fetch-only  github  skill  spec-chat  0xTomDaniel/spec-chat@09d5286f16b93ff48c455cac1925085b2f236d48  skill
+# Carried copies (#1168): `#carry NAME SRC DEST`, DEST in this repo a byte copy of SRC under NAME's path at its
+# pin, written only by `scripts/check-vendored --update NAME`, checked by `just check-vendored` (NOTICE).
+#carry  spec-chat  review-spec/assets/viz              docs/specs/.viz
+#carry  spec-chat  shape-spec/assets/style/spec.css    docs/specs/.style/spec.css
+#carry  spec-chat  shape-spec/assets/style/spec.css    templates/python/docs/specs/.style/spec.css
+#carry  spec-chat  shape-spec/assets/style/spec.css    templates/typescript/docs/specs/.style/spec.css
+#carry  spec-chat  shape-spec/assets/style/spec.css    evals/fixtures/python-app-verify-live/docs/specs/.style/spec.css
 # The same pin's scripts/, extracted into the same DEST beside skill/ (install-spec-chat links ../skill/*, and
 # review-serve.py loads ../scripts/design-set-sync), for tests/spec-chat-install.sh (#817), review-host.sh and
-# accepted.sh. Move its sha with the line above: nothing checks the two agree.
+# accepted.sh. Move its sha with the line above: `just check-vendored` fails when the two differ.
 #fetch-only  github  skill  spec-chat-installer  0xTomDaniel/spec-chat@09d5286f16b93ff48c455cac1925085b2f236d48  scripts
 # Not a skill: dorny/paths-filter v4.0.3 (MIT), the GitHub Action whose commit the kit's and both templates'
 # .github/workflows/check.yml pin (issue #589). Here because this is the kit's one pinned, offline-authenticated fetch
