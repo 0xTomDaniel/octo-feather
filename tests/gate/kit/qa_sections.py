@@ -1665,11 +1665,11 @@ def ran(s: Scratch) -> None:
         fail(f"ran: no proof line naming the run shims: {out}")
     rd = q.last() / "ran" / "ran"
     graded = seq(at(load(rd / "grading.json"), "facts"))
-    if len(graded) != len(want):
-        fail(f"ran: want {len(want)} graded facts: {graded}")
-    for g, (f, st, rx) in zip(graded, want, strict=True):
-        if at(g, "status") != st or not re.search(rx, str(at(g, "evidence"))):
-            fail(f"ran {f}: want {st} with '{rx}', got: {g}")
+    for f, st, rx in want:
+        # each fact's graded entry found by its own fields, not by its place in the list
+        g = [x for x in graded if {"fact": "ran"} | f == {k: at(x, k) for k in keys(x) - {"status", "evidence"}}]  # fmt: skip
+        if len(g) != 1 or at(g[0], "status") != st or not re.search(rx, str(at(g[0], "evidence"))):
+            fail(f"ran {f}: want one graded entry, {st} with '{rx}', got: {g or graded}")
     if not grep("ran runme --role count 1: 2 matching runs: ", lines("^FAIL ran/rclater: ", out)):
         fail(
             f"ran count 1: want FAIL on a later call's run after a fact beside it was decided: {out}"
