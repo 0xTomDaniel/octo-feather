@@ -55,7 +55,8 @@
         "fact": "branch_paths",
         "touched": [
           "agents/supervisor.md",
-          "evals/skill-triggers/cases.json"
+          "evals/skill-triggers/cases.json",
+          "evidence/2026-11-19-gh644-supervisor-skills.md"
         ]
       }
     ]

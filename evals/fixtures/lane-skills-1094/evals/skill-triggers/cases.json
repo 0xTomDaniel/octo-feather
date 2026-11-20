@@ -1,8 +1,20 @@
 [
   {"id": "impl-tdd-new-test", "role": "implementer", "should_trigger": true, "split": "train",
    "task": "Add an end-to-end test for `lane tickets` on a ticket with no acceptance list."},
-  {"id": "sup-design-port-test", "role": "supervisor", "should_trigger": true, "split": "train",
+  {"id": "sup-design-port-test", "role": "supervisor", "should_trigger": true, "split": "train", "skill": "codebase-design",
    "task": "Cut the ticket that ports tests/test_cli.sh to pytest, and brief its implementer."},
-  {"id": "sup-tdd-port-test", "role": "supervisor", "should_trigger": true, "split": "held-out",
-   "task": "Review fix: the reviewer wants the greet test moved to the CLI; write the implementer's brief."}
+  {"id": "sup-design-port-test-ho", "role": "supervisor", "should_trigger": true, "split": "held-out", "skill": "codebase-design",
+   "task": "Ticket #31 moves the greet checks out of tests/smoke.sh into the pytest suite; write its brief."},
+  {"id": "sup-design-near-rename", "role": "supervisor", "should_trigger": false, "split": "train", "skill": "codebase-design",
+   "task": "Cut the ticket that renames the --loud flag to --shout in the CLI and its help text."},
+  {"id": "sup-design-near-ho", "role": "supervisor", "should_trigger": false, "split": "held-out", "skill": "codebase-design",
+   "task": "Brief an implementer on #32: the README's install section names the old package; fix it."},
+  {"id": "sup-tdd-port-test", "role": "supervisor", "should_trigger": true, "split": "train", "skill": "tdd",
+   "task": "Review fix: the reviewer wants the greet test moved to the CLI; write the implementer's brief."},
+  {"id": "sup-tdd-port-test-ho", "role": "supervisor", "should_trigger": true, "split": "held-out", "skill": "tdd",
+   "task": "Reviewer on #33: tests/test_core.py checks a private helper; the fix goes through app greet. Brief it."},
+  {"id": "sup-tdd-near-docs", "role": "supervisor", "should_trigger": false, "split": "train", "skill": "tdd",
+   "task": "Cut the ticket that adds a CHANGELOG entry for 0.3.0."},
+  {"id": "sup-tdd-near-ho", "role": "supervisor", "should_trigger": false, "split": "held-out", "skill": "tdd",
+   "task": "Brief #34: bump the pinned uv version in mise.toml to 0.13.1."}
 ]
