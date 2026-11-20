@@ -5,16 +5,15 @@ The design: issue #1146 (its design comment); the rules: issue-lifecycle spec #g
 #lanes-one-head (the checks, the judged head), #acceptance-merge-ask-evidence,
 #acceptance-merge-ask-no-criterion, #delivery-qa-triage, quality spec #qc-results, the merge ask
 (octo-feather-lane --help, merge-ask, its Checks line). Imported by scripts/octo-feather-lane
-(`merge-ask` builds one snapshot, checks it and places check's groups among its own carried-check
-and full-pass items; `verdict`, `fields` and the head proof share the review comment's and the
-report's parsers below); how a command finds this module: the docstring of
-scripts/correction_lanes.py. Standard library only (AGENTS.md Rules, kit scripts). The merge
-ask's other rules (the head proof, the carried checks, the full pass, the gate time) are still in
-octo-feather-lane's cmd_merge_ask.
+(`merge-ask` builds one snapshot, checks it and prints check's groups around its own `Checks:
+missing` item; `verdict` and `fields` share the review comment's and the report's parsers
+below); how a command finds this module: the docstring of scripts/correction_lanes.py. Standard
+library only (AGENTS.md Rules, kit scripts). The head proof (#lanes-one-head), the carried
+checks, the full pass and the gate time (#lanes-checkpoints) are judged here too (#1150).
 
 Interface:
 
-    snapshot(pr, repo, files, read, qc_dir, err=..., base=None) -> Snapshot
+    snapshot(pr, repo, files, read, qc_dir, trend, err=..., base=None) -> Snapshot
         The one reader: the status FILES (--status), then PR in REPO (None: this directory's)
         through READ, the command's reader ((gh pr view's JSON: body, headRefName, headRefOid,
         statusCheckRollup, baseRefName, comments; the PR's commits or why they are unread)),
@@ -22,64 +21,85 @@ Interface:
         (ParentLine) or its refusal (NoParent), the head's GitHub check facts (Checks), each read
         only when its rule needs it, a failed read kept as Unread, and the qc reports in QC_DIR
         at each commit of the PR. An unreadable status file raises ERR. Spec #gates-merge-order
-        (Order): every other open PR on the PR's base branch (gh pr list), its head fetched (git
-        fetch origin pull/N/head) when this repo lacks it, git merge-tree of the two heads, the
-        octo-feather-qa --verdict pins its qc.toml demos name at its head, and that command's
+        (Order): every other open PR on the PR's base branch (gh pr list, its answer validated
+        against schemas/gh-pr-list.schema.json), its head fetched (git fetch origin
+        pull/N/head) when this repo lacks it, git merge-tree of the two heads, the
+        octo-feather-qa --verdict pins its qc.toml demos name at its head (the qc.toml
+        validated by octo-feather-contract; one that fails is not read), and that command's
         lines for them at the base (pr_base: BASE, --base, else origin/<base branch>) and at the
         base merged with the head (a commit-tree, no ref moved), each run in a scratch detached
-        worktree.
-    check(s) -> Ask | Need
-        Pure, no I/O. Need: the head proof (octo-feather-lane's head_proof) the rules need
-        next, by its arguments; the caller adds its answer to S.proofs and checks again. Ask:
-        each refusal line the merge ask prints for S, in order, by rule, in the parts the
-        command's own items go between; none when S passes; with what a passing ask prints;
-        Ask.order, the merge-order lines (spec #gates-merge-order), never a gap.
+        worktree. The lane's git facts over the base (Git: each PR commit's parents, subject,
+        files or merge facts, its walk, the lane diff at each when the PR holds a merge), the
+        full pass's (Gate: octo-feather-gate config and passed, read along the lane until one
+        carries over), the gate time's (Trend: TREND, the state dir's check-runs.jsonl, the
+        head's history, gate-budget.toml at the head) and the judged head's check runs, read
+        only when a check skipped on the head and a Judged proof carries it.
+    check(s) -> Ask
+        Pure, no I/O. Each refusal line the merge ask prints for S, in order, by rule, in the
+        parts the command's own item goes between; none when S passes; with what a passing ask
+        prints; Ask.order, the merge-order lines (spec #gates-merge-order), and Ask.gate_time,
+        never a gap.
 
-Shared with octo-feather-lane's other commands: bad_checks (lane status), check_runs (the
-carried checks) and ci_workflows (post-merge), each read raising the ERR its caller passes.
+Shared with octo-feather-lane's other commands: bad_checks (lane status), check_runs and
+ci_workflows (post-merge), git, resolution_files (verdict, resolution), full_pass (ci-start:
+its reads, then its rule), and the gate time's lines (report: budget_parse, budget_lines,
+passed_full, numbered_jsonl, stamp), each read raising the ERR its caller passes.
 """
 
 __all__ = [  # check's interface, then the helpers octo-feather-lane's other commands share
     "Ask",
     "Checks",
     "Comment",
-    "Need",
+    "Commit",
+    "Gate",
+    "Git",
+    "Merge",
     "NoParent",
     "NoWorkflow",
     "Order",
     "ParentLine",
     "Pin",
     "Policy",
-    "Proof",
-    "ProofAsk",
-    "ProofError",
     "Reported",
     "Sibling",
     "Snapshot",
+    "Trend",
     "Unread",
     "Workflows",
     "bad_checks",
+    "budget_lines",
+    "budget_parse",
     "check",
     "check_runs",
     "ci_workflows",
+    "full_pass",
+    "git",
+    "numbered_jsonl",
+    "passed_full",
     "pr_base",
+    "resolution_files",
     "snapshot",
+    "stamp",
 ]
 
 import dataclasses
+import datetime as dt
+import hashlib
 import json
 import os
 import re
 import shlex
+import statistics
 import subprocess
+import sys
 import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import cast
+from typing import NamedTuple, TypedDict, cast
 
 import tomllib
-from tracker_calls import KIT, gh, tracker
+from tracker_calls import KIT, gh, tracker, utc
 
 # GitHub's closing keywords: a PR body line with one closes that GitHub issue at merge, named
 # as #N, as owner/repo#N or by the issue URL.
@@ -118,7 +138,7 @@ class NoParent:
 
 @dataclass(frozen=True)
 class Unread:
-    """A GitHub read that failed: WHY, its refusal as worded."""
+    """A read that failed: WHY, its refusal as worded."""
 
     why: str
 
@@ -178,35 +198,78 @@ class Comment:
     body: str
 
 
-@dataclass(frozen=True)
-class ProofAsk:
-    """A head proof the rules need: octo-feather-lane's head_proof(JUDGED, HEAD, the --status
-    files, the base, at=AT, kept=KEPT, rerun=RERUN, resolved=dict(RESOLVED) or None), its
-    defaults head_proof's own."""
+# --- the head proof, the full pass and the gate time (#1150; spec #lanes-one-head,
+# #lanes-checkpoints) ---
 
-    judged: str
-    head: str
-    at: str = "judged head"
-    kept: str = "the qc verdict"
-    rerun: str = ""
-    resolved: tuple[tuple[str, str], ...] | None = None
+MERGE_PARENTS = 2  # a merge of main has two parents (spec #lanes-one-head)
 
 
 @dataclass(frozen=True)
-class Proof:
-    """head_proof's answer: LINE, the proof line, when HEAD stands for JUDGED, else WHY each
-    part does not."""
+class Merge:
+    """A two-parent merge's facts: ONTO, its second parent is an ancestor of the base; CONFLICT,
+    git merge-tree of its parents conflicts; BEYOND, the files it changes beyond git's automatic
+    merge (git diff --name-only, split on whitespace), None when its tree is that merge's;
+    RESOLUTION, the files its resolution changed (resolution_files), read only when it conflicts
+    or changes something beyond."""
 
-    line: str | None
-    why: tuple[str, ...]
+    onto: bool
+    conflict: bool = False
+    beyond: tuple[str, ...] | None = None
+    resolution: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
-class ProofError:
-    """head_proof refused (a commit or the base not in the repo, a status file outside it):
-    WHY, its message."""
+class Commit:
+    """A commit of the PR: its PARENTS, SUBJECT (git log %s), the FILES a one-parent commit
+    changes (git diff-tree), a two-parent merge's MERGE facts."""
 
-    why: str
+    parents: tuple[str, ...]
+    subject: str
+    files: frozenset[str] = frozenset()
+    merge: Merge | None = None
+
+
+@dataclass(frozen=True)
+class Git:
+    """The lane's git facts over BASE, read once. HERE: the PR head is a commit in this repo.
+    TOPO: `git rev-list --topo-order HEAD ^BASE`, Unread when git refused it. COMMITS: each of those
+    commits; WALKS, each one's own `git rev-list --reverse C ^BASE` (git's order, oldest first,
+    which every walk between two of them keeps; read only when the PR holds a merge, else the
+    one chain's prefix); DIFFS, each one's lane diff (its own diff from its merge base with
+    BASE, {path: its hunks (_lane_diff)}, status files aside), read only when the PR holds a merge.
+    STATUS: the --status files relative to the repo's top, Unread naming one outside it."""
+
+    base: str
+    here: bool = True
+    topo: tuple[str, ...] | Unread = ()
+    commits: dict[str, Commit] = dataclasses.field(default_factory=dict)
+    walks: dict[str, tuple[str, ...]] = dataclasses.field(default_factory=dict)
+    diffs: dict[str, dict[str, str]] = dataclasses.field(default_factory=dict)
+    status: frozenset[str] | Unread = frozenset()
+
+
+@dataclass(frozen=True)
+class Gate:
+    """The full pass's facts (octo-feather-gate --help): CONFIG, `config HEAD`'s exit and identity
+    fields ({} when unreadable); PASSES, `passed C`'s record ({} for none) of each lane commit
+    read, the head first, then the topo order, up to the first that carries over."""
+
+    config: tuple[int, dict[str, object]]
+    passes: dict[str, dict[str, object]] = dataclasses.field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class Trend:
+    """The gate time's facts: PATH, the state dir's check-runs.jsonl, and its ROWS
+    (numbered_jsonl; None: no file); HISTORY, the head's last 1000 commits; BUDGET,
+    gate-budget.toml at the head (None: no such file); NOW, when they were read. A failed read:
+    Unread."""
+
+    path: Path
+    rows: tuple[list[tuple[int, dict[str, object]]], list[int]] | Unread | None
+    history: frozenset[str] | Unread
+    budget: str | Unread | None
+    now: dt.datetime
 
 
 # --- the merge order (#1152, spec #gates-merge-order): the open PRs this merge sets back ---
@@ -257,7 +320,7 @@ class Snapshot:
     # (sha, subject; newest first) or UNREAD, the gap naming why none were read; the SPECS,
     # {slug: criteria} of the --status files, NAMED when any was passed; the PR's COMMENTS; QC,
     # each PR commit's (lowercase sha) latest qc result per criterion (<spec>#<id>: (result,
-    # report name)); PROOFS, each head proof the command answered (check's Need)
+    # report name))
     pr: int = 0
     head: str = ""
     commits: list[tuple[str, str]] = dataclasses.field(default_factory=list)
@@ -268,25 +331,34 @@ class Snapshot:
     qc: dict[str, dict[str, tuple[dict[str, object], str]]] = dataclasses.field(
         default_factory=dict
     )
-    proofs: dict[ProofAsk, Proof | ProofError] = dataclasses.field(default_factory=dict)
     # the merge order (#1152): ORDER, the other open PRs on the base, None when not read
     order: Order | None = None
+    # the head proof, the carried checks, the full pass and the gate time (#1150): the lane's
+    # GIT facts, the full pass's GATE facts, the gate time's TREND, each None when not read (no
+    # rule on it); RUNS, the judged head's check runs (check_runs) or why they are unread, None
+    # when not read (none)
+    git: Git | None = None
+    gate: Gate | None = None
+    trend: Trend | None = None
+    runs: list[dict[str, object]] | Unread | None = None
 
 
 @dataclass(frozen=True)
 class Ask:
-    """The merge ask's verdict on a Snapshot. Its gaps, each a refusal line, in four parts in the
+    """The merge ask's verdict on a Snapshot. Its gaps, each a refusal line, in six parts in the
     order printed: HEAD (the PR commits, parent line, section and Head; the command's `Checks:
     missing` follows), CHECKS (the Checks rules'), JUDGED (the criterion table to the Judged
-    line; the command's carried checks and full pass follow) and REVIEW (the review verdict to
-    the criterion rows against Built and Failed); none when it passes. REFUSAL: why nothing can
-    be judged (exit 1, no gap). What a passing ask prints and the command reads: SECTION, the
-    `## Merge ask` lines; JUDGED_HEAD and PROOF (its head proof line); CLASSES, the review's
-    check classes; SOURCES, each row's decision source; JUDGMENTS, the model judgment comments
-    (shown only); ORDER, the merge-order lines (shown only, spec #gates-merge-order, on
-    any Ask); NO_CI, the no-CI fact's line on a pass, else ''; CURRENT, the head's checks
-    after the current-head projection (the rollup when it could not be made), which merge-ask's
-    carried checks read."""
+    line), CARRIED (the checks skipped on the head, carried from the judged head), FULL (the
+    full pass) and REVIEW (the review verdict to the criterion rows against Built and Failed);
+    none when it passes. REFUSAL: why nothing can be judged (exit 1, no gap); ABORT: a read the
+    full pass needs failed, the refusal alone (exit 1, no gap, no merge order). What a passing
+    ask prints and the command reads: SECTION, the `## Merge ask` lines; JUDGED_HEAD and PROOF
+    (its head proof line); CLASSES, the review's check classes; SOURCES, each row's decision
+    source; JUDGMENTS, the model judgment comments (shown only); ORDER, the merge-order lines
+    (shown only, spec #gates-merge-order, on any Ask); NO_CI, the no-CI fact's line on a pass,
+    else ''; CURRENT, the head's checks after the current-head projection (the rollup when it
+    could not be made); CARRIED_OK, a line per skipped check carried; GATE_TIME, the gate time
+    lines (shown only, spec #lanes-checkpoints)."""
 
     head: list[str]
     checks: list[str] = dataclasses.field(default_factory=list)
@@ -302,17 +374,15 @@ class Ask:
     sources: list[str] = dataclasses.field(default_factory=list)
     judgments: list[str] = dataclasses.field(default_factory=list)
     order: list[str] = dataclasses.field(default_factory=list)
+    carried: list[str] = dataclasses.field(default_factory=list)
+    full: list[str] = dataclasses.field(default_factory=list)
+    abort: str = ""
+    carried_ok: list[str] = dataclasses.field(default_factory=list)
+    gate_time: list[str] = dataclasses.field(default_factory=list)
 
     @property
     def gaps(self) -> list[str]:
-        return [*self.head, *self.checks, *self.judged, *self.review]
-
-
-@dataclass(frozen=True)
-class Need:
-    """The head proof check needs next (PROOF); answer it in Snapshot.proofs, then check again."""
-
-    proof: ProofAsk
+        return [*self.head, *self.checks, *self.judged, *self.carried, *self.full, *self.review]
 
 
 class _TrackerError(Exception):
@@ -334,6 +404,7 @@ def snapshot(  # noqa: PLR0913  each read's input, the command's reader among th
     read: Callable[[], tuple[dict[str, object], list[tuple[str, str]] | str]],
     qc_dir: Path,
     *,
+    trend: Path,
     err: type[Exception],
     base: str | None = None,
 ) -> Snapshot:
@@ -359,7 +430,8 @@ def snapshot(  # noqa: PLR0913  each read's input, the command's reader among th
     shas = {oid.lower() for oid, _ in listed} | {head.lower()}
     base_branch = str(view["baseRefName"] or "")
     order = _order(pr, head, base_branch or "main", pr_base(base_branch, base), repo)
-    return Snapshot(
+    g = _git_facts(head, pr_base(base_branch, base), files, err)
+    s = Snapshot(
         body,
         branch,
         parent,
@@ -373,13 +445,245 @@ def snapshot(  # noqa: PLR0913  each read's input, the command's reader among th
         comments=comments,
         qc={sha: qc_latest(qc_dir, sha) for sha in sorted(shas)},
         order=order,
+        git=g,
+        gate=_gate_facts(g, head),
+        trend=_trend(trend, head),
     )
+    # the judged head's check runs: read only when a check skipped on the head and a Judged proof
+    # carries it (the rules' own judged head and proof, over the facts read above)
+    a = _check(s)
+    if a.refusal or a.abort or not _skipped(a.current) or not a.proof:
+        return s
+    if not a.judged_head or a.judged_head == head.lower():
+        return s
+    try:
+        runs: list[dict[str, object]] | Unread = check_runs(
+            a.judged_head, repo, "the judged head", err=_Unread
+        )
+    except _Unread as e:
+        runs = Unread(str(e))
+    return dataclasses.replace(s, runs=runs)
 
 
 def pr_base(ref: str, base: str | None) -> str:
     """The base a PR's commits are read against: BASE (--base) when given, else REF, its base
     branch, on origin."""
     return base or f"origin/{ref or 'main'}"
+
+
+def git(*args: str, ok: tuple[int, ...] = (0,), err: type[Exception]) -> tuple[int, str]:
+    """git ARGS here: (exit, stdout); ERR naming the fix on another exit than OK's."""
+    try:
+        p = subprocess.run(
+            ["git", *args],  # noqa: S607 (git from PATH)
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            check=False,
+        )
+    except FileNotFoundError:
+        msg = "git not on PATH: install git"
+        raise err(msg) from None
+    if p.returncode not in ok:
+        said = (p.stderr or p.stdout).strip().splitlines()
+        msg = (
+            f"git {' '.join(args[:2])} failed "
+            f"({said[-1][:200] if said else f'exit {p.returncode}'}): run merge-ask in the lane "
+            "worktree with the PR head and the base fetched (git fetch origin)"
+        )
+        raise err(msg)
+    return p.returncode, p.stdout
+
+
+def resolution_files(merge: str, *, err: type[Exception]) -> list[str]:
+    """The files MERGE's resolution changed: what `git show --remerge-diff` prints for it
+    (issue-lifecycle #lanes-one-head)."""
+    out = git("show", "--remerge-diff", "--format=", "--name-only", "-z", merge, err=err)[1]
+    return sorted(filter(None, out.split("\0")))
+
+
+def gate(*args: str) -> tuple[int, str]:
+    """scripts/octo-feather-gate's exit code and stdout (it owns the full pass record and the gate
+    configuration)."""
+    p = subprocess.run(
+        [sys.executable, str(KIT / "scripts" / "octo-feather-gate"), *args],
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
+    return p.returncode, p.stdout
+
+
+def _git_facts(head: str, base: str, files: list[str], err: type[Exception]) -> Git:
+    """Git's reads (its docstring): a failed read of a listed commit raises ERR."""
+
+    def run(*args: str, ok: tuple[int, ...] = (0,)) -> str:
+        return git(*args, ok=ok, err=err)[1]
+
+    here = not git("cat-file", "-e", f"{head}^{{commit}}", ok=(0, 1, 128), err=err)[0]
+    try:
+        topo = tuple(git("rev-list", "--topo-order", head, f"^{base}", err=_Unread)[1].split())
+    except _Unread as e:
+        return Git(base, here, Unread(str(e)))
+    status = _status(files)
+    walk = [
+        ln.split() for ln in run("rev-list", "--reverse", "--parents", head, f"^{base}").split("\n")
+    ]
+    subjects = dict(
+        cast("tuple[str, str]", tuple(ln.split("\0", 1)))
+        for ln in run("log", "--format=%H%x00%s", head, f"^{base}").split("\n")
+        if "\0" in ln
+    )
+    commits: dict[str, Commit] = {}
+    walks: dict[str, tuple[str, ...]] = {}
+    for c, *parents in filter(None, walk):
+        subject = subjects[c].strip()
+        if len(parents) == 1:
+            diff = run("diff-tree", "--no-commit-id", "--name-only", "-r", "-z", c)
+            commits[c] = Commit(tuple(parents), subject, frozenset(filter(None, diff.split("\0"))))
+        elif len(parents) == MERGE_PARENTS:
+            commits[c] = Commit(
+                tuple(parents), subject, merge=_merge(c, parents[0], parents[1], base, err)
+            )
+        else:
+            commits[c] = Commit(tuple(parents), subject)
+    merged = any(len(k.parents) > 1 for k in commits.values())
+    for i, c in enumerate(commits):  # one chain of commits has one walk order: its own
+        walks[c] = (
+            tuple(run("rev-list", "--reverse", c, f"^{base}").split())
+            if merged
+            else tuple(commits)[: i + 1]
+        )
+    diffs: dict[str, dict[str, str]] = {}
+    if merged:  # a lane diff is read for a merge only
+        aside: frozenset[str] = status if isinstance(status, frozenset) else frozenset()
+        for c in commits:
+            mb = run("merge-base", c, base).strip()
+            out = run("diff", "--raw", "--no-renames", "--no-abbrev", "-z", mb, c).split("\0")
+            raw = {f: m for m, f in zip(out[0::2], out[1::2], strict=False) if f and f not in aside}
+            diffs[c] = _lane_diff(raw, _patch(mb, c, err))
+    return Git(base, here, topo, commits, walks, diffs, status)
+
+
+def _patch(old: str, new: str, err: type[Exception]) -> str:
+    """`git diff -U0` of OLD to NEW, its bytes decoded losslessly (a file need not be UTF-8), the
+    user's diff settings that change its form set aside."""
+    args = ["diff", "-U0", "--no-renames", "--no-color", "--no-ext-diff", "--no-textconv"]
+    args += ["--src-prefix=a/", "--dst-prefix=b/", old, new]
+    p = subprocess.run(  # bytes: git() decodes its text strictly
+        ["git", *args],  # noqa: S607 (git from PATH)
+        capture_output=True,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
+    if p.returncode:
+        git(*args, err=err)  # git's refusal, named as every read here names it
+    return p.stdout.decode(errors="surrogateescape")
+
+
+def _lane_diff(raw: dict[str, str], patch: str) -> dict[str, str]:
+    """Each file's hunks in the lane's diff (spec #lanes-one-head: hunk by hunk wherever main's
+    changes elsewhere in a file moved its lines), from RAW, {path: its `git diff --raw` line},
+    and PATCH, git diff -U0 of the same commits: its modes and status, then each hunk's removed
+    and added lines, git's `@@` line numbers aside. A binary file, or one whose path git quotes,
+    is its raw line, blob ids and all, as before."""
+    sections: dict[str, list[str] | None] = {}  # None: binary
+    for part in re.split(r"^diff --git ", patch, flags=re.MULTILINE)[1:]:
+        head, *body = part.split("\n")
+        at = next((i for i, ln in enumerate(body) if ln.startswith("@@")), len(body))
+        binary = any(ln.startswith(("Binary files ", "GIT binary patch")) for ln in body[:at])
+        hunks = ["@@" if ln.startswith("@@") else ln for ln in body[at:] if ln]
+        had = sections.get(head, [])  # a type change is two sections
+        sections[head] = None if binary or had is None else [*had, *hunks]
+    out: dict[str, str] = {}
+    for f, m in raw.items():
+        hunks = sections.get(f"a/{f} b/{f}")
+        if hunks is None:
+            out[f] = m
+            continue
+        src, dst, _, _, st = m.lstrip(":").split()
+        out[f] = "\n".join([f"{src} {dst} {st}", *hunks])
+    return out
+
+
+def _merge(c: str, ours: str, theirs: str, base: str, err: type[Exception]) -> Merge:
+    """Merge's reads for merge C of OURS and THEIRS: the rest only when THEIRS is on BASE."""
+    if git("merge-base", "--is-ancestor", theirs, base, ok=(0, 1), err=err)[0]:
+        return Merge(onto=False)
+    rc, out = git("merge-tree", "--write-tree", "--no-messages", ours, theirs, ok=(0, 1), err=err)
+    auto, tree = (
+        out.split("\n", 1)[0].strip(),
+        git("rev-parse", f"{c}^{{tree}}", err=err)[1].strip(),
+    )
+    beyond = (
+        None if auto == tree else tuple(git("diff", "--name-only", auto, tree, err=err)[1].split())
+    )
+    resolution = tuple(resolution_files(c, err=err)) if rc or beyond is not None else ()
+    return Merge(onto=True, conflict=bool(rc), beyond=beyond, resolution=resolution)
+
+
+def _status(files: list[str]) -> frozenset[str] | Unread:
+    """The --status FILES relative to this repo's top; Unread naming one outside it."""
+    try:
+        top = os.path.realpath(git("rev-parse", "--show-toplevel", err=_Unread)[1].strip())
+    except _Unread as e:
+        return Unread(str(e))
+    out: set[str] = set()
+    for f in files:
+        rel = os.path.relpath(os.path.realpath(f), top)
+        if rel.startswith(".."):
+            return Unread(
+                f"--status {f} is outside this repo ({top}): run merge-ask in the lane worktree, "
+                "naming its status file"
+            )
+        out.add(rel)
+    return frozenset(out)
+
+
+def _gate_facts(g: Git, head: str) -> Gate:
+    """Gate's reads: HEAD's identity, then each lane commit's record until one carries over."""
+    rc, out = gate("config", head)
+    try:
+        raw: object = json.loads(out) if rc == 0 else {}
+    except ValueError:
+        raw = {}
+    facts = Gate((rc, cast("dict[str, object]", raw) if isinstance(raw, dict) else {}))
+    if not g.here or not facts.config[1] or isinstance(g.topo, Unread):
+        return facts  # the full pass stops there
+    for c in [head, *(r for r in g.topo if r.lower() != head.lower())]:
+        rc, out = gate("passed", c)
+        try:
+            rec: object = json.loads(out) if rc == 0 else None
+        except ValueError:
+            rec = None
+        facts.passes[c] = cast("dict[str, object]", rec) if isinstance(rec, dict) else {}
+        if _carries(g, facts.config[1], head, c, facts.passes[c]) == []:
+            break
+    return facts
+
+
+def _trend(path: Path, head: str) -> Trend:
+    """Trend's reads: PATH, the head's history, gate-budget.toml at it."""
+    try:
+        rows: tuple[list[tuple[int, dict[str, object]]], list[int]] | Unread | None = (
+            numbered_jsonl(path)
+        )
+    except (OSError, UnicodeDecodeError) as e:
+        rows = Unread(str(e))
+    try:
+        history: frozenset[str] | Unread = frozenset(
+            git("rev-list", "--max-count=1000", head, err=_Unread)[1].split()
+        )
+    except _Unread as e:
+        history = Unread(str(e))
+    try:
+        rc, text = git("show", f"{head}:{BUDGET}", ok=(0, 128), err=_Unread)
+        budget: str | Unread | None = None if rc else text
+    except _Unread as e:
+        budget = Unread(str(e))
+    now = dt.datetime.now(dt.UTC).replace(microsecond=0)
+    return Trend(path, rows, history, budget, now)
 
 
 def _reported(head: str, rollup: list[dict[str, object]], repo: str | None) -> Reported:
@@ -542,19 +846,8 @@ def qc_latest(d: Path, judged: str) -> dict[str, tuple[dict[str, object], str]]:
 # --- the check ---
 
 
-class _NeedError(Exception):
-    """A head proof the rules need that S.proofs lacks: check returns it as a Need."""
-
-    def __init__(self, ask: ProofAsk) -> None:
-        super().__init__(ask)
-        self.ask = ask
-
-
-def check(s: Snapshot) -> Ask | Need:
-    try:
-        a = _check(s)
-    except _NeedError as m:
-        return Need(m.ask)
+def check(s: Snapshot) -> Ask:
+    a = _check(s)
     return dataclasses.replace(a, order=merge_order(s.order)) if s.order else a
 
 
@@ -600,12 +893,23 @@ def parent_line(s: Snapshot) -> list[str]:
     return out
 
 
-def _proved(s: Snapshot, ask: ProofAsk) -> tuple[str | None, list[str]]:
-    """(proof line, why not) of S's answer to ASK, a refusal its one why."""
-    p = s.proofs.get(ask)
-    if p is None:
-        raise _NeedError(ask)
-    return (None, [p.why]) if isinstance(p, ProofError) else (p.line, list(p.why))
+class _RefusedError(Exception):
+    """The head proof refused (a commit not in the repo, a status file outside it): its message."""
+
+
+def _proved(
+    s: Snapshot, judged: str, head: str, **kw: str | dict[str, str] | None
+) -> tuple[str | None, list[str]] | _RefusedError:
+    """head_proof over S's git facts (KW its at, kept, rerun, resolved), or its refusal."""
+    try:
+        return head_proof(s.git or Git(""), judged, head, **kw)  # pyright: ignore[reportArgumentType]
+    except _RefusedError as e:
+        return e
+
+
+def _why(p: tuple[str | None, list[str]] | _RefusedError) -> tuple[str | None, list[str]]:
+    """(proof line, why not) of a head proof, a refusal its one why."""
+    return (None, [str(p)]) if isinstance(p, _RefusedError) else p
 
 
 def _check(s: Snapshot) -> Ask:
@@ -637,6 +941,12 @@ def _check(s: Snapshot) -> Ask:
     resolved = resolution_verdicts(s.comments)
     judged, proof, why = judged_proof(s, lines, judged, resolved, no_crit=no_crit)
     judged_gaps += why
+    # --- the checks skipped on the head, carried from the judged head; the full pass ---
+    carried, carried_ok = carried_checks(current, head, judged, proof, s.runs)
+    try:
+        full = [f"Full pass: {w}" for w in full_pass_of(s.git, s.gate, head)] if s.gate else []
+    except _AbortError as e:
+        return Ask([], checks, no_ci, current, abort=str(e))
     # --- the review verdict and its check classes, Built, Failed, the rows against them ---
     rest, classes = review(s, lines, judged, resolved)
     gaps, built = built_ids(s, lines, no_crit=no_crit)
@@ -658,6 +968,10 @@ def _check(s: Snapshot) -> Ask:
         classes=classes,
         sources=sources(s, rows, judged),
         judgments=judgment_lines(s.comments),
+        carried=carried,
+        full=full,
+        carried_ok=carried_ok,
+        gate_time=gate_time(s.git, s.trend, head) if s.trend else [],
     )
 
 
@@ -765,14 +1079,14 @@ def judged_proof(
         # a resolved merge after it: the PR head is judged, the review verdict kept below by its
         # resolution verdict; a refused proof leaves it (named by the proof below)
         if judged and resolved:
-            plain = ProofAsk(judged, head)
-            if not isinstance(s.proofs.get(plain), ProofError) and _proved(s, plain)[1]:
-                kept = ProofAsk(judged, head, resolved=tuple(resolved.items()))
-                if not isinstance(s.proofs.get(kept), ProofError) and not _proved(s, kept)[1]:
+            plain = _proved(s, judged, head)
+            if not isinstance(plain, _RefusedError) and plain[1]:
+                kept = _proved(s, judged, head, resolved=resolved)
+                if not isinstance(kept, _RefusedError) and not kept[1]:
                     judged = head.lower()
     if not judged:
         return None, None, miss
-    proof, why = _proved(s, ProofAsk(judged, head))
+    proof, why = _why(_proved(s, judged, head))
     miss += [f"Judged: {w}" for w in why]
     if (
         proof
@@ -956,19 +1270,19 @@ def review(  # noqa: C901  one branch per verdict gap, in the order printed
         rat = [oid.lower() for oid, _ in s.commits if rh and oid.lower().startswith(rh)]
         if judged and cb.lstrip().startswith(MARKER) and len(rat) == 1 and rat[0] != judged:
             # reviewed before the judged head
-            rproof, rwhy = _proved(
-                s,
-                ProofAsk(
+            rproof, rwhy = _why(
+                _proved(
+                    s,
                     rat[0],
                     judged,
                     at="reviewed head",
                     kept="the review verdict",
-                    resolved=tuple(resolved.items()),
+                    resolved=resolved,
                     rerun=(
                         f"review {judged[:12]} afresh in full, then `octo-feather-lane verdict "
                         f"{pr} {judged[:12]} <report>`"
                     ),
-                ),
+                )
             )
         if c is None:
             miss.append(
@@ -1015,6 +1329,507 @@ def review(  # noqa: C901  one branch per verdict gap, in the order printed
             f"line `Reviewed: {rproof}`"
         )
     return miss, review_checks
+
+
+# --- the head proof, the carried checks, the full pass and the gate time (#1150) ---
+
+
+def head_proof(  # noqa: C901, PLR0912, PLR0913, PLR0915  one branch per commit kind (moved whole)
+    g: Git,
+    judged: str,
+    head: str,
+    *,
+    at: str = "judged head",
+    kept: str = "the qc verdict",
+    rerun: str = "",
+    resolved: dict[str, str] | None = None,
+) -> tuple[str | None, list[str]]:
+    """(proof line, []) when the PR HEAD stands for the JUDGED head, else (None, why each part
+    does not), over the lane's git facts G (what may lie between them: spec #lanes-one-head).
+    AT names what JUDGED is, KEPT what carries over, RERUN the fix (a full gate pass: full_pass).
+    RESOLVED, for the review verdict only: {merge sha: URL} of each clear resolution verdict,
+    whose merge's resolution files may move. _RefusedError: a commit not in the repo, a status
+    file outside it."""
+    j, h = judged[:12], head[:12]
+    if head.lower() == judged.lower():
+        return f"{j} is the PR head", []
+    rerun = rerun or f"run just qc and the review again, in parallel, on {h}"
+    for sha in (judged, head):
+        if sha.lower() not in g.walks:
+            msg = (
+                f"commit {sha[:12]} is not in this repo: run merge-ask in the lane worktree after "
+                "git fetch origin"
+            )
+            raise _RefusedError(msg)
+    if judged.lower() not in g.walks[head.lower()]:
+        return None, [f"{at} {j} is not an ancestor of the PR head {h} (rebased or reset): {rerun}"]
+    if isinstance(g.status, Unread):
+        raise _RefusedError(g.status.why)
+    status, base = g.status, g.base
+    why: list[str] = []
+    qc: list[str] = []
+    merges: list[str] = []
+    touched: set[str] = set()
+    reviewed: dict[str, list[str]] = {}
+    gone = set(g.walks[judged.lower()])
+    for c in (c for c in g.walks[head.lower()] if c not in gone):
+        k = g.commits[c]
+        parents, s = k.parents, k.subject
+        if len(parents) == 1:
+            other = sorted(k.files - status)
+            if other:
+                why.append(
+                    f"commit {c[:12]} {s[:60]!r} after the {at} {j} changes {', '.join(other)}, "
+                    f"not only the status file{'s' * (len(status) > 1)} qc writes "
+                    f"({', '.join(sorted(status))}): {rerun}"
+                )
+            elif not ((q := QC_COMMIT.match(s)) and q.group(2)):
+                why.append(
+                    f"commit {c[:12]} {s[:60]!r} after the {at} {j} is not a `qc: built ... "
+                    f"(judged <sha>)` commit: only just qc writes the status file; drop it, then "
+                    f"{rerun}"
+                )
+            else:
+                qc.append(c)
+                touched |= k.files
+        elif len(parents) != MERGE_PARENTS or k.merge is None or not k.merge.onto:
+            why.append(
+                f"merge {c[:12]} {s[:60]!r} brings in {', '.join(p[:12] for p in parents[1:])}, "
+                f"not {base}: only a merge of main keeps {kept}; {rerun}"
+            )
+        else:
+            m = k.merge
+            hint = (
+                ""
+                if resolved is None
+                else " without a clear resolution verdict naming it (review what "
+                f"`octo-feather-lane resolution {c[:12]}` prints, then `octo-feather-lane verdict "
+                f"<PR> {c[:12]} <report> --resolution`)"
+            )
+            if (m.conflict or m.beyond is not None) and resolved is not None and c in resolved:
+                reviewed[c] = list(m.resolution)
+            elif m.conflict:
+                why.append(
+                    f"merge {c[:12]} {s[:60]!r} resolved a conflict with {base}: {kept} does not "
+                    f"carry over{hint}; {rerun}"
+                )
+            elif m.beyond is not None:
+                why.append(
+                    f"merge {c[:12]} {s[:60]!r} changes {', '.join(m.beyond)} beyond git's "
+                    f"automatic merge{hint}: {rerun}"
+                )
+            else:
+                merges.append(c)
+    proof = f"{j} to {h}: " + (
+        f"qc status commits {' '.join(c[:12] for c in qc)} change only {', '.join(sorted(touched))}"
+        if qc
+        else "no qc status commit"
+    )
+    if (merges or reviewed) and not why:
+        before, after = g.diffs[judged.lower()], g.diffs[head.lower()]
+        moved = sorted(
+            p
+            for p in before.keys() | after.keys()
+            if before.get(p) != after.get(p) and not any(p in fs for fs in reviewed.values())
+        )
+        if moved:
+            why.append(
+                f"after merging {base}, the lane's own hunks changed in {', '.join(moved)} (main "
+                f"changed the lane's own lines, or the lane's diff moved): {kept} does not carry "
+                f"over; {rerun}"
+            )
+        elif merges:
+            d = hashlib.sha256(
+                "\n".join(f"{p} {before[p]}" for p in sorted(before)).encode(
+                    errors="surrogateescape"
+                )
+            ).hexdigest()
+            proof += (
+                f"; clean merge{'s' * (len(merges) > 1)} of main {' '.join(c[:12] for c in merges)}"
+                f": lane hunks identical ({len(before)} file{'s' * (len(before) != 1)}, sha256 "
+                f"{d[:12]})" + (" outside the resolved files" if reviewed else "")
+            )
+        if not moved:
+            proof += "".join(
+                f"; resolution of merge {c[:12]} ({', '.join(fs)}) reviewed clear: "
+                f"{(resolved or {})[c]}"
+                for c, fs in reviewed.items()
+            )
+    return (None, why) if why else (proof, [])
+
+
+def _skipped(rollup: list[dict[str, object]]) -> list[str]:
+    """The checks ROLLUP reports skipped (a status context never is)."""
+    return sorted(
+        {
+            str(c.get("name") or "?")
+            for c in rollup
+            if c.get("__typename") != "StatusContext"
+            and "conclusion" in c
+            and str(c.get("conclusion") or "").upper() == "SKIPPED"
+        }
+    )
+
+
+def carried_checks(
+    rollup: list[dict[str, object]],
+    head: str,
+    judged: str | None,
+    proof: str | None,
+    runs: list[dict[str, object]] | Unread | None,
+) -> tuple[list[str], list[str]]:
+    """(why each check skipped on HEAD fails, a line per one that passes; when a skipped check
+    counts: spec issue-lifecycle #lanes-one-head). PROOF is the head proof's line for JUDGED to
+    HEAD, RUNS the judged head's check runs (None: none)."""
+    skipped = _skipped(rollup)
+    h = head[:12]
+    if not skipped:
+        return [], []
+    if not judged or judged == head.lower() or not proof:
+        return [
+            (
+                f"Checks: skipped on head {h}: {', '.join(skipped)}; a skipped check is no pass "
+                f"and no Judged proof carries a judged head's CI to {h} (issue-lifecycle "
+                "#lanes-one-head): run `octo-feather-lane ci-start <PR>` on the judged head, wait "
+                "for its CI, then rerun"
+            )
+        ], []
+    if isinstance(runs, Unread):
+        return [f"Checks: {runs.why}"], []
+    j = judged[:12]
+    why: list[str] = []
+    ok: list[str] = []
+    for name in skipped:
+        at = (
+            f"Checks: {name} skipped on head {h}, carried from the judged head {j} by the Judged "
+            "proof, and"
+        )
+        r = max(
+            (r for r in runs or [] if r.get("name") == name),
+            key=lambda r: int(str(r.get("id") or 0)),
+            default=None,
+        )
+        status = str((r or {}).get("status") or "").lower()
+        concl = str((r or {}).get("conclusion") or "").lower()
+        if r is None:
+            why.append(
+                f"{at} {j} has no {name} run; run `octo-feather-lane ci-start <PR>` on {j}, wait "
+                "for its CI, then rerun"
+            )
+        elif status != "completed":
+            why.append(
+                f"{at} pending on {j}: {name} {status or 'pending'}; wait for it to finish, then "
+                "rerun"
+            )
+        elif concl == "skipped":
+            why.append(
+                f"{at} skipped on {j} too: CI never ran there; run `octo-feather-lane ci-start "
+                f"<PR>` on {j}, then rerun"
+            )
+        elif concl not in ("success", "neutral"):
+            why.append(
+                f"{at} failing on {j}: {name} {concl or 'none'}; fix it (a red check is never "
+                "pre-existing)"
+            )
+        else:
+            ok.append(f"- {name}: skipped on {h}; {concl} on {j}, the judged head")
+    return why, ok
+
+
+class _AbortError(Exception):
+    """A read the full pass needs failed: the merge ask refuses with it alone."""
+
+
+def _fix(head: str) -> str:
+    return (
+        f"run the full gate, just check, on {head[:12]} and record its pass "
+        "(octo-feather-integrate --full records it; octo-feather-gate --help)"
+    )
+
+
+def _carries(
+    g: Git, ident: dict[str, object], head: str, c: str, rec: dict[str, object]
+) -> list[str] | None:
+    """Why lane commit C's recorded full pass REC does not carry over to HEAD (none: it does);
+    None when REC is no full pass of C."""
+    if rec.get("tier") != "full" or str(rec.get("head", "")).lower() != c.lower():
+        return None
+    fix = _fix(head)
+    if rec.get("clean") is not True:
+        no = [
+            (
+                f"it was recorded on a dirty tree (clean {json.dumps(rec.get('clean'))}): it "
+                f"proves nothing; {fix}"
+            )
+        ]
+    else:
+        try:
+            _, no = head_proof(g, c, head, at="full pass", kept="the full pass", rerun=fix)
+        except _RefusedError as e:
+            no = [str(e)]
+    return no or [
+        f"its {k} {str(rec.get(k))[:12]} is not the head's current {str(v)[:12]} "
+        f"(octo-feather-gate config {head[:12]}): stale; {fix}"
+        for k, v in ident.items()
+        if rec.get(k) != v
+    ]
+
+
+def full_pass_of(g: Git | None, gt: Gate, head: str) -> list[str]:
+    """[] when HEAD has a current recorded full gate pass, else why not (the rule:
+    issue-lifecycle #lanes-checkpoints). Current: recorded (octo-feather-gate passed) on a clean
+    tree at HEAD, or at a lane commit the head proof proves HEAD stands for, with the identity
+    fields of HEAD itself (octo-feather-gate config). _AbortError: the lane's commits unread."""
+    g = g or Git("")
+    h = head[:12]
+    if not g.here:
+        return [
+            (
+                f"commit {h} is not in this repo: run merge-ask in the lane worktree after git "
+                "fetch origin"
+            )
+        ]
+    rc, ident = gt.config
+    if not ident:
+        return [
+            (
+                f"head {h}: its gate configuration is unreadable (octo-feather-gate config {h} "
+                f"exit {rc}): {_fix(head)}"
+            )
+        ]
+    if isinstance(g.topo, Unread):
+        raise _AbortError(g.topo.why)
+    why: list[str] = []
+    for c in [head, *(r for r in g.topo if r.lower() != head.lower())]:
+        no = _carries(g, ident, head, c, gt.passes.get(c, {}))
+        if no is None:
+            continue
+        if not no:
+            return []
+        why = why or [f"the full pass recorded at {c[:12]} does not carry over: {w}" for w in no]
+    return [
+        f"head {h} has no current recorded full gate pass for that head and its gate "
+        "configuration"
+        + (
+            f"; {'; '.join(why)}"
+            if why
+            else f" (none recorded on {h} or the lane commits before it): {_fix(head)}"
+        )
+    ]
+
+
+def full_pass(head: str, files: list[str], base: str, *, err: type[Exception]) -> list[str]:
+    """ci-start's full pass: the lane's git and gate facts read (as snapshot reads them), then
+    full_pass_of; a read it needs that failed raises ERR."""
+    g = _git_facts(head, base, files, err)
+    try:
+        return full_pass_of(g, _gate_facts(g, head), head)
+    except _AbortError as e:
+        raise err(str(e)) from None
+
+
+def gate_time(g: Git | None, t: Trend, head: str) -> list[str]:  # noqa: PLR0911 (one per line)
+    """The full gate's wall time on the final head against gate-budget.toml at that head, with
+    its trend and slowest items (spec issue-lifecycle #lanes-checkpoints). Shown only: the code
+    reviewer judges it, no gate reads it, and merge-ask passes or fails the same without it."""
+    g = g or Git("")
+    h = head[:12]
+    title = (
+        f"Gate time (the full gate on the final head against {BUDGET} at {h}; the code reviewer "
+        "judges it, no gate reads it: issue-lifecycle #lanes-checkpoints):"
+    )
+    if isinstance(t.rows, Unread):
+        return [title, f"  unread: {t.rows.why}"]
+    if t.rows is None:
+        return [title, f"  no gate run recorded ({t.path}: none)"]
+    if isinstance(g.topo, Unread):
+        return [title, f"  unread: {g.topo.why}"]
+    lane = [head, *(r for r in g.topo if r != head)]
+    if isinstance(t.history, Unread):
+        return [title, f"  unread: {t.history.why}"]
+    runs = passed_full(t.rows[0], set(t.history))
+    last = next((r for c in lane for r in reversed(runs) if r.get("head") == c), None)
+    if last is None:
+        return [
+            title,
+            f"  no passed full gate run recorded on {h} or the lane commits before it ({t.path})",
+        ]
+    if isinstance(t.budget, Unread):
+        return [title, f"  unread: {t.budget.why}"]
+    budget, why = budget_parse(t.budget)
+    return [title, *budget_lines(last, runs[: runs.index(last)], budget, why, t.now, "  ")]
+
+
+# --- the gate time's lines, shared with octo-feather-lane's report (moved whole, #1150) ---
+
+BUDGET = (
+    "gate-budget.toml"  # the repo root's gate-time budget, kept by the factory (form: budget_text)
+)
+BUDGET_TREND = 5  # trend runs shown when the repo has no budget file to set trend_runs
+SLOWEST = 5  # slowest items shown
+
+
+Budget = dict[str, float]  # budget_seconds, growth_share, trend_runs (an int)
+Run = dict[str, object]  # one check-runs.jsonl line
+
+
+def numbered_jsonl(path: Path) -> tuple[list[tuple[int, Run]], list[int]] | None:
+    """A JSON lines file's object lines with their numbers, and the numbers of the lines that are
+    not one; None with no file."""
+    if not path.exists():
+        return None
+    rows: list[tuple[int, Run]] = []
+    bad: list[int] = []
+    for i, ln in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not ln.strip():
+            continue
+        try:
+            d: object = json.loads(ln)
+        except ValueError:
+            d = None
+        if isinstance(d, dict):
+            rows.append((i, cast("Run", d)))
+        else:
+            bad.append(i)
+    return rows, bad
+
+
+def budget_parse(text: str | None) -> tuple[Budget | None, str]:
+    """gate-budget.toml's three numbers, or None and why: absent (text None) or invalid.
+    budget_seconds: the full gate's wall-time budget; growth_share: the share of growth over the
+    trend's median that is flagged; trend_runs: how many passed full runs before the latest make
+    the trend. Stdlib tomllib: the kit's scripts stay stdlib-only (AGENTS.md)."""
+    if text is None:
+        return None, f"{BUDGET}: none"
+    try:
+        d: dict[str, object] = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as e:
+        return None, f"{BUDGET}: {e}"
+    least = {"budget_seconds": 0.0, "growth_share": 0.0, "trend_runs": 1.0}
+    ok: Budget = {}
+    for k, low in least.items():
+        v = d.get(k)
+        if (
+            isinstance(v, (int, float))
+            and not isinstance(v, bool)
+            and (v > low if k == "budget_seconds" else v >= low)
+            and (k != "trend_runs" or isinstance(v, int))
+        ):
+            ok[k] = v
+    bad = [f"{k} {d.get(k)!r} is not a number of the right range" for k in least if k not in ok]
+    # the per-test CPU budget, optional: the gate's own (tests/gate/conftest.py) reads it
+    cpu = d.get("test_cpu_seconds")
+    if cpu is not None and (isinstance(cpu, bool) or not isinstance(cpu, (int, float)) or cpu <= 0):
+        bad.append(f"test_cpu_seconds {cpu!r} is not a number of the right range")
+    # octo-feather-slot reads and checks them
+    slots = {
+        "heavy_items",
+        "heavy_slots",
+        "eval_slots",
+        "slot_grace_seconds",
+        "slot_bound_seconds",
+    }
+    bad += [f"unknown key {k}" for k in sorted(set(d) - set(least) - {"test_cpu_seconds"} - slots)]
+    return (None, f"{BUDGET}: " + "; ".join(bad)) if bad else (ok, "")
+
+
+def total(d: Run) -> float:
+    t = d.get("total_s")
+    return float(t) if isinstance(t, (int, float)) else 0.0
+
+
+def passed_full(rows: list[tuple[int, Run]], heads: set[str]) -> list[Run]:
+    """check-runs.jsonl lines of passed full gate runs (tier full, exit 0, the runner's own
+    fields) on HEADS, oldest first."""
+    runs = [
+        d
+        for _, d in rows
+        if d.get("tier") == "full"
+        and d.get("exit") == 0
+        and d.get("head") in heads
+        and utc(d.get("start")) is not None
+        and isinstance(d.get("total_s"), (int, float))
+    ]
+    # UTC instants of one form: text order is time order
+    return sorted(runs, key=lambda d: str(d.get("start")))
+
+
+def secs(x: float) -> str:
+    return f"{round(x, 3):g}s"
+
+
+def budget_lines(  # noqa: PLR0913, PLR0917  the run, its trend, the budget and how it is shown
+    last: Run, before: list[Run], budget: Budget | None, why: str, now: object, pad: str
+) -> list[str]:
+    """The full gate run LAST against BUDGET, with the trend (passed full runs BEFORE it, oldest
+    first) and its slowest items; flags OVER BUDGET and GROWN. Display only: no gate reads it
+    (issue-lifecycle #lanes-checkpoints)."""
+    t = total(last)
+    run = (
+        f"{pad}full gate: {secs(t)}, head {str(last.get('head'))[:12]}, started "
+        f"{stamp(last.get('start'), now)}"
+    )
+    if budget is None:
+        out = [f"{run}: no budget ({why})"]
+    else:
+        b = float(budget["budget_seconds"])
+        out = [
+            f"{run}: "
+            + (
+                f"OVER BUDGET by {secs(t - b)}"
+                if t > b
+                else f"within budget, {secs(b - t)} to spare"
+            )
+            + f" (budget {secs(b)})"
+        ]
+    base = before[-int(budget["trend_runs"] if budget else BUDGET_TREND) :]
+    if not base:
+        out.append(f"{pad}growth: no passed full run before it to compare")
+    else:
+        med = statistics.median(total(d) for d in base)
+        grow = (t - med) / med if med else 0.0
+        g = (
+            f"{pad}growth: {grow:+.1%} over the trend's median {secs(med)} (the {len(base)} "
+            f"passed full run{'s' * (len(base) > 1)} before it)"
+        )
+        if budget is None:
+            out.append(f"{g}; no set share ({why})")
+        else:
+            share = float(budget["growth_share"])
+            out.append(
+                f"{g}; set share {share * 100:g}%: " + ("GROWN" if grow > share else "within")
+            )
+    out.append(
+        f"{pad}trend: "
+        + ", ".join(
+            f"{secs(total(d))} {str(d.get('head'))[:12]} {d.get('start')}" for d in [*base, last]
+        )
+        + " (passed full runs, oldest first)"
+    )
+    raw = last.get("steps")
+    steps: list[tuple[float, str]] = []
+    for x in cast("list[object]", raw) if isinstance(raw, list) else []:
+        st = cast("dict[str, object]", x) if isinstance(x, dict) else {}
+        sec = st.get("seconds")
+        if isinstance(sec, (int, float)):
+            steps.append((float(sec), str(st.get("name"))))
+    top = sorted(steps, key=lambda s: (-s[0], s[1]))[:SLOWEST]
+    out.append(
+        f"{pad}slowest: "
+        + (", ".join(f"{name} {secs(sec)}" for sec, name in top) or "no items recorded")
+    )
+    return out
+
+
+def stamp(s: object, now: object) -> str:
+    t = utc(s)
+    if t is None:
+        return f"{s!r} (not a UTC instant)" if s not in (None, "") else "(not recorded)"
+    n = int((cast("dt.datetime", now) - t).total_seconds())
+    sign, n = ("", n) if n >= 0 else ("-", -n)
+    d, h, m = n // 86400, n // 3600 % 24, n // 60 % 60
+    age = (f"{d}d" if d else "") + (f"{h}h" if d or h else "") + f"{m}m"
+    return f"{t:%Y-%m-%dT%H:%M:%SZ} ({sign}{age} ago)"
 
 
 # --- the checks ---
@@ -1619,9 +2434,9 @@ def _stale(line: str) -> list[str] | None:
 
 
 def merge_order(o: Order) -> list[str]:
-    """Spec #gates-merge-order: each other open PR whose pinned runs fresh on the base go stale
-    with this lane merged in (the items octo-feather-qa names stale only then), and each whose
-    head conflicts with this lane's head; shown only, never a gap."""
+    """The merge-order lines for O: what they name and that they are never a gap, issue-lifecycle
+    spec #gates-merge-order; a pin's newly stale items, those octo-feather-qa names stale only
+    with this lane merged in."""
     out: list[str] = []
     for p in o.prs:
         who = f"PR #{p.number} ({p.branch})"
@@ -1658,6 +2473,23 @@ class _UnreadError(Exception):
 
 
 QA = KIT / "scripts" / "octo-feather-qa"
+CONTRACT = KIT / "scripts" / "octo-feather-contract"
+GH_PRS = KIT / "schemas" / "gh-pr-list.schema.json"
+# The kit's locked jsonschema, by octo-feather-contract's route (its docstring): this module stays
+# standard library only, so the validation runs in the kit's project environment, never the network.
+KIT_PYTHON = ["uv", "run", "--project", str(KIT), "--locked", "--offline", "--no-dev", "--quiet"]
+VALIDATE = """import json, sys, jsonschema
+schema = json.loads(open(sys.argv[1], encoding="utf-8").read())
+v = jsonschema.validators.validator_for(schema)
+v.check_schema(schema)
+try:
+    doc = json.loads(sys.stdin.read())
+except ValueError as e:
+    sys.exit(f"not JSON: {e}")
+for e in v(schema).iter_errors(doc):
+    print(f"{'.'.join(map(str, e.absolute_path)) or 'the answer'}: {e.message}", file=sys.stderr)
+    sys.exit(1)
+"""
 SHELL_OPS = {";", "&&", "||", "|", "&", "(", ")"}
 IDENT = {
     f"GIT_{who}_{k}": v
@@ -1697,22 +2529,37 @@ def _pins(command: str) -> list[str]:
     return out
 
 
+class _Demo(TypedDict, total=False):
+    """A qc.toml demo entry as the contract's schema (schemas/qc.v*.schema.json) admits it: the
+    key the merge order reads."""
+
+    command: str
+
+
+def _said(p: subprocess.CompletedProcess[str], prefix: str = "") -> str:
+    """P's stderr lines, PREFIX cut from each, joined; its exit when it printed none."""
+    lines = [ln.removeprefix(prefix) for ln in p.stderr.strip().splitlines()]
+    return "; ".join(lines)[:300] or f"exit {p.returncode}"
+
+
 def _demo_pins(oid: str) -> list[str]:
-    """The pins of every qc.toml demo at commit OID; none without a qc.toml there."""
+    """The pins of every qc.toml demo at commit OID, the contract validated first by
+    octo-feather-contract; none without a qc.toml there."""
     rc, text = _git("show", f"{oid}:qc.toml", ok=(0, 128))
     if rc:
         return []
-    try:
-        demos: object = tomllib.loads(text).get("demo", {})
-        cmds = [
-            cast("dict[str, object]", c).get("command")
-            for c in cast("dict[str, object]", demos).values()
-            if isinstance(c, dict)
-        ]
-        return list(dict.fromkeys(p for c in cmds if isinstance(c, str) for p in _pins(c)))
-    except (tomllib.TOMLDecodeError, ValueError, AttributeError) as e:
-        msg = f"qc.toml at {oid[:12]} not parsed ({e})"
-        raise _UnreadError(msg) from e
+    with tempfile.TemporaryDirectory(prefix="merge-ask-qc-") as tmp:
+        path = Path(tmp) / "qc.toml"
+        path.write_text(text, encoding="utf-8")
+        p = subprocess.run([str(CONTRACT), str(path)], capture_output=True, text=True, check=False)
+    if p.returncode:
+        why = _said(p, f"octo-feather-contract: {path}: ")
+        msg = f"qc.toml at {oid[:12]} fails octo-feather-contract ({why})"
+        raise _UnreadError(msg)
+    # valid against its format's schema above: [demo] a table of tables, each command a string
+    demos = cast("dict[str, _Demo]", tomllib.loads(text).get("demo", {}))
+    cmds = [d["command"] for d in demos.values() if "command" in d]
+    return list(dict.fromkeys(p for c in cmds for p in _pins(c)))
 
 
 def _merge_tree(ours: str, theirs: str) -> tuple[str, list[str]]:
@@ -1760,8 +2607,25 @@ def _verdicts(rev: str, pins: list[str]) -> list[str]:
     return lines
 
 
-def _open_prs(pr: int, base_branch: str, repo: str | None) -> list[tuple[int, str, str]]:
-    """(number, head branch, head oid) of every open PR but PR on BASE_BRANCH, by number."""
+class _GhPR(TypedDict):
+    """A gh pr list row, as schemas/gh-pr-list.schema.json admits it."""
+
+    number: int
+    headRefName: str
+    headRefOid: str
+
+
+class _Open(NamedTuple):
+    """An open PR the merge order reads."""
+
+    number: int
+    branch: str
+    oid: str
+
+
+def _open_prs(pr: int, base_branch: str, repo: str | None) -> list[_Open]:
+    """Every open PR but PR on BASE_BRANCH, by number; gh's answer validated first against
+    schemas/gh-pr-list.schema.json."""
     fields = "number,headRefName,headRefOid"
     args = ["pr", "list", "--state", "open", "--base", base_branch, "--limit", "200"]
     out = gh(
@@ -1769,13 +2633,25 @@ def _open_prs(pr: int, base_branch: str, repo: str | None) -> list[tuple[int, st
         "check gh auth status, then rerun",
         err=_UnreadError,
     )
+    env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
     try:
-        rows = cast("list[dict[str, object]]", json.loads(out))
-        got = [(int(str(r["number"])), str(r["headRefName"]), str(r["headRefOid"])) for r in rows]
-    except (ValueError, KeyError, TypeError) as e:
-        msg = f"gh pr list printed no pull requests ({out[:100]!r})"
+        p = subprocess.run(
+            [*KIT_PYTHON, "python", "-c", VALIDATE, str(GH_PRS)],
+            input=out,
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
+    except OSError as e:
+        msg = f"cannot run uv for the kit's locked jsonschema ({e})"
         raise _UnreadError(msg) from e
-    return sorted(x for x in got if x[0] != pr)
+    if p.returncode:
+        msg = f"gh pr list's answer fails schemas/gh-pr-list.schema.json ({_said(p)})"
+        raise _UnreadError(msg)
+    rows = cast("list[_GhPR]", json.loads(out))  # valid above
+    got = [_Open(r["number"], r["headRefName"], r["headRefOid"]) for r in rows]
+    return sorted(x for x in got if x.number != pr)
 
 
 def _sibling(

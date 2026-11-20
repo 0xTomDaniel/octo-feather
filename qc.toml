@@ -131,6 +131,10 @@ covers = ["scripts/octo-feather-lane", "scripts/merge_ask.py"]
 [demo."issue-lifecycle#acceptance-ci-status-only"]
 covers = ["scripts/octo-feather-lane", ".github/workflows/check.yml", "templates/python/.github/workflows/check.yml", "templates/typescript/.github/workflows/check.yml"]
 
+# Proven by tests/gate/kit/test_lane_merge_ask_hunks.py's tagged item (the rule: issue-lifecycle #lanes-one-head).
+[demo."issue-lifecycle#acceptance-one-head-hunks"]
+covers = ["scripts/octo-feather-lane", "scripts/merge_ask.py"]
+
 # Proven by tests/gate/kit/test_lane_review_resolution.py's tagged item (the rule: issue-lifecycle #lanes-one-head).
 [demo."issue-lifecycle#acceptance-review-resolution"]
 covers = ["scripts/octo-feather-lane", "agents/code-reviewer.md", "agents/supervisor.md"]
@@ -303,13 +307,15 @@ covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11
 command = "scripts/octo-feather-qa --verdict 20261120T001636Z-8a2c20/supervisor-autonomy/owner-access-blocker-and-ready-work 20261120T001636Z-8a2c20/supervisor-autonomy/owner-access-blocker-message"
 covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evals/fixtures/lane-shout-wip", "evals/fixtures/lane-shout-main", "scripts/octo-feather-qa", "evidence/2026-11-13-gh840-supervisor-autonomy.md", "evidence/2026-11-18-gh978-eval-verdict.md", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/herdr_messaging.py"]
 
-# Judged from pinned stored eval runs (rule: scripts/octo-feather-qa --help, Verdict): the supervisor half, sent back
-# and nothing integrated on a missed named skill, integrated on none. The command half (the log's finding line) is proved
-# by tests/gate/kit/test_lane_skills.py (the gate). The cases' stand-in for `skills` and the run evidence:
-# evidence/2026-11-20-gh644-1161-supervisor-ticket-skills.md.
+# Two halves. The supervisor half, judged from pinned stored eval runs (rule: scripts/octo-feather-qa --help, Verdict):
+# sent back and nothing integrated on a missed named skill, integrated on none; the cases' stand-in for `skills` and the
+# run evidence: evidence/2026-11-20-gh644-1161-supervisor-ticket-skills.md. The command half, offline (#1169, #1170):
+# scripts/octo-feather-lane skills 1094 in a scratch lane whose worker implementer-gh1094 the real herdr-spawn spawned
+# (testkit Herdr), so its spawn line is herdr-spawn's own: exit 1 and the send-back with eval-cases not loaded, exit 0
+# once loaded (tests/gate/kit/lane_skills.py demo, also a gate item).
 [demo."issue-lifecycle#acceptance-ticket-skills"]
-command = "scripts/octo-feather-qa --verdict 20261120T024345Z-2fd725/supervisor-ticket-skills/missed-skill-sent-back 20261120T024345Z-2fd725/supervisor-ticket-skills/loaded-skill-integrated"
-covers = ["agents/supervisor.md", "scripts/octo-feather-lane", "scripts/octo-feather-handoff", "evals/supervisor-ticket-skills", "evals/fixtures/lane-skills-main", "evals/fixtures/lane-skills-1099", "evals/fixtures/lane-skills-1094", "tests/gate/kit/testkit/recordings/lane-skills.json", "tests/fixtures/lane-skills", "scripts/octo-feather-qa", "evidence/2026-11-20-gh644-1161-supervisor-ticket-skills.md"]
+command = "scripts/octo-feather-qa --verdict 20261120T024345Z-2fd725/supervisor-ticket-skills/missed-skill-sent-back 20261120T024345Z-2fd725/supervisor-ticket-skills/loaded-skill-integrated && python3 tests/gate/kit/lane_skills.py demo"
+covers = ["agents/supervisor.md", "scripts/octo-feather-lane", "scripts/octo-feather-handoff", ".agents/skills/herdr-comms/assets/herdr-spawn", ".agents/skills/github-issues/scripts/lane-key", "tests/gate/kit/lane_skills.py", "tests/gate/kit/testkit/herdr.py", "evals/supervisor-ticket-skills", "evals/fixtures/lane-skills-main", "evals/fixtures/lane-skills-1099", "evals/fixtures/lane-skills-1094", "tests/gate/kit/testkit/recordings/lane-skills.json", "tests/fixtures/lane-skills", "scripts/octo-feather-qa", "evidence/2026-11-20-gh644-1161-supervisor-ticket-skills.md"]
 
 # Judged from pinned stored eval runs (rule: scripts/octo-feather-qa --help, Verdict). Which case proves which Then
 # clause, and the generated run evidence: evidence/2026-11-18-gh978-eval-verdict.md.
