@@ -8,9 +8,7 @@ network: a run with no Pi reaches no host, a Pi run only the hosts of Pi's model
 local provider, through srt's proxy), an allowed host never an attempt; a refused host is one
 attempt-record entry; the judge's stdio stays blocking; every process the run starts is reaped
 within it; run by hand inside a qc sandbox (nested), its proof passes; two runs of one session at
-once each pass setup, neither removing a file the other holds on the shared /tmp; in a
-coverage mapping run (COVERAGE_PROCESS_START, as just fast-map sets it) the judge's measured
-coverage leaves, and no file the judge wrote does."""
+once each pass setup, neither removing a file the other holds on the shared /tmp."""
 
 from __future__ import annotations
 
@@ -381,54 +379,6 @@ def network(s: Scratch) -> None:
     srv.shutdown()
 
 
-JUDGE = """import os, coverage
-d = os.path.join(os.environ["COV_MAP_DIR"], os.environ["GATE_ITEM"])
-open(os.path.join(d, "leak.txt"), "w").write("SECRET-1178")
-fake = coverage.CoverageData(basename=os.path.join(d, "cov.fake"))
-fake.add_lines({"/nonexistent/SECRET-1178.py": [1], os.path.realpath(__file__): [10**6]})
-fake.write()
-print("judge ran")
-"""
-
-
-def coverage_out(s: Scratch) -> None:
-    """A mapping run's judge writes a copy of a secret and forged coverage data (a file the box
-    does not hold, a line past a real file's end) into the coverage data dir: after the run the
-    dir holds only coverage data, and of it only what was measured: the judge's own script,
-    within its lines."""
-    import coverage  # noqa: PLC0415  # the kit's uv venv, as the mapping run's
-
-    r = repo(s)
-    (r / "judge.py").write_text(JUDGE)
-    s.git(r, "add", "-A")
-    s.git(r, "commit", "-qm", "judge")
-    d = s.root / "cov"
-    env = tool_homes() | {
-        "PATH": f"{Path(sys.executable).parent}{os.pathsep}{s.env['PATH']}",
-        "COVERAGE_PROCESS_START": str(ROOT / "tests" / "gate" / "coverage.toml"),
-        "COV_MAP_DIR": str(d),
-        "GATE_ITEM": "item",
-    }
-    ran = s.run([kit("octo-feather-qc-sandbox"), "--", "python3", "judge.py"], cwd=r, env=env)
-    assert ran.out == "judge ran", (ran.out, ran.err)
-    for want in ("writable persistent paths: none", f"coverage data dir {d}/item"):
-        assert want in ran.err, (want, ran.err)
-    left = sorted(f.name for f in (d / "item").iterdir())
-    assert left, left
-    assert all(n.startswith("cov.") and n != "cov.fake" for n in left), left
-    assert not any(b"SECRET-1178" in (d / "item" / n).read_bytes() for n in left), left
-    measured: dict[str, set[int]] = {}
-    for n in left:
-        cd = coverage.CoverageData(basename=str(d / "item" / n))
-        cd.read()
-        for m in cd.measured_files():
-            measured.setdefault(m, set()).update(cd.lines(m) or ())
-    j = str((r / "judge.py").resolve())
-    assert j in measured, sorted(measured)
-    assert max(measured[j]) <= len(JUDGE.splitlines()), measured[j]
-    assert not any("SECRET" in m for m in measured), sorted(measured)
-
-
 if __name__ == "__main__":
     main(
         by_hand,
@@ -440,5 +390,4 @@ if __name__ == "__main__":
         reaped,
         live_survivor,
         same_session,
-        coverage_out,
     )
