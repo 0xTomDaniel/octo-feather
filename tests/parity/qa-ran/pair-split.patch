@@ -1,0 +1,17 @@
+Seeded defect: ran matches a flag and its value each anywhere, not as an adjacent pair.
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index 404ccdfd..7bcb35d4 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -636,10 +636,7 @@ def args_match(want: list[str], got: list[str], head: str | None) -> bool:
+         return False
+     groups: list[list[str]] = []
+     for w in want[k:]:
+-        if groups and not w.startswith("-") and len(groups[-1]) == 1:
+-            groups[-1].append(w)
+-        else:
+-            groups.append([w])
++        groups.append([w])
+     rest = got[k:]
+     return all(
+         any(
