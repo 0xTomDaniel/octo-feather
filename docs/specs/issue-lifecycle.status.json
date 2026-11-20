@@ -83,6 +83,15 @@
       "status": "built",
       "pr": 91
     },
+    "acceptance-one-head-hunks": {
+      "status": "built",
+      "pr": 1164,
+      "record": "20261120T182128Z-dd0e4bf5",
+      "commit": "f462fc68ef2b93f76e8000ddfe073e082d047ce9",
+      "tests": [
+        "tests/gate/kit/lane_merge_ask_hunks.py"
+      ]
+    },
     "acceptance-qc-interim": {
       "status": "built",
       "pr": 880,
@@ -186,6 +195,15 @@
     "acceptance-merge-ask-evidence": {
       "status": "built",
       "pr": 49
+    },
+    "acceptance-merge-ask-siblings": {
+      "status": "built",
+      "pr": 1164,
+      "record": "20261120T182128Z-1b38c372",
+      "commit": "f462fc68ef2b93f76e8000ddfe073e082d047ce9",
+      "tests": [
+        "tests/gate/kit/lane_merge_order.py"
+      ]
     },
     "acceptance-merge-ask-no-criterion": {
       "status": "built",
@@ -310,6 +328,60 @@
       "record": "20261120T041917Z-e303c5bf",
       "commit": "ad5f43e0aa2eaa2ac8c7fa534e7e1da30f44a02a",
       "tests": []
+    },
+    "acceptance-lane-start": {
+      "status": "built",
+      "pr": 1166,
+      "record": "20261120T190047Z-9a151ec6",
+      "commit": "61346a96984ddde78ed09003a7f3d056d2213f59",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
+    },
+    "acceptance-lane-start-files": {
+      "status": "built",
+      "pr": 1166,
+      "record": "20261120T190047Z-e34c838e",
+      "commit": "61346a96984ddde78ed09003a7f3d056d2213f59",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
+    },
+    "acceptance-lane-start-sub-issue": {
+      "status": "built",
+      "pr": 1166,
+      "record": "20261120T190047Z-d537fb5e",
+      "commit": "61346a96984ddde78ed09003a7f3d056d2213f59",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
+    },
+    "acceptance-lane-start-exists": {
+      "status": "built",
+      "pr": 1166,
+      "record": "20261120T190048Z-53c81f32",
+      "commit": "61346a96984ddde78ed09003a7f3d056d2213f59",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
+    },
+    "acceptance-lane-start-rerun": {
+      "status": "built",
+      "pr": 1166,
+      "record": "20261120T190048Z-ff9655fd",
+      "commit": "61346a96984ddde78ed09003a7f3d056d2213f59",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
+    },
+    "acceptance-lane-start-current-kit": {
+      "status": "built",
+      "pr": 1166,
+      "record": "20261120T190048Z-5ea61b2e",
+      "commit": "61346a96984ddde78ed09003a7f3d056d2213f59",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
     }
   }
 }

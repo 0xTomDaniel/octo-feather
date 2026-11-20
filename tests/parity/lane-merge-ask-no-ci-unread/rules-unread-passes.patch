@@ -1,0 +1,14 @@
+Seeded defect: unreadable rulesets count as no ruleset: a no-CI head passes on a policy gh could not read.
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index 575dba8d..e41245e5 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -566,7 +566,7 @@ def required_none(repo: str | None, p: Policy | Unread) -> str:
+             f"the rulesets of base {base} could not be read (gh api {shown}/rules/branches/{base}: "
+             f"{why or 'no rule list'}): fix gh auth status or read access, then rerun"
+         )
+-        raise _Gap(msg)
++        rsrc = msg
+     if req:
+         msg = (
+             f"base {base} requires checks {', '.join(dict.fromkeys(req))} "

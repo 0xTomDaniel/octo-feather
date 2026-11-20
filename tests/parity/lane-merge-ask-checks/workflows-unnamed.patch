@@ -1,0 +1,14 @@
+Seeded defect: none reported with workflow files at the head no longer names them (refusal text byte-identical).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index 575dba8d..7f3dc21d 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -374,7 +374,7 @@ def head_checks(c: Checks) -> tuple[list[str], str, list[dict[str, object]]]:
+         )
+     elif isinstance(at, Workflows):
+         miss.append(
+-            f"Checks: none reported on head {h}, its workflows {', '.join(at.files)}; "
++            f"Checks: none reported on head {h}, its workflows; "
+             "push the head and wait for CI"
+         )
+     else:

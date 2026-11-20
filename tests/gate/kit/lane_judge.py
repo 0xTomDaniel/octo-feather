@@ -465,10 +465,12 @@ def threshold(s: Scratch, which: str) -> None:
     k = s.root / "kit"
     # The kit is where its scripts are; the qc sandbox binds the kit's own dirs, so those it
     # reads are copies (a link out of a kit under /tmp would dangle there); evidence is read
-    # outside it.
-    for d in ("scripts", "agents", ".agents"):
+    # outside it. merge-ask validates gh's answer with the kit's schemas and locked jsonschema
+    # (its project, linked as kit_deps links the JavaScript one).
+    for d in ("scripts", "agents", ".agents", "schemas"):
         shutil.copytree(ROOT / d, k / d, symlinks=True)
-    (k / "evidence").symlink_to(ROOT / "evidence")
+    for n in ("evidence", "pyproject.toml", "uv.lock", ".venv"):
+        (k / n).symlink_to(ROOT / n)
     kit_deps(k)
     for f in {src.relative_to(ROOT).parent for src in FAKES.values()}:
         shutil.copytree(ROOT / f, k / f, symlinks=True)

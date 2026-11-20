@@ -396,7 +396,6 @@ extraPaths = ["tests/gate", "scripts"]
   "C901",
   "E401",
   "E501",
-  "E701",
   "E702",
   "E731",
   "E741",
