@@ -1,0 +1,14 @@
+Seeded defect: a criterion row with an empty evidence cell passes (spec #acceptance-merge-ask-evidence).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index eebfe2b6..ed86ea19 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -439,7 +439,7 @@ def criteria(  # noqa: C901, PLR0912  one branch per row gap, in the order print
+                     f"criterion row {cid}: qc verdict {cells[1]!r}; write pass or fail, as the qc "
+                     "report says"
+                 )
+-            if not cells[3]:
++            if cells[3] == "none":
+                 miss.append(
+                     f"criterion row {cid}: no evidence; name the qc report and the command it ran"
+                 )

@@ -8,11 +8,11 @@ in place, and refuses a wrong head, a report with no verdict or no check classes
 a proxy check with a clear verdict and a failed write, leaving no comment behind. `merge-ask`
 passes a complete section and prints it with each row's decision source (quality
 #acceptance-qc-fallback), also through the qc judge's offline gh; fails PR #16's real body
-(fixture) naming each missing item, and each single gap: a stale head (the parent line's
-rule: test_merge_ask.py, in-process), a failing, pending or unreported check (rule: --help,
-merge-ask Checks line), rows, Built against the status file and the qc commits, the verdict
-link, an untriaged fail. One judged head (spec #acceptance-one-head): qc's status commit and a
-clean main merge keep the verdict with the check's proof line; anything else fails naming it.
+(fixture) naming each missing item, and each single gap: a failing, pending or unreported
+check (rule: --help, merge-ask Checks line). The parent line, Head, criterion rows, Built,
+Failed, the review verdict link and qc's evidence: test_merge_ask.py, in-process. One judged
+head (spec #acceptance-one-head): qc's status commit and a clean main merge keep the verdict
+with the check's proof line; anything else fails naming it.
 Full pass (#acceptance-merge-ask-full-proof), gate time (#acceptance-merge-ask-gate-budget,
 shown only), skipped checks (#acceptance-ci-status-only, the rule: #lanes-one-head), a lane that
 builds no criterion, and a PR of 101 commits.
@@ -553,8 +553,8 @@ def qc_report(ln: Lane, stamp: str, results: list[tuple[str, str, str]]) -> None
 
 def merge_ask_passes(s: Scratch) -> None:
     """A complete section passes and prints exactly it, the check classes, and each row's
-    decision source (quality#acceptance-qc-fallback): none yet, then from a qc report, never
-    from qc.toml; merge-ask writes nothing."""
+    decision source (quality#acceptance-qc-fallback): none yet, then from a qc report, a later
+    report at the same head replacing it, never from qc.toml; merge-ask writes nothing."""
     ln = Lane(s)
     n = ln.writes()
     ln.setpr()
@@ -583,6 +583,9 @@ def merge_ask_passes(s: Scratch) -> None:
     qc_report(ln, "20261029T090000Z-src123", [a, b])
     out = ln.ask().out
     assert sources(out) == [f"- demo#acceptance-a: {tagged}", "- demo#acceptance-b: agent fallback"]
+    qc_report(ln, "20261029T100000Z-src124", [("acceptance-b", "pass", "a rerun")])
+    out = ln.ask().out
+    assert sources(out) == [f"- demo#acceptance-a: {tagged}", "- demo#acceptance-b: a rerun"]
     assert ln.writes() == n, "merge-ask wrote"
 
 
@@ -653,52 +656,9 @@ def gate_time(s: Scratch) -> None:
     )
 
 
-def failed_triage(s: Scratch) -> None:
-    """A failed criterion with triage passes; insufficient evidence (quality spec #qc-results,
-    #acceptance-qc-insufficient) is never triaged, from its row or from the latest qc report at
-    the judged head, until a rerun gives pass or fail; an untriaged fail and Failed's malformed
-    forms fail."""
-    ln = Lane(s)
-    js, j = ln.js, ln.j
-    c_fail = f"\n| demo#acceptance-c | fail | judged {js} | r |"
-    why = "Failed:\n- acceptance-c: outside the lane, the spec behaviour is untouched (reason)"
-    ln.setpr(failed=why, rows=ln.rows(js, extra=c_fail.replace("| r |", "| r, output x |")))
-    assert "- acceptance-c: outside the lane, the spec behaviour is untouched (reason)" in (
-        ln.ask().out.splitlines()
-    )
-    never = (
-        "insufficient evidence is never triaged; rerun just qc on it until it gives pass or fail"
-    )
-    rows = f"| demo#acceptance-a | pass | judged {js} | r |\n"
-    rows += f"| demo#acceptance-b | insufficient evidence | judged {js} | r |"
-    ln.bad(f"criterion row demo#acceptance-b: {never}", rows=rows)
-    a = ("acceptance-a", "pass", "demo checks")
-    qc_report(ln, "20261029T100000Z-abc123", [a, ("acceptance-b", "insufficient evidence", "x")])
-    ln.bad(
-        f"criterion demo#acceptance-b: insufficient evidence at the judged head {j[:12]} (demo did "
-        "not run to its end (exit 77, a step it needs could not run here): needs GitHub; qc report "
-        f"{j}-20261029T100000Z-abc123.json): never triaged"
-    )
-    qc_report(ln, "20261029T110000Z-abc123", [a, ("acceptance-b", "pass", "x")])
-    ln.setpr()
-    ln.ask()  # the rerun at that head gave it pass
-    shutil.rmtree(ln.t / "qc")
-    ln.bad("criterion row demo#acceptance-c: fail with no triage", rows=ln.rows(js, extra=c_fail))
-    ln.bad(
-        "Failed: demo#acceptance-c has no triage",
-        failed="Failed:\n- acceptance-c:",
-        rows=ln.rows(js, extra=c_fail),
-    )
-    ln.bad(
-        "criterion row demo#acceptance-c: missing (it is in Failed)",
-        failed="Failed:\n- acceptance-c: repair ticket #9",
-    )
-    ln.bad("Failed: 'some'; write", failed="Failed: some")
-
-
 def single_gaps(s: Scratch) -> None:
-    """PR #16's real body names each missing item; a stale or missing head and each failing,
-    pending or unreported check fail, naming it."""
+    """PR #16's real body names each missing item; each failing, pending or unreported check
+    fails, naming it."""
     ln = Lane(s)
     h = ln.h[:12]
     (s.gh.dir / "pr" / "16.json").write_text(fixture("lane-merge-ask/pr16.json"))
@@ -718,8 +678,6 @@ def single_gaps(s: Scratch) -> None:
         "Failed: missing",
     ):
         assert f"  - {item}" in r.err, f"PR #16: {item!r} not named: {r.err}"
-    ln.bad(f"Head: names {OTHER[:12]}, the PR's head is {h} (stale)", head=OTHER[:12])
-    ln.bad("Head: missing", head="")
     ln.bad(f"Checks: failing on head {h}: check failure", FAILURE)
     pending = check(0, status="IN_PROGRESS", conclusion="")
     ln.bad(f"Checks: pending on head {h}: check in_progress", pending)
@@ -984,96 +942,15 @@ def current_head_identity(s: Scratch) -> None:
     c.refused(f"{unavailable} ('app')")
 
 
-def rows_and_built(s: Scratch) -> None:
-    """Rows against Built, Built against the status files and the PR's `qc: built` commits,
-    read from git (BASE..head): each case a real lane head."""
-    ln = Lane(s)
-    js, j, h = ln.js, ln.j, ln.h
-    a = f"| demo#acceptance-a | pass | judged {js} | r |"
-    ln.bad("criterion row demo#acceptance-b: missing (it is in Built)", rows=a)
-    rows = f"{a}\n| demo#acceptance-b | pass | judged {js} | |"
-    ln.bad("criterion row demo#acceptance-b: no evidence", rows=rows)
-    ln.bad(
-        "qc verdict 'ok'; write pass or fail",
-        rows=f"{a}\n| demo#acceptance-b | ok | judged {js} | r |",
-    )
-    zz = f"\n| demo#acceptance-zz | pass | judged {js} | r |"
-    ln.bad("acceptance-zz: no criterion", rows=ln.rows(js, extra=zz))
-    ln.bad(
-        "Built: lists demo#acceptance-a, the status files hold built with PR #7: "
-        "demo#acceptance-a demo#acceptance-b",
-        built="demo#acceptance-a",
-    )
-    # a Built id the status file holds but no qc: built commit names: qc's commit, acceptance-a only
-    qa = ln.on(
-        h,
-        lambda: ln.git(
-            "commit", "-q", "--amend", "-m", f"qc: built acceptance-a (judged {j[:12]})"
-        ),
-    )
-    ln.bad(
-        "Built: demo#acceptance-b in no `qc: built` commit of PR #7 (they passed acceptance-a); "
-        "built only by just qc",
-        pr_head(qa, "x"),
-        head=qa[:12],
-        judged=f"{j[:12]} to {qa[:12]}: qc status commits {qa[:12]} {ONLY}",
-    )
-    # built by an earlier qc run, reset to planned by a later one (PR #49: ac060f9, a56de61): passes
-    q1 = ln.empty(j, "qc: built acceptance-a acceptance-c (judged 0123456789ab)")
-
-    def q2() -> None:
-        ln.git("checkout", "-q", h, "--", STATUS)
-        ln.commit(f"qc: built acceptance-a acceptance-b (judged {j[:12]})")
-
-    q2_ = ln.on(q1, q2)
-    proof = f"{j[:12]} to {q2_[:12]}: qc status commits {q1[:12]} {q2_[:12]} {ONLY}"
-    ln.setpr(pr_head(q2_, "x"), head=q2_[:12], judged=proof)
-    ln.ask()
-    qn = ln.on(h, lambda: ln.git("commit", "-q", "--amend", "-m", "chore: status"))
-    ln.bad("no `qc: built` commit on PR #7", pr_head(qn, "x"), head=qn[:12])
-
-
-def review_link(s: Scratch) -> None:
-    """Review verdict: this PR's marker comment, on the judged head, clear, with usable check
-    classes (no proxy); its exact check lines listed."""
-    ln = Lane(s)
-    j = ln.j
-    ln.bad("Review verdict: empty is not a comment on PR #7", review="")
-    ln.bad("is not a comment on PR #7", review="https://github.com/o/r/pull/8#issuecomment-1001")
-    ln.bad("comment 4242 not on PR #7", review=ln.url.removesuffix("1001") + "4242")
-    other = verdict_says(f"Head: {j}", f"Head: {OTHER}")
-    ln.bad(f"the comment names head {OTHER}, not the judged head {j[:12]}", other)
-    ln.bad(
-        "Review verdict: blocking, not clear", verdict_says("Verdict: clear", "Verdict: blocking")
-    )
-    ln.bad(
-        "Review verdict: the comment carries no usable check classification (report classifies "
-        "no check",
-        verdict_says("\nChecks: none\n", "\n"),
-    )
-    proxy = "Check: scripts/x: r (ADR 1) | reads: y | class: proxy"
-    blocks = f"Review verdict: clear with a proxy check ({proxy}): a proxy check blocks"
-    ln.bad(blocks, verdict_says("Checks: none", proxy))
-    exact = "Check: scripts/x: r (ADR 1) | reads: y | class: exact"
-    ln.setpr(verdict_says("Checks: none", exact))
-    out = ln.ask().out
-    assert section(out)[-1] == f"- {exact}", f"exact check not listed: {out}"
-    ln.bad(
-        "is not a verdict comment (no marker)",
-        lambda d: d["comments"][0].update(body="Verdict: clear"),
-    )
-
-
 def one_judged_head(s: Scratch) -> None:
     """One judged head (spec #acceptance-one-head): review and qc judged J; H may add only qc's
     status commit, with the check's proof; a code commit, a qc commit carrying another file or a
-    hand status edit fails naming it; qc rerun at the exact head passes."""
+    hand status edit fails naming it; qc rerun at the exact head passes. The rows' one head and
+    the Judged line: test_merge_ask.py, in-process."""
     ln = Lane(s)
     j, h = ln.j, ln.h
     ln.setpr()
     assert f"Judged: {ln.proof}" in ln.ask().out.splitlines()
-    ln.bad(f"Judged: names ''; add the check's proof line `Judged: {ln.proof}`", judged="")
-    ln.bad("rows name 2 judged heads", rows=ln.rows(ln.js, h[:7]))
     f = ln.change(h, "feat: after qc")
     ln.on(f, ln.record)
     ln.bad(
@@ -1245,34 +1122,6 @@ def full_pass(s: Scratch) -> None:
     assert want in r.err, f"a pass recorded on a dirty tree: {r.err}"
 
 
-def judged_rows(s: Scratch) -> None:
-    """Each row's judged head is a commit of the PR, written `judged <sha>`, in a table with the
-    judged column; a multi-spec lane passes --status once per spec, a qc id outside the --status
-    files not demanded."""
-    ln = Lane(s)
-    js, j, h = ln.js, ln.j, ln.h
-    b = f"\n| demo#acceptance-b | pass | judged {js} | r |"
-    ln.bad(
-        "criterion row demo#acceptance-a: judged deadbee is not a commit of PR #7; name the head "
-        "qc and the review judged",
-        rows=f"| demo#acceptance-a | pass | judged deadbee | r |{b}",
-    )
-    ln.bad(
-        "judged 'yesterday'; write `judged <sha>`",
-        rows=f"| demo#acceptance-a | pass | yesterday | r |{b}",
-    )
-    old = ln.body().replace(HDR.splitlines()[0], "| criterion | qc verdict | evidence |")
-    ln.bad("criterion table: no judged column", lambda d: d.update(body=old))
-    qx = ln.empty(h, "qc: built acceptance-x (judged 0123456789ab)")
-    proof = f"{j[:12]} to {qx[:12]}: qc status commits {h[:12]} {qx[:12]} {ONLY}"
-    ln.setpr(pr_head(qx, "x"), head=qx[:12], judged=proof)
-    ln.ask()
-    rows = ln.rows(js, extra=f"\n| other#acceptance-x | pass | judged {js} | r |")
-    built = "acceptance-a acceptance-b other#acceptance-x"
-    ln.setpr(pr_head(qx, "x"), head=qx[:12], judged=proof, rows=rows, built=built)
-    ln.ask("--status", "docs/specs/other.status.json")
-
-
 def usage_failures(s: Scratch) -> None:
     """Usage and execution failures name their fix."""
     ln = Lane(s)
@@ -1351,30 +1200,18 @@ class Pr8:
 
 def no_criterion_lane(s: Scratch) -> None:
     """A lane building no criterion passes on head, checks, parent line and the review verdict
-    alone, with no table or its header, --status optional; each item still checked; the
-    verdict's head is the judged head: a code commit after it fails, a clean main merge needs its
-    proof line; a head with no recorded full pass refuses."""
+    alone, --status optional (its rules: test_merge_ask.py, in-process); a failing check still
+    fails; the verdict's head is the judged head: a code commit after it fails, a clean main
+    merge needs its proof line; a head with no recorded full pass refuses."""
     p = Pr8(s)
     ln, n = p.ln, p.n
-    for tbl in ("", HDR):
-        for args in ([], ["--status", STATUS]):
-            p.put(n, p.body(table=tbl))
-            out = p.ask(*args).out.splitlines()
-            assert out[0] == "## Merge ask", (tbl, args, out)
-            assert "Built: none" in out, (tbl, args, out)
-    p.put(n, p.body(head=OTHER[:12]))
-    assert f"Head: names {OTHER[:12]}" in p.ask(want=1).err
+    p.put(n, p.body())
+    for args in ([], ["--status", STATUS]):
+        out = p.ask(*args).out.splitlines()
+        assert out[0] == "## Merge ask", (args, out)
+        assert "Built: none" in out, (args, out)
     p.put(n, p.body(), FAILURE)
     assert "Checks: failing" in p.ask(want=1).err
-    p.put(n, p.body(parent=""))
-    assert "parent line: missing" in p.ask(want=1).err
-    p.put(n, p.body(), verdict_says("Verdict: clear", "Verdict: blocking"))
-    assert "Review verdict: blocking, not clear" in p.ask(want=1).err
-    p.put(n, p.body(), verdict_says("\nChecks: none\n", "\n"))
-    err = p.ask(want=1).err
-    assert "carries no usable check classification" in err, err
-    assert "criterion table" not in err, f"no-criterion lane asked for a table: {err}"
-    assert "qc: built" not in err, f"no-criterion lane asked for a qc commit: {err}"
     nf = ln.change(n, "fix: more", text="three")
     p.put(nf, p.body(head=nf[:12]), subject="fix: more")
     err = p.ask(want=1).err
@@ -1400,31 +1237,6 @@ def no_criterion_lane(s: Scratch) -> None:
     err = p.ask(want=1).err
     want = f"(1 item), head {n2[:12]}:\n  - Full pass: head {n2[:12]} has no current recorded full"
     assert want in err, err
-
-
-def criterion_claimed(s: Scratch) -> None:
-    """A lane that claims a criterion (a qc commit, a Built or Failed id, a status entry built
-    with the PR) with no rows is refused naming the table (#acceptance-merge-ask-evidence); one
-    with a Built id needs --status."""
-    p = Pr8(s)
-    ln, n = p.ln, p.n
-    st = ["--status", STATUS]
-    nq = ln.empty(n, "qc: built acceptance-a (judged 0123456789ab)")  # a qc commit on the lane
-    built8 = (ln.r / STATUS).read_text().replace('"planned", "pr": null', '"built", "pr": 8')
-    s8 = ["--status", ln.file("s8.json", built8)]
-    for tbl in ("", HDR):
-        want = "criterion table: " + ("no rows" if tbl else "missing")
-        for head, body, args in (
-            (nq, p.body(head=nq[:12], table=tbl), st),
-            (n, p.body(table=tbl, built="demo#acceptance-a"), st),
-            (n, p.body(table=tbl, failed="Failed:\n- acceptance-c: repair ticket #9"), st),
-            (n, p.body(table=tbl), s8),
-        ):
-            p.put(head, body)
-            err = p.ask(*args, want=1).err
-            assert want in err, f"{want!r}: {err}"
-    p.put(n, p.body(built="acceptance-a"))
-    assert "name the lane's status file" in p.ask(want=1).err
 
 
 def many_commits(s: Scratch) -> None:
@@ -1470,22 +1282,17 @@ if __name__ == "__main__":
         offline_gh,
         merge_ask_passes,
         gate_time,
-        failed_triage,
         single_gaps,
         no_ci,
         no_ci_unread,
         ci_status_only,
         current_head_checks,
         current_head_identity,
-        rows_and_built,
-        review_link,
         one_judged_head,
         main_merges,
         full_pass,
-        judged_rows,
         usage_failures,
         no_criterion_lane,
-        criterion_claimed,
         many_commits,
         fields,
     )

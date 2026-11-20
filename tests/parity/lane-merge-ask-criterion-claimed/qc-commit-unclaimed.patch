@@ -1,0 +1,14 @@
+Seeded defect: a `qc: built` commit on the PR does not claim a criterion (spec #lanes-one-head).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index eebfe2b6..222a3abe 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -826,7 +826,7 @@ def no_criterion(
+             break
+         if not all(re.fullmatch(r":?-+:?", c.strip()) for c in ln.strip().strip("|").split("|")):
+             return False
+-    if any(QC_COMMIT.match(sj) for _, sj in commits):
++    if any(QC_COMMIT.match(sj) for _, sj in commits[:0]):
+         return False
+     return not any(
+         v.get("status") == "built" and v.get("pr") == pr

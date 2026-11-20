@@ -7,14 +7,11 @@ from collections.abc import Callable
 import pytest
 from lane_merge_ask import (
     ci_status_only,
-    criterion_claimed,
     current_head_checks,
     current_head_identity,
-    failed_triage,
     fields,
     full_pass,
     gate_time,
-    judged_rows,
     main_merges,
     many_commits,
     merge_ask_passes,
@@ -23,8 +20,6 @@ from lane_merge_ask import (
     no_criterion_lane,
     offline_gh,
     one_judged_head,
-    review_link,
-    rows_and_built,
     single_gaps,
     usage_failures,
     verdict_posts,
@@ -65,10 +60,6 @@ def test_merge_ask_gate_time(case: Case) -> None:
     case(gate_time)
 
 
-def test_merge_ask_failed_triage(case: Case) -> None:
-    case(failed_triage)
-
-
 def test_merge_ask_single_gaps(case: Case) -> None:
     case(single_gaps)
 
@@ -96,14 +87,6 @@ def test_merge_ask_current_head_identity(case: Case) -> None:
     case(current_head_identity)
 
 
-def test_merge_ask_rows_and_built(case: Case) -> None:
-    case(rows_and_built)
-
-
-def test_merge_ask_review_link(case: Case) -> None:
-    case(review_link)
-
-
 def test_merge_ask_one_judged_head(case: Case) -> None:
     case(one_judged_head)
 
@@ -117,20 +100,12 @@ def test_merge_ask_full_pass(case: Case) -> None:
     case(full_pass)
 
 
-def test_merge_ask_judged_rows(case: Case) -> None:
-    case(judged_rows)
-
-
 def test_merge_ask_usage_failures(case: Case) -> None:
     case(usage_failures)
 
 
 def test_merge_ask_no_criterion_lane(case: Case) -> None:
     case(no_criterion_lane)
-
-
-def test_merge_ask_criterion_claimed(case: Case) -> None:
-    case(criterion_claimed)
 
 
 def test_merge_ask_many_commits(case: Case) -> None:

@@ -1,0 +1,14 @@
+Seeded defect: an empty Head line is not named missing.
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index eebfe2b6..b04fc492 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -342,7 +342,7 @@ def _check(s: Snapshot) -> Ask:
+     if not s.named and not no_crit:  # a lane that claims a criterion names its status files
+         return Ask([], refusal=NO_STATUS)
+     h = field(lines, "Head")
+-    if not h or not h[1]:
++    if not h:
+         first.append(f"Head: missing; add `Head: {head}`")
+     elif not head_matches(h[1].strip("`"), head):
+         first.append(

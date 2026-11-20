@@ -1,0 +1,14 @@
+Seeded defect: a clear review verdict with a proxy check passes (docs/adr/0008).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index eebfe2b6..704c15aa 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -709,7 +709,7 @@ def review(  # noqa: C901  one branch per verdict gap, in the order printed
+             )
+         else:
+             review_checks, why = check_lines(hdr)
+-            proxy = [c for c in review_checks if c.endswith("| class: proxy")]
++            proxy = [c for c in review_checks if c.endswith("| class: Proxy")]
+             if why:
+                 miss.append(
+                     "Review verdict: the comment carries no usable check classification "
