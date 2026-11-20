@@ -82,7 +82,7 @@ pointing to the finish order, naming the spec path and its accepted commit and t
 
 Bootstrap adoption: on taking over as director, message every live supervisor
 with your pane id ("Director is now <pane>. Report gates and completion here.")
-and write a lane record for each live lane without one (started by hand; keys: comms spec `#lane-record`). A supervisor without a director pane
+and create any missing lane records. A supervisor without a director pane
 cannot escalate and will idle silently at gates.
 
 Target project context: Pi loads the target's `AGENTS.md` from your working

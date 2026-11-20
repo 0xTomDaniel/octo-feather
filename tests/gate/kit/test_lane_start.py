@@ -15,6 +15,7 @@ from lane_start import (
     started,
     sub_issue,
     unicode_title,
+    unknown_send,
 )
 
 Case = Callable[..., None]
@@ -65,6 +66,13 @@ def test_lane_start_exists(case: Case) -> None:
 )
 def test_lane_start_rerun(case: Case) -> None:
     case(rerun)
+
+
+@pytest.mark.criterion(
+    "issue-lifecycle#acceptance-lane-start-rerun", source="tests/gate/kit/lane_start.py"
+)
+def test_lane_start_unknown_send(case: Case) -> None:
+    case(unknown_send)
 
 
 @pytest.mark.criterion(
