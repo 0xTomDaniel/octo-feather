@@ -30,6 +30,7 @@ def test_rules(case: Case) -> None:
 
 
 @pytest.mark.skipif(sys.platform == "darwin", reason="the qc sandbox needs Linux")
+@pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)
 def test_claims_gate(case: Case) -> None:
     case(claims_gate)
 

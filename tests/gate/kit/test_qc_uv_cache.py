@@ -11,6 +11,7 @@ Case = Callable[..., None]
 pytestmark = pytest.mark.skipif(sys.platform == "darwin", reason="the qc sandbox needs Linux")
 
 
+@pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)
 def test_colored(case: Case) -> None:
     case(colored)
 

@@ -1,0 +1,14 @@
+Seeded defect: install-check reads a kit install detached at main as off main (the kit line: on main, detached or not, ok).
+diff --git a/justfile b/justfile
+index c7058f09..e25f7bea 100644
+--- a/justfile
++++ b/justfile
+@@ -531,7 +531,7 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH') $CALLER
+         print(f"kit    NO ORIGIN {kit} {why}; git -C {kit} remote add origin {url}"); bad = 1
+     else:
+         branch = git("symbolic-ref", "-q", "--short", "HEAD")[1]
+-        on_main = branch == "main" or (not branch and any(not git("merge-base", "--is-ancestor", "HEAD", r)[0] for r in ("refs/remotes/origin/main", "refs/heads/main")))
++        on_main = branch == "main" or (False and any(not git("merge-base", "--is-ancestor", "HEAD", r)[0] for r in ("refs/remotes/origin/main", "refs/heads/main")))
+         if on_main: print(f"kit    ok  {kit} on main ({src})")
+         else:
+             at = f"branch {branch}" if branch else "a detached HEAD off main"

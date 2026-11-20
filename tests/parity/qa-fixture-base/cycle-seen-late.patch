@@ -1,0 +1,14 @@
+Seeded defect: a base cycle is named one step late, from the wrong fixture.
+diff --git a/scripts/check-evals b/scripts/check-evals
+index 714686c6..0cbdbba0 100755
+--- a/scripts/check-evals
++++ b/scripts/check-evals
+@@ -85,7 +85,7 @@ def fixture_tree(evals: Path, name: str, scratch: Path) -> Path:
+         if o is None:
+             break
+         by = chain[-1]
+-        if o in chain:
++        if o in chain[1:]:
+             msg = f"fixtures/{by}/{FIXTURE_FILE}: field base: a cycle {' -> '.join([*chain, o])}"
+             raise FixtureError(msg)
+         chain.append(o)
