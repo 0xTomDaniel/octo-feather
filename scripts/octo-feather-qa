@@ -180,8 +180,8 @@ from pathlib import Path
 # The grading logic, scripts/eval_grading.py beside this script (how it is found: its docstring). Run as a command,
 # this script's own dir is already first on sys.path; loaded by path from another script or a recipe
 # (octo-feather-lane, octo-feather-qc, `just install-check-models`) it may not be, so it is added here. In the sandbox
-# of a run on another kit (--kit-ref, --baseline) the head kit is masked but for this script, so run_case binds the
-# module file back read-only beside it.
+# of a run on another kit (--kit-ref, --baseline) the head kit is masked but for what docs/adr/0022 (sandbox
+# paragraph) binds back, this module among it: run_case binds it.
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
 import eval_grading as grading
