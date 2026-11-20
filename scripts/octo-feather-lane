@@ -527,6 +527,7 @@ from typing import cast
 
 # Kit modules, .py files beside this script, found through its own directory (symlinks resolved) on sys.path: from any
 # cwd and through a symlink (scripts/correction_lanes.py docstring). correction_lanes is the correction filer.
+import merge_ask
 import tracker_calls
 from correction_lanes import (DIRECTOR, DIRECTOR_LOG, KIT_REPO, MARK_WORD, Refused, correction_issues, corrections, counts,
                               lane_logs)
@@ -1856,30 +1857,6 @@ def carried_checks(rollup: "list[dict[str, object]]", head: str, judged: str | N
     return why, ok
 
 
-# GitHub's closing keywords: a PR body line with one closes that GitHub issue at merge (#N, owner/repo#N or the issue URL).
-CLOSES = re.compile(r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+(?:[\w.-]+/[\w.-]+#|https?://(?:www\.)?github\.com/[\w.-]+/[\w.-]+/issues/|#)(\d+)\b", re.I)
-
-
-def parent_line(body: str, branch: str) -> list[str]:
-    """Spec #gates-pr-line: the body carries the tracker skill's pr-line for the lane's parent (the key its
-    key-from-branch reads from the PR branch), and closes no other GitHub issue."""
-    try:
-        key = tracker("key-from-branch", branch, err=Refuse).strip()
-        want = tracker("pr-line", key, err=Refuse).strip()
-    except Refuse as e:
-        return [f"parent line: cannot name it for branch {branch!r} ({e}); push the lane from its lane branch (docs/adr/0011)"]
-    lines = [l.strip() for l in body.splitlines()]
-    got = [l for l in lines if l == want or (l.startswith(want) and not re.match(r"[\w-]", l[len(want):len(want) + 1]))]
-    out = [] if got else [f"parent line: missing; add the line `{want}` (the tracker skill's pr-line {key}) to the PR body"]
-    for l in lines:
-        for m in CLOSES.finditer(l):
-            if l in got and m.end() <= len(want):
-                continue  # the parent line's own closing link (GitHub: Closes #<parent>), never the rest of its line
-            out.append(f"parent line: `{l[:80]}` closes GitHub issue #{m.group(1)}, not the lane's parent line `{want}`; "
-                       "remove it (the supervisor's close moves each ticket to done with the tracker skill's issue-done)")
-    return out
-
-
 def no_criterion(lines: list[str], commits: list[tuple[str, str]], specs: dict[str, dict[str, dict[str, object]]], pr: int) -> bool:
     """The lane builds no criterion (spec #lanes-one-head): `Built: none`, `Failed: none`, no criterion row,
     no `qc: built` commit on the PR and no status entry built with it."""
@@ -1977,7 +1954,7 @@ def cmd_merge_ask(args: list[str]) -> int:
         commits = pr_commits(pr, cast("str", head), base)
     except Refuse as e:   # named with the other gaps; no commit of the PR is read
         commits = []; miss.append(f"PR commits: {e}")
-    miss += parent_line(d["body"] or "", d["headRefName"] or "")
+    miss += merge_ask.check(merge_ask.snapshot(cast("str", d["body"] or ""), cast("str", d["headRefName"] or ""))).gaps
     sec = section(d["body"])
     if sec is None:
         miss.append("`## Merge ask` section: none in the PR body; add it (format: octo-feather-lane with no arguments)")
