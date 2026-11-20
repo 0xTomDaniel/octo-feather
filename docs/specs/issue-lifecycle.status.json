@@ -86,8 +86,8 @@
     "acceptance-one-head-hunks": {
       "status": "built",
       "pr": 1164,
-      "record": "20261120T061145Z-9e3b1394",
-      "commit": "5db868bbe44cf905cc976cba48a494d3ed3a6aad",
+      "record": "20261120T182128Z-dd0e4bf5",
+      "commit": "f462fc68ef2b93f76e8000ddfe073e082d047ce9",
       "tests": [
         "tests/gate/kit/lane_merge_ask_hunks.py"
       ]
@@ -199,8 +199,8 @@
     "acceptance-merge-ask-siblings": {
       "status": "built",
       "pr": 1164,
-      "record": "20261120T061145Z-a4593348",
-      "commit": "5db868bbe44cf905cc976cba48a494d3ed3a6aad",
+      "record": "20261120T182128Z-1b38c372",
+      "commit": "f462fc68ef2b93f76e8000ddfe073e082d047ce9",
       "tests": [
         "tests/gate/kit/lane_merge_order.py"
       ]
