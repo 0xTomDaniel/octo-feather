@@ -1,0 +1,14 @@
+Seeded defect: recorded items run shortest first.
+diff --git a/tests/gate/conftest.py b/tests/gate/conftest.py
+index 759ac217..1b2137f1 100644
+--- a/tests/gate/conftest.py
++++ b/tests/gate/conftest.py
+@@ -201,7 +201,7 @@ def _longest_first(items: list[pytest.Item], last: dict[str, float]) -> None:
+         return last.get(i.nodeid, last.get(i.name))
+ 
+     places = [n for n, i in enumerate(items) if seconds(i) is not None]
+-    for n, i in zip(places, sorted((items[n] for n in places), key=lambda i: -(seconds(i) or 0)), strict=True):
++    for n, i in zip(places, sorted((items[n] for n in places), key=lambda i: (seconds(i) or 0)), strict=True):
+         items[n] = i
+ 
+ 
