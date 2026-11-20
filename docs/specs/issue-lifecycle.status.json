@@ -55,6 +55,10 @@
       "status": "built",
       "pr": 91
     },
+    "acceptance-one-head-hunks": {
+      "status": "planned",
+      "pr": null
+    },
     "acceptance-qc-interim": {
       "status": "built",
       "pr": 880,
@@ -158,6 +162,10 @@
     "acceptance-merge-ask-evidence": {
       "status": "built",
       "pr": 49
+    },
+    "acceptance-merge-ask-siblings": {
+      "status": "planned",
+      "pr": null
     },
     "acceptance-merge-ask-no-criterion": {
       "status": "built",
