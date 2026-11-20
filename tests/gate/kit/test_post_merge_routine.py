@@ -5,7 +5,9 @@ over lane_post_merge.py's Lane): real git clones and the real just; the testkit'
 stand-in under the kit's own herdr-say, and its argv recorder for uv and pnpm. The scratch's
 environment, and the target clone as directory, are this process's while a test runs. PR #7 has
 merged at H as the merge commit M; lane gh8 is open beside gh7, both supervisors live. The same
-criteria through the command: test_lane_post_merge.py (checkout_follows), test_lane_merge.py."""
+criteria through the command: test_lane_post_merge.py (checkout_follows), test_lane_merge.py; those
+carry the criterion tags, as qc captures a tagged case only as a command run (tests/gate/conftest.py
+docstring: criterion marker, qc_command), never an in-process call."""
 
 from __future__ import annotations
 
@@ -51,7 +53,6 @@ def routine(w: World) -> tuple[list[str], Ran]:
     return shown, ran
 
 
-@pytest.mark.criterion("issue-lifecycle#acceptance-checkout-follows-main")
 def test_checkout_follows_main(world: World) -> None:
     """The director's checkout clean on main and behind M: step 4 fast-forwards it to M, still on
     main. A fresh routine with it at M: no move."""
@@ -66,7 +67,6 @@ def test_checkout_follows_main(world: World) -> None:
     assert lane.where() == (lane.m, "main"), f"checkout at {lane.where()}"
 
 
-@pytest.mark.criterion("issue-lifecycle#acceptance-merge-starts-routine")
 def test_merge_starts_routine(world: World) -> None:
     """The routine after the merge: the kit install and the director's checkout at M, lane gh8's
     supervisor told main moved (not gh7's own), steps 1-6 ok and step 7 pending in the record (the
