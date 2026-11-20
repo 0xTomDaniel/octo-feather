@@ -6,7 +6,9 @@ worker role, its launcher and an eval case (qc_eval_verdict.py's), merged into t
 judged head then changes a skill that role launches. Three other open PRs on main, their heads on
 the lane's origin (a bare repo, refs/pull/N/head, as GitHub serves them) and not in the lane
 repo: #12 pins a stored run of the role in a qc.toml demo, #13 conflicts with the lane's head,
-#14's head is not on origin. The rule's own cases: test_merge_ask_order.py, in-process."""
+#14's head is not on origin, #15 pins the same run in a qc.toml octo-feather-contract rejects;
+then #16, whose head gh pr list answers as null. The rule's own cases: test_merge_ask_order.py,
+in-process."""
 
 from __future__ import annotations
 
@@ -30,10 +32,15 @@ WORLD = {
     "evals/s1/cases.json": json.dumps([CASE]),
     "evals/s1/reference/expectations.json": json.dumps({"c1": {"facts": FACTS}}),
 }
+QC = 'format = 2\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n'
+# main's, the lane's qc.toml made a valid contract (its demo for a only kept)
+QC_MAIN = f'{QC}[demo."demo#acceptance-a"]\ncovers = ["app.py"]\ncommand = "true"\n'
 QC_PIN = (
-    '[demo."demo#acceptance-a"]\ncommand = "true"\n'
-    f'[demo."demo#acceptance-z"]\ncommand = "scripts/octo-feather-qa --verdict {PIN}"\n'
+    f'{QC_MAIN}[demo."demo#acceptance-z"]\ncovers = ["app.py"]\n'
+    f'command = "scripts/octo-feather-qa --verdict {PIN}"\n'
 )
+# PR #15's: the same pin, its demo lacking the covers the contract requires
+QC_BAD = f'{QC}[demo."demo#acceptance-z"]\ncommand = "scripts/octo-feather-qa --verdict {PIN}"\n'
 GONE = "ab" * 20  # PR #14's head, on no remote
 HEAD = (
     "Merge order (issue-lifecycle #gates-merge-order; shown only: this merge ask passes or "
@@ -58,12 +65,13 @@ def block(text: str) -> list[str]:
 def lane(s: Scratch) -> tuple[Lane, str, str, str]:
     """The lane, main moved to M1 (the worker role, its launcher, skill and eval case) and merged
     in, then D changing the skill (its full pass recorded); PR #12 at S12 off M1 pinning a stored
-    run made at S12, PR #13 at S13 off B setting app.py's line 1, both on origin only, and PR #14
-    at a head origin lacks, all open on main. (lane, D, S12, S13)."""
+    run made at S12, PR #13 at S13 off B setting app.py's line 1 (and main's qc.toml), PR #15
+    at S15 off M1 with QC_BAD, all on origin only, and PR #14 at a head origin lacks, all open
+    on main. (lane, D, S12, S15)."""
     ln = Lane(s)
 
     def world() -> None:
-        put(ln.r, WORLD)
+        put(ln.r, WORLD | {"qc.toml": QC_MAIN})
         (ln.r / "scripts" / "pi-role").chmod(0o755)
         ln.commit("main: the worker role")
 
@@ -90,27 +98,30 @@ def lane(s: Scratch) -> tuple[Lane, str, str, str]:
         return s.git(w, "rev-parse", "HEAD")
 
     s12 = pr(12, m1, {"qc.toml": QC_PIN})
-    s13 = pr(13, ln.b, {"app.py": "uno\n" + "".join(f"{i}\n" for i in range(2, 21))})
+    app = "uno\n" + "".join(f"{i}\n" for i in range(2, 21))
+    s13 = pr(13, ln.b, {"app.py": app, "qc.toml": QC_MAIN})  # main's qc.toml alike: no conflict
+    s15 = pr(15, m1, {"qc.toml": QC_BAD})
     ln.git("remote", "add", "origin", str(origin))
     store(s, s12, case=CASE)
     s.env["OCTO_FEATHER_QA_DIR"] = str(s.root / "qa")
-    for n, oid in ((12, s12), (13, s13), (14, GONE)):
+    for n, oid in ((12, s12), (13, s13), (14, GONE), (15, s15)):
         pr_n = {"number": n, "baseRefName": "main", "headRefName": f"gh{n}", "headRefOid": oid}
         s.gh.put(n, pr_n | {"state": "OPEN"})
-    return ln, d, s12, s13
+    return ln, d, s12, s15
 
 
 def states(s: Scratch, state: str) -> None:
-    """PRs #12, #13 and #14 in STATE."""
-    for n in (12, 13, 14):
+    """PRs #12 to #15 in STATE."""
+    for n in (12, 13, 14, 15):
         s.gh.put(n, s.gh.pr(n) | {"state": state})
 
 
 def siblings(s: Scratch) -> None:
     """Passing, the ask prints #12 with its pinned run and the changed skill file, #13 with the
-    conflicting file, and #14 not read; with those PRs closed it prints the same section and
+    conflicting file, #14 not read and #15 not read with the contract's problem; with #16's head
+    unanswered, the open PRs not read; with those PRs closed it prints the same section and
     passes alike. Failing on a gap, the same items with and without them."""
-    ln, d, _, _ = lane(s)
+    ln, d, _, s15 = lane(s)
     edits, lines = ln.at(d, "feat: skill")
     ln.setpr(*edits, **lines)
     with_them = ln.ask()
@@ -121,9 +132,23 @@ def siblings(s: Scratch) -> None:
         f"- PR #12 (gh12): {stales}",
         "- PR #13 (gh13): its head conflicts with this head in app.py",
     ], with_them.out
-    assert len(order) == 4, with_them.out
+    assert len(order) == 5, with_them.out
     assert order[3].startswith(f"- not read: PR #14 (gh14) head {GONE[:12]}: git fetch "), order
+    assert order[4] == (
+        f"- not read: PR #15 (gh15) head {s15[:12]}: qc.toml at {s15[:12]} fails "
+        "octo-feather-contract (demo.demo#acceptance-z: missing covers)"
+    ), order
     assert len(ln.git("worktree", "list").splitlines()) == 1, "a scratch worktree was left"
+
+    s.gh.put(16, {"number": 16, "baseRefName": "main", "headRefName": "gh16", "state": "OPEN"})
+    malformed = ln.ask()
+    unread = (
+        "- not read: open pull requests on main: gh pr list's answer fails "
+        "schemas/gh-pr-list.schema.json (4.headRefOid: None is not of type 'string')"
+    )
+    assert block(malformed.out) == [HEAD, unread], malformed.out
+    assert section(malformed.out) == section(with_them.out), malformed.out
+    s.gh.put(16, s.gh.pr(16) | {"state": "CLOSED"})
 
     states(s, "CLOSED")
     without = ln.ask()
