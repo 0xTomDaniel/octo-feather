@@ -1,0 +1,14 @@
+Seeded defect: the judge's mise state dir is the caller's, not an empty per-run one, so its mise trust reaches the caller's state.
+diff --git a/scripts/octo-feather-qc-sandbox b/scripts/octo-feather-qc-sandbox
+index 97ef12ba..2f9117a2 100755
+--- a/scripts/octo-feather-qc-sandbox
++++ b/scripts/octo-feather-qc-sandbox
+@@ -1159,7 +1159,7 @@ def setup(judge: list[str]) -> NoReturn:
+     py = sys.executable or shutil.which("python3") or "python3"
+     RSOCK, REC = f"{SCR}/rec/sock", f"{SCR}/rec/attempts.jsonl"
+     jenv.update(
+-        MISE_STATE_DIR=f"{SCR}/mise/state",
++        MISE_STATE_DIR=E.get("MISE_STATE_DIR", f"{SCR}/mise/state"),
+         HERDR_SESSION=S,
+         XDG_STATE_HOME=f"{SCR}/state",
+         GH_CONFIG_DIR=f"{SCR}/gh",

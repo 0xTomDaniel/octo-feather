@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Integration test for the agent fallback (quality spec #qc-fallback, #acceptance-qc-fallback), through `just qc` /
 # octo-feather-qc and octo-feather-evidence read, with a fake herdr and the stub judge tests/fixtures/qc-judge/pi (no model): a scratch target whose
 # qc.toml declares no demo. acceptance-a and acceptance-b each get their own fresh qc judge, one

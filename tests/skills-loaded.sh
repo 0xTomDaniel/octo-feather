@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Integration test for the launch's side of spec skills#loading-refuse (skills#acceptance-launch-refuses-unloaded,
 # skills#acceptance-only-listed; #558): real Pi, at the kit's pin (pi-version), started through a copy of the kit's
 # scripts/pi-role against the testkit's model provider (tests/gate/kit/testkit/provider.py), which logs each request. Cases:

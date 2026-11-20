@@ -1,0 +1,14 @@
+Seeded defect: an auth.json entry holding only a refresh token field is not taken for OAuth, so no warning (octo-feather-qc --help: type oauth or a refresh token field).
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+index ce0774ba..59f7f36a 100755
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -234,7 +234,7 @@ def oauth_warning():
+     except (OSError, ValueError):
+         return None
+     entries = auth.values() if isinstance(auth, dict) else []
+-    if any(isinstance(e, dict) and (e.get("type") == "oauth" or any("refresh" in str(k).lower() for k in e)) for e in entries):
++    if any(isinstance(e, dict) and e.get("type") == "oauth" for e in entries):
+         return "qc: warning: auth.json has OAuth credentials: a token refresh during this run is discarded"
+     return None
+ 
