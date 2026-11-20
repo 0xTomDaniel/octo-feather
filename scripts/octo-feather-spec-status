@@ -3,7 +3,7 @@
 
   octo-feather-spec-status check [DIR...]          check every DIR/*.status.json (default docs/specs)
   octo-feather-spec-status init SPEC COMMIT        write SPEC's status file, every criterion planned; over an
-                                                   existing one (an accepted revision), reconcile it (below)
+                                                   existing one, an accepted revision (below)
   octo-feather-spec-status built STATUS PR ID...   flip the named criteria to built in PR
   octo-feather-spec-status built STATUS PR ID --record RECORD --commit SHA [--test TEST]...
                                                    flip ID to built in PR with its evidence link
@@ -25,14 +25,11 @@ criterion with a PR or an evidence link, a built one without a PR, or a partial 
 malformed link; a built row with no link (built before qc linked one) passes.
 The spec HTML is never edited.
 
-`init` over an existing status file (an owner-accepted revision, issue-lifecycle #spec-status-file)
-reconciles it: each criterion still in SPEC keeps its row as it stands (status, pr and evidence link; byte
-for byte, as this script writes rows), a criterion new to SPEC is added planned, one SPEC no longer has is
-dropped (its row stays in git history), criteria follow SPEC's order, and accepted_commit becomes COMMIT.
-Rerunning it on the same SPEC and COMMIT changes nothing, rows built since included. It refuses, naming the
-problem and writing nothing, when the existing file is not JSON, or a row fails the rules `check` applies to
-a row (status, pr, evidence link), when SPEC cannot be read or a criterion has no or a duplicate id, or when
-COMMIT is no commit sha.
+`init` over an existing status file applies an owner-accepted revision as issue-lifecycle
+#spec-status-file says. A kept row stays byte for byte as this script writes rows; criteria follow
+SPEC's order. It refuses, naming the problem and writing nothing, when the existing file is not JSON or a
+row fails the rules `check` applies to a row (status, pr, evidence link), when SPEC cannot be read or a
+criterion has no or a duplicate id, or when COMMIT is no commit sha.
 
 `show` is read-only and git-only, never part of `check` (a stale criterion stays
 built until a lane's just qc judges it again, quality #qc-stale). Per status file

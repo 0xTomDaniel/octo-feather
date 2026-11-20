@@ -3589,9 +3589,15 @@ def drive_spec_revision_init(f: Feature) -> None:
         f.run(name, *args)
         after = st.read_text() if st.exists() else ""
         f.obs(name, "after", after)
-        say(f"{name}: status file before and after:")
-        print("".join(difflib.unified_diff(before.splitlines(keepends=True), after.splitlines(keepends=True),
-                                           "before", "after")) or "    (byte-identical)", flush=True)
+        rel = st.relative_to(r)
+        say(f"{name}: {rel} before:")
+        print("".join(f"    {ln}" for ln in before.splitlines(keepends=True)) or "    (no file)", flush=True)
+        say(f"{name}: {rel} after:" + (" byte-identical to before" if after == before else ""))
+        if after != before:
+            print("".join(f"    {ln}" for ln in after.splitlines(keepends=True)) or "    (no file)", flush=True)
+            say(f"{name}: {rel} diff:")
+            print("".join(difflib.unified_diff(before.splitlines(keepends=True), after.splitlines(keepends=True),
+                                               "before", "after")), end="", flush=True)
 
     git("init", "-q", "-b", "main")
     for k, val in (("user.name", "verify-octo-feather"), ("user.email", "verify@octo-feather.invalid"), ("core.hooksPath", "/dev/null")):

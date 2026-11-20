@@ -14,21 +14,21 @@ Drive criterion: `issue-lifecycle#acceptance-revision-invalid`
 
 ## Sub-features
 
-- `fresh` `octo-feather-spec-status init` on a spec with no status file yet: every criterion planned.
-- `revision` the same init on an owner-accepted revision over the existing status file: matching rows kept byte for byte, new criteria planned, dropped ones gone, accepted_commit moved.
-- `check` `octo-feather-spec-status check` after it, a call logged before the revision still naming the dropped criterion.
+- `fresh` `octo-feather-spec-status init` on a spec with no status file yet.
+- `revision` the same init on an owner-accepted revision over the existing status file (what it does: issue-lifecycle spec `#spec-status-file`).
+- `check` `octo-feather-spec-status check` after it, a call logged before the revision naming the dropped criterion.
 - `repeat` the same init again after a lane built the new criterion.
 - `invalid` the same init over a status file holding a partial evidence link.
 
 ## How to get to it (user POV)
 
-- The director, in the Spec PR step (`agents/director.md`), runs `octo-feather-spec-status init docs/specs/<slug>.spec.html <commit>` at the accepted commit. What init does over an existing status file: `octo-feather-spec-status` usage, the `init` paragraph.
+- The director, in the Spec PR step (`agents/director.md`), runs `octo-feather-spec-status init docs/specs/<slug>.spec.html <commit>` at the accepted commit. What init does over an existing status file: issue-lifecycle spec `#spec-status-file`; when it refuses: `octo-feather-spec-status` usage, the `init` paragraph.
 
 ## Driving it with verify-octo-feather
 
 Preconditions: `verify-octo-feather launch` printed `ready`; `verify-octo-feather doctor` exits 0.
 
-Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive spec-revision-init`. Evidence: `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/spec-revision-init/`; each case's status file before and after as `<case>.obs.before` and `<case>.obs.after`, and their diff printed.
+Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive spec-revision-init`. Evidence: `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/spec-revision-init/`; each case's status file before and after as `<case>.obs.before` and `<case>.obs.after`. The run's stdout shows each case's command, exit, stdout and stderr (a refusal's message), and the status file before and after it in full.
 
 The drive makes a scratch git repo under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/spec-revision-init/repo`, its spec the kit's `tests/fixtures/spec-status/revision/accepted.spec.html` (criteria a, b, c), later `revised.spec.html` (a, b, d), each committed; every case runs in that repo (`env -C`).
 
@@ -42,4 +42,4 @@ The drive makes a scratch git repo under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/s
 
 ## Gotchas
 
-- Rows are byte-identical as this script writes them (`json.dumps`, indent 2); a hand-formatted file is rewritten in that format, its values kept.
+- What a kept row's bytes are kept as: `octo-feather-spec-status` usage, the `init` paragraph.
