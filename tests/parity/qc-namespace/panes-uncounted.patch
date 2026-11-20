@@ -1,0 +1,14 @@
+Seeded defect: the sandbox's cleanup counts no Herdr pane the judge spawned (herdr_panes, agents started).
+diff --git a/scripts/octo-feather-qc-sandbox b/scripts/octo-feather-qc-sandbox
+index 97ef12ba..ca61bc12 100755
+--- a/scripts/octo-feather-qc-sandbox
++++ b/scripts/octo-feather-qc-sandbox
+@@ -2007,7 +2007,7 @@ def inner(cfgp: str, judge: list[str]) -> NoReturn:
+     if HERDR:
+         panes = subprocess.run(
+             [HERDR, "--session", S, "pane", "list"], capture_output=True, text=True
+-        ).stdout.count('"pane_id"')
++        ).stdout.count('"no_pane"')
+     try:
+         # the first pi start is the judge itself
+         headless = max(0, len(open(f"{SCR}/agents.log").read().splitlines()) - 1)

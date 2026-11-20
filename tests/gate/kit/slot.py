@@ -17,9 +17,12 @@ message (testkit/argv_recorder.sh), the grace shortened through OCTO_FEATHER_SLO
 queued: queue is the director's and checks its lane; gh8 queued once onto gh7's full heavy slot,
 status lists it; nothing passes before a run started under gh7's grant, nor while its run holds
 past the grace; after the run ends and the grace passes gh8 holds it, off the queue, and its
-supervisor and the director were told. follow_up: a follow-up run of gh7 inside the grace keeps
-the slot; it passes after that run ends. queue_free: queued onto a free kind, granted at once and
-told.
+supervisor and the director were told. queue_free: queued onto a free kind, granted at once and
+told. The hand-over's follow_up and regranted: in-process, tests/gate/kit/test_slot_queue.py.
+back_to_back (quality #recipes-static-first, #1113): two gates of gh7 through the plugin, one
+after the other on a 2 s grace, gh8 queued; the second's static check outlasts the grace: gh7's
+second gate took its slot before it (`hold --if-granted`), so gh7 holds through it, and gh8 gets
+the slot and is told only a grace after the second gate ends.
 
 Compatibility with the reader every unmerged worktree on the box still runs against the one slots
 dir: main's octo-feather-slot at 53dacfca (gh906's base, the last commit before the queue), its
@@ -29,8 +32,7 @@ after the queue's commands (queue, hold, release, settle, hand-over) the old com
 the holder and the run holding it, and its revoke and grant succeed. new_reads_old: the old
 command's grants read by the new; a queued lane the old command grants leaves the queue at the
 check; a grant the old command revoked is not brought back; one it made again is a fresh grant,
-no earlier run's end inherited, so nothing passes. regranted: a run's end is recorded against
-the grant it started under, never a later grant of its lane (#977)."""
+no earlier run's end inherited, so nothing passes."""
 
 from __future__ import annotations
 
@@ -367,22 +369,6 @@ def queued(s: Scratch) -> None:
     assert said(s) == want, said(s)
 
 
-def follow_up(s: Scratch) -> None:
-    world(s)
-    s.env |= {"OCTO_FEATHER_SLOT_GRACE": str(GRACE)}
-    s.run([SLOT, "grant", "gh7", "--kind", "heavy"], env=DIRECTOR)
-    s.run([SLOT, "queue", "gh8", "--kind", "heavy"], env=DIRECTOR)
-    end(holding(s))
-    p = holding(s)  # the follow-up run, inside the grace
-    time.sleep(GRACE + 1.5)  # the first run's check has run
-    st = holder(s)
-    assert "holder: gh7 (granted " in st, st
-    assert "1. gh8 (queued " in st, st
-    assert said(s) == [], said(s)
-    end(p)
-    passed(s)
-
-
 def queue_free(s: Scratch) -> None:
     world(s)
     got = s.run([SLOT, "queue", "gh8", "--kind", "eval"], env=DIRECTOR).out
@@ -609,24 +595,61 @@ def queued_late(s: Scratch) -> None:
     assert "  queue: none" in st, st
 
 
-def regranted(s: Scratch) -> None:
-    """A run started under gh7's grant ends after gh7 is granted again: its end is the old
-    grant's, so gh7's fresh grant (no run under it, inside the bound) keeps the slot and gh8 stays
-    queued (code-reviewer-gh906's sequence, #977)."""
+# A static check (its node id the gate's, tests/gate/heavy_slot.py's STATIC) that says it started,
+# then runs until the scenario says done.
+STATIC = """import time
+from pathlib import Path
+
+import pytest
+
+@pytest.mark.parametrize("name", ["slow"])
+def test_recipe(name):
+    Path({ready!r}).touch()
+    end = time.time() + {wait}
+    while not Path({done!r}).exists():
+        assert time.time() < end, "the scenario never said done"
+        time.sleep(0.1)
+"""
+
+
+def back_to_back(s: Scratch) -> None:
     world(s)
-    s.env |= {"OCTO_FEATHER_SLOT_GRACE": "1", "OCTO_FEATHER_SLOT_BOUND": "20"}
+    s.env |= {"OCTO_FEATHER_SLOT_GRACE": str(GRACE)}
     s.run([SLOT, "grant", "gh7", "--kind", "heavy"], env=DIRECTOR)
     s.run([SLOT, "queue", "gh8", "--kind", "heavy"], env=DIRECTOR)
-    p = holding(s)
-    time.sleep(1.1)  # a new since
-    s.run([SLOT, "grant", "gh7", "--kind", "heavy"], env=DIRECTOR)
-    end(p)
-    time.sleep(1.5)  # past the grace; the release's own check has run
-    s.run([SLOT, "settle", "--kind", "heavy"])
-    st = holder(s)
+    first = run_gate(s, suite(s, "first", 31), want=0, env=AGENT)
+    assert "heavy slot: held: the heavy slot for lane gh7" in first, first
+    files = {f: str(s.root / f) for f in ("ready", "done")}
+    second = suite(s, "second", 31)
+    (second / "tests" / "gate").mkdir(parents=True)
+    (second / "tests" / "gate" / "test_gate.py").write_text(STATIC.format(wait=WAIT_S, **files))
+    env = {**s.env, **AGENT}
+    with subprocess.Popen(gate(2), cwd=second, env=env, stdout=subprocess.PIPE, text=True) as p:
+        try:
+            stop = time.time() + WAIT_S
+            while not Path(files["ready"]).exists():
+                assert p.poll() is None, f"the second gate ended: {p.communicate()[0]}"
+                assert time.time() < stop, "the static check never started"
+                time.sleep(0.1)
+            time.sleep(GRACE + 1.5)  # the first gate's grace over, its check run
+            st = s.run([SLOT, "status"]).out
+            assert "holder: gh7 (granted " in st, st
+            assert "  queue: 1. gh8 (queued " in st, st
+            assert f"run holding it now: pid {p.pid} of lane gh7 since " in st, st
+            assert said(s) == [], said(s)
+        finally:
+            Path(files["done"]).touch()
+        out = p.communicate(timeout=WAIT_S)[0]
+    assert p.returncode == 0, out
+    assert "heavy slot: held: the heavy slot for lane gh7" in out, out
+    assert "32 passed" in out, out
+    st = holder(s)  # just after it ended: inside its grace
     assert "holder: gh7 (granted " in st, st
-    assert "  queue: 1. gh8 (queued " in st, st
     assert said(s) == [], said(s)
+    st = passed(s)
+    assert "  queue: none" in st, st
+    want = [sent("w8:p1", TOLD.format(until=until(st))), sent("w1:p1", PASSED)]
+    assert said_n(s, 2) == want, said(s)
 
 
 def two_sessions(s: Scratch) -> None:
@@ -656,7 +679,6 @@ if __name__ == "__main__":
         sandboxed,
         user_mise_gate,
         queued,
-        follow_up,
         queue_free,
         old_reads_new,
         new_reads_old,
@@ -664,6 +686,6 @@ if __name__ == "__main__":
         unused_alone,
         revoked,
         queued_late,
-        regranted,
         two_sessions,
+        back_to_back,
     )

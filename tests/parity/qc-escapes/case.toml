@@ -1,0 +1,12 @@
+# The parity lever's case for tests/qc-escapes.sh, its setup moved from tests/lib/qc.sh's bash, its assertions into typed Python on the testkit's stand-ins (#997; tests/parity/lever.py --help).
+old = "tests/qc-escapes.sh"
+old_at = "6af9ea37"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
+needs = ["tests/lib/qc.sh", "tests/fixtures/spec-status/good/demo.spec.html"]
+# The same script, as its gate item: its id kept.
+new = "tests/gate/test_gate.py::test_script[tests/qc-escapes.sh]"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: the qc sandbox script, which
+# octo-feather-qc runs as its program inside the item's own namespace, where coverage.py does not reach.
+[ran]
+"scripts/octo-feather-qc-sandbox" = "exec scripts/octo-feather-qc-sandbox"

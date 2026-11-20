@@ -1,0 +1,14 @@
+Seeded defect: a pi that exits 3 on its own no longer fails its case.
+diff --git a/scripts/octo-feather-qa b/scripts/octo-feather-qa
+index 6e1952e9..44cb9007 100755
+--- a/scripts/octo-feather-qa
++++ b/scripts/octo-feather-qa
+@@ -1218,7 +1218,7 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
+     problems = [short] if short else []
+     if w is None:
+         problems.append(f"run: no stop record (exit {run.returncode})")
+-    elif w["stop"] == "exit" and w["exit"] != 0:
++    elif w["stop"] == "exit" and w["exit"] > 3:
+         problems.append(f"run: pi exited {w['exit']} on its own")
+     if w and w.get("error"):
+         problems.append(f"run: {w['error']}")

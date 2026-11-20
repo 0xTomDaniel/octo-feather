@@ -1,0 +1,14 @@
+Seeded defect: a schema the contract refuses reads as usable, so its logs are checked against it (check_decision_logs).
+diff --git a/scripts/decision_log.py b/scripts/decision_log.py
+index f16b8918..dd855f6c 100755
+--- a/scripts/decision_log.py
++++ b/scripts/decision_log.py
+@@ -124,7 +124,7 @@ def load_schema(root: Path) -> dict[str, Any]:
+         )
+ 
+     for e in sorted(contract_validator(SCHEMA_CONTRACT).iter_errors(s), key=order):
+-        raise SchemaError(contract_problem(s, e))
++        break
+     return s
+ 
+ 

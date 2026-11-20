@@ -1,0 +1,14 @@
+Seeded defect: a --kit-ref case run records no kit sha in its input.json and result.json.
+diff --git a/scripts/octo-feather-qa b/scripts/octo-feather-qa
+index 6e1952e9..436637ee 100755
+--- a/scripts/octo-feather-qa
++++ b/scripts/octo-feather-qa
+@@ -1144,7 +1144,7 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
+     """One run of a case; rep: (k, N, config), run k of N (--runs) on config ("" alone, else --baseline's baseline or
+     current), recorded in its input.json and result.json."""
+     out.mkdir(parents=True, exist_ok=True)
+-    kits = {"kit_ref": kit_ref or "HEAD", "kit_sha": kit_sha, **({"run": rep[0], "of": rep[1], "config": rep[2]} if rep else {})}
++    kits = {"kit_ref": kit_ref or "HEAD", "kit_sha": None if kit_ref else kit_sha, **({"run": rep[0], "of": rep[1], "config": rep[2]} if rep else {})}
+     missing = [p for p in (f"agents/{case['role']}.md", "scripts/pi-role") if not (kit / p).is_file()]
+     if missing:
+         (out / "input.json").write_text(json.dumps({"suite": suite["suite"], **case, **kits}, indent=2) + "\n")

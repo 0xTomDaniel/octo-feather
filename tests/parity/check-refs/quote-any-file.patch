@@ -1,0 +1,14 @@
+Seeded defect: each exempt quote is removed in every file, not only its own (check_refs, QC unscoped-quote-exemption).
+diff --git a/scripts/check_rules.py b/scripts/check_rules.py
+index c7e25c88..81399b31 100755
+--- a/scripts/check_rules.py
++++ b/scripts/check_rules.py
+@@ -206,7 +206,7 @@ def scan(
+ def retired(hit: Hit) -> bool:
+     path, _, line = hit
+     rest = line + "\n"
+-    for quote in EXEMPT.get(path, ()):
++    for quote in (q for qs in EXEMPT.values() for q in qs):
+         rest = quote.sub("", rest)
+     return bool(RETIRED.search(rest))
+ 

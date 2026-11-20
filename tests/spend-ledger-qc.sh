@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Integration test for the kit's spend-ledger Pi extension (extensions/spend-ledger.ts, issue #187), one gate item
 # per case group (#509; the fake provider, Pi environment and helpers: tests/lib/spend-ledger.sh). Cases here, on the
 # ledger as tests/spend-ledger.sh's cases agents to zero-priced leave it (seed 8):
