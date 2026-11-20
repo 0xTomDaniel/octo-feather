@@ -332,8 +332,8 @@
     "acceptance-lane-start": {
       "status": "built",
       "pr": 1166,
-      "record": "20261120T061904Z-5686243b",
-      "commit": "ea13b5c493e65c2169292cbb3c059e83c4d755b4",
+      "record": "20261120T190047Z-9a151ec6",
+      "commit": "61346a96984ddde78ed09003a7f3d056d2213f59",
       "tests": [
         "tests/gate/kit/lane_start.py"
       ]
@@ -341,8 +341,8 @@
     "acceptance-lane-start-files": {
       "status": "built",
       "pr": 1166,
-      "record": "20261120T061905Z-2afe1765",
-      "commit": "ea13b5c493e65c2169292cbb3c059e83c4d755b4",
+      "record": "20261120T190047Z-e34c838e",
+      "commit": "61346a96984ddde78ed09003a7f3d056d2213f59",
       "tests": [
         "tests/gate/kit/lane_start.py"
       ]
@@ -350,8 +350,8 @@
     "acceptance-lane-start-sub-issue": {
       "status": "built",
       "pr": 1166,
-      "record": "20261120T061905Z-2c0d95a1",
-      "commit": "ea13b5c493e65c2169292cbb3c059e83c4d755b4",
+      "record": "20261120T190047Z-d537fb5e",
+      "commit": "61346a96984ddde78ed09003a7f3d056d2213f59",
       "tests": [
         "tests/gate/kit/lane_start.py"
       ]
@@ -359,8 +359,8 @@
     "acceptance-lane-start-exists": {
       "status": "built",
       "pr": 1166,
-      "record": "20261120T061905Z-2c241c46",
-      "commit": "ea13b5c493e65c2169292cbb3c059e83c4d755b4",
+      "record": "20261120T190048Z-53c81f32",
+      "commit": "61346a96984ddde78ed09003a7f3d056d2213f59",
       "tests": [
         "tests/gate/kit/lane_start.py"
       ]
@@ -368,8 +368,8 @@
     "acceptance-lane-start-rerun": {
       "status": "built",
       "pr": 1166,
-      "record": "20261120T061905Z-e44e7c13",
-      "commit": "ea13b5c493e65c2169292cbb3c059e83c4d755b4",
+      "record": "20261120T190048Z-ff9655fd",
+      "commit": "61346a96984ddde78ed09003a7f3d056d2213f59",
       "tests": [
         "tests/gate/kit/lane_start.py"
       ]
@@ -377,8 +377,8 @@
     "acceptance-lane-start-current-kit": {
       "status": "built",
       "pr": 1166,
-      "record": "20261120T061905Z-095eb094",
-      "commit": "ea13b5c493e65c2169292cbb3c059e83c4d755b4",
+      "record": "20261120T190048Z-5ea61b2e",
+      "commit": "61346a96984ddde78ed09003a7f3d056d2213f59",
       "tests": [
         "tests/gate/kit/lane_start.py"
       ]
