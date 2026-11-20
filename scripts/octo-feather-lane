@@ -651,7 +651,7 @@ from correction_lanes import file_corrections as correction_filer
 from handoff_log import encode, read_log
 import post_merge   # the post-merge routine's run order (post-merge)
 import slot_queue   # the box's slot runs, read by post-merge steps 3 and 7 (the live-run rule)
-from tracker_calls import tracker, utc
+from tracker_calls import SHA, head_matches, issue_view, key_order, tracker, utc
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 KIT = Path(__file__).resolve().parent.parent
@@ -662,6 +662,8 @@ class Refuse(Exception):
 
 
 gh = functools.partial(tracker_calls.gh, err=Refuse)   # the lane's gh calls raise its own Refuse
+pr_view = functools.partial(tracker_calls.pr_view, err=Refuse)
+ci_workflows = functools.partial(tracker_calls.ci_workflows, err=Refuse)
 
 
 def lanes_dir() -> Path:
@@ -986,7 +988,6 @@ MARKER = "<!-- octo-feather-review-verdict -->"
 # One comment per reviewed resolution of a main merge, naming the merge (the rule: issue-lifecycle #lanes-one-head).
 RESOLUTION_MARKER = "<!-- octo-feather-review-resolution: {} -->"
 RESOLUTION_HEAD = re.compile(r"^<!-- octo-feather-review-resolution: ([0-9a-f]{40}) -->")
-SHA = re.compile(r"[0-9a-fA-F]{7,40}")
 COMMENT_URL = re.compile(r"https://github\.com/([^/\s]+/[^/\s]+)/pull/(\d+)#issuecomment-(\d+)")
 VERDICT_LINE = re.compile(r"^Verdict: (clear|blocking)\s*$")
 HEAD_LINE = re.compile(r"^Head:\s*`?([0-9a-fA-F]{7,40})`?\s*$", re.M)
@@ -1140,41 +1141,10 @@ def cmd_fields(args: list[str]) -> int:
     return 0
 
 
-def pr_view(pr: int, fields: str, repo: str | None) -> dict:
-    out = gh(["pr", "view", str(pr), "--json", fields, *(["-R", repo] if repo else [])],
-             f"check PR #{pr} exists in {repo or 'this repo'}, and gh auth status")
-    try:
-        d = json.loads(out)
-    except ValueError:
-        raise Refuse(f"gh pr view {pr} printed no JSON: check the gh on PATH ({out[:100]!r})")
-    if not isinstance(d, dict) or any(f not in d for f in fields.split(",")):
-        raise Refuse(f"gh pr view {pr} lacks fields {fields}: update gh (2.40 or later)")
-    return d
-
-
 def pr_number(s: str) -> int:
     if not re.fullmatch(r"[1-9][0-9]*", s or ""):
         raise Refuse(f"PR must be a positive integer, got {s!r}")
     return int(s)
-
-
-def ci_workflows(repo: str | None, sha: str) -> tuple[list[str], str]:
-    """The no-CI fact (rule: --help, post-merge step 2): the workflow files at commit SHA and the source as printed."""
-    name = repo or "{owner}/{repo}"   # gh fills the placeholders from this directory's repo
-    src = f"gh api repos/{repo or '<this repo>'}/git/trees/{sha[:12]}"
-    tree = sha
-    for part in (".github", "workflows", None):
-        out = gh(["api", f"repos/{name}/git/trees/{tree}"], f"check gh auth status and that {sha[:12]} is in {repo or 'this repo'}, then rerun")
-        try:
-            entries = [(str(e["path"]), str(e["type"]), str(e["sha"])) for e in json.loads(out)["tree"]]
-        except (ValueError, KeyError, TypeError):
-            raise Refuse(f"gh api git/trees/{tree[:12]} printed no tree ({out[:100]!r}): check the gh on PATH")
-        if part is None:
-            return [f".github/workflows/{p}" for p, t, _ in entries if t == "blob" and p.endswith((".yml", ".yaml"))], src
-        tree = next((s for p, t, s in entries if p == part and t == "tree"), "")
-        if not tree:
-            return [], src
-    return [], src   # unreachable: the loop returns at its last part
 
 
 # GitHub's answer to rules/branches on a plan without rulesets, as gh prints it on stderr `gh: <it> (HTTP 403)` (private
@@ -1237,10 +1207,6 @@ def take_repo(args: list[str]) -> tuple[list[str], str | None]:
     if i + 1 >= len(args) or not re.fullmatch(r"[\w.-]+/[\w.-]+", args[i + 1]):
         raise Refuse("--repo needs OWNER/NAME")
     return args[:i] + args[i + 2:], args[i + 1]
-
-
-def head_matches(named: str, head: str) -> bool:
-    return bool(SHA.fullmatch(named)) and head.lower().startswith(named.lower())
 
 
 def judged_sha(cell: str, commits: list[tuple[str, str]], head: str, pr: int) -> tuple[str | None, str | None]:
@@ -2879,30 +2845,11 @@ def strip_subst(cmd: str) -> str:
     return "".join(out)
 
 
-def issue_view(key: str, err: type = Unchecked) -> dict:
-    """The tracker skill's issue-view of KEY: {key, ..., state, children}, children a list of key strings."""
-    out = tracker("issue-view", key, err=err)
-    try:
-        d = json.loads(out)
-        if not isinstance(d, dict) or not isinstance(d.get("key"), str) or not isinstance(d.get("children"), list) \
-                or not all(isinstance(k, str) for k in d["children"]):
-            raise ValueError("no key or children list of key strings")
-    except ValueError as e:
-        raise err(f"issue-view {key} printed unreadable JSON ({e}): the tracker skill's issue-view must print key and children, then rerun") from e
-    return d
-
-
-def key_order(k: str) -> tuple:
-    """Keys in tracker order: the prefix, then the trailing number (101 before 110, ENG-9 before ENG-10)."""
-    m = re.fullmatch(r"(.*?)(\d+)", k)
-    return (m.group(1), int(m.group(2))) if m else (k, 0)
-
-
 def cmd_tickets(args: list[str]) -> int:
     if len(args) != 1 or not args[0].strip():
         raise Unchecked(f"usage: octo-feather-lane tickets PARENT (PARENT the lane's parent ticket key, e.g. 40 or ENG-123; got {' '.join(args) or 'nothing'})")
     specs = specs_dir()
-    d = issue_view(args[0])
+    d = issue_view(args[0], err=Unchecked)
     parent = d["key"]
     kids = sorted(set(d["children"]), key=key_order)
     if not kids:
@@ -5097,7 +5044,7 @@ def archive_close(name: str, rec: dict[str, object], printed: list[str]) -> None
     repo = rec.get("repository")
     try:
         d = cast("dict[str, object]", issue_view(issue, err=Refuse))
-        kids = sorted(set(cast("list[str]", d["children"])), key=lambda k: cast("tuple[str, int]", key_order(k)))
+        kids = sorted(set(cast("list[str]", d["children"])), key=key_order)
         for k in [*kids, str(d["key"])]:
             t = d if k == d["key"] else cast("dict[str, object]", issue_view(k, err=Refuse))
             if t.get("state") == "done":
