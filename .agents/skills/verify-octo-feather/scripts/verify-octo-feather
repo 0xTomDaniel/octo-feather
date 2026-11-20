@@ -3636,8 +3636,59 @@ def drive_lane_start(f: Feature) -> None:
         return (c.code == 0 and len(prods) == 1 and prods[0]["issue"] == "gh905" and set(prods[0]) == {"at", "kind", "issue", "note"}
                 and [(x["name"], x["pane"]) for x in spawns] == [("gh905", pane)])
     f.check("director-log", log_ok)
+    lane_start_files(f, w.sc, store, checkout, clean)
+    lane_start_sub_issue(f, w, store, checkout)
     f.env, f.pre = {}, []
     say(f"lane-start evidence: {f.d}")
+
+
+LANE_NEW = "Scratch lane"
+LANE_BODY = "The scratch lane's parent.\nIt has two lines.\n"
+
+
+def lane_start_files(f: Feature, sc: Path, store: Path, checkout: Path, clean: dict[str, str]) -> None:
+    """issue-lifecycle#acceptance-lane-start-files: the director starts a lane naming a title and a body file instead of a
+    ticket; the gh stand-in files issue 906 (one `issue create`, no --parent), the start prints it, then starts gh906."""
+    body, brief = sc / "body.md", sc / "brief.md"
+    body.write_text(LANE_BODY)
+    f.run("files", "sh", "-c", 'cd "$1" && exec octo-feather-lane start --new "$2" --body-file "$3" --goal "$2" --outcome "$4"'
+          ' --brief-file "$5"', "sh", str(checkout), LANE_NEW, str(body), "a scratch proof", str(brief))
+    f.obs("files", "gh-creates", "\n".join(x for x in (store / "log").read_text().splitlines() if x.startswith("issue create")))
+    view = Path(f.s.repo) / ".agents" / "skills" / "github-issues" / "scripts" / "issue-view"
+    f.obs("files", "issue-view-906", subprocess.run([str(view), "906"], env=clean, capture_output=True, text=True).stdout)
+    f.obs("files", "worktree", output(["git", "-C", str(checkout.with_name("target-gh906")), "rev-parse", "--abbrev-ref", "HEAD"])[1])
+
+    def ok(c: Case) -> bool:
+        lines = c.out.splitlines()
+        v = json.loads(c.o["issue-view-906"] or "{}")
+        return (c.code == 0 and len(lines) == 2 and lines[0] == "filed=906"
+                and re.fullmatch(r"key=gh906 pane=w\S+ issue=906", lines[1]) is not None
+                and c.o["gh-creates"] == f"issue create --title {LANE_NEW} --body-file {body}"
+                and (v.get("title"), v.get("body"), v.get("parent")) == (LANE_NEW, LANE_BODY, None)
+                and c.o["worktree"].strip() == "gh906")
+    f.check("files", ok)
+
+
+def lane_start_sub_issue(f: Feature, w: CommsWorld, store: Path, checkout: Path) -> None:
+    """issue-lifecycle#acceptance-lane-start-sub-issue: ticket 907, a sub-issue of 905, is refused naming 905, and no
+    worktree, branch, workspace, record or prompt exists for gh907."""
+    none: list[object] = []
+    child: dict[str, object] = {"number": 907, "title": "A child", "body": "b", "state": "OPEN",
+                                "url": "https://github.com/o/r/issues/907", "parent": {"number": 905},
+                                "blockedBy": {"nodes": none}, "subIssues": {"totalCount": 0, "nodes": none}}
+    (store / "issue" / "907.json").write_text(json.dumps(child))
+    calls = len((w.world / "log").read_text().splitlines())
+    prompts = (w.world / "prompts").read_text()
+    f.run("sub-issue", "sh", "-c", 'cd "$1" && exec octo-feather-lane start 907 --goal "A child" --outcome "$2" --brief-file "$3"',
+          "sh", str(checkout), "a scratch proof", str(w.sc / "brief.md"))
+    made = [str(p) for p in (checkout.with_name("target-gh907"), w.state / "lanes" / "gh907.toml") if p.exists()]
+    made += output(["git", "-C", str(checkout), "branch", "--list", "gh907"])[1].split()
+    new_calls = (w.world / "log").read_text().splitlines()[calls:]
+    made += [x for x in new_calls if x.startswith(("workspace create", "tab create"))]
+    made += ["prompt"] if (w.world / "prompts").read_text() != prompts else []
+    f.obs("sub-issue", "made", "\n".join(made))
+    f.check("sub-issue", lambda c: c.code == 1 and c.out == "" and "ticket 907 is a sub-issue of 905" in c.err
+            and c.o["made"] == "")
 
 
 DRIVES: dict[str, Callable[[Feature], None]] = {

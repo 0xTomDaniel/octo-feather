@@ -42,11 +42,20 @@ VIEW = {*VIEW_STR, *VIEW_LISTS, "parent"}
 
 
 @dataclass(frozen=True)
-class Ask:
-    """What the director names: the ticket as its tracker writes it, the lane title, the
-    outcome, and the brief's text."""
+class New:
+    """A parent ticket to file (--new, --body-file): its title, one line, and its body's file,
+    read before anything is made."""
 
-    ticket: str
+    title: str
+    body_file: Path
+
+
+@dataclass(frozen=True)
+class Ask:
+    """What the director names: the ticket as its tracker writes it, or the one to file, the lane
+    title, the outcome, and the brief's text."""
+
+    ticket: str | New
     goal: str
     outcome: str
     brief: str
@@ -59,7 +68,7 @@ class Issue:
     key: str
     title: str
     url: str
-    parent: str | None  # read for #1156's sub-issue refusal; unused here
+    parent: str | None  # set: a sub-issue, refused (refuse_sub_issue)
 
 
 @dataclass(frozen=True)
@@ -71,6 +80,7 @@ class Lane:
     checkout: Path
     issue: Issue
     repository: str
+    ticket: str  # as the director named it, or the key of the one the start filed
 
     @property
     def worktree(self) -> Path:
@@ -86,14 +96,18 @@ def parse(args: list[str], err: type[Exception]) -> Ask:
             raise err(msg)
 
     p = Parser(prog="octo-feather-lane start", add_help=False)
-    p.add_argument("ticket", metavar="TICKET")
+    p.add_argument("ticket", metavar="TICKET", nargs="?")
+    p.add_argument("--new", metavar="TITLE")
+    p.add_argument("--body-file", metavar="FILE", type=Path)
     p.add_argument("--goal", required=True, metavar="TITLE")
     p.add_argument("--outcome", required=True, metavar="TEXT")
     p.add_argument("--brief-file", required=True, metavar="FILE", type=Path)
     ns = p.parse_args(args)
-    ticket, goal, outcome = cast("str", ns.ticket), cast("str", ns.goal), cast("str", ns.outcome)
+    goal, outcome = cast("str", ns.goal), cast("str", ns.outcome)
     brief_file = cast("Path", ns.brief_file)
-    for name, v in (("TICKET", ticket), ("--goal", goal), ("--outcome", outcome)):
+    ticket = parent_ticket(p, cast("str | None", ns.ticket), ns.new, ns.body_file, err)
+    named = ("TICKET", ticket) if isinstance(ticket, str) else ("--new", ticket.title)
+    for name, v in (named, ("--goal", goal), ("--outcome", outcome)):
         if not v.strip():
             p.error(f"{name} is empty")
         try:
@@ -108,6 +122,55 @@ def parse(args: list[str], err: type[Exception]) -> Ask:
         msg = f"--brief-file {brief_file} unreadable ({e}): name the brief's file"
         raise err(msg) from e
     return Ask(ticket, goal, outcome, brief)
+
+
+def parent_ticket(
+    p: argparse.ArgumentParser,
+    ticket: str | None,
+    new: str | None,
+    body_file: Path | None,
+    err: type[Exception],
+) -> str | New:
+    """TICKET, or the New one --new and --body-file name (its body read here, before anything is
+    made); P's usage error when neither or both are named."""
+    if (ticket is None) == (new is None):
+        p.error("name a TICKET, or file one with --new TITLE --body-file FILE, not both")
+    if (new is None) != (body_file is None):
+        p.error("--new and --body-file go together: the new parent's title and body")
+    if new is None or body_file is None:
+        return cast("str", ticket)
+    if "\n" in new:
+        p.error("--new is the new parent's title, one line")
+    try:
+        body_file.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        msg = f"--body-file {body_file} unreadable ({e}): name the new parent's body file"
+        raise err(msg) from e
+    return New(new, body_file)
+
+
+def file_parent(new: New, err: type[Exception]) -> str:
+    """File NEW with the target's tracker skill's issue-create, a top-level issue (never
+    --parent: a lane's parent is no other issue's sub-issue); print its key at once, so a start
+    that stops later is rerun naming it; the key."""
+    out = tracker("issue-create", "--title", new.title, "--body-file", str(new.body_file), err=err)
+    key = out.strip()
+    if not key or len(key.split()) != 1:
+        msg = f"step file: issue-create printed {out[:200]!r}, no issue key: check the tracker"
+        raise err(msg)
+    print(f"filed={key}", flush=True)
+    return key
+
+
+def refuse_sub_issue(issue: Issue, ticket: str, err: type[Exception]) -> None:
+    """ERR naming ISSUE's parent when it has one: a lane never starts under another issue."""
+    if issue.parent is not None:
+        msg = (
+            f"step read: ticket {ticket} is a sub-issue of {issue.parent} (issue-view's parent):"
+            " a lane's parent ticket is a top-level issue; name one, or file one with"
+            " --new TITLE --body-file FILE"
+        )
+        raise err(msg)
 
 
 def toml_str(s: str) -> str:
@@ -213,14 +276,15 @@ def read(ask: Ask, err: type[Exception]) -> Lane:
         msg = "step read: no HERDR_PANE_ID: run the lane start from the director's pane"
         raise err(msg)
     checkout = Path(run(err, "read", ["git", "rev-parse", "--show-toplevel"]))
-    key = tracker("lane-key", ask.ticket, err=err).strip()
+    repo = repository(err)
+    ticket = ask.ticket if isinstance(ask.ticket, str) else file_parent(ask.ticket, err)
+    key = tracker("lane-key", ticket, err=err).strip()
     if not KEY.fullmatch(key):
-        msg = (
-            f"step read: lane-key {ask.ticket} printed {key[:100]!r}, no lane key (roles #lane-key)"
-        )
+        msg = f"step read: lane-key {ticket} printed {key[:100]!r}, no lane key (roles #lane-key)"
         raise err(msg)
-    issue = issue_view(tracker("issue-view", ask.ticket, err=err), ask.ticket, err)
-    return Lane(key, director, checkout, issue, repository(err))
+    issue = issue_view(tracker("issue-view", ticket, err=err), ticket, err)
+    refuse_sub_issue(issue, ticket, err)
+    return Lane(key, director, checkout, issue, repo, ticket)
 
 
 def start(args: list[str], lanes: Path, err: type[Exception]) -> str:
@@ -235,7 +299,7 @@ def start(args: list[str], lanes: Path, err: type[Exception]) -> str:
     made = f"made so far: worktree {wt} on branch {lane.key}"
 
     p = subprocess.run(  # its stderr shown as it comes
-        [str(START), "--issue", ask.ticket, "--cwd", str(wt)],
+        [str(START), "--issue", lane.ticket, "--cwd", str(wt)],
         stdout=subprocess.PIPE,
         text=True,
         stdin=subprocess.DEVNULL,
@@ -245,7 +309,7 @@ def start(args: list[str], lanes: Path, err: type[Exception]) -> str:
     pane, name = spawned.get("pane", ""), spawned.get("name", "")
     if p.returncode or not pane or not name:
         msg = (
-            f"step supervisor: octo-feather-start --issue {ask.ticket} exit {p.returncode}"
+            f"step supervisor: octo-feather-start --issue {lane.ticket} exit {p.returncode}"
             f" (stdout {p.stdout.strip()[:300]!r}, stderr above); {made}"
         )
         raise err(msg)
@@ -284,4 +348,4 @@ def start(args: list[str], lanes: Path, err: type[Exception]) -> str:
     except OSError as e:
         msg = f"step log: director log {log} not written ({e}); {made}, brief sent"
         raise err(msg) from e
-    return f"key={lane.key} pane={pane} issue={ask.ticket}"
+    return f"key={lane.key} pane={pane} issue={lane.ticket}"
