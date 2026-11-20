@@ -1141,9 +1141,9 @@ class Tell:
             f.write_text("")
 
 
-def told_live(t: Tell) -> None:
-    """tell_supervisors' first phase: live, parked and another repo's lanes; a rerun; a merge
-    with no rule file."""
+def tell_lanes(t: Tell) -> None:
+    """Lanes gh7 (the PR's own), live1, parked (two parked lines, the latest naming its pane)
+    of o/r and other of x/y; gh7, live1 and other live in Herdr."""
     t.lane("gh7", "zt0:p1", "o/r", 7)
     t.lane("live1", "zt1:p1", "o/r", 11)
     t.lane("parked", "zt2:p1", "o/r", 12)
@@ -1151,6 +1151,11 @@ def told_live(t: Tell) -> None:
     t.parked("parked", "zt2:p0", "2026-10-28T00:00:00Z")
     t.parked("parked", "zt2:p1", "2026-10-29T00:00:00Z")
     t.live("zt0:p1", "zt1:p1", "zt3:p1")
+
+
+def told_live(t: Tell) -> None:
+    """tell_supervisors on tell_lanes: the sends; a rerun; a merge with no rule file."""
+    tell_lanes(t)
     earlier = '{"at": "2026-10-29T00:00:00+00:00", "kind": "prod", "issue": 11, "note": "earlier"}'
     t.dlog.write_text(earlier + "\n")
     tell, last = t.run(3, 7, "--lane", "gh7", "--repo", "o/r")
@@ -1181,7 +1186,7 @@ def told_live(t: Tell) -> None:
 
 
 def told_kit(t: Tell) -> None:
-    """tell_supervisors' kit PR phase: the sends and the director log emptied first."""
+    """tell_kit's sends, on tell_lanes: the sends and the director log emptied first."""
     t.store("o/kit", "Kit rule")
     t.clear()
     t.run(3, 7, "--lane", "gh7", "--repo", "o/kit")
@@ -1190,8 +1195,8 @@ def told_kit(t: Tell) -> None:
 
 
 def told_failed(t: Tell) -> None:
-    """tell_supervisors' failed send phase, on the o/r PR again: live2 added, live1 blocked on
-    a dialog (the kit's herdr-say exits 75)."""
+    """tell_failed's sends, on tell_lanes and the o/r PR: live2 added, live1 blocked on a dialog
+    (the kit's herdr-say exits 75)."""
     t.store("o/r", "Add foo")
     t.clear()
     t.lane("live2", "zt4:p1", "o/r", 14)
@@ -1210,7 +1215,7 @@ def told_failed(t: Tell) -> None:
 
 
 def told_gone(t: Tell) -> None:
-    """tell_supervisors' issue 458 phase: every lane record and hand-off log replaced first."""
+    """tell_gone's sends: every lane record and hand-off log replaced first."""
     for f in t.lanes.iterdir():
         f.unlink()
     t.clear()
@@ -1267,22 +1272,37 @@ def tell_supervisors(s: Scratch) -> None:
     lane, a parked one (its latest parked line names its pane) and another repo's lane (never
     looked up) none; one canonical prod line per lane told, after the director's own; step 6 ok,
     step 7 pending, exit 3. A rerun sends and logs nothing new (already told). A merge touching no
-    rule file says none, and is told again. A kit PR (o/kit, the install's own repo): every lane
-    runs kit roles, so another repo's live lane is told too, one prod line each (step 3 refreshes
-    the install first: its recipes no-ops by the real just, uv and pnpm argv_recorder.sh). A send
-    that fails (its supervisor blocked on a dialog, herdr-say's 75): named, no prod line for it,
-    the others still tried and told, the step stopped, exit 1; a rerun tells only that one. Issue
-    458: --lane gh1 with a live, a parked and two gone lanes (one never parked, one whose latest
-    parked line names an older pane): only the live one told, the rest listed, step 6 ok, step 7
-    pending (not archived). Archived: step 7 runs, the kit's herdr-close failing and Herdr's
-    workspace_not_found read as already closed. Any other herdr failure (Herdr unreachable on the
-    parked lane's lookup) stops step 6, named, the other lanes still handled. One
-    world, the old test's order: each phase resets only what it names."""
+    rule file says none, and is told again. The old test's other phases, each its own world:
+    tell_kit, tell_failed, tell_gone."""
+    told_live(Tell(s))
+
+
+def tell_kit(s: Scratch) -> None:
+    """post-merge step 6 on a kit PR (o/kit, the install's own repo): every lane runs kit roles,
+    so another repo's live lane is told too, one prod line each (step 3 refreshes the install
+    first: its recipes no-ops by the real just, uv and pnpm argv_recorder.sh)."""
     t = Tell(s)
-    told_live(t)
+    tell_lanes(t)
     told_kit(t)
+
+
+def tell_failed(s: Scratch) -> None:
+    """post-merge step 6 with a send that fails (its supervisor blocked on a dialog, herdr-say's
+    75): named, no prod line for it, the others still tried and told, the step stopped, exit 1; a
+    rerun tells only that one."""
+    t = Tell(s)
+    tell_lanes(t)
     told_failed(t)
-    told_gone(t)
+
+
+def tell_gone(s: Scratch) -> None:
+    """post-merge step 6, issue 458: --lane gh1 with a live, a parked and two gone lanes (one
+    never parked, one whose latest parked line names an older pane): only the live one told, the
+    rest listed, step 6 ok, step 7 pending (not archived). Archived: step 7 runs, the kit's
+    herdr-close failing and Herdr's workspace_not_found read as already closed. Any other herdr
+    failure (Herdr unreachable on the parked lane's lookup) stops step 6, named, the other lanes
+    still handled."""
+    told_gone(Tell(s))
 
 
 COMPLETION = "DONE commit abc123: the completion"
@@ -1371,6 +1391,9 @@ if __name__ == "__main__":
         say_stalled,
         post_merge_busy,
         tell_supervisors,
+        tell_kit,
+        tell_failed,
+        tell_gone,
         worker_route,
         parent_gone,
         director_worker_resume,
