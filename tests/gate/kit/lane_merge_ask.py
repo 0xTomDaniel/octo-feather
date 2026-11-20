@@ -8,11 +8,12 @@ in place, and refuses a wrong head, a report with no verdict or no check classes
 a proxy check with a clear verdict and a failed write, leaving no comment behind. `merge-ask`
 passes a complete section and prints it with each row's decision source (quality
 #acceptance-qc-fallback), also through the qc judge's offline gh; fails PR #16's real body
-(fixture) naming each missing item, and each single gap: a failing, pending or unreported
-check (rule: --help, merge-ask Checks line). The parent line, Head, criterion rows, Built,
-Failed, the review verdict link and qc's evidence: test_merge_ask.py, in-process. One judged
-head (spec #acceptance-one-head; the rule: #lanes-one-head): what keeps the verdict, with the
-check's proof line; anything else fails naming it.
+(fixture) naming each missing item; the Checks rules' reads and output (no_ci). The parent
+line, Head, the Checks rules (--help, merge-ask Checks line; the projection aside), criterion
+rows, Built, Failed, the review verdict link and qc's evidence: test_merge_ask.py and
+test_merge_ask_checks.py, in-process. One judged head (spec #acceptance-one-head; the rule:
+#lanes-one-head): what keeps the verdict, with the check's proof line; anything else fails
+naming it.
 Full pass (#acceptance-merge-ask-full-proof), gate time (#acceptance-merge-ask-gate-budget,
 shown only), skipped checks (#acceptance-ci-status-only, the rule: #lanes-one-head), a lane that
 builds no criterion, and a PR of 101 commits.
@@ -657,10 +658,9 @@ def gate_time(s: Scratch) -> None:
 
 
 def single_gaps(s: Scratch) -> None:
-    """PR #16's real body names each missing item; each failing, pending or unreported check
-    fails, naming it."""
+    """PR #16's real body names each missing item (each single gap: test_merge_ask.py and
+    test_merge_ask_checks.py, in-process)."""
     ln = Lane(s)
-    h = ln.h[:12]
     (s.gh.dir / "pr" / "16.json").write_text(fixture("lane-merge-ask/pr16.json"))
     overview = str(ROOT / "docs/specs/overview.status.json")
     r = ln.lane("merge-ask", "16", "--status", overview, want=1)
@@ -678,19 +678,14 @@ def single_gaps(s: Scratch) -> None:
         "Failed: missing",
     ):
         assert f"  - {item}" in r.err, f"PR #16: {item!r} not named: {r.err}"
-    ln.bad(f"Checks: failing on head {h}: check failure", FAILURE)
-    pending = check(0, status="IN_PROGRESS", conclusion="")
-    ln.bad(f"Checks: pending on head {h}: check in_progress", pending)
-    ln.bad(f"Checks: pending on head {h}: ci/x pending", check(1, state="PENDING"))
-    ln.bad(f"Checks: failing on head {h}: ci/x error", check(1, state="ERROR"))
-    wf = "its workflows .github/workflows/check.yml; push the head"
-    ln.bad(f"Checks: none reported on head {h}, {wf}", no_checks)
 
 
 def no_ci(s: Scratch) -> None:
-    """No check reported and no workflow file at the head (rule: --help, merge-ask Checks line):
-    the base's required-check policy decides, read from GitHub: no check required passes,
-    naming both facts; a required check fails naming it."""
+    """The Checks rules' reads and output through merge-ask (the rules: test_merge_ask.py,
+    in-process): a reported check reads no tree and its failure is named; none reported and no
+    workflow file reads the head's tree, the base's branch protection and rulesets, in that
+    order, and passes printing the no-CI line; a tree gh cannot read is one named item, never
+    an abort of the ask (--help)."""
     ln = Lane(s)
     h = ln.h
     ln.ci(h, workflows=False)
@@ -701,68 +696,18 @@ def no_ci(s: Scratch) -> None:
     this = "gh api repos/<this repo>"
     tree = f"no workflow file under .github/workflows at head {h[:12]} ({this}/git/trees/{h[:12]})"
     rules = "rules/branches/main"
-
-    def passes(rules_fact: str) -> None:
-        out = ln.ask().out
-        want = (
-            f"Checks: no CI: {tree}; base main requires no check ({this}/branches/main: no "
-            f"required status check; {this}/{rules}: {rules_fact}), so required checks are none"
-        )
-        assert want in out.splitlines(), f"no-CI head did not pass naming both facts: {out}"
-
     ln.setpr(no_checks)
     k = len(s.gh.log())
-    passes("no required_status_checks rule")
+    out = ln.ask().out
+    want = (
+        f"Checks: no CI: {tree}; base main requires no check ({this}/branches/main: no "
+        f"required status check; {this}/{rules}: no required_status_checks rule), so required "
+        "checks are none"
+    )
+    assert want in out.splitlines(), f"no-CI head did not pass naming both facts: {out}"
     api = "api repos/{owner}/{repo}"
     read = [x for x in s.gh.log()[k:] if x.startswith("api ")]
     assert read == [f"{api}/git/trees/{h}", f"{api}/branches/main", f"{api}/{rules}"], read
-    plan = "Upgrade to GitHub Pro or make this repository public to enable this feature."
-    plan = f"gh: {plan} (HTTP 403)"
-    ln.fail(rules, plan)
-    passes("rulesets unavailable on this plan, none in force")
-    ln.heal(rules)
-    # required checks in branch protection or a ruleset fail naming them; a policy gh cannot read
-    # fails closed naming it
-    req = {
-        "enforcement_level": "everyone",
-        "contexts": ["ci/legacy"],
-        "checks": [{"context": "build", "app_id": 1}],
-    }
-    prot = {"protected": True, "protection": {"enabled": True, "required_status_checks": req}}
-    s.gh.store(f"{API}/branches/main.json", prot)
-    ln.bad(
-        f"  - Checks: none reported on head {h[:12]}, no workflow file there ({this}/git/trees/"
-        f"{h[:12]}), but base main requires checks build, ci/legacy ({this}/branches/main, "
-        f"repos/<this repo>/{rules}): push the head and wait for them",
-        no_checks,
-    )
-    s.gh.store(f"{API}/branches/main.json", UNPROTECTED)
-    vercel = {"required_status_checks": [{"context": "vercel"}]}
-    ruleset = [{"type": "deletion"}, {"type": "required_status_checks", "parameters": vercel}]
-    s.gh.store(f"{API}/{rules}.json", ruleset)
-    ln.bad("but base main requires checks vercel (gh api", no_checks)
-
-
-def no_ci_unread(s: Scratch) -> None:
-    """A base policy or a head's tree gh cannot read fails closed, naming the read; the ask still
-    lists every item (--help)."""
-    ln = Lane(s)
-    h = ln.h
-    ln.ci(h, workflows=False)
-    this = "gh api repos/<this repo>"
-    rules = "rules/branches/main"
-    fix = "fix gh auth status or read access, then rerun"
-    unread = "but the required checks of base main could not be read"
-    ln.fail("branches/main")
-    ln.bad(f"{unread} ({this}/branches/main: {ERR502}): {fix}", no_checks)
-    ln.heal("branches/main")
-    s.gh.store(f"{API}/branches/main.json", {"protected": True})
-    ln.bad(f"{unread} ({this}/branches/main: no protection.required_status_checks)", no_checks)
-    s.gh.store(f"{API}/branches/main.json", UNPROTECTED)
-    ln.fail(rules)
-    unread = "but the rulesets of base main could not be read"
-    ln.bad(f"{unread} ({this}/{rules}: {ERR502}): {fix}", no_checks)
-    ln.heal(rules)
     # the head's tree unreadable: that one Checks item fails closed naming the read
     ln.ci(h, workflows=True)
     ln.fail(f"git/trees/{h}")
@@ -1285,7 +1230,6 @@ if __name__ == "__main__":
         gate_time,
         single_gaps,
         no_ci,
-        no_ci_unread,
         ci_status_only,
         current_head_checks,
         current_head_identity,

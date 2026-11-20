@@ -1,0 +1,14 @@
+Seeded defect: a check run concluded FAILURE passes (spec #lanes-one-head: every check on the head passes).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index 575dba8d..2b15faba 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -416,7 +416,7 @@ def bad_checks(rollup: list[dict[str, object]]) -> tuple[list[str], list[str]]:
+             ).append(f"{name} {s.lower() or 'pending'}")
+         elif (c.get("status") or "COMPLETED").upper() != "COMPLETED" or not c.get("conclusion"):
+             pending.append(f"{name} {(c.get('status') or 'pending').lower()}")
+-        elif c["conclusion"].upper() not in ("SUCCESS", "NEUTRAL", "SKIPPED"):
++        elif c["conclusion"].upper() not in ("SUCCESS", "NEUTRAL", "SKIPPED", "FAILURE"):
+             failed.append(f"{name} {c['conclusion'].lower()}")
+     return failed, pending
+ 

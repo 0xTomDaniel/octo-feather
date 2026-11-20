@@ -7,13 +7,15 @@ review verdict on J, demo's status file; what the tracker skill prints for a bra
 Snapshot's parent, as its github-issues and linear scripts print it; the head proof
 (octo-feather-lane's head_proof) is the Snapshot's answer to check's Need. The command's wiring
 (snapshot over the real tracker scripts, comments, status files and qc reports, the gaps and
-the passing ask printed): lane_merge_ask.py merge_ask_passes, no_criterion_lane.
+the passing ask printed): lane_merge_ask.py merge_ask_passes, no_criterion_lane. The Checks
+rules: test_merge_ask_checks.py.
 """
 
 from dataclasses import replace
 
 from merge_ask import (
     Ask,
+    Checks,
     Comment,
     Need,
     NoParent,
@@ -21,6 +23,7 @@ from merge_ask import (
     Proof,
     ProofAsk,
     ProofError,
+    Reported,
     Snapshot,
     check,
 )
@@ -34,6 +37,11 @@ PROOF = f"{J[:12]} to {H[:12]}: qc status commits {H[:12]} change only {STATUS}"
 HDR = "| criterion | qc verdict | judged | evidence |\n|---|---|---|---|"
 GH6 = ParentLine("6", "Closes #6")
 ENG = ParentLine("ENG-123", "Tracks ENG-123")
+# the head's checks as the PR's rollup reports them, all passing (test_merge_ask_checks.py)
+CHECK_OK: list[dict[str, object]] = [
+    {"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"},
+    {"__typename": "StatusContext", "context": "ci/x", "state": "SUCCESS"},
+]
 REMOVE = (
     "remove it (the supervisor's close moves each ticket to done with the tracker skill's "
     "issue-done)"
@@ -83,6 +91,7 @@ LANE = Snapshot(
     body(),
     "gh6",
     GH6,
+    Checks(H, None, Reported(CHECK_OK, None)),
     pr=7,
     head=H,
     commits=[(H, f"qc: built acceptance-a acceptance-b (judged {J[:12]})"), (J, "feat: x")],
@@ -481,6 +490,7 @@ def pr8(at: str = N, *after: tuple[str, str], **o: str) -> Snapshot:
         section,
         "gh6",
         GH6,
+        Checks(at, None, Reported(CHECK_OK, None)),
         pr=8,
         head=at,
         commits=[*after, (N, "fix: a rule")],
