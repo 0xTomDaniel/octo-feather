@@ -23,6 +23,19 @@ clone, so the lane branch must come from origin's main as fetched, not the check
            record or prompt): a missing --brief-file (argparse's usage error); `gh repo view`
            printing nameWithOwner null and an unknown field; issue-view printing a title that is no
            string (each edge validated before anything is made).
+
+Seams (ticket #1157, recorded before any test): issue-lifecycle#acceptance-lane-start-exists and
+#acceptance-lane-start-rerun, `octo-feather-lane start` run as a command, the same stand-ins.
+
+  exists   each of a lane record lanes/gh905.toml, a worktree <checkout>-gh905 (on branch gh905),
+           a branch gh905 alone, and a Herdr workspace labelled gh905, there before a start: it
+           exits 1 naming that one, leaves it as it was and starts no supervisor (no workspace,
+           tab or agent started, no prompt, no record, no worktree it did not find).
+  rerun    the stand-in failing the goal's delivery once (its file prompt-down): the first run
+           exits 1 naming step goal; the same start run again prints the first run's pane, and
+           the lane has one worktree, one supervisor gh905 (one workspace create), one record,
+           the goal then the brief once each, one spawn line and one prod line in the director
+           log, and nothing kept of the start; a third run exits 1 naming the record.
 """
 
 from __future__ import annotations
@@ -197,5 +210,132 @@ def refused(s: Scratch) -> None:
     show(f"issue-view malformed: exit 1, {err}")
 
 
+def no_supervisor(d: Path) -> None:
+    """No workspace, tab or agent started, no prompt sent."""
+    calls = (d / "log").read_text().splitlines() if (d / "log").exists() else []
+    made = ("workspace create", "tab create", "agent start")
+    assert not [c for c in calls if c.startswith(made)], calls
+    assert not (d / "prompts").exists()
+
+
+def exists(s: Scratch) -> None:
+    d, checkout, main_ = world(s)
+    brief = s.root / "brief.md"
+    brief.write_text(BRIEF)
+    cmd = [kit("octo-feather-lane"), "start", "905", "--goal", TITLE, "--outcome", OUTCOME]
+    cmd += ["--brief-file", str(brief)]
+    lanes = s.home / ".local" / "state" / "octo-feather" / "lanes"
+    wt = checkout.with_name("target-gh905")
+
+    lanes.mkdir()
+    record = lanes / "gh905.toml"
+    record.write_text('supervisor = "w7:p7"\nissue = "gh905"\n')
+    err = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1).err
+    assert f"lane gh905 exists: lane record {record};" in err, err
+    assert record.read_text() == 'supervisor = "w7:p7"\nissue = "gh905"\n'
+    assert not wt.exists()
+    assert s.git(checkout, "branch", "--list", "gh905") == ""
+    no_supervisor(d)
+    show(f"record there: exit 1, {err}")
+    record.unlink()
+
+    s.git(checkout, "worktree", "add", "-q", "-b", "gh905", str(wt))
+    head = s.git(wt, "rev-parse", "HEAD")
+    err = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1).err
+    assert f"lane gh905 exists: worktree {wt}, branch gh905;" in err, err
+    assert s.git(wt, "rev-parse", "--abbrev-ref", "HEAD") == "gh905"
+    assert s.git(wt, "rev-parse", "HEAD") == head != main_
+    assert not record.exists()
+    no_supervisor(d)
+    show(f"worktree there: exit 1, {err}")
+    s.git(checkout, "worktree", "remove", str(wt))
+
+    err = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1).err
+    assert "lane gh905 exists: branch gh905;" in err, err
+    assert s.git(checkout, "rev-parse", "gh905") == head
+    assert not wt.exists()
+    no_supervisor(d)
+    show(f"branch there: exit 1, {err}")
+    s.git(checkout, "branch", "-q", "-D", "gh905")
+
+    agents = json.loads((d / "agents.json").read_text())
+    other = {"name": "gh905", "pane_id": "w5:p9", "workspace_id": "w5", "tab_id": "w5:t9"}
+    agents["w5:p9"] = other | {"agent_status": "working"}
+    (d / "agents.json").write_text(json.dumps(agents))
+    (d / "workspaces.json").write_text(json.dumps({"w5": "gh905"}))
+    err = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1).err
+    assert "lane gh905 exists: Herdr workspace gh905 (w5);" in err, err
+    assert json.loads((d / "agents.json").read_text()) == agents
+    assert not wt.exists()
+    assert s.git(checkout, "branch", "--list", "gh905") == ""
+    assert not record.exists()
+    no_supervisor(d)
+    show(f"workspace there: exit 1, {err}")
+
+
+def rerun(s: Scratch) -> None:
+    d, checkout, main_ = world(s)
+    brief = s.root / "brief.md"
+    brief.write_text(BRIEF)
+    cmd = [kit("octo-feather-lane"), "start", "905", "--goal", TITLE, "--outcome", OUTCOME]
+    cmd += ["--brief-file", str(brief)]
+    state = s.home / ".local" / "state" / "octo-feather"
+    wt = checkout.with_name("target-gh905")
+
+    (d / "prompt-down").write_text("")
+    err = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1).err
+    assert "step goal (made so far: " in err, err
+    assert "herdr: server not reachable" in err, err
+    assert not (d / "prompts").exists()
+    show(f"first run: exit 1, {err}")
+
+    out = s.run(cmd, cwd=checkout, env=DIRECTOR).out
+    m = re.fullmatch(r"key=gh905 pane=(\S+) issue=905", out)
+    assert m, out
+    pane = m.group(1)
+    show(f"second run: {out}")
+
+    trees = s.git(checkout, "worktree", "list", "--porcelain").splitlines()
+    assert [x for x in trees if x.startswith("worktree ")] == [
+        f"worktree {checkout}",
+        f"worktree {wt}",
+    ], trees
+    assert s.git(wt, "rev-parse", "HEAD") == main_
+    agents = json.loads((d / "agents.json").read_text())
+    assert [p for p, g in agents.items() if g["name"] == "gh905"] == [pane], agents
+    calls = (d / "log").read_text().splitlines()
+    assert len([c for c in calls if c.startswith("workspace create ")]) == 1, calls
+    assert len([c for c in calls if c.startswith("agent start ")]) == 1, calls
+    lanes = state / "lanes"
+    assert sorted(p.name for p in lanes.iterdir()) == ["gh905.toml"], list(lanes.iterdir())
+    rec = tomllib.loads((lanes / "gh905.toml").read_text())
+    assert (rec["supervisor"], rec["goal"]) == (pane, TITLE), rec
+    show(f"one worktree {wt.name}, one supervisor gh905 at {pane}, one record {rec}")
+
+    goal = (
+        f"/goal {OUTCOME} for gh905, delivered through implement-spec; done when an owner gate"
+        " is pending (review link or merge ask sent) or PR merged and lane torn down"
+    )
+    head = (
+        "Lane facts (octo-feather-lane start):\nLane key: gh905\n"
+        f"Parent issue: 905 {TITLE} (https://github.com/o/r/issues/905)\n"
+        f"Director pane: w0:p1\nWorktree: {wt}\nBranch: gh905\nMain commit: {main_}\n\n"
+    )
+    got = (d / "prompts").read_text()
+    assert got == f"{pane}\t{goal}\n{pane}\t{head}{BRIEF}\n", got
+    show(f"{pane} received the goal, then the brief, once each")
+    log = [json.loads(x) for x in (state / "director.handoffs.jsonl").read_text().splitlines()]
+    assert [(x["kind"], x.get("name") or x.get("issue")) for x in log] == [
+        ("spawn", "gh905"),
+        ("prod", "gh905"),
+    ], log
+    show("director log: one spawn line, one prod line")
+
+    err = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1).err
+    assert f"lane gh905 exists: lane record {lanes / 'gh905.toml'}, " in err, err
+    assert (d / "prompts").read_text() == got
+    show(f"third run: exit 1, {err}")
+
+
 if __name__ == "__main__":
-    main(started, unicode_title, refused)
+    main(started, unicode_title, refused, exists, rerun)

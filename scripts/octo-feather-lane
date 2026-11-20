@@ -522,14 +522,22 @@ agents: not read: <why>`. post-merge step 5 prints the same report.
 `start` (spec issue-lifecycle #acceptance-lane-start) reads the lane key (the target's tracker skill's lane-key, as
 octo-feather-start resolves it), the ticket (issue-view), the repository (gh repo view) and the caller's
 $HERDR_PANE_ID (the director pane), each answer validated and refused naming its field before anything is made
-(arguments by argparse); fetches origin and adds the worktree `<checkout>-<key>` beside the checkout on a
+(arguments by argparse); refuses a lane that exists (spec #acceptance-lane-start-exists): when any of lanes/<key>.toml,
+the worktree, the branch `<key>` or a Herdr workspace labelled <key> (herdr workspace list) is there and no stopped
+start left it, exit 1 naming each, nothing changed, no supervisor started; fetches origin and adds the worktree `<checkout>-<key>` beside the checkout on a
 new branch `<key>` from origin's main; starts the supervisor with the octo-feather-start beside this command
 (`--issue TICKET --cwd WORKTREE`); writes lanes/<supervisor name>.toml (comms spec #lane-record: supervisor,
 repository, issue, goal TITLE, started_at, waiting_on ""); sends the supervisor with herdr-say `/goal TEXT for <key>,
 delivered through implement-spec; done when ...`, then the brief: a header (lane key, parent issue, director pane,
 worktree, branch, main commit), then FILE's text; appends one director log line (comms spec
 #handoff-director-prod: issue, note); prints `key=<key> pane=<pane> issue=<TICKET>`. Each step that fails stops it,
-exit 1, naming the step and what it made so far; a failed herdr-say is never retried.
+exit 1, naming the step and what it made so far; a failed herdr-say is never retried. A stopped start keeps
+lanes/<key>.start.json beside the record (its ticket, title, outcome and brief's sha256, then each done step's fact:
+main commit, supervisor pane, name and workspace, started_at, goal_sent, brief_sent); the same start run again
+(spec #acceptance-lane-start-rerun) continues from the step that stopped, skipping each done one, so the lane gets one
+worktree, one supervisor, one record, the goal and the brief once each and one director log line; a rerun with
+another title, outcome or brief is refused naming that file. Once the start finishes the file is gone, and a rerun
+is refused as any existing lane.
 
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """

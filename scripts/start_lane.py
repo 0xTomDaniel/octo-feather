@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import hashlib
 import json
 import os
 import re
@@ -223,17 +224,176 @@ def read(ask: Ask, err: type[Exception]) -> Lane:
     return Lane(key, director, checkout, issue, repository(err))
 
 
+def workspaces(err: type[Exception]) -> dict[str, str]:
+    """Herdr's workspaces, label to id: `herdr workspace list` validated at this edge (each a
+    workspace_id and a label string, hand-written: #edge-validation-kit), as octo-feather-start
+    reads it for its own one-workspace-per-name refusal."""
+    d = json_object(run(err, "exists", ["herdr", "workspace", "list"]), "herdr workspace list", err)
+    result = d.get("result")
+    got = cast("dict[str, object]", result).get("workspaces") if isinstance(result, dict) else None
+    spaces = cast("list[object]", got) if isinstance(got, list) else None
+    if spaces is None or not all(
+        isinstance(w, dict)
+        and isinstance(cast("dict[str, object]", w).get("workspace_id"), str)
+        and isinstance(cast("dict[str, object]", w).get("label"), str)
+        for w in spaces
+    ):
+        msg = (
+            f"step exists: herdr workspace list printed {json.dumps(d)[:200]}, want"
+            " result.workspaces, each a workspace_id and a label string: check the herdr on PATH"
+        )
+        raise err(msg)
+    each = [cast("dict[str, str]", w) for w in spaces]
+    return {w["label"]: w["workspace_id"] for w in reversed(each)}
+
+
+# What a stopped start keeps, in lanes/<key>.start.json (`octo-feather-lane --help`, start): its
+# ask, then each step's fact once that step is done. Gone once the start finishes.
+ASKED = ("ticket", "goal", "outcome", "brief_sha256")
+KEPT = {*ASKED, "main", "pane", "name", "workspace", "started_at", "goal_sent", "brief_sent"}
+
+
+@dataclass
+class Kept:
+    """A start's facts so far (KEPT's keys), kept in PATH after each done step."""
+
+    path: Path
+    facts: dict[str, str]
+    err: type[Exception]
+
+    def done(self, step: str, made: str, **facts: str) -> None:
+        """STEP done with FACTS, written whole (a rename); ERR naming it and MADE when not."""
+        self.facts |= facts
+        tmp = self.path.with_name(self.path.name + ".tmp")
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            tmp.write_text(json.dumps(self.facts, ensure_ascii=False) + "\n", encoding="utf-8")
+            tmp.replace(self.path)
+        except OSError as e:
+            msg = f"step {step}: {self.path} not written ({e}), a rerun cannot continue; {made}"
+            raise self.err(msg) from e
+
+
+def stopped(lane: Lane, ask: Ask, lanes: Path, err: type[Exception]) -> Kept:
+    """What a stopped start of LANE kept in lanes/<key>.start.json (its ask alone when none did).
+    ERR when it was another ask, or when a record, worktree, branch or workspace of the lane exists
+    that no stopped start left, naming each; nothing changed (#acceptance-lane-start-exists)."""
+    kept = lanes / f"{lane.key}.start.json"
+    sha = hashlib.sha256(ask.brief.encode("utf-8")).hexdigest()
+    p = {"ticket": ask.ticket, "goal": ask.goal, "outcome": ask.outcome, "brief_sha256": sha}
+    if kept.exists():
+        try:
+            got: object = json.loads(kept.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            msg = f"step exists: stopped start's {kept} unreadable ({e}): read it, remove it, rerun"
+            raise err(msg) from e
+        d = cast("dict[str, object]", got) if isinstance(got, dict) else {}
+        if not d or set(d) - KEPT or not all(isinstance(v, str) for v in d.values()):
+            msg = f"step exists: stopped start's {kept} is no object of {sorted(KEPT)} strings"
+            raise err(msg)
+        if diff := [k for k in ASKED if d.get(k) != p[k]]:
+            msg = (
+                f"step exists: {kept} is a stopped start of {lane.key} with another"
+                f" {', '.join(diff)}: rerun that start as it was"
+            )
+            raise err(msg)
+        p = cast("dict[str, str]", d)
+    record = lanes / f"{lane.key}.toml"
+    branch = run(err, "exists", ["git", "branch", "--list", lane.key], lane.checkout)
+    space = workspaces(err).get(lane.key)
+    found = [
+        ("started_at", record.exists(), f"lane record {record}"),
+        ("main", lane.worktree.exists(), f"worktree {lane.worktree}"),
+        ("main", bool(branch), f"branch {lane.key}"),
+        ("pane", space is not None, f"Herdr workspace {lane.key} ({space})"),
+    ]
+    if there := [what for step, exists, what in found if exists and step not in p]:
+        msg = (
+            f"step exists: lane {lane.key} exists: {', '.join(there)}; nothing changed, no"
+            " supervisor started (a finished start, or another lane of this key)"
+        )
+        raise err(msg)
+    return Kept(kept, p, err)
+
+
+def write(path: Path, text: str, mode: str, made: str, err: type[Exception]) -> None:
+    """TEXT written to PATH (MODE "x" a new file, "a" appended); ERR naming MADE, its step first."""
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open(mode, encoding="utf-8") as f:
+            f.write(text)
+    except OSError as e:
+        step, _, made = made.partition("; ")
+        msg = f"{step}: {path} not written ({e}); {made}"
+        raise err(msg) from e
+
+
 def start(args: list[str], lanes: Path, err: type[Exception]) -> str:
     """Start the lane ARGS name, its record in LANES (the session's lanes dir); the line to print.
-    Every failure raises ERR naming its step and what the start made so far."""
+    Every failure raises ERR naming its step and what the start made so far; a rerun continues
+    from that step, each done one skipped (stopped, Kept)."""
     ask = parse(args, err)
     lane = read(ask, err)
     wt, top = lane.worktree, lane.checkout
-    run(err, "worktree", ["git", "fetch", "--quiet", "origin"], top)
-    main = run(err, "worktree", ["git", "rev-parse", "--verify", "origin/main^{commit}"], top)
-    run(err, "worktree", ["git", "worktree", "add", "--quiet", "-b", lane.key, str(wt), main], top)
+    kept = stopped(lane, ask, lanes, err)
+    facts = kept.facts
     made = f"made so far: worktree {wt} on branch {lane.key}"
+    if "main" not in facts:
+        run(err, "worktree", ["git", "fetch", "--quiet", "origin"], top)
+        main = run(err, "worktree", ["git", "rev-parse", "--verify", "origin/main^{commit}"], top)
+        run(
+            err,
+            "worktree",
+            ["git", "worktree", "add", "--quiet", "-b", lane.key, str(wt), main],
+            top,
+        )
+        kept.done("worktree", made, main=main)
+    main = facts["main"]
+    if "pane" not in facts:
+        kept.done("supervisor", f"{made}, a supervisor", **supervisor(ask, wt, made, err))
+    pane, name = facts["pane"], facts["name"]
+    made += f", supervisor {pane} in workspace {facts['workspace']}"
 
+    at = facts.get("started_at") or dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    record = lanes / f"{name}.toml"
+    keys = {"supervisor": pane, "repository": lane.repository, "issue": lane.key}
+    keys |= {"goal": ask.goal, "started_at": at, "waiting_on": ""}
+    if "started_at" not in facts:
+        text = "".join(f"{k} = {toml_str(v)}\n" for k, v in keys.items())
+        write(record, text, "x", f"step record; {made}", err)
+        kept.done("record", f"{made}, record {record}", started_at=at)
+    made += f", record {record}"
+
+    goal = GOAL.format(outcome=ask.outcome, key=lane.key)
+    if "goal_sent" not in facts:
+        run(err, f"goal ({made})", [str(SAY), pane, goal])
+        kept.done("goal", f"{made}, goal sent", goal_sent=at)
+    header = (
+        f"Lane facts (octo-feather-lane start):\nLane key: {lane.key}\n"
+        f"Parent issue: {lane.issue.key} {lane.issue.title} ({lane.issue.url})\n"
+        f"Director pane: {lane.director}\nWorktree: {wt}\n"
+        f"Branch: {lane.key}\nMain commit: {main}\n\n"
+    )
+    made += ", goal sent"
+    if "brief_sent" not in facts:
+        run(err, f"brief ({made})", [str(SAY), pane, header + ask.brief])
+        kept.done("brief", f"{made}, brief sent", brief_sent=at)
+
+    log = lanes.parent / DIRECTOR_LOG
+    note = f"lane start: {lane.key} supervisor {pane}, worktree {wt} on {lane.key}"
+    note += f" from main {main[:12]}; goal and brief sent"
+    line = encode({"at": at, "kind": "prod", "issue": lane.key, "note": note}) + "\n"
+    write(log, line, "a", f"step log; {made}, brief sent", err)
+    try:
+        kept.path.unlink()
+    except OSError as e:
+        msg = f"step log: {kept.path} not removed ({e}): the start finished; remove it"
+        raise err(msg) from e
+    return f"key={lane.key} pane={pane} issue={ask.ticket}"
+
+
+def supervisor(ask: Ask, wt: Path, made: str, err: type[Exception]) -> dict[str, str]:
+    """The supervisor octo-feather-start started at WT: its pane, name and workspace."""
     p = subprocess.run(  # its stderr shown as it comes
         [str(START), "--issue", ask.ticket, "--cwd", str(wt)],
         stdout=subprocess.PIPE,
@@ -249,39 +409,4 @@ def start(args: list[str], lanes: Path, err: type[Exception]) -> str:
             f" (stdout {p.stdout.strip()[:300]!r}, stderr above); {made}"
         )
         raise err(msg)
-    made += f", supervisor {pane} in workspace {spawned.get('workspace', '?')}"
-
-    at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    record = lanes / f"{name}.toml"
-    keys = {"supervisor": pane, "repository": lane.repository, "issue": lane.key}
-    keys |= {"goal": ask.goal, "started_at": at, "waiting_on": ""}
-    try:
-        lanes.mkdir(parents=True, exist_ok=True)
-        with record.open("x", encoding="utf-8") as f:
-            f.write("".join(f"{k} = {toml_str(v)}\n" for k, v in keys.items()))
-    except OSError as e:
-        msg = f"step record: {record} not written ({e}); {made}"
-        raise err(msg) from e
-    made += f", record {record}"
-
-    goal = GOAL.format(outcome=ask.outcome, key=lane.key)
-    run(err, f"goal ({made})", [str(SAY), pane, goal])
-    header = (
-        f"Lane facts (octo-feather-lane start):\nLane key: {lane.key}\n"
-        f"Parent issue: {lane.issue.key} {lane.issue.title} ({lane.issue.url})\n"
-        f"Director pane: {lane.director}\nWorktree: {wt}\n"
-        f"Branch: {lane.key}\nMain commit: {main}\n\n"
-    )
-    made += ", goal sent"
-    run(err, f"brief ({made})", [str(SAY), pane, header + ask.brief])
-
-    log = lanes.parent / DIRECTOR_LOG
-    note = f"lane start: {lane.key} supervisor {pane}, worktree {wt} on {lane.key}"
-    note += f" from main {main[:12]}; goal and brief sent"
-    try:
-        with log.open("a", encoding="utf-8") as f:
-            f.write(encode({"at": at, "kind": "prod", "issue": lane.key, "note": note}) + "\n")
-    except OSError as e:
-        msg = f"step log: director log {log} not written ({e}); {made}, brief sent"
-        raise err(msg) from e
-    return f"key={lane.key} pane={pane} issue={ask.ticket}"
+    return {"pane": pane, "name": name, "workspace": spawned.get("workspace", "?")}
