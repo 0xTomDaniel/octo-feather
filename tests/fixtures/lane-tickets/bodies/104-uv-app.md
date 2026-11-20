@@ -6,3 +6,7 @@
 
 - [ ] demo#acceptance-a: `app hello Ada --shout` prints `HELLO, ADA!`
 - [ ] demo: `uv run app hello Ada --shout --json` prints `{"greeting": "HELLO, ADA!"}`
+
+## Skills
+
+Skills: none

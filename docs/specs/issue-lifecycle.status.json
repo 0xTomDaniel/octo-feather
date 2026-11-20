@@ -275,6 +275,13 @@
       "tests": [
         "tests/gate/kit/lane_stale.py"
       ]
+    },
+    "acceptance-ticket-skills": {
+      "status": "built",
+      "pr": 1171,
+      "record": "20261120T041917Z-e303c5bf",
+      "commit": "ad5f43e0aa2eaa2ac8c7fa534e7e1da30f44a02a",
+      "tests": []
     }
   }
 }
