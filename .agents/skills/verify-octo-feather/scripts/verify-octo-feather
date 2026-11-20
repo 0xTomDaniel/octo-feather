@@ -3578,8 +3578,10 @@ def drive_lane_start(f: Feature) -> None:
     (store / "issue").mkdir(parents=True)
     (store / "log").write_text("")
     (store / "repo.json").write_text(json.dumps({"nameWithOwner": "o/r"}))
-    issue = {"number": 905, "title": LANE_TITLE, "body": "b", "state": "OPEN", "url": "https://github.com/o/r/issues/905",
-             "parent": None, "blockedBy": {"nodes": []}, "subIssues": {"totalCount": 0, "nodes": []}}
+    none: list[object] = []
+    issue: dict[str, object] = {"number": 905, "title": LANE_TITLE, "body": "b", "state": "OPEN",
+                                "url": "https://github.com/o/r/issues/905", "parent": None,
+                                "blockedBy": {"nodes": none}, "subIssues": {"totalCount": 0, "nodes": none}}
     (store / "issue" / "905.json").write_text(json.dumps(issue))
     base = w.base | {"FAKE_GH": str(store), "GH_TOKEN": "verify-token"}
     clean = {k: v for k, v in os.environ.items() if not k.startswith(COMMS_LEAKS) and k != "GH_REPO"} | base
