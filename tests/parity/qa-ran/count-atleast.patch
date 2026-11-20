@@ -1,0 +1,19 @@
+Seeded defect: a ran count holds for that many matching runs or more.
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index 404ccdfd..b8eb74c0 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -663,12 +663,10 @@ def ran_count(
+     said = f"{len(hits)} matching runs" + (
+         f": {'; '.join(show_run(r) for r in hits)}" if hits else ""
+     )
+-    if len(hits) > n:
+-        return "fail", f"{name}: {said}"
+     if not final:
+         return "open", f"{name}: {said} so far"
+     return (
+-        "pass" if len(hits) == n else "fail"
++        "pass" if len(hits) >= n else "fail"
+     ), f"{name}: {said} ({len(record)} entries in the record)"
+ 
+ 
