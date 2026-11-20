@@ -83,6 +83,22 @@ covers = ["scripts/octo-feather-qc", "scripts/octo-feather-spec-status"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-stale"
 covers = ["scripts/octo-feather-spec-status"]
 
+[demo."issue-lifecycle#acceptance-revision-preserve"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run spec-revision-init"
+covers = ["scripts/octo-feather-spec-status", "tests/fixtures/spec-status/revision"]
+
+[demo."issue-lifecycle#acceptance-revision-remove"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run spec-revision-init"
+covers = ["scripts/octo-feather-spec-status", "tests/fixtures/spec-status/revision"]
+
+[demo."issue-lifecycle#acceptance-revision-repeat"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run spec-revision-init"
+covers = ["scripts/octo-feather-spec-status", "tests/fixtures/spec-status/revision"]
+
+[demo."issue-lifecycle#acceptance-revision-invalid"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run spec-revision-init"
+covers = ["scripts/octo-feather-spec-status", "tests/fixtures/spec-status/revision"]
+
 [demo."quality#acceptance-fast-affected"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 gate-tiers"
 covers = ["scripts/octo-feather-gate", "scripts/octo-feather-integrate", "justfile", "shared-machinery.txt"]
