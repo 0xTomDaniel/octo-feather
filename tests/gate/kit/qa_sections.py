@@ -1995,32 +1995,16 @@ def rt_artifacts(d: Path) -> None:
 
 
 def runs(s: Scratch) -> None:
-    """tests/qa-runs.sh."""
+    """tests/qa-runs.sh: the command's wiring of --runs (a case over its runs: test_qa_stored.py,
+    test_qa_runs)."""
     q, t = Qa(s), s.root
     alt = t / "alt"
     want = data.runs(q)
-    # Some runs pass, some fail: 2/3, FAIL, exit 1; each run's own line first, the failing run's
-    # facts named.
+    # The run header says the runs; each run sandboxed, its sandbox.json in run-<k>/; exit 1.
     q.run(1, Q, "--evals", str(alt), "--case", "alt", "--runs", "3")
-    q.check(want["alt"])
-    runs_artifacts(q)
-    # Every run passes: PASS, 2/2, exit 0.
-    q.run(0, Q, "--evals", str(alt), "--case", "reads", "--runs", "2")
-    q.check(want["every"])
-    # One run (default): no run lines, artifacts in the case dir, result.json with one run.
-    q.run(0, Q, "--evals", str(alt), "--case", "reads")
-    q.check(want["one"])
-    c = q.last() / "trig" / "reads"
-    r = load(c / "result.json")
-    assert not (c / "run-1").exists(), r
-    assert "run" not in keys(r), r
-    assert (at(r, "verdict"), at(r, "runs_passed"), at(r, "pass_rate"), at(r, "stddev")) == (
-        "PASS",
-        1,
-        1.0,
-        0.0,
-    ), r
-    assert [at(x, "dir") for x in seq(at(r, "runs"))] == ["."], r
+    q.check([w for w in want["alt"] if w.text.startswith("^qa: run ")])
+    for k in (1, 2, 3):
+        assert (q.last() / "trig" / "alt" / f"run-{k}" / "sandbox.json").exists(), k
     # Usage: a bad value exits 64 before any run; --help documents it.
     for v in ("0", "-1", "two"):
         q.run(64, Q, "--evals", str(alt), "--runs", v)
@@ -2030,50 +2014,8 @@ def runs(s: Scratch) -> None:
     if not grep("^  --runs N  ", out):
         fail(f"--help does not document --runs: {out}")
     say(
-        "qa-runs: ok (--runs: 2/3 with pass rate and stddev FAILS exit 1, 2/2 PASSES exit 0, run-<k> artifacts, result.json and summary.json runs/pass_rate/stddev, one run unchanged, bad value 64, --help)"
+        "qa-runs: ok (--runs: the run header, run-<k> sandbox.json, exit 1, bad value 64, --help; the case over its runs: test_qa_stored.py)"
     )
-
-
-def runs_artifacts(q: Qa) -> None:
-    """tests/qa-runs.sh: run-<k> artifacts, result.json and summary.json fields of the 2/3 run."""
-    rd = q.last()
-    c = rd / "trig" / "alt"
-    for k in (1, 2, 3):
-        for f in (
-            "prompt.md",
-            "input.json",
-            "transcript.jsonl",
-            "sandbox.json",
-            "grading.json",
-            "result.json",
-        ):
-            assert (c / f"run-{k}" / f).exists(), (k, f)
-        r = load(c / f"run-{k}" / "result.json")
-        assert (at(r, "run"), at(r, "of"), at(r, "verdict")) == (
-            k,
-            3,
-            "FAIL" if k == 2 else "PASS",
-        ), r
-        assert at(load(c / f"run-{k}" / "input.json"), "run") == k
-    r = load(c / "result.json")
-    assert at(r, "verdict") == "FAIL", r
-    assert (at(r, "runs_passed"), at(r, "pass_rate"), at(r, "stddev")) == (2, 0.6667, 0.5774), r
-    rs = [(at(x, "run"), at(x, "dir"), at(x, "verdict")) for x in seq(at(r, "runs"))]
-    assert rs == [(1, "run-1", "PASS"), (2, "run-2", "FAIL"), (3, "run-3", "PASS")], rs
-    assert {
-        "suite",
-        "id",
-        "verdict",
-        "deciding",
-        "model",
-        "seconds",
-        "stop",
-        "tool_calls",
-        "kit_sha",
-    } <= keys(r), r
-    sm = load(rd / "summary.json")
-    assert (at(sm, "passed"), at(sm, "total"), at(sm, "runs")) == (0, 1, 3), sm
-    assert at(sm, "cases", 0, "pass_rate") == 0.6667, sm
 
 
 def shape(s: Scratch) -> None:
