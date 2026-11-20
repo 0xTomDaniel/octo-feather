@@ -23,6 +23,13 @@ clone, so the lane branch must come from origin's main as fetched, not the check
            record or prompt): a missing --brief-file (argparse's usage error); `gh repo view`
            printing nameWithOwner null and an unknown field; issue-view printing a title that is no
            string (each edge validated before anything is made).
+  behind_kit  OCTO_FEATHER_KIT_INSTALL a scratch kit clone one commit behind its origin's main
+           (issue 1158, #acceptance-lane-start-current-kit): exit 1 naming the install, its commit,
+           main's and that it is behind main; no gh or herdr call, so no ticket read or filed, and
+           no worktree, branch, workspace, record or prompt.
+
+The other scenarios' kit install is a scratch kit clone at its origin's main, never the real
+kit's origin (the command fetches the install's origin first).
 """
 
 from __future__ import annotations
@@ -64,6 +71,12 @@ def world(s: Scratch) -> tuple[Path, Path, str]:
     state.mkdir(parents=True)
     (state / "director.toml").write_text('pane = "w0:p1"\n')
     s.identity()
+    kit_origin, kit_install = s.root / "kit-origin.git", s.root / "kit-install"
+    s.run(["git", "init", "-q", "--bare", "-b", "main", str(kit_origin)])
+    s.run(["git", "clone", "-q", str(kit_origin), str(kit_install)])
+    s.git(kit_install, "commit", "-q", "--allow-empty", "-m", "kit")
+    s.git(kit_install, "push", "-q", "origin", "main")
+    s.env["OCTO_FEATHER_KIT_INSTALL"] = str(kit_install)
     s.gh.store("repo.json", {"nameWithOwner": "o/r"})
     none: list[object] = []
     issue: dict[str, object] = {"number": 905, "title": TITLE, "body": "b", "state": "OPEN"}
@@ -197,5 +210,27 @@ def refused(s: Scratch) -> None:
     show(f"issue-view malformed: exit 1, {err}")
 
 
+def behind_kit(s: Scratch) -> None:
+    d, checkout, _ = world(s)
+    kit_install = s.root / "kit-install"
+    head = s.git(kit_install, "rev-parse", "HEAD")
+    seed = s.root / "kit-seed"
+    s.run(["git", "clone", "-q", str(s.root / "kit-origin.git"), str(seed)])
+    s.git(seed, "commit", "-q", "--allow-empty", "-m", "kit moved")
+    s.git(seed, "push", "-q", "origin", "main")
+    main_ = s.git(seed, "rev-parse", "HEAD")
+    brief = s.root / "brief.md"
+    brief.write_text(BRIEF)
+    cmd = [kit("octo-feather-lane"), "start", "905", "--goal", TITLE, "--outcome", OUTCOME]
+    err = s.run([*cmd, "--brief-file", str(brief)], cwd=checkout, env=DIRECTOR, want=1).err
+    assert f"kit install {kit_install} at {head} is behind main on its origin ({main_}" in err, err
+    assert "post-merge" in err, err
+    assert f"git -C {kit_install} merge --ff-only origin/main" in err, err
+    assert s.gh.log() == [], s.gh.log()
+    nothing_made(s, d, checkout)
+    assert not (d / "log").exists(), (d / "log").read_text()
+    show(f"kit install one commit behind: exit 1, {err}")
+
+
 if __name__ == "__main__":
-    main(started, unicode_title, refused)
+    main(started, unicode_title, refused, behind_kit)

@@ -206,6 +206,31 @@ def run(err: type[Exception], step: str, cmd: list[str], cwd: Path | None = None
     return p.stdout.strip()
 
 
+def current_kit(kit: Path, err: type[Exception]) -> None:
+    """Step 0, the kit install KIT current with main on its origin (the rule: `octo-feather-lane
+    --help`, start); ERR, nothing made, when it is behind. Seen 2026-11-14: lanes started from a
+    stale checkout ran stale kit scripts."""
+    step = f"kit (kit install {kit}; nothing made)"
+    if not (kit / ".git").exists():
+        msg = (
+            f"step {step}: {kit} is not a git clone: set OCTO_FEATHER_KIT_INSTALL to the kit"
+            " install clone, then rerun"
+        )
+        raise err(msg)
+    run(err, step, ["git", "-C", str(kit), "fetch", "--quiet", "origin"])
+    main = run(err, step, ["git", "-C", str(kit), "rev-parse", "--verify", "origin/main^{commit}"])
+    head = run(err, step, ["git", "-C", str(kit), "rev-parse", "--verify", "HEAD^{commit}"])
+    behind = run(err, step, ["git", "-C", str(kit), "rev-list", "--count", f"{head}..{main}"])
+    if behind != "0":
+        msg = (
+            f"step kit: kit install {kit} at {head} is behind main on its origin ({main}, {behind}"
+            " commit(s) it lacks); nothing made: refresh it (octo-feather-lane post-merge step 3,"
+            f" the kit refresh) or fast-forward it (git -C {kit} merge --ff-only origin/main),"
+            " then rerun"
+        )
+        raise err(msg)
+
+
 def read(ask: Ask, err: type[Exception]) -> Lane:
     """Step 1: the lane's facts, each validated, nothing made."""
     director = os.environ.get("HERDR_PANE_ID", "")
