@@ -162,7 +162,7 @@ OCTO_FEATHER_QC_DIR as there), with what is missing, until a rerun of just qc gi
 The verdict comment must also carry its check classes (`Checks: none` or `Check:` lines, no
 `class: proxy`). Pass: the section on stdout, then `Decision sources`, one line per row: the decision source
 of the criterion's latest result in the qc reports at the judged head (as for insufficient evidence, above), or
-`no qc result at the judged head`, shown only (quality spec #qc-results); `Review check classes` (below); last, `Gate time`, the full gate on the final head (the passed
+`no qc result at the judged head`, shown only (quality spec #qc-results); `Review check classes` (below); then `Gate time`, the full gate on the final head (the passed
 full run, check-runs.jsonl in the state dir, on the PR head or the latest lane commit before it that has one)
 against gate-budget.toml at the PR head, in the report's lines (report, above; the trend: passed full runs on the
 head's history), flagged and shown only: the code reviewer judges it, no gate reads it, and the ask passes or
@@ -170,6 +170,17 @@ fails the same without it (spec issue-lifecycle #lanes-checkpoints; on a failure
 the items). `Review check classes` lists the comment's
 lines for the owner (send it all with herdr-say --parent). Failure: each missing item
 with its fix on stderr, exit 1.
+
+`Merge order` (spec issue-lifecycle #gates-merge-order), shown only, after `Gate time` on a pass, and on stderr
+after it, before the items, on a failure: the ask passes or fails the same without it. It names each other open
+PR on the PR's base (`gh pr list --state open --base <base>`), its head fetched (`git fetch origin pull/N/head`)
+when the repo lacks it, that this merge would set back: `- PR #N (<branch>): its head conflicts with this head in
+<files>` (git merge-tree of the two heads), and `- PR #N (<branch>): this merge stales its pinned run
+RUN/SUITE/CASE: <items>` for each `octo-feather-qa --verdict` pin its qc.toml demos name at its head (none without
+a qc.toml), the items that command names stale for it at BASE merged with this head (a git commit-tree, no ref
+moved) and not at BASE, each run in a scratch detached worktree (freshness: octo-feather-qa --help, Verdict). A read
+that fails, or a pin that command judges no freshness for, is one `- not read: ...` line; nothing named prints
+`- none: <n> other open pull requests on <base>, none this merge would stale or conflict with`.
 
 A lane that builds no criterion (spec #lanes-one-head) says `Built: none` and `Failed: none` with no
 criterion row (no table, or its header alone), and its PR holds no `qc: built` commit and no --status
@@ -1954,7 +1965,9 @@ def cmd_merge_ask(args: list[str]) -> int:
         commits = pr_commits(pr, cast("str", head), base)
     except Refuse as e:   # named with the other gaps; no commit of the PR is read
         commits = []; miss.append(f"PR commits: {e}")
-    miss += merge_ask.check(merge_ask.snapshot(cast("str", d["body"] or ""), cast("str", d["headRefName"] or ""))).gaps
+    lane = merge_ask.Lane(pr, cast("str", head), cast("str", d["baseRefName"] or "") or "main", base, repo)
+    ask = merge_ask.check(merge_ask.snapshot(cast("str", d["body"] or ""), cast("str", d["headRefName"] or ""), lane))
+    miss += ask.gaps
     sec = section(d["body"])
     if sec is None:
         miss.append("`## Merge ask` section: none in the PR body; add it (format: octo-feather-lane with no arguments)")
@@ -2174,7 +2187,7 @@ def cmd_merge_ask(args: list[str]) -> int:
                      else f"- {cid}: no qc result at the judged head" for cid in sorted(rows))]
     gate_time = merge_ask_gate_time(cast("str", head), base)   # after the pass or fail was decided above
     if miss:
-        print("\n".join(gate_time), file=sys.stderr)
+        print("\n".join([*gate_time, "", *ask.order]), file=sys.stderr)   # shown only (spec #gates-merge-order)
         raise Refuse(f"PR #{pr} merge ask incomplete ({len(miss)} item{'s' * (len(miss) > 1)}), head {head[:12]}:\n"
                      + "\n".join(f"  - {x}" for x in miss))
     print("\n".join(lines).strip())
@@ -2190,6 +2203,7 @@ def cmd_merge_ask(args: list[str]) -> int:
     print("\nReview check classes (from the verdict comment, docs/adr/0008):")
     print("\n".join(f"- {c}" for c in review_checks))
     print("\n" + "\n".join(gate_time))
+    print("\n" + "\n".join(ask.order))   # shown only, after the pass was decided above (spec #gates-merge-order)
     return 0
 
 

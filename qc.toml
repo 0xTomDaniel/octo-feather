@@ -123,6 +123,10 @@ covers = ["templates/python/src", "templates/python/pyproject.toml", "templates/
 [demo."issue-lifecycle#acceptance-merge-ask-full-proof"]
 covers = ["scripts/octo-feather-lane", "scripts/octo-feather-gate", "scripts/octo-feather-integrate"]
 
+# Proven by tests/gate/kit/test_lane_merge_order.py's tagged item (the rule: issue-lifecycle #gates-merge-order).
+[demo."issue-lifecycle#acceptance-merge-ask-siblings"]
+covers = ["scripts/octo-feather-lane", "scripts/merge_ask.py"]
+
 # Proven by tests/gate/kit/test_lane_merge_ask.py's tagged items (the rule: issue-lifecycle #lanes-one-head).
 [demo."issue-lifecycle#acceptance-ci-status-only"]
 covers = ["scripts/octo-feather-lane", ".github/workflows/check.yml", "templates/python/.github/workflows/check.yml", "templates/typescript/.github/workflows/check.yml"]
