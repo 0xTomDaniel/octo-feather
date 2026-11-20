@@ -9,6 +9,7 @@ from lane_start import (
     exists,
     filed_stopped,
     files,
+    help_,
     refused,
     rerun,
     started,
@@ -71,3 +72,7 @@ def test_lane_start_rerun(case: Case) -> None:
 )
 def test_lane_start_behind_kit(case: Case) -> None:
     case(behind_kit)
+
+
+def test_lane_start_help(case: Case) -> None:
+    case(help_)

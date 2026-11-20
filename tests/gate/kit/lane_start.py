@@ -57,6 +57,14 @@ Seams (ticket #1157, recorded before any test): issue-lifecycle#acceptance-lane-
            the lane has one worktree, one supervisor gh905 (one workspace create), one record,
            the goal then the brief once each, one spawn line and one prod line in the director
            log, and nothing kept of the start; a third run exits 1 naming the record.
+
+Seam (ticket #1159, recorded before any test): `octo-feather-lane start`, as above.
+
+  help_    `start --help` and `start -h`, the kit install behind its origin's main: exit 0, stdout
+           the start entry of `octo-feather-lane --help` alone (every step agents/director.md points
+           to it for: the parent filed or taken, the worktree and branch, the supervisor, the lane
+           record, the goal, the brief, the director log line, the refusals and the rerun); no gh
+           or herdr call and nothing made.
 """
 
 from __future__ import annotations
@@ -462,7 +470,46 @@ def behind_kit(s: Scratch) -> None:
     show(f"kit install one commit behind: exit 1, {err}")
 
 
+def help_(s: Scratch) -> None:
+    d, checkout, _ = world(s)
+    seed = s.root / "kit-seed"
+    s.run(["git", "clone", "-q", str(s.root / "kit-origin.git"), str(seed)])
+    s.git(seed, "commit", "-q", "--allow-empty", "-m", "kit moved")
+    s.git(seed, "push", "-q", "origin", "main")
+    steps = (
+        "issue-create with that title and FILE, a top-level issue, never --parent",
+        "adds the worktree `<checkout>-<key>` beside the checkout",
+        "new branch `<key>` from origin's main",
+        "starts the supervisor with the octo-feather-start",
+        "writes lanes/<supervisor name>.toml",
+        "sends the supervisor with herdr-say `/goal TEXT for <key>",
+        "then the brief: a header",
+        "appends one director log line",
+        "It refuses a lane that exists",
+        "the same start run again",
+    )
+    for flag in ("--help", "-h"):
+        out = s.run([kit("octo-feather-lane"), "start", flag], cwd=checkout, env=DIRECTOR).out
+        assert out.startswith("  octo-feather-lane start TICKET|--new TITLE"), out
+        assert out.rstrip().endswith("is refused as any existing lane."), out
+        for step in steps:
+            assert step in out, (step, out)
+    assert s.gh.log() == [], s.gh.log()
+    nothing_made(s, d, checkout)
+    assert not (d / "log").exists(), (d / "log").read_text()
+    show(f"start --help, kit behind: exit 0, {len(out.splitlines())} lines, the start entry")
+
+
 if __name__ == "__main__":
     main(
-        started, unicode_title, refused, files, filed_stopped, sub_issue, exists, rerun, behind_kit
+        started,
+        unicode_title,
+        refused,
+        files,
+        filed_stopped,
+        sub_issue,
+        exists,
+        rerun,
+        behind_kit,
+        help_,
     )

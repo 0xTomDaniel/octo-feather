@@ -559,6 +559,7 @@ agents: not read: <why>`. post-merge step 5 prints the same report.
 
   octo-feather-lane start TICKET|--new TITLE --body-file FILE --goal TITLE --outcome TEXT --brief-file FILE
                                    the director's lane start, one command, in its checkout of a target
+  octo-feather-lane start -h|--help this entry alone, nothing read or made
 
 `start` (spec issue-lifecycle #acceptance-lane-start) first fetches the kit install's origin (the kit dir this command
 runs from, or OCTO_FEATHER_KIT_INSTALL: the install post-merge's step 3 refreshes) and refuses, exit 1 with nothing
@@ -4751,7 +4752,12 @@ def cmd_post_merge(args: list[str]) -> int:
 
 
 def cmd_start(args: list[str]) -> int:
-    """`start` (--help): the logic in scripts/start_lane.py."""
+    """`start` (--help): the logic in scripts/start_lane.py. -h or --help prints its --help entry
+    alone, before anything is read (issue 1159: agents/director.md points to it for the steps)."""
+    if "-h" in args or "--help" in args:
+        doc = __doc__ or ""
+        print(doc[doc.index("  octo-feather-lane start "):doc.index("\nOne subcommand per function")].rstrip())
+        return 0
     import start_lane
     start_lane.current_kit(kit_install(), Refuse)
     print(start_lane.start(args, lanes_dir(), Refuse), flush=True)
