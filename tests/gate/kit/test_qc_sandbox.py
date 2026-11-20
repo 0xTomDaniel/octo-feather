@@ -8,6 +8,7 @@ import pytest
 from qc_sandbox import (
     blocking_stdio,
     by_hand,
+    coverage_out,
     live_survivor,
     nested,
     network,
@@ -63,3 +64,8 @@ def test_live_survivor(case: Case) -> None:
 @pytest.mark.e2e  # real srt and namespaces, two runs of one session at once
 def test_same_session(case: Case) -> None:
     case(same_session)
+
+
+@pytest.mark.e2e  # real srt and namespaces, under coverage as just fast-map runs
+def test_coverage_out(case: Case) -> None:
+    case(coverage_out)
