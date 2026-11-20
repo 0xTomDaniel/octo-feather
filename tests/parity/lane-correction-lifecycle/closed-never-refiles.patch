@@ -1,0 +1,14 @@
+Seeded defect: a class whose issue closed before its latest finding never files again (issue-lifecycle #lanes-correction).
+diff --git a/scripts/correction_lanes.py b/scripts/correction_lanes.py
+index 82516854..0950d1c5 100755
+--- a/scripts/correction_lanes.py
++++ b/scripts/correction_lanes.py
+@@ -260,7 +260,7 @@ def still_due(due: Due, issues: list[dict[str, Any]]) -> bool:
+         return True
+     if any(is_open(i) for i in mine):
+         return False
+-    return due.latest > max(str(i.get("closedAt") or "") for i in mine)
++    return False
+ 
+ 
+ QUOTED = re.compile(r"(?m)^- (\S+) (\d{4}-\d\d-\d\dT\S+)(?: .*|$)")  # a quote, its run and date
