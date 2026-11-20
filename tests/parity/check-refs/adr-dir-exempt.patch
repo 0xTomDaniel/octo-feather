@@ -1,0 +1,14 @@
+Seeded defect: the lane branch scan skips every ADR, not only docs/adr/0011 (check_refs, #121 N1 N2).
+diff --git a/scripts/check_rules.py b/scripts/check_rules.py
+index c7e25c88..b048009d 100755
+--- a/scripts/check_rules.py
++++ b/scripts/check_rules.py
+@@ -233,7 +233,7 @@ def check_refs(root: Path, tracked: Sequence[str]) -> Report:
+     )
+     files = [p for p in tracked if not re.match(UNSCANNED, p)]
+     own = [p for p in tracked if not re.match(unowned, p)]
+-    lane = [p for p in tracked if not re.match(rf"(docs/adr/0011-|{LABELS})", p)]
++    lane = [p for p in tracked if not re.match(rf"(docs/adr/|{LABELS})", p)]
+     skills = [p for p in tracked if p.startswith((".agents/skills/", "agents/"))]
+     texts = {p: read(root / p) for p in tracked}
+     lines: list[tuple[Stream, bytes]] = []

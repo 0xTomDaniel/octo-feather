@@ -1,0 +1,14 @@
+Seeded defect: install-check takes a 6.1 kernel as new enough for the qc sandbox (the kernel line: 6.6 or later, else TOO OLD).
+diff --git a/justfile b/justfile
+index c7058f09..58f99db7 100644
+--- a/justfile
++++ b/justfile
+@@ -486,7 +486,7 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH') $CALLER
+     bad = 0
+     rel = run("uname", "-r")[1] or "unknown"
+     m = re.match(r"([0-9]+)\.([0-9]+)", rel)
+-    if m and (int(m[1]), int(m[2])) >= (6, 6): print(f"kernel {rel} ok (6.6 or later, the qc sandbox)")
++    if m and (int(m[1]), int(m[2])) >= (6, 1): print(f"kernel {rel} ok (6.6 or later, the qc sandbox)")
+     else:
+         bp = "echo \"deb http://deb.debian.org/debian bookworm-backports main\" | sudo tee /etc/apt/sources.list.d/backports.list && sudo apt update && sudo apt install -t bookworm-backports linux-image-$(dpkg --print-architecture)"
+         print(f"kernel {rel} TOO OLD, want 6.6 or later (the qc sandbox overlay needs tmpfs user xattrs: scripts/octo-feather-qc-sandbox); boot a 6.6 or later kernel, then reboot (Debian 12: {bp}; Ubuntu 22.04: sudo apt install linux-generic-hwe-22.04)"); bad = 1

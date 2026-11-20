@@ -1,0 +1,13 @@
+[
+ {
+  "request": "auth status",
+  "out": "github.com\n  \u2713 Logged in to github.com account 0xTomDaniel (/home/exedev/.config/gh/hosts.yml)\n  - Active account: true\n  - Git operations protocol: https\n  - Token: gho_************************************\n  - Token scopes: 'gist', 'read:org', 'repo', 'workflow'\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "command": "gh auth status",
+   "date": "2026-11-18"
+  }
+ }
+]

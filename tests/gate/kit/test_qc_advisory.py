@@ -20,6 +20,7 @@ Case = Callable[..., None]
 pytestmark = pytest.mark.skipif(sys.platform == "darwin", reason="the qc sandbox needs Linux")
 
 
+@pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)
 def test_does_not_show(case: Case) -> None:
     case(does_not_show)
 
@@ -29,26 +30,32 @@ def test_refused_sprint(case: Case, how: str) -> None:
     case(refused_sprint, how)
 
 
+@pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)
 def test_incomplete_sprint(case: Case) -> None:
     case(incomplete_sprint)
 
 
+@pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)
 def test_sprint(case: Case) -> None:
     case(sprint)
 
 
+@pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)
 def test_shows(case: Case) -> None:
     case(shows)
 
 
+@pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)
 def test_unavailable(case: Case) -> None:
     case(unavailable)
 
 
+@pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)
 def test_node_shim(case: Case) -> None:
     case(node_shim)
 
 
 @pytest.mark.parametrize("how", ["nopi", "loop"])
+@pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)
 def test_no_pi(case: Case, how: str) -> None:
     case(no_pi, how)

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Integration test for the kit's spend-ledger Pi extension (extensions/spend-ledger.ts, issue #187,
 # spec spend#writer-agent), one gate item per case group (#509): tests/spend-ledger.sh and each
 # tests/spend-ledger-*.sh; the fake provider, Pi environment and helpers: tests/lib/spend-ledger.sh. Cases here:

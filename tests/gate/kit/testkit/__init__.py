@@ -44,9 +44,14 @@ FAKES = {
     "systemctl": HERE / "systemd.py",
 }
 # Stand-ins a scenario puts first on PATH itself, where its command reaches the system another
-# way: pi_agent.py (Pi at the agent boundary, an eval case's role run; tests/lib/qa.sh copies it
+# way: pi_agent.py (Pi at the agent boundary, an eval case's role run; qa_box.py copies it
 # too), and gh.py (above) on a PATH of its own; each file's header says what it answers.
 # provider.py stands in for a model provider, a server its caller starts (its header).
+# tests/fixtures/install-check/pi stands in for Pi at its version and its model proxy, the
+# install-check items' one (install_check.py, its header).
+# pi_agent.py with FAKE_QC set: the qc sandbox items' judge (qc_box.py; its docstring).
+# tests/fixtures/qa-bench/registry.mjs stands in for the model at a judgment bench's classify path,
+# the qa items' `pi-extension` (qa_box.py, its header).
 # Unset in every scenario: a user's config, state and auth, a Herdr pane's session, and a check
 # run's marker (a scenario's commands start outside any check run: scripts/check-gate-free).
 # GH_REPO, gh's repo override, too: the fake gh's request names it (testkit/gh.py).

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # criterion: quality#acceptance-qc-carry
 # Integration test for qc carry (quality spec #qc-carry), through `just qc` / octo-feather-qc, the status file and the qc
 # report, with a fake herdr and the stub judge tests/fixtures/qc-judge/pi (no model). A scratch target on a lane
