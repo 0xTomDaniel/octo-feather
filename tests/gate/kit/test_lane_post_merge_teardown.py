@@ -3,7 +3,14 @@ docstring), each run as that file's command through `case` (tests/gate/kit/conft
 
 from collections.abc import Callable
 
-from lane_post_merge_teardown import kept, no_ci, not_archived, own_space, shared_space
+from lane_post_merge_teardown import (
+    kept,
+    no_ci,
+    not_archived,
+    own_space,
+    shared_space,
+    shared_supervisor,
+)
 
 Case = Callable[..., None]
 
@@ -22,6 +29,10 @@ def test_lane_post_merge_teardown_no_ci(case: Case) -> None:
 
 def test_lane_post_merge_teardown_shared_space(case: Case) -> None:
     case(shared_space)
+
+
+def test_lane_post_merge_teardown_shared_supervisor(case: Case) -> None:
+    case(shared_supervisor)
 
 
 def test_lane_post_merge_teardown_kept(case: Case) -> None:
