@@ -277,8 +277,13 @@
       ]
     },
     "acceptance-lane-start": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1166,
+      "record": "20261120T033230Z-2e6cbe69",
+      "commit": "0e83d6193043d122034f6630bda93051138d5887",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
     },
     "acceptance-lane-start-files": {
       "status": "planned",
