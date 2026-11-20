@@ -33,7 +33,7 @@ import sys
 from typing import TYPE_CHECKING
 
 import tomllib
-from testkit import Scratch, kit, main
+from testkit import ROOT, Scratch, kit, main
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -160,14 +160,14 @@ def unicode_title(s: Scratch) -> None:
     show(f"lanes/gh905.toml goal reads back {rec['goal']!r}")
 
 
-def nothing_made(s: Scratch, d: Path, checkout: Path) -> None:
-    """No worktree, branch, workspace, record or prompt for gh905."""
-    assert not checkout.with_name("target-gh905").exists()
-    assert s.git(checkout, "branch", "--list", "gh905") == ""
+def nothing_made(s: Scratch, d: Path, checkout: Path, key: str = "gh905") -> None:
+    """No worktree, branch, workspace, record or prompt for KEY."""
+    assert not checkout.with_name(f"target-{key}").exists()
+    assert s.git(checkout, "branch", "--list", key) == ""
     calls = (d / "log").read_text().splitlines() if (d / "log").exists() else []
     assert not [c for c in calls if c.startswith(("workspace create", "tab create"))], calls
     assert not (d / "prompts").exists()
-    assert not (s.home / ".local" / "state" / "octo-feather" / "lanes" / "gh905.toml").exists()
+    assert not (s.home / ".local" / "state" / "octo-feather" / "lanes" / f"{key}.toml").exists()
 
 
 def refused(s: Scratch) -> None:
@@ -197,5 +197,82 @@ def refused(s: Scratch) -> None:
     show(f"issue-view malformed: exit 1, {err}")
 
 
+NEW = "Scratch lane"
+BODY = "The scratch lane's parent.\nIt has two lines.\n"
+
+
+def new_start(s: Scratch) -> tuple[list[str], Path]:
+    """The --new start's command (title NEW, body file BODY) and the body file."""
+    brief, body = s.root / "brief.md", s.root / "body.md"
+    brief.write_text(BRIEF)
+    body.write_text(BODY)
+    cmd = [kit("octo-feather-lane"), "start", "--new", NEW, "--body-file", str(body)]
+    return [*cmd, "--goal", NEW, "--outcome", OUTCOME, "--brief-file", str(brief)], body
+
+
+def creates(s: Scratch) -> list[str]:
+    """The gh log's issue create calls."""
+    return [c for c in s.gh.log() if c.startswith("issue create")]
+
+
+def files(s: Scratch) -> None:
+    _, checkout, _ = world(s)
+    cmd, body = new_start(s)
+    out = s.run(cmd, cwd=checkout, env=DIRECTOR).out.splitlines()
+    assert out[0] == "filed=906", out
+    assert re.fullmatch(r"key=gh906 pane=\S+ issue=906", out[1]), out
+    assert len(out) == 2, out  # noqa: PLR2004
+    show(f"printed: {out}")
+    assert creates(s) == [f"issue create --title {NEW} --body-file {body}"], s.gh.log()
+    show(f"gh log: {creates(s)}")
+    view = json.loads(s.run([str(ROOT / ".agents" / "skills" / "github-issues" / "scripts" / "issue-view"), "906"]).out)
+    assert (view["title"], view["body"], view["parent"]) == (NEW, BODY, None), view
+    show(f"issue-view 906: title {view['title']!r}, body {view['body']!r}, parent None")
+    state = s.home / ".local" / "state" / "octo-feather"
+    rec = tomllib.loads((state / "lanes" / "gh906.toml").read_text())
+    assert (rec["issue"], rec["goal"]) == ("gh906", NEW), rec
+    wt = checkout.with_name("target-gh906")
+    assert s.git(wt, "rev-parse", "--abbrev-ref", "HEAD") == "gh906"
+    show(f"lane started under gh906: record {rec}, worktree {wt.name} on gh906")
+
+
+def filed_stopped(s: Scratch) -> None:
+    _, checkout, _ = world(s)
+    cmd, _ = new_start(s)
+    taken = checkout.with_name("target-gh906")
+    taken.mkdir()
+    (taken / "x").write_text("in the way")
+    r = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1)
+    assert r.out == "filed=906", r.out
+    assert "step worktree" in r.err, r.err
+    show(f"stopped after filing: exit 1, printed {r.out!r}, {r.err}")
+    (taken / "x").unlink()  # the director clears what was in the way, and the branch git made
+    taken.rmdir()
+    s.git(checkout, "branch", "-q", "-D", "gh906")
+    rerun = [kit("octo-feather-lane"), "start", "906", *cmd[cmd.index("--goal") :]]
+    out = s.run(rerun, cwd=checkout, env=DIRECTOR).out
+    assert re.fullmatch(r"key=gh906 pane=\S+ issue=906", out), out
+    assert len(creates(s)) == 1, s.gh.log()
+    show(f"rerun naming 906: {out}; one issue filed")
+
+
+def sub_issue(s: Scratch) -> None:
+    d, checkout, _ = world(s)
+    brief = s.root / "brief.md"
+    brief.write_text(BRIEF)
+    none: list[object] = []
+    issue: dict[str, object] = {"number": 907, "title": "A child", "body": "b", "state": "OPEN"}
+    issue |= {"url": "https://github.com/o/r/issues/907", "parent": {"number": 905}}
+    issue |= {"blockedBy": {"nodes": none}, "subIssues": {"totalCount": 0, "nodes": none}}
+    s.gh.store("issue/907.json", issue)
+    cmd = [kit("octo-feather-lane"), "start", "907", "--goal", "A child", "--outcome", OUTCOME]
+    r = s.run([*cmd, "--brief-file", str(brief)], cwd=checkout, env=DIRECTOR, want=1)
+    assert "ticket 907 is a sub-issue of 905" in r.err, r.err
+    assert r.out == "", r.out
+    nothing_made(s, d, checkout, "gh907")
+    assert not creates(s), s.gh.log()
+    show(f"sub-issue 907: exit 1, {r.err}")
+
+
 if __name__ == "__main__":
-    main(started, unicode_title, refused)
+    main(started, unicode_title, refused, files, filed_stopped, sub_issue)
