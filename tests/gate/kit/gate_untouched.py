@@ -81,7 +81,7 @@ def gate(s: Scratch, k: Path, seed: str, want: int | None) -> Ran:
     env |= tool_homes() | {
         "npm_config_store_dir": pnpm_store(),
         "MISE_STATE_DIR": str(s.root / "user-mise"),
-        "GATE_WORKERS": "1",
+        "GATE_WORKERS": "0",  # one item: in pytest's own process, no xdist worker to start (#1180)
         "SEED": seed,
         "SEED_STATE": str(s.root / "user-mise"),
         "SEED_LIVE": str(s.root / "live" / "mise.toml"),
