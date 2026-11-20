@@ -7,10 +7,11 @@ added, burning the same, just fast fails naming new.sh, its CPU seconds, those o
 again and the budget, and names heavy.sh, unchanged, report-only. passes: one just fast with the
 same new.sh marked e2e (`# gate: e2e`), skipped and never named over the budget; once.sh, added,
 burning only its first time (a scratch file it removes), named over once with both CPU times;
-heavy.sh report-only; the run passes. One nested gate run per item, so each stays within the kit's
-own budget; the copy prepared once per gate run (Scratch.prepare, billed to its own line). The
-demo's revert (new.sh removed, just fast passes) is the passes item's unchanged over-budget test in
-a passing run."""
+heavy.sh report-only; the run passes. e2e: the same new.sh marked e2e, run (`just test NODE`), over
+the budget: passes, shown as e2e, never named over it. One nested gate run per item, so each
+stays within the kit's own budget; the copy prepared once per gate run (Scratch.prepare, billed to
+its own line). The demo's revert (new.sh removed, just fast passes) is the passes item's unchanged
+over-budget test in a passing run."""
 
 from __future__ import annotations
 
@@ -155,5 +156,22 @@ def passes(s: Scratch) -> None:
     assert f"{LINE} 3 over, 1 changed over once, passes" in out, out
 
 
+def e2e(s: Scratch) -> None:
+    """A changed e2e item over the budget, run (`just test NODE`): passes, shown as e2e, never named
+    over the budget."""
+    k = kit_copy(s)
+    script(k, "new", "# gate: e2e\n")
+    out = gate(s, k, "test", item("new"), want=0).out
+    m = re.search(
+        rf"^ *([0-9.]+)s cpu +[0-9.]+s wall +{re.escape(item('new'))}  \(e2e\)$", out, re.MULTILINE
+    )
+    assert m, out
+    assert float(m.group(1)) >= 0.18, (
+        f"new.sh shows {m.group(1)}s CPU, want its child's 0.2 s:\n{out}"
+    )
+    assert f"OVER CPU BUDGET: {item('new')}" not in out, out
+    assert f"{LINE} 0 over, report-only" in out, out
+
+
 if __name__ == "__main__":
-    main(changed, passes)
+    main(changed, passes, e2e)
