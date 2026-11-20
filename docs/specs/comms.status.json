@@ -119,8 +119,8 @@
     "acceptance-close-line": {
       "status": "built",
       "pr": 1160,
-      "record": "20261120T025516Z-9b1070ec",
-      "commit": "abd12d01cece72cc366d4c85a9d9c48cab58a961",
+      "record": "20261120T201946Z-fabc8e00",
+      "commit": "c88544fe3d2d3dea685747e7fb7dcfe618f74749",
       "tests": [
         "tests/gate/kit/test_herdr_close_log.py"
       ]
@@ -128,8 +128,8 @@
     "acceptance-park-line": {
       "status": "built",
       "pr": 1160,
-      "record": "20261120T025516Z-ea130bde",
-      "commit": "abd12d01cece72cc366d4c85a9d9c48cab58a961",
+      "record": "20261120T201946Z-c6d87d11",
+      "commit": "c88544fe3d2d3dea685747e7fb7dcfe618f74749",
       "tests": [
         "tests/gate/kit/test_herdr_park_log.py"
       ]
@@ -137,8 +137,8 @@
     "acceptance-close-no-log": {
       "status": "built",
       "pr": 1160,
-      "record": "20261120T025516Z-7512a615",
-      "commit": "abd12d01cece72cc366d4c85a9d9c48cab58a961",
+      "record": "20261120T201946Z-67779e36",
+      "commit": "c88544fe3d2d3dea685747e7fb7dcfe618f74749",
       "tests": [
         "tests/gate/kit/test_herdr_close_log.py"
       ]
