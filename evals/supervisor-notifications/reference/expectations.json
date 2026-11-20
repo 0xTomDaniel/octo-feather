@@ -145,15 +145,6 @@
       },
       {
         "fact": "ran",
-        "program": "gh",
-        "args": [
-          "pr",
-          "merge"
-        ],
-        "count": 0
-      },
-      {
-        "fact": "ran",
         "program": "herdr-say",
         "args": [
           "--parent"

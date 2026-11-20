@@ -67,7 +67,7 @@ lane's eval slot. Command for the slot holder:
 `scripts/octo-feather-qa --suite supervisor-notifications --case merge-approved-lane-merge-archive --runs 3 --baseline 13191f3f`
 
 Expected at base 13191f3f: FAIL on `ran octo-feather-lane merge 12 {head}` (absent: github-pr named
-`gh pr merge`), `ran gh pr merge` count 0 and `ran herdr-say --parent` count 0 (the close report). `scripts/check-evals`: `evals: ok (20 suites,
+`gh pr merge`) and `ran herdr-say --parent` count 0 (the close report). `scripts/check-evals`: `evals: ok (20 suites,
 533 cases)`.
 
 ## tdd pass (sent back by `octo-feather-lane skills 1139`)
@@ -83,3 +83,12 @@ Expected at base 13191f3f: FAIL on `ran octo-feather-lane merge 12 {head}` (abse
   not recomputed from post_merge.py. Red check: with post_merge.py's old line restored, `just check-tests
   test_lane_post_merge_teardown.py::test_lane_post_merge_teardown_not_archived test_lane_merge.py::test_lane_merge_starts_routine`:
   2 failed on that line; with the new one, passed.
+
+## Smoke 20261120T195944Z-69983d: proof failed, case fixed
+
+The supervisor's smoke (`octo-feather-qa --suite supervisor-notifications --case merge-approved-lane-merge-archive
+--runs 1 --baseline 13191f3f`) ran no case on either kit: `qc sandbox: FAIL github: none (factory eval: no GitHub
+evidence); the offline gh refuses every call (exit 1)`. Cause: the fact `ran gh pr merge` count 0 makes the sandbox
+put a run shim named gh first on PATH (scripts/octo-feather-qc-sandbox, `recs`), and the proof's offline gh check
+requires `which gh` to be the offline gh. Fix: that fact dropped (the gh stand-in, placed after the proof, stays).
+`ran octo-feather-lane merge 12 {head}` still fails a base run, whose github-pr names `gh pr merge`.
