@@ -16,7 +16,7 @@ TOOLS = {"read", "grep", "find", "ls", "bash", "edit", "write",
          "web"}  # web: the kit's web server list's tools, given by pi-role (spec roles#fm-tools)
 # Exactly the keys scripts/pi-role reads; anything else would be silently ignored.
 FIELDS = {"name", "description", "model", "thinking", "tools", "skills"}
-OPTIONAL = {"externalSkills"}  # resolved at launch; absent ones are skipped
+OPTIONAL = {"externalSkills", "extensions"}  # externalSkills resolved at launch, absent ones skipped
 SKILL_ROOTS = [os.path.join(ROOT, ".agents", "skills")]
 
 errors = []
@@ -27,13 +27,18 @@ def parse(path, rel):
     m = re.match(r"---\n(.*?)\n---\n(.*)", text, re.S)
     if not m:
         err(f"{rel}: no frontmatter"); return {}, ""
-    fm = {}
+    fm: dict[str, str] = {}
     for n, line in enumerate(m.group(1).splitlines(), 2):
         mm = re.fullmatch(r"([A-Za-z]+): (\S.*)", line)
         if not mm:
             err(f"{rel}:{n}: use one `key: value` per line, lists comma-separated"); continue
         fm[mm.group(1)] = mm.group(2).strip()
     return fm, m.group(2).strip()
+
+def bad_extensions(value: str) -> list[str]:
+    """The names in an `extensions:` VALUE that are no bare file name in extensions/ (spec roles#fm-extensions)."""
+    names = [x.strip() for x in value.split(",") if x.strip()]
+    return [e for e in names if os.path.basename(e) != e or not os.path.isfile(os.path.join(ROOT, "extensions", e))]
 
 lst = lambda v: [x.strip() for x in v.split(",") if x.strip()]
 extra = sorted(set(f[:-3] for f in os.listdir(AGENTS) if f.endswith(".md")) - set(ROLES))
@@ -66,6 +71,8 @@ for role in ROLES:
             continue
         if not any(os.path.isfile(os.path.join(r, s, "SKILL.md")) for r in SKILL_ROOTS):
             err(f"{rel}: skill `{s}` not found under .agents/skills/")
+    for e in bad_extensions(fm.get("extensions", "")):
+        err(f"{rel}: extension `{e}` is no file name in extensions/; name a file there, bare")
     if not body:
         err(f"{rel}: empty body")
     if "model" in fm:
