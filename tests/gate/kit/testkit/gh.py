@@ -32,7 +32,8 @@ $FAKE_GH/watch-fails makes every run watch fail as gh does on a rejected token, 
 run watch's texts are real gh's (gh 2.102.0 on vuejs/core, 2026-11-13; watch() names each call).
 Issue writes print what gh v2.102.0 prints with stdout not a terminal (cli/cli pkg/cmd/issue:
 create/create.go, close/close.go; pkg/cmd/pr/shared/commentable.go): `issue create --title T
---body-file F|- ...` stores issue/N.json, N past every stored one, and prints its URL; `issue
+--body-file F|- ...` stores issue/N.json (its title, body and URL), N past every stored one, and
+prints its URL; `issue
 comment N --body-file F|-` appends to issue N's comments and prints the comment URL; `issue close
 N` closes it, on stderr `✓ Closed issue o/r#N (TITLE)`, or `! Issue o/r#N (TITLE) is already
 closed`. Anything else exits 2 naming it.
@@ -331,7 +332,7 @@ def issue_write(a: list[str]) -> None:
     body = stdin() if f == "-" else Path(f).read_text() if f else ""
     url = f"https://github.com/{repo}/issues/{n}"
     if a[1] == "create":
-        d["body"] = body
+        d |= {"body": body, "url": url}  # as GitHub: issue view --json url reads it
     elif a[1] == "comment":
         comments: list[object] = d.setdefault("comments", [])
         url += f"#issuecomment-{1001 + len(comments)}"

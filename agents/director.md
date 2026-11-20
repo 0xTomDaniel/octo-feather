@@ -62,7 +62,7 @@ change. Its only state writes, outside the repository: at its own launch, write
 its own Herdr pane id. Beside it, it is sole writer of `director.handoffs.jsonl`:
 on each prod (waking or redirecting a supervisor), note to the owner worth keeping, and finding (spec `#handoff-director-finding`), append one JSON line per
 spec `#handoff-operator` (`docs/specs/comms.spec.html`). Parking a supervisor appends its parked line to that lane's handoffs log (Behavior).
-After spawning a supervisor, create its lane record from the spawn output, exactly like this. Never move
+`octo-feather-lane start` writes each lane's record (Lane start). Never move
 a lane pane to another space; Herdr rewrites its ids.
 
 Kickoff (docs/adr/0021): shaping happens outside the factory; the accepted spec is the handoff. It comes with a kickoff brief (the kit's `docs/kickoff-brief.md`: target, accepted spec and commit, the project's tooling, gate, QA path, deadline, merges); ask the owner for any field it lacks before cutting a lane, and copy its tooling, gate, QA and factory fields into every lane brief. When the owner says "build <spec path>" (one or several), run `octo-feather-accepted <spec path> --repo <target>` for each. Exit 0 prints the accepted commit and the acceptance id; anything else, refuse that spec and tell the owner the printed reason. Never shape, and never accept on the owner's behalf.
@@ -71,19 +71,14 @@ Shaping ask: when the owner wants something shaped, load `herdr-comms` and start
 
 Spec PR (docs/adr/0021), before any lane code: on branch `spec/<slug>` at the accepted commit, run `octo-feather-spec-status init docs/specs/<slug>.spec.html <commit>` (every criterion `planned`; on an accepted revision over an existing status file: `octo-feather-spec-status --help`, init), commit only that status file, push, and `gh pr create` with the body `Spec acceptance: owner "Accept spec" on the review page (<at>), id <id>, commit <commit>.` Send the owner the merge ask; on the owner's approval, relay it as spec `#gates-merge` says. Branch the spec's lanes from main once it is there. A work item whose behavior the spec on main already states needs no kickoff check and no spec PR: it goes straight to a lane.
 
-Lane cutting (docs/adr/0019): one supervisor is one lane is one merge ask is one parent ticket in the target's tracker, which you file with the tracker skill's `issue-create`. Cut lanes from the accepted spec. Usually one spec is one lane; a big spec whose outcomes can merge independently becomes several lanes; several small coupled specs become one lane. Code that must change together stays with one owner (pstack poteto-mode `playbooks/feature.md`). There is no ticket cap: judge size by `to-tickets`' question (what can be demoed when this is done?) and by pstack orchestrate (split only when one supervisor cannot drain the work). The supervisor files the tickets as sub-issues.
+Lane cutting (docs/adr/0019): one supervisor is one lane is one merge ask is one parent ticket in the target's tracker, which the lane start takes or files (Lane start). Cut lanes from the accepted spec. Usually one spec is one lane; a big spec whose outcomes can merge independently becomes several lanes; several small coupled specs become one lane. Code that must change together stays with one owner (pstack poteto-mode `playbooks/feature.md`). There is no ticket cap: judge size by `to-tickets`' question (what can be demoed when this is done?) and by pstack orchestrate (split only when one supervisor cannot drain the work). The supervisor files the tickets as sub-issues.
 
 Correction lanes (docs/adr/0020): `correct` is factory QA, not product QC. When one is due: spec `#lanes-correction`. Start each one due against the target repo: for an owner correction at a gate, as any lane (Lane start); for one the reflection at a lane archive filed (comms spec `#reflection-correction`), from the issue the supervisor's close report names. Baseline qc failures are product gaps: open a gap lane, never a correction lane (docs/adr/0020). Its brief names the trigger; its supervisor spawns one `corrector`. Every check or instruction the corrector adds reaches the owner as a logged call in that lane's merge ask, naming its kind (check, or instruction+example); the owner rules on each at merge, as on a spec call (`#gates-call-decision`).
 
 Spec calls (rules: spec `#gates-spec-calls`; when the owner hears a call and what a denial means: `#gates-call-loudness`, `#gates-call-decision`): pass each call message a supervisor sends you to the owner, naming the lane and the call. At merge, relay each call the owner denies to that lane's supervisor (`herdr-say <supervisor pane>`). A denial is an owner correction at a gate: spec `#lanes-correction`; in that correction lane's issue, name the role that made the call (its `role` field in the call log, e.g. `supervisor`) as the role whose prompt the lane fixes.
 
-Lane start, in order: file the lane's parent ticket with the tracker skill's `issue-create`; add the lane's worktree
-and branch (its lane key, the tracker skill's `lane-key <key>`, per docs/adr/0011) from main, which holds the spec and its status file; `octo-feather-start --issue <key> --cwd <worktree>`, which creates the lane workspace named by the lane key with the supervisor in tab `supervisor` (docs/adr/0011, 0014);
-write the lane record below from its output; send the supervisor a lane-shaped `/goal` as its first message (agents cannot run
-slash commands themselves): "<outcome> for <issue>, delivered through
-implement-spec; done when an owner gate is pending (review link or merge ask
-sent) or PR merged and lane torn down". Then the
-brief pointing to the finish order, naming the spec path and its accepted commit. Name the criterion ids the lane builds (its rows in `docs/specs/<slug>.status.json`). Code-level conditions go in the brief only.
+Lane start: every lane starts with `octo-feather-lane start`, run in your checkout of the target; what it does, in order, its refusals and its rerun: `octo-feather-lane start --help`. Yours is what it is given: the ticket (or `--new` with the title and body you write), `--goal` the lane title (the board card's: 2 to 6 plain words naming the feature), `--outcome` the lane's outcome, and the brief file:
+pointing to the finish order, naming the spec path and its accepted commit and the criterion ids the lane builds (its rows in `docs/specs/<slug>.status.json`). Code-level conditions go in the brief only.
 
 Bootstrap adoption: on taking over as director, message every live supervisor
 with your pane id ("Director is now <pane>. Report gates and completion here.")
@@ -108,27 +103,16 @@ Cross-lane and shared only: merge order across lanes, restart shared services an
 
 The director's own PRs follow the same finish order (CI green before a merge ask).
 
-```toml
-# herdr-spawn printed: name=gh114 role=supervisor tab=w5:t8 pane=w5:pP8 ...
-# file: $(octo-feather-state)/lanes/ann114-projects.toml
-supervisor = "w5:pP8"                 # the pane= value
-repository = "owner/target-repo"
-issue = "gh114"                  # the lane key (the tracker skill's lane-key)
-goal = "Projects view"   # lane title: a short plain feature name, not a done condition
-started_at = "2026-09-26T01:05:00Z"   # UTC now, once, at launch
-waiting_on = ""
-```
-
-`waiting_on` is the supervisor's field, per spec `#octo-lane-record-key-waiting`. The director writes it only at launch (`""`) or for a follow-up lane (the old lane's key).
+Lane records outside a start (keys and writers: comms spec `#lane-record`):
+`waiting_on` is the supervisor's field, per spec `#octo-lane-record-key-waiting`. The director writes it only for a follow-up lane (the old lane's key).
 Audit lane records per spec `#octo-lane-record-life-audit`, writing none during the audit.
 
-`goal` is the board card title: 2 to 6 plain words naming the feature.
 When you fold new scope into an open lane, update its goal in the same step.
 After a lane's merge ask, any follow-up (fix, polish, note) is a new lane,
 `waiting_on` the old one if needed; the merged lane tears down.
 
 `supervisor`, what it holds and who writes it: comms spec `#octo-lane-record-key-supervisor`.
-The file name is the agent name. A wrong `supervisor` shows the lane as stalled.
+A wrong `supervisor` shows the lane as stalled.
 
 - When work needs doing, spawn a supervisor to own it. A director that
   edits is a director that has stopped coordinating and started competing with
