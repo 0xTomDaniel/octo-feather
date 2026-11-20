@@ -20,7 +20,9 @@ RuntimeMaxSec=N`; then its `-p ExecStopPost=` command line, as systemd runs a st
 end, with SERVICE_RESULT (success, exit-code, timeout), EXIT_CODE (exited, killed) and EXIT_STATUS
 (the exit status or the signal) set. FAKE_SYSTEMD_KILLED set in systemd-run's environment: CMD
 outlives its runtime limit, so the unit is killed at its limit (the stand-in runs no CMD; result
-timeout, killed TERM). With FAKE_SYSTEMD_LOG set, each unit's end is logged there too (`unit U
+timeout, killed TERM). FAKE_SYSTEMD_RUN_FAILS set: the manager refuses the unit, as systemd-run
+does (`Failed to start transient service unit: ...` on stderr, exit 1), and nothing runs. With
+FAKE_SYSTEMD_LOG set, each unit's end is logged there too (`unit U
 ended RESULT`), after its hook.
 """
 
@@ -131,6 +133,8 @@ elif name == "systemctl" and a == ["--user", "is-system-running"]:
     sys.stdout.write("offline\n" if offline else "running\n")
     sys.exit(1 if offline else 0)
 elif name == "systemd-run" and a[:1] == ["--user"] and "--" in a:
+    if os.environ.get("FAKE_SYSTEMD_RUN_FAILS"):
+        sys.exit("Failed to start transient service unit: Unit already exists.")
     start(a)
 else:
     sys.exit(f"systemd stand-in: unhandled: {name} {' '.join(a)}")
