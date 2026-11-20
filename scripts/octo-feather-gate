@@ -32,12 +32,15 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
       file no recorded coverage reaches that the list names, or that is absent at the map head (the
       map cannot know it), runs every non-e2e item.
   octo-feather-gate changed
-      The test items changed as select judges a changed test item, one pytest argument per line: a
-      tests/*.sh as its test_gate.py node id, any other changed file as its path (a pytest item's
-      file); test_gate.py itself is no item's. Changed since the diff base and since the map head;
-      with no map, since the latest commit of HEAD's history with a recorded full pass on a clean
-      tree; with neither, none. Where from on stderr. The gate's per-test CPU budget reads it
-      (tests/gate/conftest.py; quality #acceptance-test-cpu-budget).
+      The test items the change adds or changes, one pytest argument per line: a tests/*.sh as its
+      test_gate.py node id, any other changed file as its path (a pytest item's file); test_gate.py
+      itself is no item's. Changed: differing from the merge base of HEAD with the default branch,
+      to the working tree, untracked files too: the change's net changes, so a file changed and
+      restored is none, the same on CI (a checkout with the default branch's history). The
+      default branch from local refs, no network: origin/HEAD; else origin/<name>, then the local
+      <name>, for init.defaultBranch, main, master. None found: none judged. Where from on
+      stderr. Not select's diff base, which is for selection. The gate's per-test CPU budget reads
+      it (tests/gate/conftest.py; quality #acceptance-test-cpu-budget).
   octo-feather-gate map DATA_DIR --junit FILE
       In the kit, under its uv venv (coverage): writes the coverage map from a mapping run's data
       (just fast-map), one coverage data dir per gate item, DATA_DIR/<item>/ (<item> GATE_ITEM: a
@@ -354,44 +357,33 @@ def diff_base(at: str) -> str:
     return best[1]
 
 
-def last_pass() -> str | None:
-    """The latest commit of HEAD's history with a recorded full pass on a clean tree (record)."""
-    best: tuple[int, str] | None = None
-    for rec in records():
-        head = rec.get("head")
-        if not isinstance(head, str) or rec.get("clean") is not True:
-            continue
-        if ok("merge-base", "--is-ancestor", head, "HEAD"):
-            n = (int(git("rev-list", "--count", f"{head}..HEAD")), head)
-            best = min(best, n) if best else n
-    return best[1] if best else None
+def default_branch() -> str | None:
+    """The default branch's ref, from local refs only (no network): origin/HEAD as the clone or
+    `git remote set-head` left it; else, for init.defaultBranch, main and master in turn, origin's
+    remote-tracking branch (a CI checkout's), then the local branch."""
+    head = git("symbolic-ref", "-q", "refs/remotes/origin/HEAD", check=False).strip()
+    if head:
+        return head
+    names = [git("config", "init.defaultBranch", check=False).strip(), "main", "master"]
+    for n in filter(None, names):
+        for ref in (f"refs/remotes/origin/{n}", f"refs/heads/{n}"):
+            if ok("rev-parse", "--verify", "-q", ref):
+                return ref
+    return None
 
 
 def changed_items() -> None:
-    """The test items changed as choose judges one (--help, changed), as pytest arguments."""
-    if not ok("rev-parse", "--verify", "-q", "HEAD"):
-        sys.stderr.write("changed: none judged: no commit here, so no diff base\n")
-        return
-    m = newest_map(git("rev-parse", "HEAD").strip())
-    if m is not None:
-        at = str(m["head"])
-        base = diff_base(at)
-        files = changed_since(base) | changed_since(at)
-        since = f"since the diff base {base[:12]} and the map at {at[:12]}"
-    elif (base := last_pass()) is not None:
-        files = changed_since(base)
-        since = f"since {base[:12]}, the latest recorded full pass on HEAD's history (no map)"
-    else:
-        sys.stderr.write(
-            "changed: none judged: no diff base (no coverage map, no recorded full pass"
-            " on HEAD's history)\n"
-        )
+    """The test items the change adds or changes (--help, changed), as pytest arguments."""
+    ref = default_branch() if ok("rev-parse", "--verify", "-q", "HEAD") else None
+    base = git("merge-base", "HEAD", ref, check=False).strip() if ref else ""
+    if not base:
+        sys.stderr.write("changed: none judged: no default branch or no merge base with it\n")
         return
     out = [
         f"{NODE}test_script[{f}]" if re.fullmatch(r"tests/[^/]*\.sh", f) else f
-        for f in sorted(files - {NODE[:-2]})
+        for f in sorted(changed_since(base) - {NODE[:-2]})
     ]
-    sys.stderr.write(f"changed: {len(out)} files {since}\n")
+    sys.stderr.write(f"changed: {len(out)} files since {base[:12]}, the merge base with {ref}\n")
     sys.stdout.write("".join(f"{i}\n" for i in out))
 
 

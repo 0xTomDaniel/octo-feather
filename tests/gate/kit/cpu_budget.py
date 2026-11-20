@@ -1,14 +1,15 @@
 """The per-test CPU budget fails the gate on a changed integration test (quality
 #acceptance-test-cpu-budget; #1182, #687): `just fast` in a git copy of the kit with its own tests
-left out, its gate-budget.toml's test_cpu_seconds 0.1, and one item, heavy.sh, whose child
-burns 0.2 s of CPU, committed with a recorded full pass (the diff base). The static checks are
-cut to one with just's own override (`just --set GATE_RECIPES check-dashes`). changed: new.sh
+left out, its gate-budget.toml's test_cpu_seconds 0.1, and one item, heavy.sh, whose child burns
+0.2 s of CPU, committed on main, the default branch a change is judged against. The static checks
+are cut to one with just's own override (`just --set GATE_RECIPES check-dashes`). changed: new.sh
 added, burning the same, just fast fails naming new.sh, its CPU seconds and the budget, and names
-heavy.sh, unchanged, report-only. e2e: the same new.sh marked e2e (`# gate: e2e`), run with heavy.sh
-(`just test NODE NODE`): passes, new.sh shown as e2e and never named over the budget, heavy.sh
-named report-only. One nested gate run per item, so each stays within the kit's own budget; the
-copy prepared once per gate run (Scratch.prepare, billed to its own line). The demo's revert (new.sh
-removed, just fast passes) is the e2e item's unchanged over-budget test in a passing run."""
+heavy.sh, unchanged, report-only. e2e: the same new.sh marked e2e (`# gate: e2e`), run with
+heavy.sh (`just test NODE NODE`): passes, new.sh shown as e2e and never named over the budget,
+heavy.sh named report-only. One nested gate run per item, so each stays within the kit's own
+budget; the copy prepared once per gate run (Scratch.prepare, billed to its own line). The demo's
+revert (new.sh removed, just fast passes) is the e2e item's unchanged over-budget test in a
+passing run."""
 
 from __future__ import annotations
 
@@ -23,10 +24,12 @@ if TYPE_CHECKING:
 
 NODE = "tests/gate/test_gate.py::test_script"
 BURN = "import time\nt = time.process_time() + 0.2\nwhile time.process_time() < t: pass\n"
-OUT_OF_COPY = re.compile(r"tests/[^/]*\.sh|tests/gate/test_cpu\.py|tests/gate/kit/(.*/)?test_[^/]*\.py")
-# The kit gate's own settings, never the copy's run's; GATE_NESTED set below: a gate inside this item.
+OUT_OF_COPY = re.compile(
+    r"tests/[^/]*\.sh|tests/gate/test_cpu\.py|tests/gate/kit/(.*/)?test_[^/]*\.py"
+)
+# The kit gate's own settings, never the copy's run's; GATE_NESTED set below: a gate in this item.
+LINE = "cpu budget: 0.1s per non-e2e test (gate-budget.toml test_cpu_seconds):"
 GATE = ("GATE_RECIPES", "GATE_WORKERS", "GATE_RUN_DIR", "GATE_ITEM", "HERDR_SESSION", "VIRTUAL_ENV")
-IDENT = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@t", "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@t"}
 
 
 def item(script: str) -> str:
@@ -60,13 +63,14 @@ def build(s: Scratch) -> None:
     )
     subprocess.run(["tar", "-xf", "-", "-C", str(k)], input=tar.stdout, check=True)  # noqa: S607
     budget = (k / "gate-budget.toml").read_text()
-    (k / "gate-budget.toml").write_text(re.sub(r"(?m)^test_cpu_seconds = .*$", "test_cpu_seconds = 0.1", budget))
+    (k / "gate-budget.toml").write_text(
+        re.sub(r"(?m)^test_cpu_seconds = .*$", "test_cpu_seconds = 0.1", budget)
+    )
     script(k, "heavy")
     s.git(k, "init", "-q", "-b", "main")
     kit_deps(k)
     s.git(k, "add", "-A")
     s.git(k, "commit", "-qm", "copy")
-    s.run([str(k / "scripts" / "octo-feather-gate"), "record", "--reason", "base", "--seconds", "1"], cwd=k, env=IDENT)
 
 
 def kit_copy(s: Scratch) -> Path:
@@ -77,8 +81,14 @@ def kit_copy(s: Scratch) -> Path:
 def gate(s: Scratch, k: Path, *args: str, want: int) -> Ran:
     """`just --set GATE_RECIPES check-dashes ARGS` in K; its stdout and stderr together."""
     env = {n: v for n, v in s.env.items() if n not in GATE}
-    env |= tool_homes() | {"npm_config_store_dir": pnpm_store(), "GATE_NESTED": "1", "PYTEST_ADDOPTS": "--color=no"}
-    env["UV_PROJECT_ENVIRONMENT"] = str(ROOT / ".venv")   # the kit's venv: the copy syncs none of its own
+    env |= tool_homes() | {
+        "npm_config_store_dir": pnpm_store(),
+        "GATE_NESTED": "1",
+        "PYTEST_ADDOPTS": "--color=no",
+    }
+    env["UV_PROJECT_ENVIRONMENT"] = str(
+        ROOT / ".venv"
+    )  # the kit's venv: the copy syncs none of its own
     p = subprocess.run(
         ["just", "--set", "GATE_RECIPES", "check-dashes", *args],  # noqa: S607
         cwd=k,
@@ -88,14 +98,17 @@ def gate(s: Scratch, k: Path, *args: str, want: int) -> Ran:
         text=True,
         check=False,
     )
-    assert p.returncode == want, f"just {' '.join(args)}: exit {p.returncode}, want {want}\n{p.stdout}"
+    assert p.returncode == want, (
+        f"just {' '.join(args)}: exit {p.returncode}, want {want}\n{p.stdout}"
+    )
     return Ran(p.returncode, p.stdout, "")
 
 
 def over(out: str, name: str, verdict: str) -> float:
     """NAME's OVER CPU BUDGET line with VERDICT: its CPU seconds, the 0.2 s its child burns."""
     m = re.search(
-        rf"^OVER CPU BUDGET: {re.escape(item(name))} ([0-9.]+)s CPU, budget 0\.1s \({re.escape(verdict)}\)$",
+        rf"^OVER CPU BUDGET: {re.escape(item(name))} ([0-9.]+)s CPU, budget 0\.1s "
+        rf"\({re.escape(verdict)}\)$",
         out,
         re.MULTILINE,
     )
@@ -112,7 +125,7 @@ def changed(s: Scratch) -> None:
     out = gate(s, k, "fast", want=1).out
     over(out, "new", "changed: the gate fails")
     over(out, "heavy", "report-only")
-    assert "cpu budget: 0.1s per non-e2e test (gate-budget.toml test_cpu_seconds): 3 over, 1 of them changed: FAIL" in out, out
+    assert f"{LINE} 3 over, 1 of them changed: FAIL" in out, out
 
 
 def e2e(s: Scratch) -> None:
@@ -121,10 +134,12 @@ def e2e(s: Scratch) -> None:
     k = kit_copy(s)
     script(k, "new", "# gate: e2e\n")
     out = gate(s, k, "test", item("new"), item("heavy"), want=0).out
-    assert re.search(rf"^ *[0-9.]+s cpu +[0-9.]+s wall +{re.escape(item('new'))}  \(e2e\)$", out, re.MULTILINE), out
+    assert re.search(
+        rf"^ *[0-9.]+s cpu +[0-9.]+s wall +{re.escape(item('new'))}  \(e2e\)$", out, re.MULTILINE
+    ), out
     over(out, "heavy", "report-only")
     assert f"OVER CPU BUDGET: {item('new')}" not in out, out
-    assert "cpu budget: 0.1s per non-e2e test (gate-budget.toml test_cpu_seconds): 1 over, report-only" in out, out
+    assert f"{LINE} 1 over, report-only" in out, out
 
 
 if __name__ == "__main__":

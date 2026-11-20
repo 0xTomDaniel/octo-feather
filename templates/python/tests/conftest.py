@@ -44,9 +44,10 @@ one JSON line there, {"line": NAME, "cpu_s": its CPU building it}; the item's cp
 cpu_shared property ({NAME: seconds}, JSON; the trend step's cpu_shared) carries it. After the run the controller
 shows each item's CPU and wall seconds, each shared line, and names each item over test_cpu_seconds in the root's
 gate-budget.toml (its form: octo-feather-lane --help, report) but one carrying pytest's `e2e` marker (quality spec
-#acceptance-test-cpu-budget). Such an item changed, as `octo-feather-gate changed` (when on PATH) names one, fails
-the run, named with its CPU and the budget; one unchanged is reported only, as is a shared line. Stdlib getrusage, not a plugin: pytest-monitor (last release 2023) measures the pytest
-process only, into its own sqlite, without xdist; pytest-timing (new in 2026) records CPU into its own report, with no
+#acceptance-test-cpu-budget). Such an item the change adds or changes (since the merge base with the default
+branch), as `octo-feather-gate changed` (when on PATH) names one, fails the run, named with its CPU and the budget;
+one unchanged is reported only, as is a shared line. Stdlib getrusage, not a plugin: pytest-monitor (last release
+2023) measures the pytest process only, into its own sqlite, without xdist; pytest-timing (new in 2026) records CPU into its own report, with no
 per-test budget.
 
 Also copyable unchanged: the qc capture's side of the gate (what it must capture: quality spec #qc-capture). A test
