@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Integration test for a role's `web` tool (issue #262; spec roles#launch-web, roles#roles-web,
 # roles#fm-tools): real Pi, at the kit's pin (pi-version), launched headless through a copy of the
 # kit's scripts/pi-role whose web-mcp.json names a stub stdio MCP server instead of the hosted ones

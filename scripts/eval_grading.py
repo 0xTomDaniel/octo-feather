@@ -10,7 +10,7 @@ Interface (__all__):
   watch(plan, cmd, *, where, out) -> int   the in-sandbox watcher and its stop rule: runs CMD in
       the case repo with the environment and private dir WHERE gives, Pi's events and its own
       (qa_fs, qa_branch, qa_watch) written to OUT; never changes the process cwd or os.environ
-  grade(plan, watched, sandbox, *, model) -> Run   every fact and the run's verdict
+  grade(plan, watched, sandbox=None, *, model) -> Run   every fact and the run's verdict
   record(slot, run, ...) -> (result, lines)   one run's artifacts written, the lines to print
   combine(case_dir, done, *, runs, baseline) -> (result, lines)   a case over its runs and kits
   analysis(cases) -> (analysis, lines)   the deterministic flags
@@ -35,7 +35,6 @@ from __future__ import annotations
 import hashlib
 import importlib.machinery
 import importlib.util
-import itertools
 import json
 import os
 import queue
@@ -1398,14 +1397,20 @@ def problems(
 
 
 def grade(
-    plan: Plan, watched: subprocess.CompletedProcess[str] | None, sandbox: Fact, *, model: str
+    plan: Plan,
+    watched: subprocess.CompletedProcess[str] | None,
+    sandbox: Fact | None = None,
+    *,
+    model: str,
 ) -> Run:
-    """The run of PLAN: WATCHED the sandboxed watcher's process (None: the sandbox did not start),
-    SANDBOX its record, MODEL the role's. Every fact graded, then the run's verdict (--help; a
-    review case: Review)."""
+    """The run of PLAN: WATCHED the watcher's process (None: the sandbox did not start), SANDBOX the
+    sandbox's record (sandbox.json; None: no sandbox ran, so attempt_blocked and ran fail as with
+    no whole attempt record), MODEL the role's. Every fact graded, then the run's verdict (--help;
+    a review case: Review)."""
     if watched is None:
-        bad = [ln for ln in sandbox.get("proof", []) if "FAIL" in ln] or [
-            sandbox.get("error", "sandbox did not start")
+        rec = sandbox or {}
+        bad = [ln for ln in rec.get("proof", []) if "FAIL" in ln] or [
+            rec.get("error", "sandbox did not start")
         ]
         return Run(
             "FAIL",
@@ -1426,7 +1431,7 @@ def grade(
     ]
     used = next((f"{m.get('provider')}/{m.get('model')}" for m in asst if m.get("model")), model)
     last = ((w or {}).get("stop"), content_text(asst[-1]) if asst else None)
-    att, short = attempts(sandbox)
+    att, short = attempts(sandbox or {})
     seen = Seen(calls, lines, att, last, fs_marks(lines))
     graded = [
         dict({k: v for k, v in f.items() if not k.startswith("_")}, status=s, evidence=txt)
@@ -2141,9 +2146,6 @@ RUN_INPUT_KEYS = (
     "of",
     "config",
 )
-# What a role's launch reads beside agents/<role>.md and what pi-role --json lists (scripts/pi-role
-# --help).
-LAUNCH_PATHS = ("scripts/pi-role", "web-mcp.json")
 PIN = re.compile(r"[^-/][^/]*/[^/]+/[^/]+")  # RUN_ID/SUITE/CASE, never an option
 
 
@@ -2173,15 +2175,15 @@ def stored(p: Path) -> Result | None:
 
 
 def launched(top: str, role: str) -> tuple[list[str], str | None]:
-    """The repo paths ROLE launches with, asked of the launcher at HEAD (`scripts/pi-role --json`,
-    from an empty dir so no target selects a skill): each --skill folder (a trailing /) and
-    --extension file inside TOP; a path outside it (an external skill) is not compared. (paths,
-    None), or ([], why the launcher gave no list)."""
+    """The repo paths ROLE launches with: its launch set, asked of the launcher at HEAD
+    (`scripts/pi-role --launch-set`, spec roles#launch-set; from an empty dir so no target selects a
+    skill), each path inside TOP (a skill folder with a trailing /); a path outside it (an external
+    skill) is not compared. (paths, None), or ([], why the launcher gave no list)."""
     with tempfile.TemporaryDirectory(prefix="qa-verdict-") as cwd:
         p = subprocess.run(
             [
                 str(Path(top) / "scripts" / "pi-role"),
-                "--json",
+                "--launch-set",
                 str(Path(top) / "agents" / f"{role}.md"),
             ],
             capture_output=True,
@@ -2190,23 +2192,21 @@ def launched(top: str, role: str) -> tuple[list[str], str | None]:
             check=False,
         )
     raw = safe_json(p.stdout) if p.returncode == 0 else None
-    args = raw.get("args") if isinstance(raw, dict) else None
-    if not isinstance(args, list):
+    files = raw.get("files") if isinstance(raw, dict) else None
+    if not isinstance(files, dict):
         return (
             [],
             (
-                f"scripts/pi-role --json agents/{role}.md listed no launch (exit "
+                f"scripts/pi-role --launch-set agents/{role}.md listed no launch (exit "
                 f"{p.returncode}: {p.stderr.strip()[-200:]})"
             ),
         )
-    a = [str(x) for x in cast("list[object]", args)]
     real = os.path.realpath(top)
     out: list[str] = []
-    for flag, val in itertools.pairwise(a):
-        if flag in ("--skill", "--extension"):
-            rel = os.path.relpath(os.path.realpath(val), real)
-            if not rel.startswith(".."):
-                out.append(rel + ("/" if flag == "--skill" else ""))
+    for f in cast("dict[str, object]", files):
+        rel = os.path.relpath(os.path.realpath(f.rstrip("/")), real)
+        if not rel.startswith(".."):
+            out.append(rel + ("/" if f.endswith("/") else ""))
     return sorted(set(out)), None
 
 
@@ -2340,7 +2340,6 @@ def pinned(root: Path, top: str, head: str, arg: str) -> tuple[str, str, list[st
         missing += [why for _, why in asked if why]
         paths = [
             *(f"agents/{r}.md" for r in role),
-            *LAUNCH_PATHS,
             *sorted({p for ps, _ in asked for p in ps}),
         ]
         bad, changed = trees_changed(top, sha, head, fx)

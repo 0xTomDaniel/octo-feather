@@ -1,0 +1,14 @@
+Seeded defect: any file edit marks test_write, not only a change to the fixture's declared tests.
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index af457dc7..6c74aee8 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -1019,7 +1019,7 @@ def changed(old: Fact, new: Fact, known: set[str]) -> list[str]:
+         m
+         for m, hit in (
+             ("edit", old["files"] != new["files"]),
+-            ("test_write", old.get("tests") != new.get("tests")),
++            ("test_write", old["files"] != new["files"]),
+             ("git_commit", new["head"] != old["head"] and new["head"] not in known),
+             ("git_push", new["refs"] != old["refs"]),
+             ("gh_call", len(new["gh"]) > len(old["gh"])),

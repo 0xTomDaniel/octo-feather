@@ -1,0 +1,14 @@
+Seeded defect: a pi that exits 3 on its own no longer fails its case.
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index af457dc7..1131db29 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -1382,7 +1382,7 @@ def problems(
+     out: list[str] = []
+     if w is None:
+         out.append(f"run: no stop record (exit {watched.returncode})")
+-    elif w["stop"] == "exit" and w["exit"] != 0:
++    elif w["stop"] == "exit" and w["exit"] > 3:
+         out.append(f"run: pi exited {w['exit']} on its own")
+     if w and w.get("error"):
+         out.append(f"run: {w['error']}")

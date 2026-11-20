@@ -1,0 +1,14 @@
+Seeded defect: a blank labelled_by or relabel is accepted.
+diff --git a/scripts/check-evals b/scripts/check-evals
+index 714686c6..cd443e82 100755
+--- a/scripts/check-evals
++++ b/scripts/check-evals
+@@ -786,7 +786,7 @@ def check_judgment(d, cases, exps, errs):
+         for k in sorted(set(exp) - J_EXP - J_EXP_OPT):
+             errs.append(f"{at}: field {k}: unknown field")
+         for k in sorted(J_EXP_OPT & set(exp)):
+-            if not (isinstance(exp[k], str) and exp[k].strip() and "\n" not in exp[k]):
++            if not (isinstance(exp[k], str) and "\n" not in exp[k]):
+                 errs.append(f"{at}: field {k}: must be one non-empty line")
+         if "label" in exp and labels and exp["label"] not in labels:
+             errs.append(f"{at}: field label: must be one of {labels}, got {exp['label']!r}")

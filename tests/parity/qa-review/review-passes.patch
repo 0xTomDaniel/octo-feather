@@ -1,0 +1,14 @@
+Seeded defect: a review case with no problem is a PASS, not awaiting review.
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index af457dc7..054bdf0e 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -1464,7 +1464,7 @@ def grade(
+             f"awaiting review: {q}",
+             f"changed files: {', '.join(kept['changed_files']) or 'none'}",
+         ]
+-    return Run("FAIL" if failed else "REVIEW", deciding, used, kept=kept, **out)
++    return Run("FAIL" if failed else "PASS", deciding, used, kept=kept, **out)
+ 
+ 
+ @dataclass(frozen=True)

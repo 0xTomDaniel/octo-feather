@@ -1,0 +1,13 @@
+Seeded defect: ran ignores the fact's exit, counting runs that exited otherwise.
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index af457dc7..ffb900e1 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -687,7 +687,6 @@ def judge_ran(fact: Fact, seen: Seen, *, final: bool) -> Status:
+         r
+         for r, a in runs
+         if args_match(want, a, head if isinstance(head, str) else None)
+-        and ("exit" not in fact or r.get("exit") == fact["exit"])
+     ]
+     if "count" in fact:  # rule: schema, Run record
+         return ran_count(fact, name, hits, record, final=final)

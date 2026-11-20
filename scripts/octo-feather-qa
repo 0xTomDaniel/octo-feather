@@ -148,9 +148,9 @@ holding the run's input.json, grading.json and result.json) passed when its resu
 case is PASS when every run passed, else FAIL; a review case takes the latest maintainer verdict recorded for that
 run id (Review: REVIEWS/SUITE/CASE.jsonl), pass PASS, fail FAIL. Freshness (the rule and its file list: spec quality#qc-fallback): the run
 is stale when, between K (the run's kit_sha) and HEAD, git diff names one of those files, or the case's own entry (by
-id) in evals/SUITE/cases.json or reference/expectations.json differs, each named. The skills and extensions a role
-launches with are asked of the launcher at HEAD, `scripts/pi-role --json agents/<role>.md` (its --skill and
---extension args), run from an empty dir, so a skill a case's fixture selects is compared as a fixture file; a path
+id) in evals/SUITE/cases.json or reference/expectations.json differs, each named. The files a role launches with
+are asked of the launcher at HEAD, `scripts/pi-role --launch-set agents/<role>.md` (its launch set's files: spec
+roles#launch-set), run from an empty dir, so a skill a case's fixture selects is compared as a fixture file; a path
 outside the repo (an external skill) is not compared, and a launcher that lists no launch is insufficient evidence,
 naming it. Fixture trees: for each fixture the case names at any depth (every string value of a `fixture` key; a
 history fixture {repo, commit} is pinned by its commit), its materialized tree (schema.md, Fixtures) at K and at HEAD,
@@ -180,12 +180,10 @@ from pathlib import Path
 # The grading logic, scripts/eval_grading.py beside this script (how it is found: its docstring). Run as a command,
 # this script's own dir is already first on sys.path; loaded by path from another script or a recipe
 # (octo-feather-lane, octo-feather-qc, `just install-check-models`) it may not be, so it is added here. In the sandbox
-# of a run on another kit (--kit-ref, --baseline) the head kit is masked but for this script, so run_case binds a copy
-# of the module in read-only and names its dir in OCTO_FEATHER_QA_GRADING, found there.
+# of a run on another kit (--kit-ref, --baseline) the head kit is masked but for what docs/adr/0022 (sandbox
+# paragraph) binds back, this module among it: run_case binds it.
 if str(Path(__file__).resolve().parent) not in sys.path:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
-if os.environ.get("OCTO_FEATHER_QA_GRADING"):
-    sys.path.append(os.environ["OCTO_FEATHER_QA_GRADING"])
 import eval_grading as grading
 
 if TYPE_CHECKING:
@@ -476,12 +474,8 @@ def run_case(qc: "ModuleType", evals: Path, suite: Result, case: Result, facts: 
                *(["--model", model] if model else []), "--mode", "json", "--session-dir", "/tmp/qa-session", "-p", task]
         here = os.getcwd(); os.chdir(repo)
         ro = os.environ.get("OCTO_FEATHER_QC_RO_BINDS")
-        if kit != KIT:   # the older kit read-only in the sandbox, as the head kit is, and the grading module's copy
-            grader = scratch / "grading"
-            grader.mkdir()
-            shutil.copy2(grading.__file__, grader / "eval_grading.py")
-            os.environ["OCTO_FEATHER_QC_RO_BINDS"] = ":".join(p for p in (ro, str(kit), str(grader)) if p)
-            os.environ["OCTO_FEATHER_QA_GRADING"] = str(grader)
+        if kit != KIT:   # the older kit read-only in the sandbox, as the head kit is, and the grading module on the head kit's mask
+            os.environ["OCTO_FEATHER_QC_RO_BINDS"] = ":".join(p for p in (ro, str(kit), grading.__file__) if p)
         # the sandbox's run shims: only the programs this case's ran facts name (schema, Run record)
         os.environ["QC_RECORD"] = planned.shims
         try:
@@ -489,7 +483,7 @@ def run_case(qc: "ModuleType", evals: Path, suite: Result, case: Result, facts: 
         except SystemExit as e:   # unshare missing or unusable: never run unsandboxed
             run, rec = None, {"error": f"sandbox unavailable (exit {e.code})"}
         finally:
-            os.chdir(here); os.environ.pop("QC_RECORD", None); os.environ.pop("OCTO_FEATHER_QA_GRADING", None)
+            os.chdir(here); os.environ.pop("QC_RECORD", None)
             if ro is None:
                 os.environ.pop("OCTO_FEATHER_QC_RO_BINDS", None)
             else:

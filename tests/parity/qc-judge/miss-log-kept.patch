@@ -1,0 +1,14 @@
+Seeded defect: a --no-sandbox judge's offline gh miss log (qc-ghmiss-*) is never removed, so a killed run leaves scratch.
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+index ce0774ba..a4b6262c 100755
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -1041,7 +1041,7 @@ def fallback(i: str, n: int, head: str, spec: Path, text: dict[str, str], stem:
+             run, sandbox = subprocess.run(cmd, capture_output=True, text=True, env=env), False
+             misses = [json.loads(l) for l in miss.read_text().splitlines() if l.strip()]
+         finally:
+-            miss.unlink(missing_ok=True)
++            pass
+     else:
+         run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}-j{n}", gh)
+         if run is None:

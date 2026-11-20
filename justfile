@@ -526,7 +526,7 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH') $CALLER
     elif not os.path.isdir(lanes): print(f"state  MISSING {lanes} (the session state folder, octo-feather-state); mkdir -p {lanes}"); bad = 1
     elif not os.access(lanes, os.W_OK): print(f"state  NOT WRITABLE {lanes} (the session state folder, octo-feather-state); sudo chown -R $(id -un) {st}"); bad = 1
     else: print(f"state  ok  {st} (octo-feather-state)")
-    sys.path.insert(0, os.path.join(root, "scripts"))  # its own imports (handoff_log), as when it runs
+    sys.path.insert(0, os.path.join(root, "scripts"))  # its own imports (kit modules: handoff_log, correction_lanes, tracker_calls), as when it runs
     s = iu.spec_from_loader("octo_feather_lane", im.SourceFileLoader("octo_feather_lane", os.path.join(root, "scripts", "octo-feather-lane"))); lane = iu.module_from_spec(s); s.loader.exec_module(lane)
     kit, src = str(lane.kit_install()), "OCTO_FEATHER_KIT_INSTALL" if os.environ.get("OCTO_FEATHER_KIT_INSTALL") else "the kit dir"
     def git(*a): return run("git", "-C", kit, *a)
@@ -904,8 +904,8 @@ state:
 new-repo $lang $dest *$flags:
     octo-feather-new-repo "$@"
 
-# Opt-in, never part of `just check`: tests/qc.sh with the box's real herdr (QC_TEST_HERDR=real) for the
+# Opt-in, never part of `just check`: tests/qc-namespace.sh with the box's real herdr (QC_TEST_HERDR=real) for the
 # sandbox pane proof: a judge's pane runs in its PID namespace, reaches no live session and dies with the run.
 # Offline like the gate; a throwaway HOME with its own "live" session, the box's sessions untouched. Needs herdr on PATH.
 qc-real-herdr:
-    QC_TEST_HERDR=real "$root/tests/qc.sh"
+    QC_TEST_HERDR=real "$root/tests/qc-namespace.sh"

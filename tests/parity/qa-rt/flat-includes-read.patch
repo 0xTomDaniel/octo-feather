@@ -1,0 +1,14 @@
+Seeded defect: declared_includes reads a top-level string as a list of its characters.
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index af457dc7..e24cc102 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -313,7 +313,7 @@ def judge_includes(fact: Fact, seen: Seen, *, final: bool) -> Status:
+     if st:
+         return st, txt
+     got = obj.get(f)
+-    if not isinstance(got, list):
++    if not isinstance(got, (list, str)):
+         return (
+             "fail",
+             (

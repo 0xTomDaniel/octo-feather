@@ -1,0 +1,14 @@
+Seeded defect: tool_called_before passes when its target is reached before any call to the tools.
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index af457dc7..a3f67c6f 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -527,7 +527,7 @@ def judge_tool_before(fact: Fact, seen: Seen, *, final: bool) -> Status:
+             "the final message" if b == "final_message" else f"first {b} at {at(seen, w)}"
+         )
+     if w is not None:
+-        return "fail", (
++        return "pass", (
+             f"{head}: "
+             + (
+                 "reached the final message"

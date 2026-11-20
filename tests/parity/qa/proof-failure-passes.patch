@@ -1,0 +1,14 @@
+Seeded defect: a failed sandbox proof is a PASS, not a FAIL.
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index af457dc7..6e506d91 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -1413,7 +1413,7 @@ def grade(
+             rec.get("error", "sandbox did not start")
+         ]
+         return Run(
+-            "FAIL",
++            "PASS",
+             [f"sandbox: proof failed, case not run: {'; '.join(map(str, bad))}"],
+             model,
+             sandbox=sandbox,

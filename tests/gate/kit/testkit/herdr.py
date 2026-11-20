@@ -1,11 +1,18 @@
 #!/usr/bin/env python3
 """Fake `herdr` (the testkit's stand-in for Herdr, which the kit does not own), as
-tests/lib/qa.sh's: a session's socket is a file under the config dir naming the session.
+testkit/qa_box.py's: a session's socket is a file under the config dir naming the session.
 
 `server` writes it and sleeps; `session stop S` removes S's socket, `session delete S` its dir;
 with no socket a call fails `server_not_running`; `pane list` prints nothing; `agent list` prints
 no agent in Herdr's envelope; any other call prints
 {"session": S}.
+Its panes, one per workspace, as the qc sandbox's judge spawns one (#997): `workspace create`
+prints a root pane, `pane run P CMD` starts CMD detached (sh -c, its own session) and logs P in
+the session's dir, `pane list` prints each logged pane. FAKE_HERDR_LEAK set: once past `server`
+and `session stop|delete`, every call answers the default session, as a Herdr reaching its live
+server past every mask would.
+Its one pane a prompt reaches, as the qa items' attempt cases need (#998): `agent prompt w9:ok ...`
+prints {"result": "delivered"}; `agent prompt P ...` to any other P fails `pane_not_found: P`.
 
 With FAKE_HERDR set, it stands for Herdr's agents instead (#666): a world in that dir, each call one
 line in its `log`. `agents.json` maps each pane id to its agent, {name, pane_id, workspace_id,
@@ -52,7 +59,9 @@ process the agent's `pi_pid` a scenario wrote (a real process standing in for it
 argv and cwd read from its /proc, as Herdr does), else none; `tab close` and `workspace
 close` send each closed pane's shell SIGHUP, as Herdr's close does.
 `pane read` shows a ready Pi prompt; `pane send-keys|send-text` log only. `agent list` prints every
-agent in Herdr's envelope ({"id", "result": {"agents"}}), as `agent get` shows one. A file `down`
+agent in Herdr's envelope ({"id", "result": {"agents"}}), as `agent get` shows one, with AgentInfo's
+other required fields (terminal_id, focused, revision) as `pane list` gives them; a file
+`list-answer` holding JSON is printed as its answer instead (a malformed Herdr). A file `down`
 fails every call as a herdr with no server does (`error: could not connect to herdr server`,
 exit 1). Anything else exits 2.
 """
@@ -326,6 +335,20 @@ class World:
             return fail("timeout")
         return say({"agent_status": "idle"})
 
+    def agent_list(self) -> int:
+        told = self.dir / "list-answer"
+        if told.exists():
+            sys.stdout.write(told.read_text() + "\n")
+            return 0
+        agents = [
+            {k: v for k, v in g.items() if k not in HIDDEN}
+            | {"agent_status": self.status(g), "terminal_id": f"term_{g['pane_id']}"}
+            | {"focused": False, "revision": 0}
+            for g in self.agents.values()
+        ]
+        sys.stdout.write(json.dumps({"id": "1", "result": {"agents": agents}}) + "\n")
+        return 0
+
     def call(self, a: list[str]) -> int:
         """One call A, logged."""
         self.note("log", " ".join(a))
@@ -334,12 +357,7 @@ class World:
             return 1
         self.settle()
         if a == ["agent", "list"]:
-            agents = [
-                {k: v for k, v in g.items() if k not in HIDDEN} | {"agent_status": self.status(g)}
-                for g in self.agents.values()
-            ]
-            sys.stdout.write(json.dumps({"id": "1", "result": {"agents": agents}}) + "\n")
-            return 0
+            return self.agent_list()
         two = (a[0], a[1]) if len(a) > 1 else (" ".join(a), "")
         if two == ("pane", "read"):
             sys.stdout.write(" pi\n\n > \n")
@@ -391,8 +409,29 @@ if a[:2] == ["session", "stop"] and len(a) == 3:
 if a[:2] == ["session", "delete"] and len(a) == 3:
     shutil.rmtree(home / "sessions" / a[2], ignore_errors=True)
     sys.exit(0)
+if os.environ.get("FAKE_HERDR_LEAK"):
+    sys.stdout.write(json.dumps({"session": "default"}) + "\n")
+    sys.exit(0)
 if not sock.is_file():
     sys.exit("server_not_running")
+if a[:2] == ["workspace", "create"]:
+    sys.stdout.write(json.dumps({"result": {"root_pane": {"pane_id": "w1:p1"}}}) + "\n")
+    sys.exit(0)
+if a[:2] == ["pane", "run"] and len(a) > 3:
+    with (sock.parent / "panes").open("a") as f:
+        f.write(json.dumps({"pane_id": a[2]}) + "\n")
+    io = subprocess.DEVNULL
+    cmd = ["sh", "-c", " ".join(a[3:])]
+    subprocess.Popen(cmd, stdin=io, stdout=io, stderr=io, start_new_session=True)
+    sys.exit(0)
+if a == ["pane", "list"] and (sock.parent / "panes").is_file():
+    sys.stdout.write((sock.parent / "panes").read_text())
+    sys.exit(0)
+if a[:2] == ["agent", "prompt"] and len(a) > 2:  # its one pane a prompt reaches (docstring)
+    if a[2] != "w9:ok" or len(a) == 3:
+        sys.exit(f"pane_not_found: {a[2]}")
+    sys.stdout.write(json.dumps({"result": "delivered"}) + "\n")
+    sys.exit(0)
 if a == ["agent", "list"]:
     sys.stdout.write(json.dumps({"id": "1", "result": {"agents": []}}) + "\n")
 elif a != ["pane", "list"]:
