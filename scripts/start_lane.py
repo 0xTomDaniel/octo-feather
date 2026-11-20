@@ -61,6 +61,7 @@ class Ask:
     goal: str
     outcome: str
     brief: str
+    seen: dict[str, str]  # step (goal, brief) to what the director saw in the pane: shown, absent
 
 
 @dataclass(frozen=True)
@@ -104,7 +105,14 @@ def parse(args: list[str], err: type[Exception]) -> Ask:
     p.add_argument("--goal", required=True, metavar="TITLE")
     p.add_argument("--outcome", required=True, metavar="TEXT")
     p.add_argument("--brief-file", required=True, metavar="FILE", type=Path)
+    for flag in ("--shown", "--absent"):
+        p.add_argument(flag, action="append", choices=SENDS, default=[], metavar="STEP")
     ns = p.parse_args(args)
+    shown, absent = cast("list[str]", ns.shown), cast("list[str]", ns.absent)
+    if both := set(shown) & set(absent):
+        p.error(
+            f"--shown and --absent both name {', '.join(sorted(both))}: name what the pane shows"
+        )
     goal, outcome = cast("str", ns.goal), cast("str", ns.outcome)
     brief_file = cast("Path", ns.brief_file)
     ticket = parent_ticket(p, cast("str | None", ns.ticket), ns.new, ns.body_file, err)
@@ -123,7 +131,8 @@ def parse(args: list[str], err: type[Exception]) -> Ask:
     except (OSError, UnicodeDecodeError) as e:
         msg = f"--brief-file {brief_file} unreadable ({e}): name the brief's file"
         raise err(msg) from e
-    return Ask(ticket, goal, outcome, brief)
+    seen = dict.fromkeys(shown, "shown") | dict.fromkeys(absent, "absent")
+    return Ask(ticket, goal, outcome, brief, seen)
 
 
 def parent_ticket(
@@ -341,7 +350,13 @@ def workspaces(err: type[Exception]) -> dict[str, str]:
 # What a stopped start keeps, in lanes/<key>.start.json (`octo-feather-lane --help`, start): its
 # ask, then each step's fact once that step is done. Gone once the start finishes.
 ASKED = ("ticket", "goal", "outcome", "brief_sha256")
-KEPT = {*ASKED, "main", "pane", "name", "workspace", "started_at", "goal_sent", "brief_sent"}
+SENDS = ("goal", "brief")
+KEPT = {*ASKED, "main", "pane", "name", "workspace", "started_at"} | {
+    f"{s}_{k}" for s in SENDS for k in ("sent", "unknown")
+}
+# herdr-say exits that prove nothing was typed (herdr-comms SKILL.md, Send a message): a send that
+# ended so is rejected and sent again on a rerun; any other failure leaves it unknown (send).
+REJECTED = {64, 69, 75, 77}
 
 
 @dataclass
@@ -363,6 +378,58 @@ class Kept:
         except OSError as e:
             msg = f"step {step}: {self.path} not written ({e}), a rerun cannot continue; {made}"
             raise self.err(msg) from e
+
+    def seen(self, seen: dict[str, str]) -> None:
+        """ERR when SEEN, what the director saw in the pane, names a step with no unknown send."""
+        if bad := [f"--{v} {k}" for k, v in seen.items() if f"{k}_unknown" not in self.facts]:
+            msg = f"step goal: {', '.join(bad)}, but no unknown send of it is kept: drop it"
+            raise self.err(msg)
+
+    def send(self, step: str, pane: str, text: str, seen: str | None, made: str) -> None:
+        """TEXT sent to PANE with herdr-say as STEP once: skipped when sent; an unknown send kept
+        (comms spec #delivery-unknown) never sent again blind: ERR naming what to look at, until
+        SEEN, the director's look at the pane, says shown (counted sent) or absent (sent again)."""
+        sent, unknown = f"{step}_sent", f"{step}_unknown"
+        if sent in self.facts:
+            return
+        at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        look = (
+            f"look at supervisor pane {pane} (herdr pane read {pane}): when it shows the {step},"
+            f" rerun this start with --shown {step}; when it does not and is not compacting,"
+            f" with --absent {step} (sent once more)"
+        )
+        if unknown in self.facts and seen is None:
+            msg = (
+                f"step {step}: the {step} send to {pane} is unknown ({self.facts[unknown]}), so it"
+                f" is not sent again blind (comms spec #delivery-unknown): {look}; {made}"
+            )
+            raise self.err(msg)
+        if seen == "shown":
+            del self.facts[unknown]
+            self.done(step, made, **{sent: at})
+            return
+        self.done(step, made, **{unknown: "sent, no result kept"})
+        p = subprocess.run(
+            [str(SAY), pane, text],
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            check=False,
+        )
+        said = (p.stderr or p.stdout).strip().splitlines()
+        why = f"herdr-say {pane} exit {p.returncode} ({said[-1][:300] if said else 'no output'})"
+        if p.returncode == 0:
+            del self.facts[unknown]
+            self.done(step, made, **{sent: at})
+            return
+        if p.returncode in REJECTED:
+            del self.facts[unknown]
+            self.done(step, made)
+            msg = f"step {step} ({made}): {why}: not delivered; rerun once the cause is fixed"
+            raise self.err(msg)
+        self.done(step, made, **{unknown: why})
+        msg = f"step {step} ({made}): {why}: delivery unknown, not sent again blind: {look}"
+        raise self.err(msg)
 
 
 def stopped(lane: Lane, ask: Ask, lanes: Path, err: type[Exception]) -> Kept:
@@ -456,9 +523,8 @@ def start(args: list[str], lanes: Path, err: type[Exception]) -> str:
     made += f", record {record}"
 
     goal = GOAL.format(outcome=ask.outcome, key=lane.key)
-    if "goal_sent" not in facts:
-        run(err, f"goal ({made})", [str(SAY), pane, goal])
-        kept.done("goal", f"{made}, goal sent", goal_sent=at)
+    kept.seen(ask.seen)
+    kept.send("goal", pane, goal, ask.seen.get("goal"), made)
     header = (
         f"Lane facts (octo-feather-lane start):\nLane key: {lane.key}\n"
         f"Parent issue: {lane.issue.key} {lane.issue.title} ({lane.issue.url})\n"
@@ -466,9 +532,7 @@ def start(args: list[str], lanes: Path, err: type[Exception]) -> str:
         f"Branch: {lane.key}\nMain commit: {main}\n\n"
     )
     made += ", goal sent"
-    if "brief_sent" not in facts:
-        run(err, f"brief ({made})", [str(SAY), pane, header + ask.brief])
-        kept.done("brief", f"{made}, brief sent", brief_sent=at)
+    kept.send("brief", pane, header + ask.brief, ask.seen.get("brief"), made)
 
     log = lanes.parent / DIRECTOR_LOG
     note = f"lane start: {lane.key} supervisor {pane}, worktree {wt} on {lane.key}"

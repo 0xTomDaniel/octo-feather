@@ -562,6 +562,8 @@ agents: not read: <why>`. post-merge step 5 prints the same report.
 
   octo-feather-lane start TICKET|--new TITLE --body-file FILE --goal TITLE --outcome TEXT --brief-file FILE
                                    the director's lane start, one command, in its checkout of a target
+  octo-feather-lane start ... [--shown goal|brief] [--absent goal|brief]
+                                   its rerun after an unknown send, naming what the supervisor's pane shows
   octo-feather-lane start -h|--help this entry alone, nothing read or made
 
 `start` (spec issue-lifecycle #acceptance-lane-start) first fetches the kit install's origin (the kit dir this command
@@ -584,12 +586,18 @@ repository, issue, goal TITLE, started_at, waiting_on ""); sends the supervisor 
 delivered through implement-spec; done when ...`, then the brief: a header (lane key, parent issue, director pane,
 worktree, branch, main commit), then FILE's text; appends one director log line (comms spec
 #handoff-director-prod: issue, note); prints `key=<key> pane=<pane> issue=<TICKET>` (with --new, the filed key). Each step that fails stops it,
-exit 1, naming the step and what it made so far; a failed herdr-say is never retried. A stopped start keeps
+exit 1, naming the step and what it made so far; a failed herdr-say is never retried within a run. A stopped start keeps
 lanes/<key>.start.json beside the record (its ticket, title, outcome and brief's sha256, then each done step's fact:
-main commit, supervisor pane, name and workspace, started_at, goal_sent, brief_sent); the same start run again
+main commit, supervisor pane, name and workspace, started_at, goal_sent, brief_sent, and goal_unknown or
+brief_unknown: a send begun, or one herdr-say ended neither delivered nor rejected); the same start run again
 (spec #acceptance-lane-start-rerun) continues from the step that stopped, skipping each done one, so the lane gets one
 worktree, one supervisor, one record, the goal and the brief once each and one director log line; a rerun with
-another title, outcome or brief is refused naming that file. Once the start finishes the file is gone, and a rerun
+another title, outcome or brief is refused naming that file. A send herdr-say rejected (exit 64, 69, 75 or 77: nothing
+typed) is sent on the rerun. A send left unknown (any other failure, a timeout 124 or a stall among them; comms spec
+#delivery-unknown) is never sent again blind: the rerun refuses, exit 1, naming the step, the supervisor's pane and
+what to look at there; look, then rerun the same start with --shown STEP when the pane shows the message (counted
+sent), or --absent STEP when it does not and the pane is not compacting (sent once more). Naming either for a step
+with no unknown send is refused. Once the start finishes the file is gone, and a rerun
 is refused as any existing lane.
 
 One subcommand per function, listed in COMMANDS; add a subcommand there.

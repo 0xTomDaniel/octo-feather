@@ -45,12 +45,15 @@ seconds after the call (a slow Herdr); a file `get-answer`, a JSON object, makes
 answer that text on stdout, exit 0 (a Herdr answer of a shape the kit must not trust).
 `agent wait T --until S... --timeout MS` returns once T reads a state S, else `timeout`: at once
 when T has booted, as its state then never changes. `agent prompt T TEXT --wait [--until S...]
-[--timeout MS]`: a file `prompt-down` fails it plain once (`herdr: server not reachable`,
-exit 1, nothing sent; the file removed); blocked is `agent_blocked`, nothing sent; an agent not
-yet taking input gets TEXT typed, unsent (a line in `typed`), `agent_prompt_stalled`; any other
-gets it submitted (a line "PANE<TAB>TEXT" in `prompts`): an idle one turns working, then idle,
-so the wait matches; a working one (busy, as #619 saw it) never matches, so the wait ends only
-at --timeout (`timeout`), else never.
+[--timeout MS]`: blocked is `agent_blocked`, nothing sent; an agent not yet taking input gets
+TEXT typed, unsent (a line in `typed`), `agent_prompt_stalled`; any other gets it submitted (a line
+"PANE<TAB>TEXT" in `prompts`): an idle one turns working, then idle, so the wait matches; a
+working one (busy, as #619 saw it) never matches, so the wait ends only at --timeout
+(`timeout`), else never.
+Induced once each, the file then removed: a file `prompt-down` refuses the next prompt as Herdr
+refuses a blocked agent (`agent_blocked`, nothing sent); a file `prompt-timeout` has the next
+prompt to a found agent submitted (a line in `prompts`) and its wait end at once in `timeout`, as
+a target Herdr never saw start a turn.
 An agent holding `compacting_until` (an epoch time) is a Pi compacting until then: a prompt to it
 is queued, not submitted (a line in `queued`), Herdr seeing no turn start (`agent_prompt_stalled`),
 and `agent read` shows Pi's compaction line and each queued text as Pi does (`Steering: TEXT`);
@@ -347,15 +350,12 @@ class World:
         watch = self.dir / "prompt-watch"
         if watch.exists():
             self.note("watched", "yes" if Path(watch.read_text().strip()).exists() else "no")
-        down = self.dir / "prompt-down"
-        if down.exists():
-            down.unlink()
-            sys.stderr.write("herdr: server not reachable\n")
-            return 1
         g = self.find(a[2])
-        s = self.status(g) if g else ""
-        if g is None or s == "blocked":
-            return fail("agent_blocked" if g else "agent_not_found")
+        if g is None:
+            return fail("agent_not_found")
+        s = self.status(g)
+        if s == "blocked":
+            return fail("agent_blocked")
         if self.compacting(g):
             self.note("queued", f"{g['pane_id']}\t{a[3]}")
             return fail("agent_prompt_stalled")
@@ -368,6 +368,18 @@ class World:
             time.sleep(int(ms[0]) / 1000 if ms else 3600)
             return fail("timeout")
         return say({"agent_status": "idle"})
+
+    def prompt_induced(self, a: list[str]) -> int:
+        """`agent prompt` failing as a scenario induced (module docstring), else agent_prompt."""
+        down, late = self.dir / "prompt-down", self.dir / "prompt-timeout"
+        if down.exists():
+            down.unlink()
+            return fail("agent_blocked")
+        if late.exists() and (g := self.find(a[2])):
+            late.unlink()
+            self.note("prompts", f"{g['pane_id']}\t{a[3]}")
+            return fail("timeout")
+        return self.agent_prompt(a)
 
     def agent_list(self) -> int:
         told = self.dir / "list-answer"
@@ -411,7 +423,7 @@ class World:
             ("agent", "start"): self.agent_start,
             ("agent", "get"): self.agent_get,
             ("agent", "wait"): self.agent_wait,
-            ("agent", "prompt"): self.agent_prompt,
+            ("agent", "prompt"): self.prompt_induced,
             ("agent", "read"): self.agent_read,
             ("integration", "install"): self.integration_install,
         }

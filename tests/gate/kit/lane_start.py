@@ -52,11 +52,18 @@ Seams (ticket #1157, recorded before any test): issue-lifecycle#acceptance-lane-
            a branch gh905 alone, and a Herdr workspace labelled gh905, there before a start: it
            exits 1 naming that one, leaves it as it was and starts no supervisor (no workspace,
            tab or agent started, no prompt, no record, no worktree it did not find).
-  rerun    the stand-in failing the goal's delivery once (its file prompt-down): the first run
-           exits 1 naming step goal; the same start run again prints the first run's pane, and
+  rerun    the stand-in refusing the goal's delivery once (its file prompt-down: Herdr's
+           agent_blocked, nothing typed): the first run exits 1 naming step goal and that it was
+           not delivered; the same start run again prints the first run's pane, and
            the lane has one worktree, one supervisor gh905 (one workspace create), one record,
            the goal then the brief once each, one spawn line and one prod line in the director
            log, and nothing kept of the start; a third run exits 1 naming the record.
+  unknown_send  the stand-in timing out the goal's send once (its file prompt-timeout: the goal
+           submitted, Herdr never seeing a turn; herdr-say exit 124): the first run exits 1
+           naming step goal, delivery unknown and --shown/--absent; the same start again exits 1
+           naming the unknown send, the supervisor's pane and what to look at, and sends nothing
+           (the goal once in the pane); `--absent brief` is refused, no brief send being unknown;
+           with `--shown goal` the start finishes: the goal and the brief once each.
 
 Seam (ticket #1159, recorded before any test): `octo-feather-lane start`, as above.
 
@@ -396,7 +403,8 @@ def rerun(s: Scratch) -> None:
     (d / "prompt-down").write_text("")
     err = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1).err
     assert "step goal (made so far: " in err, err
-    assert "herdr: server not reachable" in err, err
+    assert " exit 75 (" in err, err
+    assert "not delivered; rerun once the cause is fixed" in err, err
     assert not (d / "prompts").exists()
     show(f"first run: exit 1, {err}")
 
@@ -446,6 +454,53 @@ def rerun(s: Scratch) -> None:
     assert f"lane gh905 exists: lane record {lanes / 'gh905.toml'}, " in err, err
     assert (d / "prompts").read_text() == got
     show(f"third run: exit 1, {err}")
+
+
+def unknown_send(s: Scratch) -> None:
+    d, checkout, main_ = world(s)
+    brief = s.root / "brief.md"
+    brief.write_text(BRIEF)
+    cmd = [kit("octo-feather-lane"), "start", "905", "--goal", TITLE, "--outcome", OUTCOME]
+    cmd += ["--brief-file", str(brief)]
+    wt = checkout.with_name("target-gh905")
+    goal = (
+        f"/goal {OUTCOME} for gh905, delivered through implement-spec; done when an owner gate"
+        " is pending (review link or merge ask sent) or PR merged and lane torn down"
+    )
+
+    (d / "prompt-timeout").write_text("")
+    err = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1).err
+    agents = json.loads((d / "agents.json").read_text())
+    pane = next(p for p, g in agents.items() if g["name"] == "gh905")
+    assert f"step goal (made so far: worktree {wt}" in err, err
+    assert f"herdr-say {pane} exit 124 (" in err, err
+    assert "delivery unknown, not sent again blind" in err, err
+    assert (d / "prompts").read_text() == f"{pane}\t{goal}\n"
+    show(f"first run, the goal's send timed out: exit 1, {err}")
+
+    err = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1).err
+    assert f"step goal: the goal send to {pane} is unknown (herdr-say {pane} exit 124" in err, err
+    assert "not sent again blind (comms spec #delivery-unknown)" in err, err
+    assert f"look at supervisor pane {pane} (herdr pane read {pane})" in err, err
+    assert "rerun this start with --shown goal" in err, err
+    assert "with --absent goal (sent once more)" in err, err
+    assert (d / "prompts").read_text() == f"{pane}\t{goal}\n"
+    show(f"second run, not sent again: exit 1, {err}")
+
+    err = s.run([*cmd, "--absent", "brief"], cwd=checkout, env=DIRECTOR, want=1).err
+    assert "--absent brief, but no unknown send of it is kept" in err, err
+    assert (d / "prompts").read_text() == f"{pane}\t{goal}\n"
+
+    out = s.run([*cmd, "--shown", "goal"], cwd=checkout, env=DIRECTOR).out
+    assert out == f"key=gh905 pane={pane} issue=905", out
+    head = (
+        "Lane facts (octo-feather-lane start):\nLane key: gh905\n"
+        f"Parent issue: 905 {TITLE} (https://github.com/o/r/issues/905)\n"
+        f"Director pane: w0:p1\nWorktree: {wt}\nBranch: gh905\nMain commit: {main_}\n\n"
+    )
+    got = (d / "prompts").read_text()
+    assert got == f"{pane}\t{goal}\n{pane}\t{head}{BRIEF}\n", got
+    show(f"--shown goal: {out}; {pane} holds the goal, then the brief, once each")
 
 
 def behind_kit(s: Scratch) -> None:
@@ -509,6 +564,7 @@ if __name__ == "__main__":
         filed_stopped,
         sub_issue,
         exists,
+        unknown_send,
         rerun,
         behind_kit,
         help_,
