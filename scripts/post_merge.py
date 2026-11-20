@@ -1031,6 +1031,51 @@ def _live(pane: str) -> bool:
     raise Refused(msg)
 
 
+@dataclass(frozen=True)
+class Seen:
+    """One live agent as `herdr agent list` names it: its pane, space, tab and working
+    directories (AgentInfo cwd and foreground_cwd, each when Herdr gives one)."""
+
+    pane: str
+    space: str
+    tab: str
+    cwds: tuple[str, ...]
+
+
+def _agents() -> list[Seen] | str:
+    """Every agent Herdr runs (`herdr agent list`, Herdr 0.9.5 AgentInfo: pane_id, workspace_id,
+    tab_id strings, cwd and foreground_cwd a string or null), or why it was not read."""
+    where = "herdr agent list"
+    try:
+        p = subprocess.run(
+            ["herdr", "agent", "list"],  # noqa: S607 (herdr from PATH)
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            check=False,
+        )
+    except FileNotFoundError:
+        return f"{where} failed (herdr not on PATH)"
+    if p.returncode:
+        out = _last(p)
+        return f"{where} failed ({out[-1][:200] if out else f'exit {p.returncode}'})"
+    try:
+        got: object = cast("dict[str, dict[str, object]]", json.loads(p.stdout))["result"]["agents"]
+        seen: list[Seen] = []
+        for v in cast("list[dict[str, object]]", got):
+            ids = [v[k] for k in ("pane_id", "workspace_id", "tab_id")]
+            cwds = [v.get(k) for k in ("cwd", "foreground_cwd")]
+            if not all(isinstance(x, str) for x in ids) or not all(
+                x is None or isinstance(x, str) for x in cwds
+            ):
+                return f"{where} printed an agent of another shape ({str(v)[:200]})"
+            pane, space, tab = cast("list[str]", ids)
+            seen.append(Seen(pane, space, tab, tuple(x for x in cwds if isinstance(x, str) and x)))
+    except (ValueError, TypeError, KeyError, AttributeError) as e:
+        return f"{where} printed no agent list ({p.stdout[:100]!r}, {type(e).__name__})"
+    return seen
+
+
 # One send's bound (#619, #666; owner load rule: every run bounded): herdr-say --timeout, Herdr's
 # own wait bound; a herdr-say still running TELL_GRACE seconds past it is killed with its group.
 TELL_BOUND = 20
@@ -1292,7 +1337,8 @@ def _tell(pm: PostMerge) -> str:  # noqa: C901, PLR0912, PLR0915 (the step's one
     """Step 6: tell each live supervisor of the PR's repo (every lane on a kit PR), but --lane's,
     that main moved and which rule files changed; one prod line per lane told in the director
     log, which a rerun reads to skip it. A pane Herdr does not find is listed, never sent to (why:
-    herdr-comms SKILL.md, herdr-say)."""
+    herdr-comms SKILL.md, herdr-say); nor is the merging lane's own supervisor pane, which runs
+    this routine."""
     lanes = pm.lanes
     recs = [p for p in sorted(lanes.glob("*.toml")) if p.stem != pm.lane]
     if not recs:
@@ -1313,6 +1359,13 @@ def _tell(pm: PostMerge) -> str:  # noqa: C901, PLR0912, PLR0915 (the step's one
         msg = f"cannot read the director log {dlog} ({e}): fix it, then rerun"
         raise Refused(msg) from e
     mark = f"post-merge {pm.merge} #{pm.pr}: "
+    # The merging lane's supervisor runs this routine (merge, archive): never sent to, as a send to
+    # its own busy pane would time out; its record open, or archived by now.
+    merging: object = None
+    for p in (lanes / f"{pm.lane}.toml", lanes / "archive" / f"{pm.lane}.toml"):
+        with contextlib.suppress(OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+            merging = tomllib.loads(p.read_text(encoding="utf-8")).get("supervisor")
+            break
     told: list[str] = []
     already: list[str] = []
     parked: list[str] = []
@@ -1348,7 +1401,28 @@ def _tell(pm: PostMerge) -> str:  # noqa: C901, PLR0912, PLR0915 (the step's one
         f"main moved to {pm.merge[:12]} (#{pm.pr} {d['title']}); rule files changed: {listed}; "
         "re-read the changed ones before your next step."
     )
+
+    def prod(name: str, sup: str, issue: object) -> bool:
+        """The lane's prod line in the director log, which a rerun reads to skip it."""
+        line: dict[str, object] = {
+            "at": dt.datetime.now(dt.timezone.utc).isoformat(),
+            "kind": "prod",
+            "issue": issue,
+            "note": f"{mark}main moved, told {name} to re-read {listed}",
+        }
+        try:
+            with dlog.open("a", encoding="utf-8") as f:
+                f.write(encode(line) + "\n")
+        except OSError as e:
+            failed.append(f"{name} {sup} told, but its prod line not written to {dlog} ({e})")
+            return False
+        return True
+
     for name, sup, issue in due:
+        if sup == merging:
+            if prod(name, sup, issue):
+                told.append(f"{name} {sup} (the merging supervisor)")
+            continue
         try:
             live = _live(sup)
         except Refused as e:
@@ -1402,20 +1476,8 @@ def _tell(pm: PostMerge) -> str:  # noqa: C901, PLR0912, PLR0915 (the step's one
                 + f"; {again}"
             )
             continue
-        at = dt.datetime.now(dt.timezone.utc).isoformat()
-        line: dict[str, object] = {
-            "at": at,
-            "kind": "prod",
-            "issue": issue,
-            "note": f"{mark}main moved, told {name} to re-read {listed}",
-        }
-        try:
-            with dlog.open("a", encoding="utf-8") as f:
-                f.write(encode(line) + "\n")
-        except OSError as e:
-            failed.append(f"{name} {sup} told, but its prod line not written to {dlog} ({e})")
-            continue
-        told.append(f"{name} {sup}")
+        if prod(name, sup, issue):
+            told.append(f"{name} {sup}")
     who = (
         f"merge {pm.merge[:12]} of {repo}, rule files: {listed}; NOT told: "
         f"{', '.join(pm.not_told) or 'none'}; told: {', '.join(told) or 'none'}; already told: "
@@ -1532,10 +1594,34 @@ def _mise_prune(path: str) -> int:
     return n
 
 
+def _users(path: str, seen: list[Seen] | str, gone: tuple[str, str] | None) -> str | None:
+    """The line keeping worktree PATH (comms #transport-close-space): a live agent outside GONE
+    (the space or tab the teardown closed, None when it closed none) works in it or under it, by
+    Herdr's agent cwds (SEEN); Herdr not read (SEEN is why), it is kept, never removed blind. None
+    when no such agent works in it."""
+    if isinstance(seen, str):
+        return f"kept: worktree {path}: who works in it unknown ({seen})"
+    roots = {os.path.normpath(path), os.path.realpath(path)}
+    panes = [
+        a.pane
+        for a in seen
+        if not (gone and (a.space if gone[0] == "space" else a.tab) == gone[1])
+        and any(
+            os.path.normpath(c) == r or os.path.normpath(c).startswith(r.rstrip("/") + "/")
+            for c in a.cwds
+            for r in roots
+        )
+    ]
+    if not panes:
+        return None
+    return f"kept: worktree {path}: {', '.join(panes)} work{'s' * (len(panes) == 1)} in it"
+
+
 def _teardown(pm: PostMerge) -> str:  # noqa: C901, PLR0912, PLR0915 (the step's one pass, in order)
     """Step 7: once the lane's record is archived for this PR (its archive starts this step),
     close its own space (or only its supervisor tab in a shared one; neither while another open
-    lane or the director names that pane), remove its worktree, retarget PRs based on its
+    lane or the director names that pane), remove its worktree (kept, its local branch with it,
+    while a live agent outside what was closed works in it: _users), retarget PRs based on its
     branch, delete the branch locally (merged only) and on origin. Any refusal stops the step,
     what ran before named."""
     lanes = pm.lanes
@@ -1582,15 +1668,22 @@ def _teardown(pm: PostMerge) -> str:  # noqa: C901, PLR0912, PLR0915 (the step's
     branch = tracker("lane-key", str(rec.get("issue")), err=Refused).strip()
     if at := _worktree_of(branch):  # the live-run rule (--help, step 7)
         _wait_runs(pm, Path(at[1]), "teardown", "nothing closed or removed", program=False)
+    seen = _agents()  # read before the close changes it
+    tab = next((a.tab for a in seen if a.pane == sup), None) if isinstance(seen, list) else None
     done: list[str] = []
     try:
         if holders or director:
             why = [f"still supervises {', '.join(holders)}"] * bool(holders)
             why += ["is the director"] * director
-            done.append(f"kept: supervisor {sup} {' and '.join(why)}")
+            unknown = seen if isinstance(seen, str) else "Herdr finds no such agent"
+            known = f"tab {tab}" if tab else f"tab unknown: {unknown}"
+            done.append(f"kept: supervisor {sup} ({known}) {' and '.join(why)}")
+            gone: tuple[str, str] | None = None
         else:
             done.append(_close(sup if shared else space, space, shared=shared))
-        done.append(_worktree(branch))
+            gone = ("tab", tab or "") if shared else ("space", space)
+        users = _users(at[1], seen, gone) if at else None
+        done.append(users or _worktree(branch))
         out = _gh(
             ["pr", "list", "--base", branch, "--state", "open", "--json", "number", *pm.r()],
             "check gh auth status, then rerun",
@@ -1614,7 +1707,9 @@ def _teardown(pm: PostMerge) -> str:  # noqa: C901, PLR0912, PLR0915 (the step's
             done.append(f"PR #{n} retargeted from {branch} to {pm.base}")
         if not based:
             done.append(f"no open PR based on {branch}")
-        if git_here("rev-parse", "-q", "--verify", f"refs/heads/{branch}").returncode:
+        if users and at:
+            done.append(f"kept: local branch {branch}: checked out in kept worktree {at[1]}")
+        elif git_here("rev-parse", "-q", "--verify", f"refs/heads/{branch}").returncode:
             done.append(f"local branch {branch} already deleted")
         else:
             if git_here("cat-file", "-e", f"{pm.merge}^{{commit}}").returncode:
@@ -1700,7 +1795,7 @@ def post_merge(pm: PostMerge, show: Callable[[str], None]) -> Ran:
     if all(o.endswith(" ok") for o in outcomes):
         unsent = _tell_end(pm.lanes, rec, show)
     else:
-        unsent = _tell_stop(pm.lanes, rec, stop, show, pm.repo) if stop else 0
+        unsent = _tell_stop(pm.lanes, rec, stop, show, repo=pm.repo, wait=pm.wait) if stop else 0
     show(f"post-merge {pm.lane} PR #{pm.pr}: {'; '.join(outcomes)}{told}")
     if unsent:
         return Ran(rec, 1)
@@ -1809,30 +1904,42 @@ def unit_end(  # noqa: PLR0913 (the unit's end and the run's --repo)
         else None
     )
     if stop:  # the routine told it (_tell_stop): told again here only when that send failed
-        return _tell_stop(lanes, rec, stop, show, repo)
+        return _tell_stop(lanes, rec, stop, show, repo=repo, wait=None)
     why = f"teardown unit {unit} ended {result} ({status}) before its routine finished"
     msg = (
-        f"post-merge {lane} PR #{rec.pr} stopped: {why}; fix it, then rerun `{_rerun(rec, repo)}` "
+        f"post-merge {lane} PR #{rec.pr} stopped: {why}; fix it, then rerun "
+        f"`{_rerun(rec, repo, None)}` "
         f"(the unit's lines: {records(lanes) / (lane + '.teardown.log')})"
     )
     return tell_director(lanes, lane, why, msg, show)
 
 
-def _rerun(rec: Record, repo: str | None) -> str:
-    """The command that reruns REC's routine, keeping the run's --repo REPO."""
+WAIT = 300  # post-merge's --wait when none is given (octo-feather-lane --help, post-merge)
+
+
+def _rerun(rec: Record, repo: str | None, wait: int | None) -> str:
+    """The command that reruns REC's routine, keeping the run's --repo REPO and its --wait WAIT
+    (None: not known, as at the teardown unit's end; the default named by none)."""
     cmd = ["octo-feather-lane", "post-merge", str(rec.pr), rec.head, "--lane", rec.lane]
-    return shlex.join([*cmd, *(["--repo", repo] if repo else [])])
+    keep = ["--wait", str(wait)] if wait is not None and wait != WAIT else []
+    return shlex.join([*cmd, *(["--repo", repo] if repo else []), *keep])
 
 
-def _tell_stop(
-    lanes: Path, rec: Record, stop: Step, show: Callable[[str], None], repo: str | None
+def _tell_stop(  # noqa: PLR0913 (the stop and the run's --repo and --wait)
+    lanes: Path,
+    rec: Record,
+    stop: Step,
+    show: Callable[[str], None],
+    *,
+    repo: str | None,
+    wait: int | None,
 ) -> int:
     """A stopped step of the routine told the director once: a rerun stopping with the same line
-    sends nothing. The rerun named keeps the run's --repo REPO."""
+    sends nothing. The rerun named keeps the run's --repo REPO and --wait WAIT (_rerun)."""
     why = f"step {stop.number} {stop.name} stopped: {stop.line}"
     msg = (
         f"post-merge {rec.lane} PR #{rec.pr} stopped: {why}; fix it, then rerun "
-        f"`{_rerun(rec, repo)}`"
+        f"`{_rerun(rec, repo, wait)}`"
     )
     return tell_director(lanes, rec.lane, why, msg, show)
 

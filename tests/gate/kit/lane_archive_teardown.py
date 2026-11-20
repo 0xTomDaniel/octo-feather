@@ -240,31 +240,46 @@ def archive_tears_down(s: Scratch) -> None:
 
 def shared_supervisor_kept(s: Scratch) -> None:
     """comms#acceptance-shared-supervisor-kept (#892): lanes gh7 and gh8 open, both records naming
-    supervisor zt1:p1. gh7 merges, then its supervisor archives it: the teardown unit closes no
-    space or tab (zt1:p1's tab stays open), gh8's record is byte for byte unchanged, and the
-    director's one message names the tab kept and gh8, the lane holding it; gh7's worktree,
-    branch gh70 and PR #9 handled as when not shared."""
+    supervisor zt1:p1, which works in gh7's worktree (Herdr's agent cwd). gh7 merges: step 6
+    sends nothing to zt1:p1, the merging supervisor (mid-turn, a send to it would time out),
+    listing gh8 told as its lane. Then its supervisor archives it: the teardown unit closes no
+    space or tab (zt1:p1's tab stays open), keeps gh7's worktree and its branch gh70 (zt1:p1
+    works in it), gh8's record is byte for byte unchanged, and the director's one message names
+    the tab kept with gh8, the lane holding it, and the worktree kept with that pane, among what
+    is left on disk on purpose; PR #9 retargeted as when not shared."""
     t = Lane(s)
     t.w.record("gh8", "zt1:p1", 80, None)
+    world = json.loads((t.w.herdr / "agents.json").read_text())
+    world["zt1:p1"]["cwd"] = str(t.wt)
+    (t.w.herdr / "agents.json").write_text(json.dumps(world))
     gh8 = t.w.lanes / "gh8.toml"
     before = gh8.read_bytes()
-    t.merged()
+    r = t.run(0, "merge", "7", H, "--repo", "o/r", cwd="t")
+    s6 = next(x for x in r.out.split("\n") if x.startswith("step 6 tell supervisors: "))
+    assert "; told: gh8 zt1:p1 (the merging supervisor); " in s6, s6
+    sent = [x for x in lines(t.w.herdr / "prompts") if x.startswith("zt1:p1\t")]
+    assert not sent, f"sent to the merging supervisor: {sent}"
     t.run(0, "archive", "gh7")
     t.ended()
     closes = [x for x in t.herdr_log() if x.startswith(("workspace close", "tab close"))]
     assert not closes, f"closed: {closes}"
     assert gh8.read_bytes() == before, "gh8's record changed"
-    assert not t.wt.exists(), "worktree kept"
-    assert not t.branch("origin"), "branch gh70 kept on origin"
+    assert t.wt.is_dir(), "worktree removed under its kept supervisor"
+    assert t.branch("local"), "branch gh70 deleted under its kept worktree"
     said = t.said()
     sys.stdout.write("# the director's messages\n" + "\n".join(said) + "\n")
     assert len(said) == 1, f"director got {len(said)} messages: {said}"
-    teardown = (
-        f"teardown: kept: supervisor zt1:p1 still supervises gh8; worktree {t.wt} removed (0 mise "
-        "config links into it pruned); PR #9 retargeted from gh70 to main; local branch gh70 "
-        "deleted; remote branch gh70 deleted from origin"
+    kept = (
+        f"kept: supervisor zt1:p1 (tab zt1:t1) still supervises gh8; kept: worktree {t.wt}: "
+        f"zt1:p1 works in it; kept: local branch gh70: checked out in kept worktree {t.wt}"
     )
-    assert said[0].split(" | ")[-1] == teardown, f"message: {said[0]}"
+    teardown = (
+        f"kept: supervisor zt1:p1 (tab zt1:t1) still supervises gh8; kept: worktree {t.wt}: "
+        "zt1:p1 works in it; PR #9 retargeted from gh70 to main; kept: local branch gh70: "
+        f"checked out in kept worktree {t.wt}; remote branch gh70 deleted from origin"
+    )
+    items = said[0].split(" | ")
+    assert items[-2:] == [f"left on disk on purpose: {kept}", f"teardown: {teardown}"], said[0]
 
 
 def no_manager(s: Scratch) -> None:
