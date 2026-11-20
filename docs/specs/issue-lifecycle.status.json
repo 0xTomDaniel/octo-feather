@@ -10,6 +10,22 @@
       "status": "planned",
       "pr": null
     },
+    "acceptance-revision-preserve": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-revision-remove": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-revision-repeat": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-revision-invalid": {
+      "status": "planned",
+      "pr": null
+    },
     "acceptance-chat-not-acceptance": {
       "status": "planned",
       "pr": null
