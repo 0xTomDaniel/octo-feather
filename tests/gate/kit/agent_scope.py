@@ -258,7 +258,7 @@ def foreign(s: Scratch) -> subprocess.Popen[bytes]:
 
 def park(s: Scratch, want: int = 0) -> tuple[str, str]:
     """`herdr-close --park w1:p1` from its supervisor w1:p9, lane gh1's in S's state: the parked
-    line it appended to the lane log ('' for none; stdout carries none), and stderr."""
+    line it appended to the lane log ('' for none), and stderr."""
     lanes = s.home / ".local" / "state" / "octo-feather" / "lanes"
     lanes.mkdir(parents=True, exist_ok=True)
     (lanes / "gh1.toml").write_text('issue = "1"\nsupervisor = "w1:p9"\n')

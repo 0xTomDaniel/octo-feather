@@ -20,8 +20,8 @@ session from its Pi process, as park reads them); once Herdr's close succeeded, 
 (the rule: herdr-comms SKILL.md, Close an agent or a lane space).
 
 park PANE (herdr-close --park): close's report on stderr, nothing on stdout, and exits close's
-status; once that close succeeded, it hands the parked line to `octo-feather-handoff park
---caller HERDR_PANE_ID` (which log takes it: its --help), and names on stderr, with the line, a
+status; it hands the parked line to `octo-feather-handoff park --caller HERDR_PANE_ID` (when:
+comms spec #roles-park; which log takes it: its --help), and names on stderr, with the line, a
 park no log takes; what it reads and its refusals: herdr-comms SKILL.md, Park an idle agent.
 
 Herdr's answers are checked here by hand against the shape Herdr 0.9.5 states for them

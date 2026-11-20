@@ -61,7 +61,7 @@ change. Its only state writes, outside the repository: at its own launch, write
 `$(octo-feather-state)/director.toml` with one key, `pane`,
 its own Herdr pane id. Beside it, it is sole writer of `director.handoffs.jsonl`:
 on each prod (waking or redirecting a supervisor), note to the owner worth keeping, and finding (spec `#handoff-director-finding`), append one JSON line per
-spec `#handoff-operator` (`docs/specs/comms.spec.html`). A supervisor's park records its own parked line (`herdr-close --park`; which log: `octo-feather-handoff --help`, park).
+spec `#handoff-operator` (`docs/specs/comms.spec.html`). A supervisor's parked line: spec `#roles-park`; `octo-feather-handoff --help`, park.
 After spawning a supervisor, create its lane record from the spawn output, exactly like this. Never move
 a lane pane to another space; Herdr rewrites its ids.
 

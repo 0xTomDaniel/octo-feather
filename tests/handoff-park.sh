@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
-# Park's public contract (its parked line appended to the parker's lane log, stdout empty, the
-# close report on stderr), isolated Herdr, state and process session, no Pi; systemd the
-# testkit stand-in, first on PATH: a run inside an agent's scope never reaches the real manager,
-# and parking this unowned pane asks no stop (#1070).
+# Park's public contract (herdr_scope.py park; its parked line: comms spec #roles-park),
+# isolated Herdr, state and process session, no Pi; systemd the testkit stand-in, first on
+# PATH: a run inside an agent's scope never reaches the real manager, and parking this unowned pane asks no stop (#1070).
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 [[ -d /proc/self ]] || exit 0
