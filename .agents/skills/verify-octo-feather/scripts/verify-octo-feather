@@ -1642,7 +1642,7 @@ def drive_qc_eval_verdict(f: Feature) -> None:
         f.run(name, *qc)
         # the demo's output, as the qc report keeps it (octo-feather-qc --help, Report)
         rep = sorted((sc / "state" / "octo-feather" / "qc").glob(f"{judged}-*.json"))
-        res = [x for x in json.loads(rep[-1].read_text())["results"] if x["id"] == "acceptance-a"] if rep else []
+        res = [x for x in json.loads(rep[-1].read_text()).get("results", []) if x["id"] == "acceptance-a"] if rep else []
         f.obs(name, "demo", f"{res[0].get('output', '') if res else 'no qc report'}\n")
     f.check("fresh", lambda c: c.code == 0 and re.search(r"(?m)^PASS acceptance-a", c.out) and re.search(fresh, c.o["demo"])
             and re.search(bound, c.err))
