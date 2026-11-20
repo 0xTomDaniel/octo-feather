@@ -3387,7 +3387,8 @@ def pm_unit_start(name: str, pr: int, head: str, repo: str | None) -> int:
         why = f"{type(e).__name__}: {e}"
     if why:
         print(f"teardown: unit {unit} not started ({why})", flush=True)
-        return post_merge.unit_end(lanes_dir(), name, "start failed", why, show_line, repo=repo)
+        post_merge.unit_end(lanes_dir(), name, "start failed", why, show_line, repo=repo)
+        return 1   # no teardown runs, whether or not the director was told
     print(f"teardown: started unit {unit} ({how}, cwd {top}, limit {PM_UNIT_LIMIT}s, its lines in {log}); "
           "the director gets one message when it ends", flush=True)
     return 0

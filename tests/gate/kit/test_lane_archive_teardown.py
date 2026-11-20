@@ -12,6 +12,7 @@ from lane_archive_teardown import (
     red_main,
     unit_fails,
     unit_killed,
+    unit_start_fails,
     watch_gh_gone,
 )
 
@@ -54,3 +55,7 @@ def test_lane_archive_teardown_unit_fails(case: Case) -> None:
 
 def test_lane_archive_teardown_unit_killed(case: Case) -> None:
     case(unit_killed)
+
+
+def test_lane_archive_teardown_unit_start_fails(case: Case) -> None:
+    case(unit_start_fails)

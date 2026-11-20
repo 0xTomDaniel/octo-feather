@@ -183,7 +183,7 @@ def torn_down(lane: Lane, how: str) -> None:
     items = (
         f"lane gh7 closed: PR #7 merged as {t.w.lane.m[:12]}; post-merge {ok}",
         "tickets done: 71, 70",
-        "left open: PR #9 based on gh70 (https://github.com/o/r/pull/9)",
+        "left open: PR #9 based on gh70 at the archive (https://github.com/o/r/pull/9)",
         "reflection findings: lane gh7: 0 findings; director: 0 findings",
         "correction lanes: none filed or commented",
         "left on disk on purpose: nothing",
@@ -415,6 +415,22 @@ def unit_killed(s: Scratch) -> None:
     unit_fails(s, "killed")
 
 
+def unit_start_fails(s: Scratch) -> None:
+    """The teardown unit cannot start (systemd-run refuses it): the archive, its files moved,
+    names it and exits 1; its end recorded as `start failed`; the director told that once."""
+    t = Lane(s)
+    t.merged()
+    r = t.run(1, "archive", "gh7", FAKE_SYSTEMD_RUN_FAILS="1")
+    assert f"archived: {t.w.lanes}/archive/gh7.toml sha256=" in r.out, r.out
+    want = f"teardown: unit {UNIT} not started (systemd-run exit 1: Failed to start transient"
+    assert want in r.out, r.out
+    said = t.said()
+    assert len(said) == 1, said
+    assert "ended start failed (systemd-run exit 1: " in said[0], said
+    assert ", ended " in t.unit(), t.unit()
+    assert ": start failed (systemd-run exit 1: " in t.unit(), t.unit()
+
+
 if __name__ == "__main__":
     main(
         archive_tears_down,
@@ -425,4 +441,5 @@ if __name__ == "__main__":
         watch_gh_gone,
         unit_fails,
         unit_killed,
+        unit_start_fails,
     )

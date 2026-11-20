@@ -1716,9 +1716,10 @@ def post_merge(pm: PostMerge, show: Callable[[str], None]) -> Ran:
 def archived(lanes: Path, name: str, rec: dict[str, object], printed: list[str]) -> None:
     """The archive's part of the director's message in lane NAME's post-merge record (--help,
     archive): the reflections' finding counts and the correction lane lines from what it
-    PRINTED, the tickets done and what is left open (sub-issues, PRs based on the lane's branch,
-    review rows rooted in its worktree) as the tracker, gh and the Spec Chat registries read them
-    now; a source it cannot read is named in its place."""
+    PRINTED, the tickets done and what is left open (sub-issues, PRs based on the lane's branch at
+    the archive, which the teardown then retargets, review rows rooted in its worktree) as the
+    tracker, gh and the Spec Chat registries read them now; a source it cannot read is named in
+    its place."""
     found = [re.match(r"reflection: (.+?), (\d+ findings?)", x) for x in printed]
     findings = tuple(f"{m.group(1)}: {m.group(2)}" for m in found if m)
     corrections = tuple(x for x in printed if x.startswith("correction lane"))
@@ -1755,7 +1756,7 @@ def archived(lanes: Path, name: str, rec: dict[str, object], printed: list[str])
             "check gh auth status",
         )
         prs = cast("list[dict[str, object]]", json.loads(out))
-        left += [f"PR #{x['number']} based on {branch} ({x['url']})" for x in prs]
+        left += [f"PR #{x['number']} based on {branch} at the archive ({x['url']})" for x in prs]
         tree = _git_ok("git worktree list failed", "worktree", "list", "--porcelain")
         wt = [
             e.split("\n", 1)[0].removeprefix("worktree ")
