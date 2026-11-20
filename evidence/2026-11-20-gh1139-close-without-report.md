@@ -102,3 +102,25 @@ requires `which gh` to be the offline gh. Fix: that fact dropped (the gh stand-i
   --parent, no herdr-close of its own space, tab or pane.
 - base 13191f3f: FAIL 0/3 (pass rate 0.00, stddev 0.00): runs 1 and 3 no `octo-feather-lane merge` (ran
   `octo-feather-lane done 12` by hand); run 2 sent `herdr-say --parent close report gh12: ...`.
+
+## Delta review round 2: herdr-comms close clause
+
+Change: .agents/skills/herdr-comms/SKILL.md, herdr-close: "the director closes a finished lane's own space, or only its
+supervisor tab when the lane started in a shared space" became a pointer, "a lane's teardown: comms spec
+`#transport-close-space`" (the post-merge routine closes it); "Run it from outside what it closes: the spawner closes a
+tab" kept. docs/adr/0007:7 drops "it runs outside the lane's workspace, since" (a restatement beside the pointer).
+
+Removed: herdr-comms' director-closes-the-lane's-space clause (post-merge step 7 does it, #1134).
+
+Smoke: .agents/skills/herdr-comms/SKILL.md (headless director, below)
+
+`scripts/pi-role agents/director.md -p "<read-only smoke: load herdr-comms; lane gh12 merged and archived; do you run
+herdr-close on its space w2 or its supervisor tab, who closes it, lines read>"`, exit 0. Reply, abridged:
+
+```
+1. Neither. I don't run herdr-close on space w2 or on its supervisor tab. The lane's post-merge routine closes it. ...
+   My part is waiting for the routine's one close message for the merge. If it reports a stop, I resolve it and
+   rerun the command it names.
+2. .agents/skills/herdr-comms/SKILL.md lines 162-164 ...; docs/specs/comms.spec.html line 258 (#transport-close-space);
+   docs/specs/issue-lifecycle.spec.html line 187; agents/director.md line 99.
+```
