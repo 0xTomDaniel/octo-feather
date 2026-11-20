@@ -1,0 +1,16 @@
+Seeded defect: mise auto-install left on in the sandbox, so a tool not installed is fetched at its shim (mise offline, auto-install off).
+diff --git a/scripts/octo-feather-qc-sandbox b/scripts/octo-feather-qc-sandbox
+index 97ef12ba..e4fed84a 100755
+--- a/scripts/octo-feather-qc-sandbox
++++ b/scripts/octo-feather-qc-sandbox
+@@ -1166,8 +1166,8 @@ def setup(judge: list[str]) -> NoReturn:
+         GIT_TERMINAL_PROMPT="0",
+         TMPDIR="/tmp",
+         MISE_OFFLINE="1",
+-        MISE_AUTO_INSTALL="0",
+-        MISE_NOT_FOUND_AUTO_INSTALL="0",
++        MISE_AUTO_INSTALL="1",
++        MISE_NOT_FOUND_AUTO_INSTALL="1",
+         MISE_NOT_FOUND_SYSTEM_FALLBACK="0",
+         **menv,
+     )
