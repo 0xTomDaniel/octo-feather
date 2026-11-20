@@ -4,13 +4,13 @@ left out, its gate-budget.toml's test_cpu_seconds 0.1, and one item, heavy.sh, w
 0.2 s of CPU, committed on main, the default branch a change is judged against. The static checks
 are cut to one with just's own override (`just --set GATE_RECIPES check-dashes`). changed: new.sh
 added, burning the same, just fast fails naming new.sh, its CPU seconds, those of its run alone
-again and the budget, and names heavy.sh, unchanged, report-only. passes: one run (`just test
-NODE...`) of the same new.sh marked e2e (`# gate: e2e`), shown as e2e and never named over the
-budget; once.sh, added, burning only its first time (a scratch file it removes), named over once
-with both CPU times; heavy.sh report-only; the run passes. One nested gate run per item, so each
-stays within the kit's own budget; the copy prepared once per gate run (Scratch.prepare, billed to
-its own line). The demo's revert (new.sh removed, just fast passes) is the passes item's unchanged
-over-budget test in a passing run."""
+again and the budget, and names heavy.sh, unchanged, report-only. passes: one just fast with the
+same new.sh marked e2e (`# gate: e2e`), skipped and never named over the budget; once.sh, added,
+burning only its first time (a scratch file it removes), named over once with both CPU times;
+heavy.sh report-only; the run passes. One nested gate run per item, so each stays within the kit's
+own budget; the copy prepared once per gate run (Scratch.prepare, billed to its own line). The
+demo's revert (new.sh removed, just fast passes) is the passes item's unchanged over-budget test in
+a passing run."""
 
 from __future__ import annotations
 
@@ -138,25 +138,21 @@ def changed(s: Scratch) -> None:
 
 
 def passes(s: Scratch) -> None:
-    """One run, passing: the new test marked e2e is never held to the budget; a changed test over
-    it once and under it alone again passes, named with both CPU times; the unchanged one over it
-    is reported only."""
+    """One just fast, passing: the new test marked e2e is never held to the budget (the fast tier
+    skips it, named so); a changed test over it once and under it alone again passes, named with
+    both CPU times; the unchanged one over it is reported only."""
     k = kit_copy(s)
     script(k, "new", "# gate: e2e\n")
     script(k, "once", once=True)
     (s.root / "once").touch()
-    out = gate(
-        s, k, "test", item("new"), item("once"), item("heavy"), want=0, once=s.root / "once"
-    ).out
-    assert re.search(
-        rf"^ *[0-9.]+s cpu +[0-9.]+s wall +{re.escape(item('new'))}  \(e2e\)$", out, re.MULTILINE
-    ), out
-    assert f"OVER CPU BUDGET: {item('new')}" not in out, out
+    out = gate(s, k, "fast", want=0, once=s.root / "once").out
+    assert "fast: tests/new.sh: e2e (# gate: e2e): skipped" in out, out
+    assert item("new") not in out, out
     _, again = over(out, "once", "changed, over once: passes")
     assert again is not None, out
     assert again < 0.1, out
     over(out, "heavy", "report-only")
-    assert f"{LINE} 2 over, 1 changed over once, passes" in out, out
+    assert f"{LINE} 3 over, 1 changed over once, passes" in out, out
 
 
 if __name__ == "__main__":
