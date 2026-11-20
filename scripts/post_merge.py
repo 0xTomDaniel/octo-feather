@@ -16,18 +16,33 @@ Interface:
         record's is a prefix of) keeps its leading ok steps, not run again, and sets PM's merge
         and base from it; SHOW gets each of those, with "recorded". Then the next steps run in
         order, each while every step before it is ok, SHOW getting each as it finishes, with
-        "ran", and the record is rewritten after each: the kept steps, then this run's. A record
-        of another merge is replaced. The record after the run.
+        "ran", and the record is rewritten after each: the kept steps, then this run's, and the
+        kept record's close, unit and told. A record of another merge is replaced. The record
+        after the run.
     read(records, lane) -> Record | None
         The lane's record; None when it has none. Unreadable(message) when it cannot be read or is
-        no record; run raises it too, nothing run.
+        no record; run, update and tell raise it too, nothing run or written.
+    update(records, lane, change) -> Record | None
+        Under the lane's lock, the lane's record replaced by CHANGE(record) (dataclasses.replace of
+        its close or unit); None, nothing written, when it has none.
+    tell(records, lane, key, send) -> "told" | "already" | "not told" | None
+        Under the lane's lock: "already" when the record's told holds KEY, nothing sent; else
+        SEND() (True when the director got it) and KEY added to told, "told"; SEND() False:
+        nothing recorded, "not told". None when the lane has no record.
 
 The record, one JSON object per lane: lane, pr, head, merge (the merge commit, "" before step 1
-learns it), base, steps: [{number, name, outcome, line, at (UTC ISO 8601)}], written whole each
-time (a temp file renamed over it), so a reader never sees half of one.
+learns it), base, steps: [{number, name, outcome, line, at (UTC ISO 8601)}]; then, each absent
+in a record written before them: close (null, or what the archive recorded for the director's
+message: {findings, corrections, done, open, lines, at}, each but at a list of lines), unit (null,
+or the teardown unit: {name, how, started, ended, result, status}, ended, result and status ""
+while it runs; result systemd's SERVICE_RESULT), told (the keys the director was told: "end", or
+a stop). Written whole each time (a temp file renamed over it), so a reader never sees half of one.
 """
 
-__all__ = ["Body", "Merge", "Outcome", "Record", "Step", "Unreadable", "read", "run"]
+__all__ = [
+    "Body", "Close", "Merge", "Outcome", "Record", "Step", "Unit", "Unreadable", "read", "run",
+    "tell", "update",
+]  # fmt: skip
 
 import contextlib
 import datetime as dt
@@ -36,7 +51,7 @@ import json
 import os
 import tempfile
 from collections.abc import Callable, Generator, Sequence
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 from pathlib import Path
 from typing import Literal, Protocol, TypeVar, cast, get_args
 
@@ -74,6 +89,30 @@ class Step:
 
 
 @dataclass(frozen=True)
+class Close:
+    """What the archive recorded for the director's one message (the module docstring)."""
+
+    findings: tuple[str, ...]
+    corrections: tuple[str, ...]
+    done: tuple[str, ...]
+    open: tuple[str, ...]
+    lines: tuple[str, ...]
+    at: str
+
+
+@dataclass(frozen=True)
+class Unit:
+    """The teardown unit: its name, how it started, and its end (the module docstring)."""
+
+    name: str
+    how: str
+    started: str
+    ended: str
+    result: str
+    status: str
+
+
+@dataclass(frozen=True)
 class Record:
     """A lane's post-merge record (the module docstring)."""
 
@@ -83,6 +122,9 @@ class Record:
     merge: str
     base: str
     steps: tuple[Step, ...]
+    close: Close | None = None
+    unit: Unit | None = None
+    told: tuple[str, ...] = ()
 
 
 def _path(records: Path, lane: str) -> Path:
@@ -109,8 +151,13 @@ def read(records: Path, lane: str) -> Record | None:
 
 def _record(raw: object) -> Record:
     """RAW, a parsed record, as a Record; KeyError, TypeError or ValueError naming what is off."""
-    keys = {"lane": str, "pr": int, "head": str, "merge": str, "base": str, "steps": list}
-    d = _fields(raw, keys)
+    keys: dict[str, type | tuple[type, ...]] = {"lane": str, "pr": int, "head": str, "merge": str}
+    keys |= {"base": str, "steps": list}
+    nullable = (dict, type(None))
+    later: dict[str, type | tuple[type, ...]] = {"close": nullable, "unit": nullable, "told": list}
+    present = set(cast("dict[str, object]", raw)) if isinstance(raw, dict) else set[str]()
+    keys |= {k: t for k, t in later.items() if k in present}
+    d = _fields(cast("object", raw), keys)
     steps: list[Step] = []
     for x in cast("list[object]", d["steps"]):
         s = _fields(x, {"number": int, "name": str, "outcome": str, "line": str, "at": str})
@@ -125,6 +172,19 @@ def _record(raw: object) -> Record:
             str(s["at"]),
         )
         steps.append(Step(number, name, outcome, line, at))
+    close: Close | None = None
+    unit: Unit | None = None
+    if d.get("close") is not None:
+        lists = ("findings", "corrections", "done", "open", "lines")
+        want: dict[str, type | tuple[type, ...]] = {**dict.fromkeys(lists, list), "at": str}
+        c = _fields(d["close"], want)
+        f = {k: _lines(c[k], k) for k in lists}
+        at = str(c["at"])
+        close = Close(f["findings"], f["corrections"], f["done"], f["open"], f["lines"], at)
+    if d.get("unit") is not None:
+        names = ("name", "how", "started", "ended", "result", "status")
+        u = {k: str(v) for k, v in _fields(d["unit"], dict.fromkeys(names, str)).items()}
+        unit = Unit(u["name"], u["how"], u["started"], u["ended"], u["result"], u["status"])
     return Record(
         str(d["lane"]),
         cast("int", d["pr"]),
@@ -132,10 +192,22 @@ def _record(raw: object) -> Record:
         str(d["merge"]),
         str(d["base"]),
         tuple(steps),
+        close,
+        unit,
+        _lines(d.get("told", []), "told"),
     )
 
 
-def _fields(raw: object, want: dict[str, type]) -> dict[str, object]:
+def _lines(raw: object, key: str) -> tuple[str, ...]:
+    """RAW, a JSON list of strings, as a tuple; TypeError naming KEY otherwise."""
+    items = cast("list[object]", raw)
+    if not all(isinstance(x, str) for x in items):
+        msg = f"{key} {raw!r} is no list of strings"
+        raise TypeError(msg)
+    return tuple(cast("list[str]", items))
+
+
+def _fields(raw: object, want: dict[str, type | tuple[type, ...]]) -> dict[str, object]:
     """RAW, a JSON object holding exactly WANT's keys, each of its type (an int no bool)."""
     if not isinstance(raw, dict):
         msg = f"not a JSON object: {str(raw)[:80]}"
@@ -146,7 +218,7 @@ def _fields(raw: object, want: dict[str, type]) -> dict[str, object]:
         raise KeyError(msg)
     for k, t in want.items():
         if not isinstance(d[k], t) or (t is int and isinstance(d[k], bool)):
-            msg = f"{k} {d[k]!r} is no {t.__name__}"
+            msg = f"{k} {d[k]!r} is no {getattr(t, '__name__', 'object or null')}"
             raise TypeError(msg)
     return d
 
@@ -186,7 +258,9 @@ def run(
     with _locked(records, lane):
         was = read(records, lane)
         kept: list[Step] = []
+        more: tuple[Close | None, Unit | None, tuple[str, ...]] = (None, None, ())
         if was is not None and _same(was, pm):
+            more = (was.close, was.unit, was.told)
             for (name, _), s in zip(steps, was.steps, strict=False):
                 if (s.number, s.name, s.outcome) != (len(kept) + 1, name, "ok"):
                     break
@@ -196,7 +270,7 @@ def run(
         for s in kept:
             show(s, "recorded")
         done = list(kept)
-        rec = Record(lane, pm.pr, pm.head, pm.merge, pm.base, tuple(done))
+        rec = Record(lane, pm.pr, pm.head, pm.merge, pm.base, tuple(done), *more)
         for n, (name, step) in enumerate(steps, 1):
             if n <= len(kept):
                 continue
@@ -205,7 +279,36 @@ def run(
             outcome, line = step(pm)
             at = dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds")
             done.append(Step(n, name, outcome, line, at))
-            rec = Record(lane, pm.pr, pm.head, pm.merge, pm.base, tuple(done))
+            rec = Record(lane, pm.pr, pm.head, pm.merge, pm.base, tuple(done), *more)
             _write(records, rec)
             show(done[-1], "ran")
         return rec
+
+
+def update(records: Path, lane: str, change: Callable[[Record], Record]) -> Record | None:
+    """The lane's record replaced by CHANGE of it, under its lock (the module docstring)."""
+    records.mkdir(parents=True, exist_ok=True)
+    with _locked(records, lane):
+        was = read(records, lane)
+        if was is None:
+            return None
+        rec = change(was)
+        _write(records, rec)
+        return rec
+
+
+def tell(
+    records: Path, lane: str, key: str, send: Callable[[], bool]
+) -> Literal["told", "already", "not told"] | None:
+    """KEY told the director once, through SEND, under the lane's lock (the module docstring)."""
+    records.mkdir(parents=True, exist_ok=True)
+    with _locked(records, lane):
+        was = read(records, lane)
+        if was is None:
+            return None
+        if key in was.told:
+            return "already"
+        if not send():
+            return "not told"
+        _write(records, replace(was, told=(*was.told, key)))
+        return "told"
