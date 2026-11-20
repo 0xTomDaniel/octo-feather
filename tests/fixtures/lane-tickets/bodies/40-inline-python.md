@@ -6,3 +6,7 @@
 
 - [ ] demo#acceptance-a: every case scored
 - [ ] demo: `python3 -c "print('harness.py score ok')"` prints ok
+
+## Skills
+
+Skills: none

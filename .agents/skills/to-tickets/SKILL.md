@@ -56,7 +56,7 @@ Iterate until the user approves the breakdown.
 
 ### 5. Publish the tickets to the configured tracker
 
-Before publishing, check each drafted issue body with `octo-feather-lane ticket -` (the draft on stdin) from the target repo. It fails a draft that breaks a rule `octo-feather-lane --help` states for `ticket` (its criterion ids or owned rule, its demo, an `Expand-contract:` line), printing the class and the fix. It checks facts, not meaning: you judge that the demo shows the behavior What to build describes and that the ticket is a real vertical slice. Fix the draft as it says and rerun until it exits 0; never publish a draft that fails. A failure you cannot fix inside the approved breakdown (no criterion fits, no demo path exists) goes back to step 4.
+Before publishing, check each drafted issue body with `octo-feather-lane ticket -` (the draft on stdin) from the target repo. It fails a draft that breaks a rule `octo-feather-lane --help` states for `ticket` (its criterion ids or owned rule, its demo, an `Expand-contract:` line, its `Skills:` line), printing the class and the fix. It checks facts, not meaning: you judge that the demo shows the behavior What to build describes and that the ticket is a real vertical slice. Fix the draft as it says and rerun until it exits 0; never publish a draft that fails. A failure you cannot fix inside the approved breakdown (no criterion fits, no demo path exists) goes back to step 4.
 
 Publish the approved tickets. **How** depends on the tracker; the tickets are the same either way, only the shape of the blocking edges changes:
 
@@ -105,6 +105,10 @@ For one step of a wide refactor, replace the demo item with the line `Expand-con
 ## Seams
 
 Seam: <spec slug>#<anchor>: `<seam>` one line per seam a criterion's tests go at, set before any test (form and check: `octo-feather-lane --help`, seam); a seam set later: agents/supervisor.md, Briefs
+
+## Skills
+
+Skills: <skill>, <skill> the skills this ticket's worker must load, or `Skills: none`, one line (form and check: `octo-feather-lane --help`, ticket); a line set later: `octo-feather-lane --help`, skills
 
 ## Blocked by
 

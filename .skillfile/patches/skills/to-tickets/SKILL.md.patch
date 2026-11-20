@@ -1,4 +1,4 @@
-# reason: ADR 0012 model-invoked; ADR 0004 the target's tracker through the tracker skill's scripts, issue-create with --parent and --blocked-by and no label (skills #tracker-writes, #100); spec issue-lifecycle #acceptance-tracer-tickets: the issue template names criterion ids and ends on a demo (or an Expand-contract line), each draft passes octo-feather-lane ticket before publishing (lane #40, ticket #47); issue #118 the What-to-build naming rule left the check (a proxy, docs/adr/0008); issue #173 the ticket rules stated once, by their owner (octo-feather-lane --help, ticket), here only pointed at; issue #254 infrastructure tickets ask for prior art (closing paragraph)
+# reason: ADR 0012 model-invoked; ADR 0004 the target's tracker through the tracker skill's scripts, issue-create with --parent and --blocked-by and no label (skills #tracker-writes, #100); spec issue-lifecycle #acceptance-tracer-tickets: the issue template names criterion ids and ends on a demo (or an Expand-contract line), each draft passes octo-feather-lane ticket before publishing (lane #40, ticket #47); issue #118 the What-to-build naming rule left the check (a proxy, docs/adr/0008); issue #173 the ticket rules stated once, by their owner (octo-feather-lane --help, ticket), here only pointed at; issue #254 infrastructure tickets ask for prior art (closing paragraph); spec issue-lifecycle #lanes-tickets: the issue template's Skills section, its `Skills:` line, which octo-feather-lane ticket checks (#1099)
 --- a/SKILL.md
 +++ b/SKILL.md
 @@ -1,14 +1,13 @@
@@ -31,7 +31,7 @@
  ### 5. Publish the tickets to the configured tracker
  
 -Publish the approved tickets. **How** depends on the tracker `/setup-matt-pocock-skills` configured; the tickets are the same either way, only the shape of the blocking edges changes:
-+Before publishing, check each drafted issue body with `octo-feather-lane ticket -` (the draft on stdin) from the target repo. It fails a draft that breaks a rule `octo-feather-lane --help` states for `ticket` (its criterion ids or owned rule, its demo, an `Expand-contract:` line), printing the class and the fix. It checks facts, not meaning: you judge that the demo shows the behavior What to build describes and that the ticket is a real vertical slice. Fix the draft as it says and rerun until it exits 0; never publish a draft that fails. A failure you cannot fix inside the approved breakdown (no criterion fits, no demo path exists) goes back to step 4.
++Before publishing, check each drafted issue body with `octo-feather-lane ticket -` (the draft on stdin) from the target repo. It fails a draft that breaks a rule `octo-feather-lane --help` states for `ticket` (its criterion ids or owned rule, its demo, an `Expand-contract:` line, its `Skills:` line), printing the class and the fix. It checks facts, not meaning: you judge that the demo shows the behavior What to build describes and that the ticket is a real vertical slice. Fix the draft as it says and rerun until it exits 0; never publish a draft that fails. A failure you cannot fix inside the approved breakdown (no criterion fits, no demo path exists) goes back to step 4.
 +
 +Publish the approved tickets. **How** depends on the tracker; the tickets are the same either way, only the shape of the blocking edges changes:
  
@@ -43,7 +43,7 @@
  
  Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
  
-@@ -89,12 +92,19 @@
+@@ -89,12 +92,23 @@
  
  ## What to build
  
@@ -63,10 +63,14 @@
 +## Seams
 +
 +Seam: <spec slug>#<anchor>: `<seam>` one line per seam a criterion's tests go at, set before any test (form and check: `octo-feather-lane --help`, seam); a seam set later: agents/supervisor.md, Briefs
++
++## Skills
++
++Skills: <skill>, <skill> the skills this ticket's worker must load, or `Skills: none`, one line (form and check: `octo-feather-lane --help`, ticket); a line set later: `octo-feather-lane --help`, skills
  
  ## Blocked by
  
-@@ -102,4 +112,6 @@
+@@ -102,4 +116,6 @@
  
  </issue-template>
  

@@ -296,13 +296,21 @@ covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11
 # evidence: evidence/2026-11-18-gh978-eval-verdict.md; herdr-say's delivery is proven by the tagged tests in
 # tests/gate/kit/test_herdr_messaging.py.
 [demo."comms#acceptance-real-blocker"]
-command = "scripts/octo-feather-qa --verdict 20261119T221913Z-9249cd/supervisor-autonomy/owner-access-blocker-and-ready-work 20261119T221913Z-9249cd/supervisor-autonomy/owner-access-blocker-message"
+command = "scripts/octo-feather-qa --verdict 20261120T001636Z-8a2c20/supervisor-autonomy/owner-access-blocker-and-ready-work 20261120T001636Z-8a2c20/supervisor-autonomy/owner-access-blocker-message"
 covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evals/fixtures/lane-shout-wip", "evals/fixtures/lane-shout-main", "scripts/octo-feather-qa", "evidence/2026-11-13-gh840-supervisor-autonomy.md", "evidence/2026-11-18-gh978-eval-verdict.md", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/herdr_messaging.py"]
+
+# Judged from pinned stored eval runs (rule: scripts/octo-feather-qa --help, Verdict): the supervisor half, sent back
+# and nothing integrated on a missed named skill, integrated on none. The command half (the log's finding line) is proved
+# by tests/gate/kit/test_lane_skills.py (the gate). The cases' stand-in for `skills` and the run evidence:
+# evidence/2026-11-20-gh644-1161-supervisor-ticket-skills.md.
+[demo."issue-lifecycle#acceptance-ticket-skills"]
+command = "scripts/octo-feather-qa --verdict 20261120T024345Z-2fd725/supervisor-ticket-skills/missed-skill-sent-back 20261120T024345Z-2fd725/supervisor-ticket-skills/loaded-skill-integrated"
+covers = ["agents/supervisor.md", "scripts/octo-feather-lane", "scripts/octo-feather-handoff", "evals/supervisor-ticket-skills", "evals/fixtures/lane-skills-main", "evals/fixtures/lane-skills-1099", "evals/fixtures/lane-skills-1094", "tests/gate/kit/testkit/recordings/lane-skills.json", "tests/fixtures/lane-skills", "scripts/octo-feather-qa", "evidence/2026-11-20-gh644-1161-supervisor-ticket-skills.md"]
 
 # Judged from pinned stored eval runs (rule: scripts/octo-feather-qa --help, Verdict). Which case proves which Then
 # clause, and the generated run evidence: evidence/2026-11-18-gh978-eval-verdict.md.
 [demo."roles#acceptance-general-worker-no-implementation"]
-command = "scripts/octo-feather-qa --verdict 20261119T221913Z-9249cd/supervisor-general-worker/diagnosis-diff-goes-to-implementer 20261119T221913Z-9249cd/supervisor-general-worker/implementer-result-integrated-not-candidate 20261119T221913Z-9249cd/supervisor-general-worker/reviewed-implementer-result-integrated"
+command = "scripts/octo-feather-qa --verdict 20261120T001636Z-8a2c20/supervisor-general-worker/diagnosis-diff-goes-to-implementer 20261120T001636Z-8a2c20/supervisor-general-worker/implementer-result-integrated-not-candidate 20261120T001636Z-8a2c20/supervisor-general-worker/reviewed-implementer-result-integrated"
 covers = ["agents/supervisor.md", "evals/supervisor-general-worker", "evals/fixtures/lane-shout-general-diff", "evals/fixtures/lane-shout-qc-fixed", "evals/fixtures/lane-shout-qc-red", "scripts/octo-feather-qa", "evidence/2026-11-17-gh840-supervisor-general-worker.md", "evidence/2026-11-18-gh978-eval-verdict.md"]
 
 # Two halves (evidence/2026-11-13-gh840-supervisor-fresh-worker.md, How this meets the criterion): the supervisor starts
@@ -343,13 +351,35 @@ covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/tracker
 
 # Proven by test_lane_start.py's tagged item; the demo is the same lane-start drive's `files` case: `octo-feather-lane
 # start --new "Scratch lane" --body-file body.md --goal ... --outcome ... --brief-file brief.md` in the scratch clone prints
-# filed=906 then key=gh906 ...; the gh stand-in's log shows one issue create, no --parent; issue-view 906 no parent.
+# filed=907 then key=gh907 ...; the gh stand-in's log shows one issue create, no --parent; issue-view 907 no parent.
 [demo."issue-lifecycle#acceptance-lane-start-files"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
 covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/tracker_calls.py", ".agents/skills/github-issues/scripts/issue-create", ".agents/skills/github-issues/scripts/issue-view", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
 
-# Proven by test_lane_start.py's tagged item; the demo is the lane-start drive's `sub-issue` case: ticket 907, a
-# sub-issue of 905, refused naming 905; no worktree, branch, workspace or record for gh907.
+# Proven by test_lane_start.py's tagged item; the demo is the lane-start drive's `sub-issue` case: ticket 908, a
+# sub-issue of 905, refused naming 905; no worktree, branch, workspace or record for gh908.
 [demo."issue-lifecycle#acceptance-lane-start-sub-issue"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
 covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", ".agents/skills/github-issues/scripts/issue-view", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
+# Proven by tests/gate/kit/test_lane_start.py's exists item; the demo is the lane-start drive's exists case
+# (features/lane-start.md): the same start again on the started lane gh905 exits 1 naming its record, worktree,
+# branch and workspace, each read back as it was, no workspace, tab or agent started.
+[demo."issue-lifecycle#acceptance-lane-start-exists"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
+covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/tracker_calls.py", "scripts/octo-feather-start", ".agents/skills/herdr-comms/assets/herdr-spawn", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
+
+# Proven by tests/gate/kit/test_lane_start.py's rerun item; the demo is the lane-start drive's rerun cases: the testkit
+# Herdr failing the goal's delivery once, `octo-feather-lane start 906 ...` stops naming step goal, the same start
+# again finishes (one worktree, supervisor and record, goal then brief once each, one spawn and one prod line), a
+# third is refused naming the record.
+[demo."issue-lifecycle#acceptance-lane-start-rerun"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
+covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/tracker_calls.py", "scripts/octo-feather-start", ".agents/skills/herdr-comms/assets/herdr-spawn", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
+
+# Proven by tests/gate/kit/test_lane_start.py's tagged item (behind_kit); the demo is the lane-start drive's current-kit
+# case: OCTO_FEATHER_KIT_INSTALL a scratch kit clone one commit behind its origin's main, `octo-feather-lane start 905
+# --goal ... --outcome ... --brief-file brief.md` with the testkit's stand-ins exits 1 naming the install and that it is
+# behind main, nothing made; then the install fast-forwarded as named and the start runs.
+[demo."issue-lifecycle#acceptance-lane-start-current-kit"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
+covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
