@@ -3,7 +3,15 @@ each run as that file's command through `case` (tests/gate/kit/conftest.py)."""
 
 from collections.abc import Callable
 
-from lane_skills import demo, linear, refusals, send_back_once, tickets_comment
+from lane_skills import (
+    demo,
+    linear,
+    refusals,
+    seams,
+    seams_unchecked,
+    send_back_once,
+    tickets_comment,
+)
 
 Case = Callable[..., None]
 
@@ -26,3 +34,11 @@ def test_lane_skills_linear(case: Case) -> None:
 
 def test_lane_skills_demo(case: Case) -> None:
     case(demo)
+
+
+def test_lane_skills_seams(case: Case) -> None:
+    case(seams)
+
+
+def test_lane_skills_seams_unchecked(case: Case) -> None:
+    case(seams_unchecked)
