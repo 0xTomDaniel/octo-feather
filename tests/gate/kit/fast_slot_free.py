@@ -2,18 +2,20 @@
 `just fast`, `just check` and `just test` in a throwaway git copy of the kit
 (tests/gate/kit/gate_recipes_first.py's: test items tests/a.sh and tests/b.sh each logging its name
 to its run's PROBE, tests/a.sh end-to-end by its header; here one static check, check-probe, so two
-gate runs fit one item's CPU budget) whose octo-feather-slot is the kit's own, run against a scratch
-XDG_STATE_HOME (the box's slot files and lane records, as tests/gate/kit/slot.py builds them; the
-box's own never touched). The copy's gate-budget.toml says heavy_items 1, so every run here is over
-it, and fast_workers CAP. Lane gh8 holds the heavy grant; the runs of gh7, which holds none, are an
-implementer's.
+gate runs fit one item's CPU budget), each item logging with its name the processor and disk
+priority it runs at (nice(1), ionice(1)), whose octo-feather-slot is the kit's own, run against a
+scratch XDG_STATE_HOME (the box's slot files and lane records, as tests/gate/kit/slot.py builds
+them; the box's own never touched). The copy's gate-budget.toml says heavy_items 1, so every run
+here is over it, and fast_workers CAP. Lane gh8 holds the heavy grant; the runs of gh7, which
+holds none, are an implementer's.
 
 fast: gh8's full gate, `just check` on FULL workers (over the cap), holds the slot (its `heavy
 slot: held:` line read from its output as it runs; its tests/a.sh then waits on a lock this
 scenario holds, no clock). Meanwhile gh7's `just fast`, the caller's GATE_WORKERS FULL, starts,
-says it runs as the fast tier on CAP workers, runs check-probe and tests/b.sh, never the e2e
-tests/a.sh, and passes; the slot's status still names gh8's run holding it. Released, gh8's gate
-passes on FULL workers (xdist's `created: N/N workers`), each of its items run.
+says it runs as the fast tier on CAP workers at the lowest priority, runs check-probe and tests/b.sh
+at nice 19 and idle disk class, never the e2e tests/a.sh, and passes; the slot's status still
+names gh8's run holding it. Released, gh8's gate passes on FULL workers (xdist's `created: N/N
+workers`), each of its items run at the priority its caller has, this scenario's.
 heavy: lane gh8's run holding the slot's lock (`octo-feather-slot hold`, its stdin kept open).
 (check) `just check` on CAP workers holds the e2e tests/a.sh, so it asks the slot and is refused
 for want of a grant (exit 75), no test item run; (workers) `just test -m 'not e2e'` holds no e2e
@@ -36,7 +38,9 @@ if TYPE_CHECKING:
 
 CAP = 1
 FULL = CAP + 1  # the full gate's width, over the cap (its default, 8, costs this item 3 s of CPU)
-TIER = f"{CAP} worker (cap {CAP})"
+TIER = f"{CAP} worker (cap {CAP}), at the lowest priority (nice 19, disk idle)"
+PRIO = "$(nice) $(ionice)"  # what each item logs after its name
+LOWEST = "19 idle"
 HELD = "heavy slot: held: the heavy slot for lane gh8"
 PIPE = subprocess.PIPE
 # gh8's tests/a.sh: with HOLD set, it waits for a shared lock on that file, the scenario's.
@@ -44,8 +48,9 @@ A_SH = """#!/usr/bin/env bash
 # gate: e2e
 lock='import fcntl, sys; fcntl.flock(open(sys.argv[1]), fcntl.LOCK_SH)'
 [[ -z "${HOLD:-}" ]] || python3 -c "$lock" "$HOLD"
-echo a >> "$PROBE"
+echo "a $(nice) $(ionice)" >> "$PROBE"
 """
+B_SH = '#!/usr/bin/env bash\necho "b $(nice) $(ionice)" >> "$PROBE"\n'
 REFUSED = 75
 LANES = {"gh7": "w9:p1", "gh8": "w8:p1"}
 DIRECTOR = {"OCTO_FEATHER_ROLE": "director", "HERDR_PANE_ID": "w1:p1"}
@@ -82,8 +87,11 @@ def box(s: Scratch) -> Path:
     slot = (ROOT / "scripts" / "octo-feather-slot").read_text()
     (k / "scripts" / "octo-feather-slot").write_text(slot)
     (k / "tests" / "a.sh").write_text(A_SH)
+    (k / "tests" / "b.sh").write_text(B_SH)
     jf = k / "justfile"  # one static check, check-probe: two gate runs here, each kept cheap
-    jf.write_text(jf.read_text().replace('GATE_RECIPES := "check-dashes ', 'GATE_RECIPES := "', 1))
+    text = jf.read_text().replace('GATE_RECIPES := "check-dashes ', 'GATE_RECIPES := "', 1)
+    probe = '@echo check-probe >> "$PROBE"'
+    jf.write_text(text.replace(probe, f'@echo "check-probe {PRIO}" >> "$PROBE"', 1))
     budget = k / "gate-budget.toml"
     text = re.sub(r"^heavy_items = \d+$", "heavy_items = 1", budget.read_text(), flags=re.MULTILINE)
     cap = f"fast_workers = {CAP}"
@@ -128,6 +136,11 @@ def held_now(p: subprocess.Popen[str]) -> str:
     return seen  # it ended without: the caller's assertion names it
 
 
+def logged(probe: list[str]) -> dict[str, str]:
+    """PROBE's lines: each item's name and the priority it ran at."""
+    return dict(ln.split(" ", 1) for ln in probe)
+
+
 def fast(s: Scratch) -> None:
     k = box(s)
     hold, probe8 = s.root / "hold", s.root / "probe-gh8"
@@ -147,7 +160,9 @@ def fast(s: Scratch) -> None:
                 said = f"just fast: exit {ran.rc}\nprobe: {probe}\n{ran.out}"
                 assert ran.rc == 0, said
                 assert f"heavy slot: not needed: fast tier, {TIER}" in ran.out, said
-                assert sorted(probe) == ["b", "check-probe"], f"want statics and b.sh: {said}"
+                ran_at = logged(probe)
+                assert sorted(ran_at) == ["b", "check-probe"], f"want statics and b.sh: {said}"
+                assert set(ran_at.values()) == {LOWEST}, f"want each at {LOWEST}: {said}"
                 st = status(s, k)
                 assert re.search(r"run holding it now: pid \d+ of lane gh8 since ", st), st
             finally:
@@ -157,7 +172,11 @@ def fast(s: Scratch) -> None:
     said = f"gh8's just check: exit {p.returncode}\n{seen}"
     assert p.returncode == 0, said
     assert f"created: {FULL}/{FULL} workers" in seen, said
-    assert sorted(probe8.read_text().split()) == ["a", "b", "check-probe"], said
+    ran_at = logged(probe8.read_text().splitlines())
+    assert sorted(ran_at) == ["a", "b", "check-probe"], said
+    sh = ["sh", "-c", f'echo "{PRIO}"']
+    mine = subprocess.run(sh, capture_output=True, text=True, check=True).stdout
+    assert set(ran_at.values()) == {mine.strip()}, f"want each at its caller's {mine}: {said}"
 
 
 def heavy(s: Scratch, how: str) -> None:
@@ -175,7 +194,7 @@ def heavy(s: Scratch, how: str) -> None:
         assert "refused, nothing ran: this heavy run selects " in ran.out, said
         assert "lane gh7 holds no heavy grant; current holder: gh8 (granted " in ran.out, said
         assert "fast tier" not in ran.out, said
-        assert not {"a", "b"} & set(probe), f"a test item ran: {said}"
+        assert not {"a", "b"} & set(logged(probe)), f"a test item ran: {said}"
         st = status(s, k)
         assert f"run holding it now: pid {pid} of lane gh8" in st, st
 

@@ -29,7 +29,16 @@ unrun and unreported; without xdist the session stops after the last static chec
 
 The fast tier's exemption (which runs: quality #recipes-static-first; #1210), its cap fast_workers
 in the kit's gate-budget.toml: such a run asks nothing, early or late, and says `heavy slot: not
-needed: fast tier, N workers (cap C)` once it knows its items; its static checks still run first.
+needed: fast tier, N workers (cap C), at the lowest priority (nice 19, disk idle)` once it knows
+its items; its static checks still run first. Each of its items, static ones too, runs at the
+lowest processor and disk priority, so a full gate beside it is served first (quality
+#recipes-static-first, #1213): the process running it (an xdist worker, told by a file FAST beside
+VERDICT that the controller writes before xdist schedules any item; without xdist the session's)
+sets it on each of its threads before its first item, nice 19 (os.setpriority) and ionice(1)'s
+idle class, and every process an item starts inherits it. The run is known fast only once its
+items are, after its processes start, so the recipe cannot set it (nice(1) on `just fast`): a
+`just fast` run selecting an e2e item is no fast-tier run and keeps its priority, as every other
+run does.
 Any other run asks as above. An item is end-to-end by pytest's e2e marker (a tests/*.sh by its
 `# gate: e2e` header: tests/gate/test_gate.py marks it), read where the items are: without xdist
 from the session's, under xdist each worker writes the e2e ids it collected beside VERDICT before
@@ -56,6 +65,8 @@ if TYPE_CHECKING:
 SLOT = Path(__file__).resolve().parents[2] / "scripts" / "octo-feather-slot"
 STATIC = "tests/gate/test_gate.py::test_recipe["  # a static check's node id (test_gate.py)
 VERDICT = "OCTO_FEATHER_GATE_VERDICT"
+FAST = "fast"  # beside VERDICT: the run is the fast tier
+LOWEST = "at the lowest priority (nice 19, disk idle)"
 BUDGET, CAP = SLOT.parents[1] / "gate-budget.toml", "fast_workers"
 _asked: list[subprocess.Popen[str]] = []  # the hold, kept for this process's life
 
@@ -163,8 +174,10 @@ def _counted(config: pytest.Config, ids: Sequence[str], e2e: set[str] | None) ->
     cap, workers = _cap(), _workers(config)
     _run.fast = cap is not None and e2e is not None and not e2e & set(ids) and workers <= cap
     if _run.fast:
-        tier = f"fast tier, {workers} worker{'s' * (workers != 1)} (cap {cap})"
+        tier = f"fast tier, {workers} worker{'s' * (workers != 1)} (cap {cap}), {LOWEST}"
         config.get_terminal_writer().line(f"heavy slot: not needed: {tier}")
+        if _run.verdict is not None:
+            (_run.verdict.parent / FAST).write_text("")
     if not _run.left:
         _decide(config)
     else:
@@ -264,9 +277,31 @@ def pytest_runtest_logreport(report: pytest.TestReport) -> None:
             _decide(session.config)
 
 
+_lowered: list[bool] = []  # this process set to the lowest priority, once
+
+
+def _lowest(config: pytest.Config) -> None:
+    """A fast-tier run's process about to run its first item: each thread of it at the lowest
+    processor and disk priority, which the processes it starts inherit."""
+    if _lowered:
+        return
+    _lowered.append(True)
+    if hasattr(config, "workerinput"):
+        fast = VERDICT in os.environ and (Path(os.environ[VERDICT]).parent / FAST).exists()
+    else:
+        fast = _run.fast
+    if not fast:
+        return
+    tids = [t.name for t in Path("/proc/self/task").iterdir()]
+    for tid in tids:
+        os.setpriority(os.PRIO_PROCESS, int(tid), 19)
+    subprocess.run(["ionice", "-c", "3", "-p", *tids], check=True)  # noqa: S607
+
+
 @pytest.hookimpl(tryfirst=True)
 def pytest_runtest_protocol(item: pytest.Item) -> bool | None:
     """An xdist worker's non-static item waits for the controller's verdict; stop: skipped unrun."""
+    _lowest(item.config)
     if not hasattr(item.config, "workerinput") or _static(item.nodeid):
         return None
     verdict, parent = Path(os.environ[VERDICT]), os.getppid()
