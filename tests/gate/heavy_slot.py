@@ -65,7 +65,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Protocol, cast
+from typing import TYPE_CHECKING, Protocol, TypedDict, cast
 
 import pytest
 import tomllib
@@ -189,13 +189,33 @@ def _ancestors() -> set[int]:
     return pids
 
 
-def _record(f: Path) -> dict[str, object]:
-    """A run record, KIND-I.run.json or fast-I.run.json ({pid, ...}); {} unreadable."""
+class _Holder(TypedDict, total=False):
+    """What this reads of a run record: fast-I.run.json (written below) or octo-feather-slot's
+    KIND-I.run.json ({pid, lane, since, items})."""
+
+    pid: int
+    cwd: str
+    since: str
+
+
+def _record(f: Path) -> _Holder:
+    """F's run record, each field kept only when of its type; {} unreadable. Plain json and type
+    checks, no schema library: the kit's own files, read for a pid to match and a line to show."""
     try:
-        v = json.loads(f.read_text())
+        v = cast("object", json.loads(f.read_text()))
     except (OSError, ValueError):
         return {}
-    return cast("dict[str, object]", v) if isinstance(v, dict) else {}
+    if not isinstance(v, dict):
+        return {}
+    d = cast("dict[str, object]", v)
+    h: _Holder = {}
+    if isinstance(pid := d.get("pid"), int):
+        h["pid"] = pid
+    if isinstance(cwd := d.get("cwd"), str):
+        h["cwd"] = cwd
+    if isinstance(since := d.get("since"), str):
+        h["since"] = since
+    return h
 
 
 def _wait_turn(config: pytest.Config) -> None:
@@ -217,7 +237,7 @@ def _wait_turn(config: pytest.Config) -> None:
     locks = [slots / f"fast-{i}.lock" for i in range(n)]
     waited, start = False, time.monotonic()
     while True:
-        held: list[dict[str, object]] = []
+        held: list[_Holder] = []
         for lock in locks:
             f = lock.open("a")
             try:

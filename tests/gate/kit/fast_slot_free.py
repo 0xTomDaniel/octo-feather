@@ -215,27 +215,28 @@ def turn(s: Scratch) -> None:
     out, cmd = subprocess.STDOUT, ["just", "fast"]
     with hold.open() as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
-        try:
-            with subprocess.Popen(cmd, cwd=k, env=env8, stdout=PIPE, stderr=out, text=True) as p8:
+        with subprocess.Popen(cmd, cwd=k, env=env8, stdout=PIPE, stderr=out, text=True) as p8:
+            try:  # released before either run is waited for, a failed assertion too
                 seen8 = held_now(p8, "heavy slot: not needed: fast tier")
                 assert "not needed: fast tier" in seen8, f"gh8's just fast:\n{seen8}"
                 with subprocess.Popen(
                     cmd, cwd=k, env=env7, stdout=PIPE, stderr=out, text=True
                 ) as p7:
-                    seen7 = held_now(p7, "fast tier: waiting my turn")
-                    said = f"gh7's just fast:\n{seen7}"
-                    assert WAIT in seen7, said
-                    assert re.search(rf"held by: pid \d+ in {re.escape(str(k))} since ", seen7), (
-                        said
-                    )
-                    assert probe7.read_text() == "", f"gh7 ran an item while waiting: {said}"
-                    fcntl.flock(lock, fcntl.LOCK_UN)
+                    try:
+                        seen7 = held_now(p7, "fast tier: waiting my turn")
+                        said = f"gh7's just fast:\n{seen7}"
+                        assert WAIT in seen7, said
+                        held_by = rf"held by: pid \d+ in {re.escape(str(k))} since "
+                        assert re.search(held_by, seen7), said
+                        assert probe7.read_text() == "", f"gh7 ran an item while waiting: {said}"
+                    finally:
+                        fcntl.flock(lock, fcntl.LOCK_UN)
                     assert p7.stdout is not None
                     seen7 += p7.stdout.read()
-                assert p8.stdout is not None
-                seen8 += p8.stdout.read()
-        finally:
-            fcntl.flock(lock, fcntl.LOCK_UN)
+            finally:
+                fcntl.flock(lock, fcntl.LOCK_UN)
+            assert p8.stdout is not None
+            seen8 += p8.stdout.read()
     for lane, p, seen, probe in (("gh8", p8, seen8, probe8), ("gh7", p7, seen7, probe7)):
         said = f"{lane}'s just fast: exit {p.returncode}\n{seen}"
         assert p.returncode == 0, said
