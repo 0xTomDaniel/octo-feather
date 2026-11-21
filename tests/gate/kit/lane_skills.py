@@ -34,6 +34,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+import shlex
 import shutil
 import sys
 from pathlib import Path
@@ -51,6 +53,7 @@ AT_876 = "2026-11-18T03:24:33+00:00"  # 74f80a78's author time (lane gh840, #876
 AT_1210 = "2026-11-21T03:04:59+00:00"  # 646363b8's (lane gh1186, #1210)
 AT_1214 = "2026-11-21T11:13:39+00:00"  # 0347bcd5's (lane gh1121, #1214)
 SLOT = "quality#acceptance-fast-slot-free"
+URL_1210 = "https://github.com/0xTomDaniel/octo-feather/issues/1210"
 SESSION = "4fd43c0c-7119-4cb4-866f-e114e16ecdb4"
 RECORDED = next((FIXTURES / "lane-skills" / "sessions").glob(f"*/*_{SESSION}.jsonl"))
 SPAWN = ROOT / ".agents" / "skills" / "herdr-comms" / "assets" / "herdr-spawn"
@@ -338,6 +341,12 @@ def commit(s: Scratch, ticket: str, path: str, at: str, *seams: str) -> str:
     return s.git(w, "rev-parse", "HEAD")
 
 
+def sent_back(out: str, pane: str) -> str:
+    """The message the fix line has the supervisor send to PANE, unquoted as the shell would."""
+    line = next(x for x in out.splitlines() if f"herdr-say {pane} " in x and "Ticket " in x)
+    return shlex.split(line.split(f"herdr-say {pane} ", 1)[1].rsplit("; integrate once", 1)[0])[0]
+
+
 def late(ticket: str, sha: str, *, blocking: bool) -> dict[str, object]:
     """A test-seam finding line for TICKET's commit SHA, as the log holds it."""
     return {
@@ -355,9 +364,7 @@ def seams(s: Scratch) -> None:
     commit (exit 0); one adding web/cart.test.ts (a runner's default test name, outside tests/)
     with no `Seam:` trailer is refused: exit 1 naming the commit, the ticket, the trailer form and
     the send-back by the worker's pane, one blocking finding (class unlisted-test-seam, the
-    commit); run again, recorded not blocking, `sent back once already`, exit 0. #1210 (lane
-    gh1186): a test commit at 646363b8's time declaring `just fast` and `just check`: `just fast`
-    recorded before it, `just check` written after it, exit 1 naming that seam. #1214: a test
+    commit); run again, recorded not blocking, `sent back once already`, exit 0. #1214: a test
     commit at 0347bcd5's time declaring `Seam: rule: `octo-feather-lane seam``, recorded before
     it: exit 0, no test-seam finding."""
     log = world(s)
@@ -373,27 +380,14 @@ def seams(s: Scratch) -> None:
     said = f"876: commit {sha[:8]} adds or changes test web/cart.test.ts with no `Seam:` trailer"
     assert said in out, out
     assert "Seam: <spec>#<anchor>: `<seam>`" in out, out
-    fix = f"876: fix: send implementer-gh876 back before integrate: herdr-say {pane} '"
+    fix = f"876: fix: send implementer-gh876 back before integrate: herdr-say {pane} "
     assert fix in out, out
+    assert "Records on 876 now: none." in sent_back(out, pane), out
     assert [strip(f) for f in findings(log)] == [late("876", sha, blocking=True)], findings(log)
     out = skills(s, "876")
     assert "876: test seams: sent back once already; this miss stands recorded, not blocking" in out
     assert "fix:" not in out, out
     assert [strip(f) for f in findings(log)][1:] == [late("876", sha, blocking=False)]
-
-    worker(s, "1210", sent=("tdd", "python"))
-    fast, check = f"{SLOT}: `just fast`", f"{SLOT}: `just check`"
-    sha = commit(s, "1210", "tests/gate/kit/fast_slot_free.py", AT_1210, fast, check)
-    n = len(findings(log))
-    out = skills(s, "1210", want=1)
-    ok = f"1210: seam {SLOT} `just fast` recorded at 2026-11-21T02:52:25Z"
-    assert ok in out, out
-    no = f"1210: class: unlisted-test-seam: `Seam:` record for {SLOT} `just check` on 1210 "
-    assert no in out, out
-    assert "written at 2026-11-21T04:36:25Z" in out, out
-    assert f", after commit {sha[:8]} at 2026-11-21T03:04:59Z" in out, out
-    got = [strip(f) for f in findings(log)][n:]
-    assert late("1210", sha, blocking=True) in got, got
 
     sent = ("tdd", "codebase-design", "python", "principle-encode-lessons-in-structure")
     worker(s, "1214", sent=sent)
@@ -407,6 +401,52 @@ def seams(s: Scratch) -> None:
     assert ok + f"before commit {sha[:8]}" in out, out
     got = [f["class"] for f in findings(log)][n:]
     assert "unlisted-test-seam" not in got, got
+
+
+def seams_fix(s: Scratch) -> None:
+    """#1210 (lane gh1186): a test commit at 646363b8's time with no trailer: exit 1, the message
+    sent back alone enough to fix it (the exact trailer, the ticket's records in order,
+    issue-comment, the git commands); its own `git rebase --exec` command, run with the recorded
+    `just fast`, makes the commit pass; a later commit declaring `just check`, written after it, is
+    named late (recorded, not blocking: sent back once already)."""
+    log = world(s)
+    s.gh.store("tape.json", [r for p in SEAM_TAPES for r in json.loads(p.read_text())])
+    pane = worker(s, "1210", sent=("tdd", "python"))
+    sha = commit(s, "1210", "tests/gate/kit/fast_slot_free.py", AT_1210)
+    out = skills(s, "1210", want=1)
+    say = sent_back(out, pane)
+    head = s.git(s.root / "t", "rev-parse", "--short=12", "HEAD")
+    for part in (
+        f"Ticket 1210: your test commits are refused: {sha[:8]}: ",
+        "one git trailer per seam its tests drive, exactly `Seam: <id>: `<seam>``",
+        "a `Seam:` record on ticket 1210 (its body or a comment) written before that commit",
+        (
+            f"Records on 1210 now: Seam: {SLOT}: `just fast` (written 2026-11-21T02:52:25Z); "
+            f"Seam: {SLOT}: `just check` (written 2026-11-21T04:36:25Z); "
+            f"Seam: {SLOT}: `just test` (written 2026-11-21T04:36:25Z). "
+        ),
+        "on 1210 with the tracker skill's issue-comment and tell me",
+        f"git rebase -i {head}, mark each test commit edit",
+        "git commit --amend --no-edit --trailer 'Seam: <id>: `<seam>`'",
+    ):
+        assert part in say, f"{part!r} not in {say}"
+    m = re.search(r"(git rebase \S+ --exec '[^']*')", say)
+    assert m, say
+    fix = m[1].replace("<id>", SLOT).replace("<seam>", "just fast")
+    ident = {"GIT_COMMITTER_NAME": "w", "GIT_COMMITTER_EMAIL": "w@w"}
+    s.run(["sh", "-c", fix], cwd=s.root / "w1210", env=ident)
+    fixed = s.git(s.root / "w1210", "rev-parse", "HEAD")
+    out = skills(s, "1210")
+    ok = f"1210: seam {SLOT} `just fast` recorded at 2026-11-21T02:52:25Z"
+    assert f"{ok} ({URL_1210}), before commit {fixed[:8]}" in out, out
+    assert "no `Seam:` trailer" not in out, out
+    sha = commit(s, "1210", "tests/gate/kit/fast_slot_check.py", AT_1210, f"{SLOT}: `just check`")
+    out = skills(s, "1210")
+    no = f"1210: class: unlisted-test-seam: `Seam:` record for {SLOT} `just check` on 1210 "
+    assert no in out, out
+    assert "written at 2026-11-21T04:36:25Z" in out, out
+    assert f", after commit {sha[:8]} at 2026-11-21T03:04:59Z" in out, out
+    assert late("1210", sha, blocking=False) in [strip(f) for f in findings(log)], findings(log)
 
 
 def seams_unchecked(s: Scratch) -> None:
@@ -424,4 +464,4 @@ def seams_unchecked(s: Scratch) -> None:
 
 
 if __name__ == "__main__":
-    main(send_back_once, refusals, tickets_comment, linear, demo, seams, seams_unchecked)
+    main(send_back_once, refusals, tickets_comment, linear, demo, seams, seams_fix, seams_unchecked)

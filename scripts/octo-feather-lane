@@ -334,7 +334,10 @@ lane head lacks, <k> adding or changing a test`. Each miss logs one finding line
 skills' ones: {at, kind: finding, source: skills, class: unlisted-test-seam, blocking, summary, ticket, commit}.
 Sent back once, counted by the log as for a skill: the first time for a ticket (no blocking unlisted-test-seam
 finding for it in the log) logs blocking true, prints the fix `<ticket>: fix: send <worker> back before integrate:
-herdr-say <pane> '...'` naming the trailer form and exits 1; later misses for that ticket log blocking false and
+herdr-say <pane> <message>` and exits 1, the message shell-quoted and enough alone for a worker to fix it in one step:
+each miss, the exact trailer, the ticket's records it must match (body or comment, written before the commit), the
+tracker skill's issue-comment for a seam not there (and to tell the supervisor), and the git commands that add the
+trailers keeping each author time (git rebase -i with git commit --amend --trailer, or git rebase --exec); later misses for that ticket log blocking false and
 print `<ticket>: test seams: sent back once already; this miss stands recorded, not blocking`. Exit 2, could not
 check, never blocking, recorded as skills-unchecked above, only when no first miss exits 1: a spawn line with no
 cwd, a worker worktree or commit git cannot read, or a declared seam `seam --before` leaves unchecked (exit 2).
@@ -2903,10 +2906,9 @@ def skills_check(key: str) -> int:
     if seam_back:
         print(f"{name}: {len(late)} blocking finding line(s) in {log}, class unlisted-test-seam: "
               + ", ".join(sha[:8] for sha, _ in late))
-        print(f"{name}: fix: send {worker} back before integrate: herdr-say {wpane} 'Each commit adding or changing a test "
-              f"carries one trailer per seam its tests drive, {TRAILER_FORM}, each recorded on ticket {name} before that commit "
-              f"(octo-feather-lane seam {name} <id> <seam> --before <commit>); a seam recorded late: tell me, I ask the "
-              f"owner; then hand off again'; integrate once octo-feather-lane skills {name} no longer exits 1")
+        say = seam_send_back(name, notes, late)
+        print(f"{name}: fix: send {worker} back before integrate: herdr-say {wpane} {shlex.quote(say)}; integrate once "
+              f"octo-feather-lane skills {name} no longer exits 1")
     if back or seam_back:
         return 1
     if unchecked:
@@ -2929,6 +2931,34 @@ def git_out(*args: str, cwd: str | None = None, stdin: str | None = None) -> str
     if p.returncode:
         raise Unchecked(f"git {' '.join(args[:3])} failed in {cwd or '.'}: {' '.join(p.stderr.split())[:200]}")
     return p.stdout
+
+
+def seam_send_back(name: str, notes: "list[tuple[str, str | None, str, str]]", late: "list[tuple[str, str]]") -> str:
+    """The worker's send-back for LATE test commits of ticket NAME: alone, enough to fix them in one step (--help,
+    skills, Test seams): each commit's miss, the exact trailer, the ticket's records it must match, and the git commands
+    that add it, keeping the author time."""
+    items = criteria_items(notes[0][3]) or []
+    ids = {"#".join(m.groups()) for m in (CRITERION.match(i) for i in items) if m}
+    ids |= {"rule"} if any(RULE.match(i) for i in items) else set()
+    recs = list(dict.fromkeys((m[1], m[2], w) for w, _, _, body in notes for l in structure(body)
+                              if (m := SEAM_LINE.match(l)) and m[1] in ids))   # as the notes hold them
+    try:
+        head = subprocess.run(["git", "rev-parse", "--short=12", "--verify", "-q", "HEAD"], capture_output=True, text=True,
+                              timeout=60).stdout.strip() or "<lane head>"
+    except (OSError, subprocess.TimeoutExpired):
+        head = "<lane head>"
+    misses = "; ".join(f"{sha[:8]}: {why}" for sha, why in late)
+    have = ("; ".join(f"Seam: {i}: `{sm}` (written {w})" for i, sm, w in recs)) if recs else "none"
+    return (f"Ticket {name}: your test commits are refused: {misses}. Fix: each commit that adds or changes a test carries "
+            f"one git trailer per seam its tests drive, exactly `Seam: <id>: `<seam>`` (a rule-only ticket: `Seam: rule: "
+            f"`<seam>``), each the same id and seam as a `Seam:` record on ticket {name} (its body or a comment) written "
+            f"before that commit. Records on {name} now: {have}. A seam your tests drive that is not there: post `Seam: "
+            f"<id>: `<seam>`` on {name} with the tracker skill's issue-comment and tell me (a record written after the "
+            f"commit is late: I ask the owner). Add the trailers, keeping each author time: git rebase -i {head}, mark each "
+            f"test commit edit, at each run git commit --amend --no-edit --trailer 'Seam: <id>: `<seam>`' (once per seam), "
+            f"then git rebase --continue; or, for every commit since {head}: git rebase {head} --exec 'git commit --amend "
+            f"--no-edit --trailer \"Seam: <id>: \\`<seam>\\`\"'. Check each with octo-feather-lane seam {name} <id> '<seam>' "
+            f"--before <commit>, then hand off again.")
 
 
 def test_seams(name: str, notes: "list[tuple[str, str | None, str, str]]", worker: str, cwd: str
