@@ -9,4 +9,7 @@
 #     call); a key with trailing terminal characters REJECTED; a proxy not answering UNREACHABLE; a judgment model Pi does
 #     not list FAILED; the key never printed nor on pi's command line.
 # Run by `just check`: its scenario `models` in tests/gate/kit/install_check.py, whose box is tests/gate/kit/testkit/install_check.py.
+# Each install-check fact runs once per platform (#1200): on Linux tests/user-mise-ic.sh runs this item inside the
+# user-mise fixture (USER_MISE_FIXTURE set), so here it skips (exit 77); on macOS, where user-mise skips, it runs here.
+[[ "$(uname -s)" == Darwin || -n "${USER_MISE_FIXTURE:-}" ]] || { echo "install-check-models: skipped on Linux, tests/user-mise-ic.sh runs it inside the user-mise fixture"; exit 77; }
 exec python3 "$(dirname "$0")/gate/kit/install_check.py" models
