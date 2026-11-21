@@ -756,20 +756,23 @@ def fixture_base(s: Scratch) -> None:
     shutil.copy(e / "fb" / "suite.json", fe / "fb")
     look = steps("Look.", [["bash", "git ls-tree -r main; echo ===; git ls-tree -r HEAD; ls -a"]])
     head = {"fixture": "headover", "branch": "hb", "message": "head"}
+    # One sandboxed case (#1206; were main, head and seq): main over's tree, head (HEAD~1)
+    # headover's, its then (HEAD) over's, branch bb mid's, each in its own section.
     seq_ = steps(
         "Look.",
         [
             [
                 "bash",
-                "git ls-tree -r main; echo ===; git ls-tree -r HEAD; echo ===; git ls-tree -r bb",
+                (
+                    "git ls-tree -r main; echo ===; git ls-tree -r HEAD~1; echo ===; git ls-tree -r HEAD; "
+                    "echo ===; git ls-tree -r bb; echo ===; ls -a"
+                ),
             ]
         ],
     )
     pull: list[object] = [{"fact": "skill_not_read", "skill": "pull"}]
     cs: Cases = [
-        ({"id": "main", "role": "implementer", "fixture": "over", "task": look}, pull),
-        ({"id": "head", "role": "implementer", "fixture": "root", "task": look, "head": head}, pull),
-        ({"id": "seq", "role": "implementer", "fixture": "root", "task": seq_,
+        ({"id": "seq", "role": "implementer", "fixture": "over", "task": seq_,
           "head": head | {"then": [{"fixture": "over", "message": "then"}]},
           "branches": [{"fixture": "mid", "branch": "bb", "message": "b"}]}, pull),
     ]  # fmt: skip
@@ -799,37 +802,33 @@ def case_repo(q: Qa, e: Path, fe: Path, f: Path) -> None:
         fail(f"no PASS line for flat: {out}")
     df = q.last()
     out = q.run(0, Q, "--evals", str(e))
-    for c in ("main", "head", "seq"):
-        if not has(f"^PASS fb/{c}: ", out):
-            fail(f"no PASS line for {c}: {out}")
+    if not has("^PASS fb/seq: ", out):
+        fail(f"no PASS line for seq: {out}")
     d = q.last()
-    m, h = (
-        texts(d / "fb" / "main" / "transcript.jsonl"),
-        texts(d / "fb" / "head" / "transcript.jsonl"),
-    )
-    want = texts(df / "fb" / "flat" / "transcript.jsonl")
-    if upto(m) != upto(want):
-        fail(f"main is not over's whole tree: {m}  vs flat: {want}")
-    if not (grep("^100755 blob .*\ttools/run.sh$", m) and grep("^120000 blob .*\tlink$", m)):
-        fail(f"exec bit or symlink lost: {m}")
-    if grep("eval-fixture", m + h):
-        fail(f"the base file reached the case repo: {m} {h}")
-    readme = blob(q, (f / "headover" / "README.md").read_bytes())
-    if not grep(f"^100644 blob {readme}\tREADME.md$", past(h)):
-        fail(f"head is not headover's tree over root: {h}")
-    if not grep("\ttools/run.sh$", past(h)):
-        fail(f"head lost root's files: {h}")
-
-    then_branches(q, f, d, want)
-
-
-def then_branches(q: Qa, f: Path, d: Path, want: str) -> None:
-    """tests/qa-fixture-base.sh: head.then commits over's whole tree, branch bb mid's."""
-    # head.then and branches (schema.md, Case): then commits over's whole tree, as flat's; branch
-    # bb holds mid's tree.
     sq = texts(d / "fb" / "seq" / "transcript.jsonl")
-    st = past(sq)
-    bb = past(st)
+    m, h = upto(sq), before(past(sq))
+    want = texts(df / "fb" / "flat" / "transcript.jsonl")
+    if m != upto(want):
+        fail(f"main is not over's whole tree: {sq}  vs flat: {want}")
+    if not (grep("^100755 blob .*\ttools/run.sh$", m) and grep("^120000 blob .*\tlink$", m)):
+        fail(f"exec bit or symlink lost: {sq}")
+    if grep("eval-fixture", m + h + re.split("^===$", sq, flags=re.MULTILINE)[-1]):  # ls -a
+        fail(f"the base file reached the case repo: {sq}")
+    readme = blob(q, (f / "headover" / "README.md").read_bytes())
+    if not grep(f"^100644 blob {readme}\tREADME.md$", h):
+        fail(f"head is not headover's tree over root: {sq}")
+    if not grep("\ttools/run.sh$", h):
+        fail(f"head lost root's files: {sq}")
+
+    then_branches(q, f, sq, want)
+
+
+def then_branches(q: Qa, f: Path, sq: str, want: str) -> None:
+    """tests/qa-fixture-base.sh: head.then commits over's whole tree, branch bb mid's."""
+    # head.then and branches (schema.md, Case): then (HEAD, SQ's third section) commits over's
+    # whole tree, as flat's; branch bb (its fourth) holds mid's tree.
+    st = past(past(sq))
+    bb = before(past(st))
     if before(st) != "\n".join(x for x in past(want).splitlines() if "\t" in x):
         fail(f"head.then is not over's whole tree: {sq}  vs flat: {want}")
     swap = blob(q, (f / "mid" / "sub" / "swap.txt").read_bytes())
@@ -861,9 +860,9 @@ def trees(q: Qa, e: Path, fe: Path) -> None:
     br = sha("seq", r"branches\[0\]")
     if not (br and br != sha("seq", "fixture")):
         fail(f"--trees: no branches[0] line: {out}")
-    if not (sha("main", "fixture") and sha("main", "fixture") == flat):
+    if not (sha("seq", "fixture") and sha("seq", "fixture") == flat):
         fail(f"--trees: over not hashed as flat: {out}")
-    if not (sha("head", "head") and sha("head", "head") != sha("head", "fixture")):
+    if not (sha("seq", "head") and sha("seq", "head") != sha("seq", "fixture")):
         fail(f"--trees: no head tree line: {out}")
     edit(fe / "fb" / "cases.json", 'c[0]["fixture"] = {"repo": "kit", "commit": "a" * 40}', "c")
     out = q.run(0, C, "--trees", str(fe))
@@ -880,7 +879,7 @@ def materialized(q: Qa, e: Path) -> None:
     (f / "root" / "uv.lock").write_text("")
     edit(
         e / "fb" / "reference" / "expectations.json",
-        'x["main"]["facts"] += [{"fact": "skill_read", "skill": "base-only"}, '
+        'x["seq"]["facts"] += [{"fact": "skill_read", "skill": "base-only"}, '
         '{"fact": "skill_read_before", "skill": "tdd", "before": "test_write"}]',
         "x",
     )
@@ -912,7 +911,7 @@ def materialized(q: Qa, e: Path) -> None:
         fail(f"missing base not refused: {out}")
     out = q.run(1, C, "--trees", str(e))
     if (
-        "fb/cases.json case main: field fixture: fixtures/mid/.eval-fixture.json: field base: no fixture dir"
+        "fb/cases.json case seq: field fixture: fixtures/mid/.eval-fixture.json: field base: no fixture dir"
         not in out
     ):
         fail(f"--trees: missing base: {out}")
@@ -1047,13 +1046,19 @@ def isolation(s: Scratch) -> None:
     f: list[object] = [
         {"fact": "attempt_blocked", "kind": k} for k in ("herdr", "lane_state", "credential")
     ]
-    fh: list[object] = [{"fact": "attempt_blocked", "kind": "herdr"}]
+    # Four sandboxed cases in one run (#1206), each a run of its own because its stub commands
+    # exclude the others': blocked must pass, so it makes no delivery; tamper is leak's commands
+    # (a delivered message, then a failing command) and the tampering after them; overflow makes
+    # only its 511 herdr calls, so it is nocred's case too (no credential attempt); sync's senders
+    # are its only commands (pi_agent.py, STUB-SYNC).
     cs: Cases = [
         (ic("blocked", "Diagnose. STUB-ATTEMPTS"), f),
-        (ic("leak", "Diagnose. STUB-ATTEMPTS STUB-LEAK"), f),
-        (ic("nocred", "Diagnose. STUB-ATTEMPTS STUB-NOCRED"), f),
         (ic("tamper", "Diagnose. STUB-ATTEMPTS STUB-LEAK STUB-TAMPER"), f),
-        (ic("overflow", "Diagnose. STUB-ATTEMPTS STUB-OVERFLOW"), fh),
+        (ic("overflow", "Diagnose. STUB-ATTEMPTS STUB-OVERFLOW"), f),
+        (
+            ic("sync", "Diagnose. STUB-ATTEMPTS STUB-SYNC"),
+            [{"fact": "attempt_blocked", "kind": "credential"}],
+        ),
     ]
     cases(iso / "iso", cs)
     # herdr-say calls herdr through PATH
@@ -1061,29 +1066,28 @@ def isolation(s: Scratch) -> None:
     out = q.run(1, Q, "--evals", str(iso), env={"PATH": f"{assets}:{s.env['PATH']}"})
     blocked(q, lv)
     delivered = "attempt_blocked herdr: recorded attempt NOT refused: herdr agent prompt w9:ok hi (session qa-[^,]*, exit 0)"
-    if not grep(delivered, lines("^FAIL iso/leak: ", out)):
-        fail(f"leak: a delivered message followed by a failing command must fail by name: {out}")
-    if not grep(
-        "attempt_blocked credential: no recorded attempt in the sandbox's record",
-        lines("^FAIL iso/nocred: ", out),
-    ):
-        fail(f"nocred: an attempt never made must fail: {out}")
-    # The judged agent tampers after a delivered call (overwrite, truncate, delete, move, read,
-    # forge, kill the recorder): the verdict stays what the real attempts make it (rule:
-    # schema.md, Attempt record).
+    # A delivered message followed by a failing command, then tampering (overwrite, truncate,
+    # delete, move, read, forge, kill the recorder): the verdict stays what the real attempts
+    # make it (rule: schema.md, Attempt record).
     if not grep(delivered, lines("^FAIL iso/tamper: ", out)):
-        fail(f"tamper: the delivered call must still fail the case: {out}")
+        fail(
+            f"tamper: a delivered message followed by a failing command, then tampering, must fail by name: {out}"
+        )
     d = q.last()
     tampered(d)
-    # Any number of forged refusals before a delivered call (rule: schema.md, Attempt record).
-    if not grep(delivered, lines("^FAIL iso/overflow: ", out)):
+    # Any number of forged refusals before a delivered call (rule: schema.md, Attempt record);
+    # the case made no credential attempt.
+    ov = lines("^FAIL iso/overflow: ", out)
+    if not grep(delivered, ov):
         fail(f"overflow: a delivered call after 510 forged refusals must fail: {out}")
+    if not grep("attempt_blocked credential: no recorded attempt in the sandbox's record", ov):
+        fail(f"overflow: an attempt never made must fail: {out}")
     osb = load(d / "iso" / "overflow" / "sandbox.json")
     if not (len(seq(at(osb, "attempts"))) == 511 and at(osb, "recorded") == 511):
         fail(
             f"overflow: the record is not exported whole: recorded {at(osb, 'recorded')}, n {len(seq(at(osb, 'attempts')))}"
         )
-    if count("qc sandbox: ok   history none (0 bound", out) != 5:
+    if count("qc sandbox: ok   history none (0 bound", out) != 4:
         fail(f"a qa case got lane history bound in: {out}")
     if grep("history read-only", out):
         fail(f"qa proof still binds history: {out}")
@@ -1092,7 +1096,7 @@ def isolation(s: Scratch) -> None:
         for p in (d / "iso").glob("*/transcript.jsonl")
     ):
         fail("live lane state or a credential reached a case")
-    synced(q)
+    synced(q, d)
     say(
         "qa-isolation: ok (attempt_blocked from the sandbox attempt record (herdr-say called "
         "through a variable and herdr both recorded, a delivered message then a failing command "
@@ -1158,24 +1162,13 @@ def tampered(d: Path) -> None:
         )
 
 
-def synced(q: Qa) -> None:
-    """A sender returns only once its entry is written (rule: schema.md, Attempt record): the case
-    runs the herdr shim, git's helper and the offline gh, each as a command, and reads its entry
-    from the published record as soon as it returns."""
-    syn = q.t / "syn"
-    q.fixture_fx(syn)
-    suite(syn, "syn", "stub acked senders", 20, 60)
-    cases(
-        syn / "syn",
-        [
-            (
-                ic("sync", "Diagnose. STUB-ATTEMPTS STUB-SYNC"),
-                [{"fact": "attempt_blocked", "kind": "credential"}],
-            )
-        ],
-    )
-    q.run(0, Q, "--evals", str(syn))
-    so = outputs(q.last() / "syn" / "sync" / "transcript.jsonl")
+def synced(q: Qa, d: Path) -> None:
+    """A sender returns only once its entry is written (rule: schema.md, Attempt record): case
+    sync of run D runs the herdr shim, git's helper and the offline gh, each as a command, and
+    reads its entry from the published record as soon as it returns."""
+    if not lines("^PASS iso/sync: ", q.out):
+        fail(f"sync: want PASS: {q.out}")
+    so = outputs(d / "iso" / "sync" / "transcript.jsonl")
     for w in ("herdr 1", "cred 1", "gh 1"):
         if w not in so.splitlines():
             fail(f"sync: a sender returned before its entry was written, want '{w}': {so}")

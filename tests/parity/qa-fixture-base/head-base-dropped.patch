@@ -1,0 +1,14 @@
+Seeded defect: the head commit holds its fixture's own dir, not its based tree.
+diff --git a/scripts/octo-feather-qa b/scripts/octo-feather-qa
+index 86981513..7aa42efa 100755
+--- a/scripts/octo-feather-qa
++++ b/scripts/octo-feather-qa
+@@ -367,7 +367,7 @@ def fixture_copy(src, scratch, case=None, evals=None):
+     for a in steps:
+         subprocess.run(["git", *a], cwd=repo, env=env, check=True, capture_output=True)
+     if case.get("head"):
+-        src = fixture_src(*cast("tuple[Path, object, Path]", (evals, case["head"]["fixture"], scratch)))
++        src = evals / "fixtures" / case["head"]["fixture"]
+         shutil.copytree(src, cast("Path", repo), symlinks=True, dirs_exist_ok=True)
+         for a in (["add", "-A"], [*commit, h["message"]]):
+             subprocess.run(["git", *a], cwd=repo, env=env, check=True, capture_output=True)
