@@ -69,16 +69,6 @@ def qa(s: Scratch) -> None:
     selection(q)
     coverage(q)
 
-    # A failed sandbox proof (raw herdr reaches a live session) is a FAIL; the case never runs.
-    out = q.run(1, Q, "--evals", str(t / "evals"), "--case", "reads", env={"FAKE_HERDR_LEAK": "1"})
-    if not grep(
-        "sandbox: proof failed, case not run: .*FAIL live Herdr unreachable",
-        q.line("FAIL", "reads"),
-    ):
-        fail(f"proof failure not a FAIL: {out}")
-    if (q.last() / "trig" / "reads" / "transcript.jsonl").exists():
-        fail("case ran after a failed proof")
-
     # Inside a check run (marker set) it refuses before any case: 70.
     out = q.run(70, Q, "--evals", str(t / "evals"), env={"OCTO_FEATHER_CHECK_RUN": '{"just":1}'})
     if grep("qa: run ", out):
@@ -148,9 +138,28 @@ def selection(q: Qa) -> None:
         fail(f"sample line does not say its seed and size: {s1}")
     if not grep("^qa: train score 1/1", out):
         fail(f"no train score in a sample: {out}")
-    q.run(1, Q, "--evals", str(t / "evals"), "--sample", "2")
+    # The same sample again, its run the failed sandbox proof's (#1204: one run, not two; the
+    # sample line is printed before any case).
+    q.run(1, Q, "--evals", str(t / "evals"), "--sample", "2", env={"FAKE_HERDR_LEAK": "1"})
     if sampled() != s1:
         fail(f"--sample not deterministic: {s1} vs {sampled()}")
+    proof_failed(q, re.findall(r"trig/([a-z]+) \(should_trigger", s1))
+
+
+def proof_failed(q: Qa, picks: list[str]) -> None:
+    """A failed sandbox proof (raw herdr reaches a live session) is a FAIL; the case never runs:
+    the last run's PICKS."""
+    out = q.out
+    for c in picks:
+        if not grep(
+            "sandbox: proof failed, case not run: .*FAIL live Herdr unreachable",
+            q.line("FAIL", c),
+        ):
+            fail(f"proof failure not a FAIL: {out}")
+        if (q.last() / "trig" / c / "transcript.jsonl").exists():
+            fail("case ran after a failed proof")
+    if len(picks) != 2 or len(lines(r"^(PASS|FAIL) ", out).splitlines()) != 2:
+        fail(f"--sample 2 with a failed proof: want its 2 picks' FAIL lines: {out}")
 
 
 def artifacts(q: Qa) -> None:
@@ -210,7 +219,8 @@ def load_text(x: str) -> object:
 
 def coverage(q: Qa) -> None:
     """Coverage (rule: schema.md, Coverage): the kit's suite passes; then one held-out near miss
-    dropped; {tracker} on a role's skills line resolved per fixture."""
+    dropped; {tracker} on a role's skills line resolved per fixture. The near miss and the
+    {tracker} pair dropped from one copy, one check-evals run, not two (#1204): each gap named."""
     t = q.t
     tree(ROOT / "evals", t / "kit-evals")
     drop(
@@ -219,32 +229,33 @@ def coverage(q: Qa) -> None:
         'and e[x["id"]]["facts"] == [{"fact": "skill_not_read", "skill": "pull"}]',
         "no held-out near miss for implementer pull in the kit suite",
     )
+    # {tracker} on a role's skills line (rule: schema.md, Coverage): fixtures with no
+    # .octo-feather.toml, one naming linear, one naming an unknown tracker.
+    drop(
+        t / "kit-evals" / "skill-triggers",
+        'x["role"] == "supervisor" and x["should_trigger"] and x["split"] == "train" '
+        'and e[x["id"]]["facts"] == [{"fact": "skill_read", "skill": "github-issues"}]',
+        "no train should case for supervisor github-issues in the kit suite",
+    )
     out = q.run(1, C, str(t / "kit-evals"))
     if (
         "skill-triggers: role implementer skill pull: no case for should_trigger false split held-out"
         not in out
     ):
         fail(f"coverage gap not named: {out}")
-    # {tracker} on a role's skills line (rule: schema.md, Coverage): fixtures with no
-    # .octo-feather.toml, one naming linear, one naming an unknown tracker.
-    tree(ROOT / "evals", t / "trk-evals")
-    drop(
-        t / "trk-evals" / "skill-triggers",
-        'x["role"] == "supervisor" and x["should_trigger"] and x["split"] == "train" '
-        'and e[x["id"]]["facts"] == [{"fact": "skill_read", "skill": "github-issues"}]',
-        "no train should case for supervisor github-issues in the kit suite",
-    )
-    out = q.run(1, C, str(t / "trk-evals"))
     if (
         "skill-triggers: role supervisor skill github-issues: no case for should_trigger true split train;"
         not in out
     ):
         fail(f"a {{tracker}} gap not named as github-issues: {out}")
-    if count(": role .* skill ", out) != 1:
-        fail(f"only the dropped {{tracker}} pair should be missing: {out}")
+    if count(": role .* skill ", out) != 2:
+        fail(f"only the two dropped pairs should be missing: {out}")
     tree(ROOT / "evals", t / "lin-evals")
     toml = t / "lin-evals" / "fixtures" / "lane-mini" / ".octo-feather.toml"
     toml.write_text('tracker = "linear"\n')
+    # The unknown tracker on another fixture of the same copy: one run, not two (#1204).
+    jira = t / "lin-evals" / "fixtures" / "kit-mini" / ".octo-feather.toml"
+    jira.write_text('tracker = "jira"\n')
     out = q.run(1, C, str(t / "lin-evals"))
     for r in ("director", "implementer", "supervisor"):
         if (
@@ -254,10 +265,8 @@ def coverage(q: Qa) -> None:
             fail(f"a fixture's linear tracker did not add {r} linear: {out}")
     if grep(r"skill {tracker}\|skill github-issues:", out):
         fail(f"{{tracker}} left unresolved, or github-issues dropped: {out}")
-    toml.write_text('tracker = "jira"\n')
-    out = q.run(1, C, str(t / "lin-evals"))
     if (
-        "fixtures/lane-mini/.octo-feather.toml: field tracker: 'jira' has no kit tracker skill"
+        "fixtures/kit-mini/.octo-feather.toml: field tracker: 'jira' has no kit tracker skill"
         not in out
     ):
         fail(f"unknown tracker not named: {out}")
@@ -333,6 +342,7 @@ def baseline(s: Scratch) -> None:
     kq, ev = str(k), str(t / "evals")
     want = data.baseline(c1, c2)
     # Baseline c1 beside the head c2: one evaluation naming the baseline, runs interleaved, exit 0.
+    # Its 4 sandboxed runs stay (#1204): interleaving and the tokens spread need 2 runs a kit.
     out = q.run(0, kq, "--evals", ev, "--case", "reads", "--runs", "2", "--baseline", c1[:9])
     q.check([w for w in want["compared"] if w.text.startswith(("^qa: run ", "; baseline kit "))])
     if (
@@ -341,7 +351,7 @@ def baseline(s: Scratch) -> None:
     ):
         fail(f"runs not interleaved: {out}")
     # The exit status follows the current kit only: the change side c1 fails beside a passing
-    # baseline c2.
+    # baseline c2. Its own evaluation (#1204): a run has one exit, and the one above must be 0.
     q.run(1, kq, "--evals", ev, "--case", "reads", "--kit-ref", c1, "--baseline", c2)
     q.check(want["reverse"])
     # An unknown baseline: 64 before any run.
@@ -584,58 +594,61 @@ def spend(q: Qa) -> None:
 
 def tail(q: Qa) -> None:
     """--classifier, its aliases, best's tie-break, an unscored kit model, a partly answering
-    classifier, a dead bench command."""
+    classifier, a dead bench command: in 5 bench runs, not 7 (#1204). Two runs each prove the facts
+    of two old ones, which no other's settings decide; three stay alone (why: at each)."""
     t, jg = q.t, str(q.t / "jg")
 
     def jl(w: str) -> None:
         if w not in q.out:
             fail(f"bench: no '{w}' in: {q.out}")
 
-    q.run(0, Q, "--evals", jg, "--classifier", "stub/first", "--classifier", "stub/nope")
-    jl("bench jb: benched only --classifier stub/first, stub/nope (not available: stub/nope)")
-    jl("DONE bench jb: kit model stub/first, best stub/first")
-    # A --classifier naming a listed moving alias or yes/no only (rule: schema.md, Bench, Classes;
-    # a call kills the stub run).
-    cl = ["stub/p/q-latest", "stub/p/q-1.2:free", "stub/p/q-1.2", "stub/ynr"]
+    # --classifier with an unknown id, and best's tie-break (schema.md, Bench): cheap-train costs
+    # less on train, more in all; the kit's model, not benched, not scored.
+    cl = ["stub/cheap-total", "stub/cheap-train", "stub/nope"]
     q.run(0, Q, "--evals", jg, *[x for c in cl for x in ("--classifier", c)])
     jl(
-        "bench jb: benched only --classifier stub/p/q-latest, stub/p/q-1.2:free, stub/p/q-1.2, stub/ynr"
+        "bench jb: benched only --classifier stub/cheap-total, stub/cheap-train, stub/nope (not available: stub/nope)"
+    )
+    if not has(r"^  kit +stub/first +not scored: not benched$", q.out):
+        fail(f"bench: kit model not benched not shown: {q.out}")
+    jl("DONE bench jb: kit model stub/first not scored (not benched), best stub/cheap-train")
+    # A --classifier naming a listed moving alias or yes/no only (rule: schema.md, Bench, Classes;
+    # a call kills the stub run), beside the kit's model benched but unscored (schema.md, Bench: a
+    # bench FAILS): yesno cannot accept the question's form, every case refused.
+    jm = t / "jg" / "judgment-model.json"
+    dump(jm, {"model": "stub/yesno", "evidence": "evidence/jb.md"})
+    cl = ["stub/p/q-latest", "stub/p/q-1.2:free", "stub/p/q-1.2", "stub/ynr", "stub/yesno"]
+    q.run(1, Q, "--evals", jg, *[x for c in cl for x in ("--classifier", c)])
+    jl(
+        "bench jb: benched only --classifier stub/p/q-latest, stub/p/q-1.2:free, stub/p/q-1.2, stub/ynr, stub/yesno"
     )
     jl("bench jb: skipped: yes/no only stub/ynr; never called")
     jl("bench jb: skipped: moving alias (1): stub/p/q-1.2:free; never called")
     if grep("unclassified id", q.out):
         fail(f"bench: an unclassified flag with every benched id pinned: {q.out}")
-    if not has(r"^  kit +stub/first +not scored: not benched$", q.out):
-        fail(f"bench: kit model not benched not shown: {q.out}")
-    jl("DONE bench jb: kit model stub/first not scored (not benched), best stub/p/q-1.2")
     if grep("not available", q.out):
         fail(f"bench: a skipped alias named not available: {q.out}")
+    jl(
+        "FAILED bench jb: the kit's judgment model stub/yesno was not scored (answered 0 of 12 train cases, first error: Stub API error (400): "
+    )
     b = load(q.last() / "jb" / "bench.json")
     ok = at(b, "skipped") == ["stub/p/q-1.2:free", "stub/ynr"] and at(b, "unclassified") == []
-    if not (ok and at(b, "benched") == ["stub/p/q-latest", "stub/p/q-1.2"]):
-        fail("bench: --classifier aliases not recorded skipped")
-    # Best's tie-break (schema.md, Bench): cheap-train costs less on train, more in all.
-    q.run(
-        0, Q, "--evals", jg, "--classifier", "stub/cheap-total", "--classifier", "stub/cheap-train"
-    )
-    jl("DONE bench jb: kit model stub/first not scored (not benched), best stub/cheap-train")
-    # The kit's model benched but unscored (schema.md, Bench: a bench FAILS) (broken: every case
-    # refused; yesno: cannot accept the question's form, every case refused).
-    jm = t / "jg" / "judgment-model.json"
+    if not (ok and at(b, "benched") == ["stub/p/q-latest", "stub/p/q-1.2", "stub/yesno"]):
+        fail(f"bench: --classifier aliases not recorded skipped: {b}")
+    if at(b, "best", "model") != "stub/p/q-1.2":
+        fail(f"bench: best not stub/p/q-1.2: {b}")
+    # The kit's model benched but unscored (schema.md, Bench: a bench FAILS), broken: every case
+    # refused. Its own run: a run has one kit model (judgment-model.json), yesno's above.
     dump(jm, {"model": "stub/broken", "evidence": "evidence/jb.md"})
     q.run(1, Q, "--evals", jg)
     down = "stub provider down " + "x" * 400 + " end"
     jl(
         f"FAILED bench jb: the kit's judgment model stub/broken was not scored (answered 0 of 12 train cases, first error: {down})"
     )
-    dump(jm, {"model": "stub/yesno", "evidence": "evidence/jb.md"})
-    q.run(1, Q, "--evals", jg, "--classifier", "stub/yesno", "--classifier", "stub/first")
-    jl(
-        "FAILED bench jb: the kit's judgment model stub/yesno was not scored (answered 0 of 12 train cases, first error: Stub API error (400): "
-    )
     shutil.copy(t / "jg-good" / "judgment-model.json", jm)
     # A classifier that answers some cases (rule: schema.md, Bench, Unavailable): first refuses
-    # a STUB-REFUSE state.
+    # a STUB-REFUSE state. Its own run: the state is refused for every classifier, so none is
+    # eligible as best and a kit model's fact cannot share it.
     cj = t / "jg" / "jb" / "cases.json"
     edit(cj, "c[0]['state'] += ' STUB-REFUSE'", "c")
     q.run(1, Q, "--evals", jg, "--classifier", "stub/first")
@@ -647,7 +660,8 @@ def tail(q: Qa) -> None:
     if grep("unavailable stub/first", q.out):
         fail(f"bench: a partly answering classifier listed unavailable: {q.out}")
     shutil.copy(t / "jg-good" / "jb" / "cases.json", cj)
-    # A pi that dies before the command prints its result: the bench fails, naming it.
+    # A pi that dies before the command prints its result: the bench fails, naming it. Its own run:
+    # the dead pi prints none of the lines the other facts read.
     edit(cj, "c[0]['state'] += ' STUB-DIE'", "c")
     q.run(1, Q, "--evals", jg, "--classifier", "stub/first")
     jl("FAILED bench jb: the bench command printed no bench result:")
@@ -742,20 +756,23 @@ def fixture_base(s: Scratch) -> None:
     shutil.copy(e / "fb" / "suite.json", fe / "fb")
     look = steps("Look.", [["bash", "git ls-tree -r main; echo ===; git ls-tree -r HEAD; ls -a"]])
     head = {"fixture": "headover", "branch": "hb", "message": "head"}
+    # One sandboxed case (#1206; were main, head and seq): main over's tree, head (HEAD~1)
+    # headover's, its then (HEAD) over's, branch bb mid's, each in its own section.
     seq_ = steps(
         "Look.",
         [
             [
                 "bash",
-                "git ls-tree -r main; echo ===; git ls-tree -r HEAD; echo ===; git ls-tree -r bb",
+                (
+                    "git ls-tree -r main; echo ===; git ls-tree -r HEAD~1; echo ===; git ls-tree -r HEAD; "
+                    "echo ===; git ls-tree -r bb; echo ===; ls -a"
+                ),
             ]
         ],
     )
     pull: list[object] = [{"fact": "skill_not_read", "skill": "pull"}]
     cs: Cases = [
-        ({"id": "main", "role": "implementer", "fixture": "over", "task": look}, pull),
-        ({"id": "head", "role": "implementer", "fixture": "root", "task": look, "head": head}, pull),
-        ({"id": "seq", "role": "implementer", "fixture": "root", "task": seq_,
+        ({"id": "seq", "role": "implementer", "fixture": "over", "task": seq_,
           "head": head | {"then": [{"fixture": "over", "message": "then"}]},
           "branches": [{"fixture": "mid", "branch": "bb", "message": "b"}]}, pull),
     ]  # fmt: skip
@@ -785,37 +802,33 @@ def case_repo(q: Qa, e: Path, fe: Path, f: Path) -> None:
         fail(f"no PASS line for flat: {out}")
     df = q.last()
     out = q.run(0, Q, "--evals", str(e))
-    for c in ("main", "head", "seq"):
-        if not has(f"^PASS fb/{c}: ", out):
-            fail(f"no PASS line for {c}: {out}")
+    if not has("^PASS fb/seq: ", out):
+        fail(f"no PASS line for seq: {out}")
     d = q.last()
-    m, h = (
-        texts(d / "fb" / "main" / "transcript.jsonl"),
-        texts(d / "fb" / "head" / "transcript.jsonl"),
-    )
-    want = texts(df / "fb" / "flat" / "transcript.jsonl")
-    if upto(m) != upto(want):
-        fail(f"main is not over's whole tree: {m}  vs flat: {want}")
-    if not (grep("^100755 blob .*\ttools/run.sh$", m) and grep("^120000 blob .*\tlink$", m)):
-        fail(f"exec bit or symlink lost: {m}")
-    if grep("eval-fixture", m + h):
-        fail(f"the base file reached the case repo: {m} {h}")
-    readme = blob(q, (f / "headover" / "README.md").read_bytes())
-    if not grep(f"^100644 blob {readme}\tREADME.md$", past(h)):
-        fail(f"head is not headover's tree over root: {h}")
-    if not grep("\ttools/run.sh$", past(h)):
-        fail(f"head lost root's files: {h}")
-
-    then_branches(q, f, d, want)
-
-
-def then_branches(q: Qa, f: Path, d: Path, want: str) -> None:
-    """tests/qa-fixture-base.sh: head.then commits over's whole tree, branch bb mid's."""
-    # head.then and branches (schema.md, Case): then commits over's whole tree, as flat's; branch
-    # bb holds mid's tree.
     sq = texts(d / "fb" / "seq" / "transcript.jsonl")
-    st = past(sq)
-    bb = past(st)
+    m, h = upto(sq), before(past(sq))
+    want = texts(df / "fb" / "flat" / "transcript.jsonl")
+    if m != upto(want):
+        fail(f"main is not over's whole tree: {sq}  vs flat: {want}")
+    if not (grep("^100755 blob .*\ttools/run.sh$", m) and grep("^120000 blob .*\tlink$", m)):
+        fail(f"exec bit or symlink lost: {sq}")
+    if grep("eval-fixture", m + h + re.split("^===$", sq, flags=re.MULTILINE)[-1]):  # ls -a
+        fail(f"the base file reached the case repo: {sq}")
+    readme = blob(q, (f / "headover" / "README.md").read_bytes())
+    if not grep(f"^100644 blob {readme}\tREADME.md$", h):
+        fail(f"head is not headover's tree over root: {sq}")
+    if not grep("\ttools/run.sh$", h):
+        fail(f"head lost root's files: {sq}")
+
+    then_branches(q, f, sq, want)
+
+
+def then_branches(q: Qa, f: Path, sq: str, want: str) -> None:
+    """tests/qa-fixture-base.sh: head.then commits over's whole tree, branch bb mid's."""
+    # head.then and branches (schema.md, Case): then (HEAD, SQ's third section) commits over's
+    # whole tree, as flat's; branch bb (its fourth) holds mid's tree.
+    st = past(past(sq))
+    bb = before(past(st))
     if before(st) != "\n".join(x for x in past(want).splitlines() if "\t" in x):
         fail(f"head.then is not over's whole tree: {sq}  vs flat: {want}")
     swap = blob(q, (f / "mid" / "sub" / "swap.txt").read_bytes())
@@ -847,9 +860,9 @@ def trees(q: Qa, e: Path, fe: Path) -> None:
     br = sha("seq", r"branches\[0\]")
     if not (br and br != sha("seq", "fixture")):
         fail(f"--trees: no branches[0] line: {out}")
-    if not (sha("main", "fixture") and sha("main", "fixture") == flat):
+    if not (sha("seq", "fixture") and sha("seq", "fixture") == flat):
         fail(f"--trees: over not hashed as flat: {out}")
-    if not (sha("head", "head") and sha("head", "head") != sha("head", "fixture")):
+    if not (sha("seq", "head") and sha("seq", "head") != sha("seq", "fixture")):
         fail(f"--trees: no head tree line: {out}")
     edit(fe / "fb" / "cases.json", 'c[0]["fixture"] = {"repo": "kit", "commit": "a" * 40}', "c")
     out = q.run(0, C, "--trees", str(fe))
@@ -866,7 +879,7 @@ def materialized(q: Qa, e: Path) -> None:
     (f / "root" / "uv.lock").write_text("")
     edit(
         e / "fb" / "reference" / "expectations.json",
-        'x["main"]["facts"] += [{"fact": "skill_read", "skill": "base-only"}, '
+        'x["seq"]["facts"] += [{"fact": "skill_read", "skill": "base-only"}, '
         '{"fact": "skill_read_before", "skill": "tdd", "before": "test_write"}]',
         "x",
     )
@@ -898,7 +911,7 @@ def materialized(q: Qa, e: Path) -> None:
         fail(f"missing base not refused: {out}")
     out = q.run(1, C, "--trees", str(e))
     if (
-        "fb/cases.json case main: field fixture: fixtures/mid/.eval-fixture.json: field base: no fixture dir"
+        "fb/cases.json case seq: field fixture: fixtures/mid/.eval-fixture.json: field base: no fixture dir"
         not in out
     ):
         fail(f"--trees: missing base: {out}")
@@ -1033,13 +1046,19 @@ def isolation(s: Scratch) -> None:
     f: list[object] = [
         {"fact": "attempt_blocked", "kind": k} for k in ("herdr", "lane_state", "credential")
     ]
-    fh: list[object] = [{"fact": "attempt_blocked", "kind": "herdr"}]
+    # Four sandboxed cases in one run (#1206), each a run of its own because its stub commands
+    # exclude the others': blocked must pass, so it makes no delivery; tamper is leak's commands
+    # (a delivered message, then a failing command) and the tampering after them; overflow makes
+    # only its 511 herdr calls, so it is nocred's case too (no credential attempt); sync's senders
+    # are its only commands (pi_agent.py, STUB-SYNC).
     cs: Cases = [
         (ic("blocked", "Diagnose. STUB-ATTEMPTS"), f),
-        (ic("leak", "Diagnose. STUB-ATTEMPTS STUB-LEAK"), f),
-        (ic("nocred", "Diagnose. STUB-ATTEMPTS STUB-NOCRED"), f),
         (ic("tamper", "Diagnose. STUB-ATTEMPTS STUB-LEAK STUB-TAMPER"), f),
-        (ic("overflow", "Diagnose. STUB-ATTEMPTS STUB-OVERFLOW"), fh),
+        (ic("overflow", "Diagnose. STUB-ATTEMPTS STUB-OVERFLOW"), f),
+        (
+            ic("sync", "Diagnose. STUB-ATTEMPTS STUB-SYNC"),
+            [{"fact": "attempt_blocked", "kind": "credential"}],
+        ),
     ]
     cases(iso / "iso", cs)
     # herdr-say calls herdr through PATH
@@ -1047,29 +1066,28 @@ def isolation(s: Scratch) -> None:
     out = q.run(1, Q, "--evals", str(iso), env={"PATH": f"{assets}:{s.env['PATH']}"})
     blocked(q, lv)
     delivered = "attempt_blocked herdr: recorded attempt NOT refused: herdr agent prompt w9:ok hi (session qa-[^,]*, exit 0)"
-    if not grep(delivered, lines("^FAIL iso/leak: ", out)):
-        fail(f"leak: a delivered message followed by a failing command must fail by name: {out}")
-    if not grep(
-        "attempt_blocked credential: no recorded attempt in the sandbox's record",
-        lines("^FAIL iso/nocred: ", out),
-    ):
-        fail(f"nocred: an attempt never made must fail: {out}")
-    # The judged agent tampers after a delivered call (overwrite, truncate, delete, move, read,
-    # forge, kill the recorder): the verdict stays what the real attempts make it (rule:
-    # schema.md, Attempt record).
+    # A delivered message followed by a failing command, then tampering (overwrite, truncate,
+    # delete, move, read, forge, kill the recorder): the verdict stays what the real attempts
+    # make it (rule: schema.md, Attempt record).
     if not grep(delivered, lines("^FAIL iso/tamper: ", out)):
-        fail(f"tamper: the delivered call must still fail the case: {out}")
+        fail(
+            f"tamper: a delivered message followed by a failing command, then tampering, must fail by name: {out}"
+        )
     d = q.last()
     tampered(d)
-    # Any number of forged refusals before a delivered call (rule: schema.md, Attempt record).
-    if not grep(delivered, lines("^FAIL iso/overflow: ", out)):
+    # Any number of forged refusals before a delivered call (rule: schema.md, Attempt record);
+    # the case made no credential attempt.
+    ov = lines("^FAIL iso/overflow: ", out)
+    if not grep(delivered, ov):
         fail(f"overflow: a delivered call after 510 forged refusals must fail: {out}")
+    if not grep("attempt_blocked credential: no recorded attempt in the sandbox's record", ov):
+        fail(f"overflow: an attempt never made must fail: {out}")
     osb = load(d / "iso" / "overflow" / "sandbox.json")
     if not (len(seq(at(osb, "attempts"))) == 511 and at(osb, "recorded") == 511):
         fail(
             f"overflow: the record is not exported whole: recorded {at(osb, 'recorded')}, n {len(seq(at(osb, 'attempts')))}"
         )
-    if count("qc sandbox: ok   history none (0 bound", out) != 5:
+    if count("qc sandbox: ok   history none (0 bound", out) != 4:
         fail(f"a qa case got lane history bound in: {out}")
     if grep("history read-only", out):
         fail(f"qa proof still binds history: {out}")
@@ -1078,7 +1096,7 @@ def isolation(s: Scratch) -> None:
         for p in (d / "iso").glob("*/transcript.jsonl")
     ):
         fail("live lane state or a credential reached a case")
-    synced(q)
+    synced(q, d)
     say(
         "qa-isolation: ok (attempt_blocked from the sandbox attempt record (herdr-say called "
         "through a variable and herdr both recorded, a delivered message then a failing command "
@@ -1144,24 +1162,13 @@ def tampered(d: Path) -> None:
         )
 
 
-def synced(q: Qa) -> None:
-    """A sender returns only once its entry is written (rule: schema.md, Attempt record): the case
-    runs the herdr shim, git's helper and the offline gh, each as a command, and reads its entry
-    from the published record as soon as it returns."""
-    syn = q.t / "syn"
-    q.fixture_fx(syn)
-    suite(syn, "syn", "stub acked senders", 20, 60)
-    cases(
-        syn / "syn",
-        [
-            (
-                ic("sync", "Diagnose. STUB-ATTEMPTS STUB-SYNC"),
-                [{"fact": "attempt_blocked", "kind": "credential"}],
-            )
-        ],
-    )
-    q.run(0, Q, "--evals", str(syn))
-    so = outputs(q.last() / "syn" / "sync" / "transcript.jsonl")
+def synced(q: Qa, d: Path) -> None:
+    """A sender returns only once its entry is written (rule: schema.md, Attempt record): case
+    sync of run D runs the herdr shim, git's helper and the offline gh, each as a command, and
+    reads its entry from the published record as soon as it returns."""
+    if not lines("^PASS iso/sync: ", q.out):
+        fail(f"sync: want PASS: {q.out}")
+    so = outputs(d / "iso" / "sync" / "transcript.jsonl")
     for w in ("herdr 1", "cred 1", "gh 1"):
         if w not in so.splitlines():
             fail(f"sync: a sender returned before its entry was written, want '{w}': {so}")
@@ -1577,158 +1584,143 @@ def repos(q: Qa, kq: str, c2: str) -> None:
 
 
 def ran(s: Scratch) -> None:
-    """tests/qa-ran.sh."""
+    """tests/qa-ran.sh: ran (rule: schema.md, Run record), in one octo-feather-qa run of two
+    sandboxed cases (#1199). Case ran holds every fact but one, each on its own program or
+    arguments so no other step's run can decide it, each judged from its graded status in
+    grading.json; case rclater stays apart (why: at the fact)."""
     q, t = Qa(s), s.root
-    # ran (rule: schema.md, Run record): cases rpass, recho, rother; then rpass's transcript and
-    # record.
     q.stub("runme", 'echo "runme: $* stdin=$(cat)"; exit 3')
     q.stub("other-prog", "echo other")
-    q.ran()
-    out = q.run(1, Q, "--evals", str(t / "ran"))
-
-    def rn(v: str, c: str, rx: str) -> None:
-        if not has(rx, lines(f"^{v} ran/{c}: ", out)):
-            fail(f"ran {c}: want {v} with '{rx}': {out}")
-
-    rn(
-        "PASS",
-        "rpass",
-        r"ran runme lane show \{head\}: recorded run runme lane show [0-9a-f]{7,} extra \(exit 3\)",
+    q.stub("octo-feather-qa", "echo POISON-REAL-QA-REACHED\nexit 9")
+    d = t / "ran"
+    q.fixture_fx(d)
+    # fake_qa (schema.md, Case): fixture fxe, fx plus an eval suite (evals/s1, case c1) for the
+    # fake octo-feather-qa to answer on.
+    fxe = d / "fixtures" / "fxe"
+    dump(fxe / ".eval-fixture.json", {"base": "fx"})
+    dump(
+        fxe / "evals" / "s1" / "suite.json",
+        {"suite": "s1", "kind": "role-transcript", "description": "x"},
     )
-    rn(
-        "FAIL",
-        "recho",
-        r"ran runme lane show \{head\}: no run of runme with these arguments in the sandbox's record \([0-9]+ entries; no run of runme recorded\)",
-    )
-    rn(
-        "FAIL",
-        "rother",
-        r"runs of runme: runme lane show 0000000 \(exit 3\); runme lane list \(exit 3\)\)",
-    )
-    if not grep("qc sandbox: ok   run record: shims first on PATH for runme ", out):
-        fail(f"ran: no proof line naming the run shims: {out}")
-    d = q.last()
-    ro = outputs(d / "ran" / "rpass" / "transcript.jsonl")
-    if not (has(r"^runme: lane show [0-9a-f]+ extra stdin=IN$", ro) and "rc=3" in ro.splitlines()):
-        fail(f"ran: the shim did not pass argv, stdin, stdout and exit through: {ro}")
-    if str(s.bin / "other-prog") not in ro.splitlines():
-        fail(f"ran: shim only for the named program: {ro}")
-    sb = load(d / "ran" / "rpass" / "sandbox.json")
-    runs = [
-        a
-        for a in seq(at(sb, "attempts"))
-        if at(a, "kind") == "run"
-        and at(a, "program") == "runme"
-        and at(a, "exit") == 3
-        and at(a, "attempt") is False
-    ]
-    if len(runs) != 1:
-        fail(f"ran: run not in the record: {(d / 'ran' / 'rpass' / 'sandbox.json').read_text()}")
-    flags(q)
-    stand_ins(q)
-    fake_qa(q)
-    say(
-        "qa-ran: ok (ran (a run through the sandbox's recording shim matched by its arguments (positional prefix, flag and value pairs anywhere) and {head}, a count of matching runs, a case's stand-ins, stdin/stdout/exit passed through, an echo or other arguments fail naming the record, a shim only for a named program))"
-    )
-
-
-def rf_line(q: Qa, v: str, c: str) -> str:
-    got = lines(f"^{v} rf/{c}: ", q.out)
-    if not got:
-        fail(f"ran {c}: want {v}: {q.out}")
-    return got
-
-
-def flags(q: Qa) -> None:
-    """Flag and value pairs anywhere after the positional prefix, and count (rule: schema.md, Run
-    record)."""
-    t = q.t
-    rf = t / "rf"
-    tree(t / "good" / "fixtures", rf / "fixtures")
-    suite(rf, "rf", "stub ran flags", 10, 60)
-    role = ["--role", "shaper"]
-    fl = [("rflag", "runme --a x --role shaper", role), ("rsplit", "runme --role --x shaper", role), ("rnoval", "runme --x shaper", role),
-          ("rpos", "runme other --role shaper", ["sub", *role]), ("rposok", "runme sub --a x --role shaper", ["sub", *role])]  # fmt: skip
     cases(
-        rf / "rf",
+        fxe / "evals" / "s1",
         [
             (
-                ic(i, steps("Do it.", [["bash", c + " < /dev/null; true"]])),
-                [{"fact": "ran", "program": "runme", "args": a}],
+                {"id": "c1", "role": "implementer", "fixture": "fx", "task": "x"},
+                [{"fact": "skill_read", "skill": "tdd"}],
             )
-            for i, c, a in fl
         ],
     )
-    q.run(1, Q, "--evals", str(rf))
-    rf_line(q, "PASS", "rflag")
-    rf_line(q, "PASS", "rposok")
-    for c in ("rsplit", "rnoval", "rpos"):
-        if not grep("no run of runme with these arguments", rf_line(q, "FAIL", c)):
-            fail(f"ran {c}: want FAIL naming the record: {q.out}")
-    # count (rule: schema.md, Run record).
-    two, other = (
-        "runme --role shaper < /dev/null; runme --role shaper < /dev/null; runme --x y",
-        "runme --x y",
-    )
-    cn = [("rc2", two, 2), ("rc1", two, 1), ("rc0", other, 0), ("rc0hit", two, 0)]
-    # rclater: the first call's run decides the plain ran fact beside it; the count stays open and
-    # sees the later call's run.
-    cn.append(("rclater", "runme --role shaper ;; runme --x y ;; runme --role shaper", 1))
-
-    def st(c: str) -> list[list[object]]:
-        return [["bash", x + " < /dev/null; true"] for x in c.split(" ;; ")]
-
-    def facts(i: str, n: int) -> list[object]:
-        f: list[object] = [{"fact": "ran", "program": "runme", "args": ["--role"], "count": n}]
-        return f + (
-            [{"fact": "ran", "program": "runme", "args": ["--role"]}] if i == "rclater" else []
-        )
-
-    cases(rf / "rf", [(ic(i, steps("Do it.", st(c))), facts(i, n)) for i, c, n in cn])
-    q.run(1, Q, "--evals", str(rf))
-    if not grep("ran runme --role count 2: 2 matching runs: ", rf_line(q, "PASS", "rc2")):
-        fail(f"ran count 2: want PASS naming both runs: {q.out}")
-    if not grep(r"ran runme --role count 0: 0 matching runs (", rf_line(q, "PASS", "rc0")):
-        fail(f"ran count 0: want PASS: {q.out}")
-    if not grep("ran runme --role count 1: 2 matching runs: ", rf_line(q, "FAIL", "rc1")):
-        fail(f"ran count 1: want FAIL on the second run: {q.out}")
-    if not grep("ran runme --role count 0: [12] matching runs: ", rf_line(q, "FAIL", "rc0hit")):
-        fail(f"ran count 0: want FAIL at the first run: {q.out}")
-    if not grep("ran runme --role count 1: 2 matching runs: ", rf_line(q, "FAIL", "rclater")):
-        fail(
-            f"ran count 1: want FAIL on a later call's run after a fact beside it was decided: {q.out}"
-        )
-
-
-def stand_ins(q: Qa) -> None:
-    """stand_ins (rule: schema.md, Case)."""
-    rf = q.t / "rf"
-    step: list[list[object]] = [["bash", ("herdr-say --parent 'hi there' < /dev/null; echo rc=$?; herdr-say --parent < /dev/null; echo rc=$?; herdr-say other x < /dev/null; echo rc=$?; "
-                                          "herdr agent get p1; echo rc=$?; herdr-close p1; herdr agent get p1; echo rc=$?; echo REPO=$PWD; herdr pane read p1; echo HEAD=$(git rev-parse HEAD); echo SHORT=$(git rev-parse --short=12 HEAD)")]]  # fmt: skip
+    suite(d, "ran", "stub ran", 10, 60)
     stands: dict[str, object] = {"herdr-say": [{"args": ["--parent"], "argc": 2, "stdout": "delivered\n", "exit": 0},
                             {"args": ["--parent"], "stdout": "usage: herdr-say\n", "exit": 64}],
               "herdr": [{"args": ["agent", "get", "p1"], "stdout": "gone\n", "exit": 1, "after": ["herdr-close", "p1"]},
                         {"args": ["agent", "get", "p1"], "stdout": "up in {repo}\n", "exit": 0},
                         {"args": ["pane", "read", "p1"], "stdout": "at {head:12} of {head}\n", "exit": 0}],
               "herdr-close": [{"args": [], "stdout": "", "exit": 0}]}  # fmt: skip
-    facts: list[object] = [{"fact": "ran", "program": "herdr-say", "args": ["--parent", "hi there"], "count": 1},
-                           {"fact": "ran", "program": "herdr-say", "args": ["--parent"], "exit": 64, "count": 1}]  # fmt: skip
-    cases(rf / "rf", [(ic("rstand", steps("Do it.", step)) | {"stand_ins": stands}, facts)])
-    out = q.run(0, Q, "--evals", str(rf))
-    if not grep(
-        r"^PASS rf/rstand: ran herdr-say --parent hi there count 1: 1 matching runs: herdr-say --parent hi there (exit 0)",
-        out,
-    ):
-        fail(f"stand_ins: want PASS on the recorded stand-in call: {out}")
-    if not grep(
-        "ran herdr-say --parent exit 64 count 1: 1 matching runs: herdr-say --parent (exit 64)", out
-    ):
+    nul = " < /dev/null; "
+    step: list[list[object]] = [
+        # s0: {head}, a positional prefix with more after it, stdin/stdout/exit through the shim, a
+        # shim only for a named program; an echo of a command is no run; other arguments fail.
+        ["bash", ('echo IN | runme lane show "$(git rev-parse --short HEAD)" extra; echo "rc=$?"; command -v runme other-prog; echo echome lane show HEAD; '
+                  f"runme lane view 0000000{nul}runme lane list{nul}true")],
+        # s1: flag and value pairs anywhere after the positional prefix, each its own value.
+        ["bash", f"runme --a x --role flag{nul}runme --role --x split{nul}runme --x noval{nul}runme other --role pos{nul}runme sub --a x --role posok{nul}true"],
+        # s2: count.
+        ["bash", f"runme --role two{nul}runme --role two{nul}true"],
+        # s3: stand_ins (schema.md, Case).
+        ["bash", ("herdr-say --parent 'hi there' < /dev/null; echo say1=$?; herdr-say --parent < /dev/null; echo say2=$?; herdr-say other x < /dev/null; echo say3=$?; "
+                  "herdr agent get p1; echo get1=$?; herdr-close p1; herdr agent get p1; echo get2=$?; echo REPO=$PWD; herdr pane read p1; echo HEAD=$(git rev-parse HEAD); echo SHORT=$(git rev-parse --short=12 HEAD)")],
+        # s4: fake_qa: the role's own octo-feather-qa call, answered with no case run.
+        ["bash", "octo-feather-qa --case c1 --runs 3 --baseline main < /dev/null; echo rc=$?; octo-feather-qa --help | head -1"],
+    ]  # fmt: skip
+    rq = "recorded run octo-feather-qa --case c1 --runs 3 --baseline main \\(exit 0\\)"
+    nr = "no run of runme with these arguments in the sandbox's record"
+    want: list[tuple[dict[str, object], str, str]] = [
+        ({"program": "runme", "args": ["lane", "show", "{head}"]}, "pass", r"^ran runme lane show \{head\}: recorded run runme lane show [0-9a-f]{7,} extra \(exit 3\)$"),
+        ({"program": "echome", "args": ["lane", "show", "{head}"]}, "fail", r"^ran echome lane show \{head\}: no run of echome with these arguments in the sandbox's record \([0-9]+ entries; no run of echome recorded\)$"),
+        ({"program": "runme", "args": ["lane", "view", "{head}"]}, "fail", rf"^ran runme lane view \{{head\}}: {nr} .*runs of runme: .*runme lane view 0000000 \(exit 3\); runme lane list \(exit 3\)"),
+        ({"program": "runme", "args": ["--role", "flag"]}, "pass", r"^ran runme --role flag: recorded run runme --a x --role flag \(exit 3\)$"),
+        ({"program": "runme", "args": ["--role", "split"]}, "fail", f"^ran runme --role split: {nr}"),
+        ({"program": "runme", "args": ["--role", "noval"]}, "fail", f"^ran runme --role noval: {nr}"),
+        ({"program": "runme", "args": ["sub", "--role", "pos"]}, "fail", f"^ran runme sub --role pos: {nr}"),
+        ({"program": "runme", "args": ["sub", "--role", "posok"]}, "pass", r"^ran runme sub --role posok: recorded run runme sub --a x --role posok \(exit 3\)$"),
+        ({"program": "runme", "args": ["--role", "two"], "count": 2}, "pass", "^ran runme --role two count 2: 2 matching runs: "),
+        ({"program": "runme", "args": ["--role", "zero"], "count": 0}, "pass", r"^ran runme --role zero count 0: 0 matching runs \("),
+        ({"program": "runme", "args": ["--role", "two"], "count": 1}, "fail", "^ran runme --role two count 1: 2 matching runs: "),
+        ({"program": "runme", "args": ["--role", "two"], "count": 0}, "fail", "^ran runme --role two count 0: 2 matching runs: "),
+        ({"program": "herdr-say", "args": ["--parent", "hi there"], "count": 1}, "pass", r"^ran herdr-say --parent hi there count 1: 1 matching runs: herdr-say --parent hi there \(exit 0\)"),
+        # exit: only the run that exited 64 counts, not the --parent run that exited 0.
+        ({"program": "herdr-say", "args": ["--parent"], "exit": 64, "count": 1}, "pass", r"^ran herdr-say --parent exit 64 count 1: 1 matching runs: herdr-say --parent \(exit 64\)"),
+        ({"program": "octo-feather-qa", "args": ["--baseline"]}, "pass", f"^ran octo-feather-qa --baseline: {rq}$"),
+        ({"program": "octo-feather-qa", "args": ["--runs"]}, "pass", f"^ran octo-feather-qa --runs: {rq}$"),
+        # A run count and a bare flag together: --runs 3 --baseline holds for `--runs 3 --baseline
+        # main`, --runs 1 --baseline (the smoke's) does not.
+        ({"program": "octo-feather-qa", "args": ["--runs", "3", "--baseline"]}, "pass", f"^ran octo-feather-qa --runs 3 --baseline: {rq}$"),
+        ({"program": "octo-feather-qa", "args": ["--runs", "1", "--baseline"]}, "fail", "^ran octo-feather-qa --runs 1 --baseline: no run of octo-feather-qa with these arguments"),
+    ]  # fmt: skip
+    case: Case = {"id": "ran", "role": "implementer", "fixture": "fxe", "fake_qa": True, "stand_ins": stands, "task": steps("Do it.", step)}  # fmt: skip
+    # rclater, its own run: a count kept open after the plain fact beside it decides, to see a later
+    # call's run, shows only in a case with no other open fact (case ran's failing ones stay open).
+    later: list[list[object]] = [["bash", f"runme --role shaper{nul}true"], ["bash", f"runme --x y{nul}true"], ["bash", f"runme --role shaper{nul}true"]]  # fmt: skip
+    cl: list[object] = [{"fact": "ran", "program": "runme", "args": ["--role"], "count": 1}, {"fact": "ran", "program": "runme", "args": ["--role"]}]  # fmt: skip
+    cases(d / "ran", [(case, [{"fact": "ran"} | f for f, _, _ in want]), (ic("rclater", steps("Do it.", later)), cl)])  # fmt: skip
+    out = q.run(1, Q, "--evals", str(d))
+    if not lines("^FAIL ran/ran: ", out):
+        fail(f"ran: want FAIL on case ran's failing facts: {out}")
+    if not grep("qc sandbox: ok   run record: shims first on PATH for .*runme", out):
+        fail(f"ran: no proof line naming the run shims: {out}")
+    rd = q.last() / "ran" / "ran"
+    graded = seq(at(load(rd / "grading.json"), "facts"))
+    for f, st, rx in want:
+        # each fact's graded entry found by its own fields, not by its place in the list
+        g = [x for x in graded if {"fact": "ran"} | f == {k: at(x, k) for k in keys(x) - {"status", "evidence"}}]  # fmt: skip
+        if len(g) != 1 or at(g[0], "status") != st or not re.search(rx, str(at(g[0], "evidence"))):
+            fail(f"ran {f}: want one graded entry, {st} with '{rx}', got: {g or graded}")
+    if not grep("ran runme --role count 1: 2 matching runs: ", lines("^FAIL ran/rclater: ", out)):
         fail(
-            f"ran exit 64 count 1: want PASS counting only the run that exited 64, not the --parent run that exited 0: {out}"
+            f"ran count 1: want FAIL on a later call's run after a fact beside it was decided: {out}"
         )
-    so = outputs(q.last() / "rf" / "rstand" / "transcript.jsonl")
+    tr = rd / "transcript.jsonl"
+    ro = outputs(tr, "s0")
+    if not (has(r"^runme: lane show [0-9a-f]+ extra stdin=IN$", ro) and "rc=3" in ro.splitlines()):
+        fail(f"ran: the shim did not pass argv, stdin, stdout and exit through: {ro}")
+    if str(s.bin / "other-prog") not in ro.splitlines():
+        fail(f"ran: shim only for the named program: {ro}")
+    sb = load(rd / "sandbox.json")
+    runs = [
+        a
+        for a in seq(at(sb, "attempts"))
+        if at(a, "kind") == "run"
+        and at(a, "program") == "runme"
+        and re.fullmatch(r"lane show [0-9a-f]{7,} extra", " ".join(map(str, seq(at(a, "argv")))))
+        and at(a, "exit") == 3
+        and at(a, "attempt") is False
+    ]
+    if len(runs) != 1:
+        fail(f"ran: run not in the record: {(rd / 'sandbox.json').read_text()}")
+    stand_ins(outputs(tr, "s3"))
+    fake_qa(outputs(tr, "s4"))
+    say(
+        "qa-ran: ok (ran (a run through the sandbox's recording shim matched by its arguments (positional prefix, flag and value pairs anywhere) and {head}, a count of matching runs, a case's stand-ins, stdin/stdout/exit passed through, an echo or other arguments fail naming the record, a shim only for a named program))"
+    )
+
+
+def stand_ins(so: str) -> None:
+    """stand_ins (rule: schema.md, Case): step s3's output SO."""
     ls = so.splitlines()
-    ok = all(x in ls for x in ("delivered", "rc=0", "usage: herdr-say", "rc=64", "rc=1"))
+    ok = all(
+        x in ls
+        for x in (
+            "delivered",
+            "say1=0",
+            "usage: herdr-say",
+            "say2=64",
+            "say3=1",
+            "get1=0",
+            "get2=1",
+        )
+    )
     if not (ok and grep("^stand-in: no answer for .*herdr-say other x$", so)):
         fail(
             f"stand_ins: want the canned answer, exit 0, the argc-mismatch answer, exit 64, then the no-answer exit 1: {so}"
@@ -1746,54 +1738,10 @@ def stand_ins(q: Qa) -> None:
         fail(f"stand_ins: want {{head:12}} and {{head}} filled: {so}")
 
 
-def fake_qa(q: Qa) -> None:
-    """fake_qa (schema.md, Case): the role's own octo-feather-qa call recorded by the ran shim and
-    answered in the real tool's output form, with no case run; a poison octo-feather-qa further
-    down PATH (where the kit's real one would be found) never runs. The case repo holds an eval
-    suite (fixture fxe: fx plus evals/s1, case c1)."""
-    t = q.t
-    q.stub("octo-feather-qa", "echo POISON-REAL-QA-REACHED\nexit 9")
-    fq = t / "fq"
-    tree(t / "good" / "fixtures", fq / "fixtures")
-    fxe = fq / "fixtures" / "fxe"
-    dump(fxe / ".eval-fixture.json", {"base": "fx"})
-    dump(
-        fxe / "evals" / "s1" / "suite.json",
-        {"suite": "s1", "kind": "role-transcript", "description": "x"},
-    )
-    cases(
-        fxe / "evals" / "s1",
-        [
-            (
-                {"id": "c1", "role": "implementer", "fixture": "fx", "task": "x"},
-                [{"fact": "skill_read", "skill": "tdd"}],
-            )
-        ],
-    )
-    suite(fq, "fq", "stub fake qa", 10, 60)
-    step: list[list[object]] = [
-        [
-            "bash",
-            "octo-feather-qa --case c1 --runs 3 --baseline main < /dev/null; echo rc=$?; octo-feather-qa --help | head -1",
-        ]
-    ]
-    facts: list[object] = [{"fact": "ran", "program": "octo-feather-qa", "args": ["--baseline"]},
-                           {"fact": "ran", "program": "octo-feather-qa", "args": ["--runs"]}]  # fmt: skip
-    case: Case = {
-        "id": "fq",
-        "role": "implementer",
-        "fixture": "fxe",
-        "fake_qa": True,
-        "task": steps("Prove it.", step),
-    }
-    cases(fq / "fq", [(case, facts)])
-    out = q.run(0, Q, "--evals", str(fq))
-    if not has(
-        r"^PASS fq/fq: ran octo-feather-qa --baseline: recorded run octo-feather-qa --case c1 --runs 3 --baseline main \(exit 0\); ran octo-feather-qa --runs: ",
-        out,
-    ):
-        fail(f"fake_qa: want PASS on both ran facts: {out}")
-    fo = outputs(q.last() / "fq" / "fq" / "transcript.jsonl")
+def fake_qa(fo: str) -> None:
+    """fake_qa (schema.md, Case): step s4's output FO, the role's own octo-feather-qa call answered
+    in the real tool's output form, with no case run; the poison octo-feather-qa further down PATH
+    (where the kit's real one would be found) never runs."""
     for w in (r"^evals: ok \(1 suites, 1 cases\)$", r"^qa: run [0-9]{8}T[0-9]{6}Z-[0-9a-f]{6}: 1 case\(s\), 3 runs each; kit [0-9a-f]{40}; baseline kit [0-9a-f]{40} \(--baseline main\), runs interleaved; artifacts ",
               "^  baseline run 1/3: FAIL s1/c1: skill_read tdd: no load of tdd/SKILL.md", "^  current run 3/3: PASS s1/c1: skill_read tdd: loaded at tool call 2 of ",
               r"^PASS s1/c1: 3/3 runs passed \(pass rate 1.00, stddev 0.00\); run 1: ", r"^  baseline FAIL s1/c1: 0/3 runs passed \(pass rate 0.00, stddev 0.00\)",
@@ -1804,31 +1752,6 @@ def fake_qa(q: Qa) -> None:
             fail(f"fake_qa: no line like {w} in: {fo}")
     if grep(r"fake\|POISON-REAL-QA-REACHED\|qc sandbox", fo, "-i"):
         fail(f"fake_qa: the answer names itself, or something real ran: {fo}")
-    # A run count and a bare flag together (schema.md, Run record): ran octo-feather-qa [--runs,
-    # 3, --baseline] holds for `--runs 3 --baseline main`, not for the smoke `--runs 1 --baseline
-    # main`.
-    want: list[object] = [
-        {"fact": "ran", "program": "octo-feather-qa", "args": ["--runs", "3", "--baseline"]}
-    ]
-    cs: Cases = [
-        ({"id": f"fq{n}", "role": "implementer", "fixture": "fxe", "fake_qa": True,
-          "task": steps("Prove it.", [["bash", f"octo-feather-qa --case c1 --runs {n} --baseline main < /dev/null; echo rc=$?"]])}, want)
-        for n in (1, 3)
-    ]  # fmt: skip
-    cases(fq / "fq", cs)
-    out = q.run(1, Q, "--evals", str(fq))
-    one = grep(
-        "^FAIL fq/fq1: ran octo-feather-qa --runs 3 --baseline: no run of octo-feather-qa with these arguments",
-        out,
-    )
-    if not (
-        one
-        and grep(
-            "^PASS fq/fq3: ran octo-feather-qa --runs 3 --baseline: recorded run octo-feather-qa --case c1 --runs 3 --baseline main (exit 0)",
-            out,
-        )
-    ):
-        fail(f"fake_qa runs 3: want fq1 FAIL (the smoke) and fq3 PASS: {out}")
 
 
 def review(s: Scratch) -> None:

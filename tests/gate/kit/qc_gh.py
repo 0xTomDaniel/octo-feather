@@ -10,7 +10,9 @@ mid-judge; no GitHub remote skips cleanly; a failed fetch aborts before the judg
 --no-github; PR 0 is refused before the judge; a failed status commit leaves the status file
 unmodified; the status commit's Owner field (status_commit_owner); a copy of the kit judges
 itself. One judged run is prepared once per gate run (build_run), the scenarios reading it or
-judging again from it."""
+judging again from it. Each judged run starts two qc sandboxes (the judge, the advice): a run
+proves every fact its setup allows (no_github, killed); one stays separate only where its setup
+excludes another's (a kill, a kit copy, a fetched snapshot)."""
 
 from __future__ import annotations
 
@@ -241,8 +243,9 @@ def killed(s: Scratch) -> None:
     """A run killed mid-judge as a timeout kills it (TERM to it, then to its process group, the 2nd
     send landing during qc's cleanup as on a loaded box, #235) leaves no snapshot behind, and its
     judge does not survive. The kill waits on readiness (the proof line said, the judge started),
-    never a sleep."""
-    world(s)
+    never a sleep. It is the prepared target's second run: its snapshot fetched anew."""
+    world(s, "qc-gh-run")
+    s.git(s.root / "repo", "reset", "-q", "--hard", "HEAD~1")  # the prepared status commit undone
     mark = f"9{os.getpid()}{time.monotonic_ns() % 1000}"  # the judge's sleep, unique to this run
     cmd = [
         "unshare",
@@ -293,6 +296,8 @@ def killed(s: Scratch) -> None:
         time.sleep(0.0005)
     rc = p.wait()
     assert rc != 0, "the killed run exited 0"
+    views = [ln for ln in s.gh.log() if ln.startswith("repo view")]
+    assert len(views) == 2, f"the snapshot was not refetched per run: {s.gh.log()}"
     left = [f.name for f in (s.root / "tmp").iterdir()]
     assert left == [], f"the killed run left scratch: {left}"
     end = time.monotonic() + 10
@@ -336,33 +341,27 @@ def fetch_fails(s: Scratch) -> None:
 
 
 def no_github(s: Scratch) -> None:
-    """--no-github with the fetch failing: the run judges without it, said in the proof, the
-    offline gh refusing."""
+    """--no-github with the fetch failing: the run judges without it (acceptance-a passes), said in
+    the proof, the offline gh refusing. Its status commit then fails (a pre-commit hook): exit 3,
+    the status file restored, nothing uncommitted."""
     world(s)
-    (s.gh.dir / "down").touch()
-    r = qc(s, STATUS, "5", "acceptance-a", "--no-github", want=0)
-    assert "qc sandbox: ok   github: SKIPPED (--no-github; o/r not fetched" in r.err, r.err
-    _, j = judged(r)
-    assert re.search(rf"^R1 {REFUSED}.*\): github: SKIPPED", j, re.MULTILINE), j
-
-
-def status_commit_fails(s: Scratch) -> None:
-    """The status commit fails after the judge ran: exit 3, the status file restored, nothing
-    uncommitted. That second run of the prepared target fetched its snapshot anew."""
-    world(s, "qc-gh-run")
     r = s.root / "repo"
-    s.git(r, "reset", "-q", "--hard", "HEAD~1")  # the prepared run's status commit undone
     base = s.git(r, "rev-parse", "HEAD")
     hooks = s.root / "hooks"
     hooks.mkdir()
     (hooks / "pre-commit").write_text("#!/bin/sh\nexit 1\n")
     (hooks / "pre-commit").chmod(0o755)
     s.git(r, "config", "core.hooksPath", str(hooks))
-    ran = qc(s, STATUS, "5", "acceptance-a", want=3)
-    assert "status commit failed" in ran.out + ran.err, ran.err
+    (s.gh.dir / "down").touch()
+    ran = qc(s, STATUS, "5", "acceptance-a", "--no-github", want=3)
+    assert "qc sandbox: ok   github: SKIPPED (--no-github; o/r not fetched" in ran.err, ran.err
+    failed = re.search(r"status commit failed .*; report (\S+)$", ran.err, re.MULTILINE)
+    assert failed, ran.err
     unchanged(s, base)
-    views = [ln for ln in s.gh.log() if ln.startswith("repo view")]
-    assert len(views) == 2, f"the snapshot was not refetched per run: {s.gh.log()}"
+    rep = json.loads(Path(failed[1]).read_text())
+    assert [(x["id"], x["verdict"]) for x in rep["results"]] == [("acceptance-a", "pass")], rep
+    j = rep["fallback"]["acceptance-a"]["stdout"]
+    assert re.search(rf"^R1 {REFUSED}.*\): github: SKIPPED", j, re.MULTILINE), j
 
 
 def status_commit_owner(s: Scratch) -> None:
@@ -601,7 +600,6 @@ if __name__ == "__main__":
         killed,
         fetch_fails,
         no_github,
-        status_commit_fails,
         status_commit_owner,
         snapshot_misses,
         diff_too_large,

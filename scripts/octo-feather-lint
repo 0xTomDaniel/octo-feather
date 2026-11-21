@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import filecmp
 import json
+import os
 import shutil
 import subprocess
 import sys
@@ -62,6 +63,7 @@ ROOT_CONFIG = ["--config", str(PYPROJECT)]
 LINT_TABLE = "tool.ruff.lint.extend-per-file-ignores"
 FORMAT_TABLE = "tool.ruff.format"
 SHRINK = "octo-feather-lint shrink"
+FILES_PER_THREAD = 25
 
 Json = dict[str, object]
 
@@ -337,7 +339,12 @@ def cmd_types(files: list[str]) -> int:
         if base.is_file():
             shutil.copyfile(base, copy)
         # Auto mode on a throwaway copy: fixed errors leave the copy only, so a change is stale.
-        report = pyright(files, copy, ["--baselinemode", "auto"])
+        # basedpyright's --threads: a worker per FILES_PER_THREAD files, at most one per logical CPU
+        # (the tool's auto count). Each worker parses the imports its files share again: the kit's
+        # 200 files on 8 take about 2/3 the wall for 2.5 times the CPU; tests/lint.sh's 3 files on 3
+        # took twice the CPU for the same wall, so a small set stays on one (#1201).
+        threads = max(1, min(os.cpu_count() or 1, len(files) // FILES_PER_THREAD))
+        report = pyright(files, copy, ["--threads", str(threads), "--baselinemode", "auto"])
         stale = base.is_file() and not filecmp.cmp(base, copy, shallow=False)
     new = [d for d in diagnostics(report) if d.get("severity") in {"error", "warning"}]
     for d in new:

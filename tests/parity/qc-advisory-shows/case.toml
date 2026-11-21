@@ -1,0 +1,10 @@
+# The parity lever's case for tests/gate/kit/test_qc_advisory.py::test_shows at a00d2e09: test_node_shim's run merged into its own (#1207; tests/parity/lever.py --help).
+old = "tests/gate/kit/test_qc_advisory.py::test_shows"
+old_at = "a00d2e09"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): the scenario module its item runs.
+needs = ["tests/gate/kit/qc_advisory.py"]
+new = "tests/gate/kit/test_qc_advisory.py::test_shows"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: octo-feather-qc, run as its program (strace); never coverage, which fails inside the qc sandbox it starts.
+[ran]
+"scripts/octo-feather-qc" = "exec scripts/octo-feather-qc"

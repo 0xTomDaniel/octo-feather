@@ -1,0 +1,14 @@
+Seeded defect: {tracker} resolves to the default tracker whatever a fixture's .octo-feather.toml names.
+diff --git a/scripts/check-evals b/scripts/check-evals
+index 714686c6..9a326239 100755
+--- a/scripts/check-evals
++++ b/scripts/check-evals
+@@ -940,7 +940,7 @@ def fixture_trackers(evals, errs):
+         if name not in have:
+             errs.append(f"fixtures/{fx.name}/.octo-feather.toml: field tracker: {name!r} has no kit tracker skill; the kit has: {', '.join(have)}")
+             continue
+-        out.add(pr.TRACKERS[name])
++        out.add(pr.TRACKERS[pr.DEFAULT_TRACKER])
+     return sorted(out or {pr.TRACKERS[pr.DEFAULT_TRACKER]}), pr.TRACKER_SLOT
+ 
+ 
