@@ -8,6 +8,7 @@ from lane_skills import (
     linear,
     refusals,
     seams,
+    seams_fix,
     seams_unchecked,
     send_back_once,
     tickets_comment,
@@ -38,6 +39,10 @@ def test_lane_skills_demo(case: Case) -> None:
 
 def test_lane_skills_seams(case: Case) -> None:
     case(seams)
+
+
+def test_lane_skills_seams_fix(case: Case) -> None:
+    case(seams_fix)
 
 
 def test_lane_skills_seams_unchecked(case: Case) -> None:
