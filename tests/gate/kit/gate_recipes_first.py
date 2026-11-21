@@ -143,16 +143,10 @@ def gate_env(s: Scratch, probe: Path, **env: str) -> dict[str, str]:
 
 def gate(s: Scratch, k: Path, recipe: str, **env: str) -> tuple[Ran, list[str]]:
     """`just RECIPE` in K: its exit and output (stdout and stderr together), and PROBE's lines."""
-    return copy_run(s, k, "just", recipe, **env)
-
-
-def copy_run(s: Scratch, k: Path, *cmd: str, **env: str) -> tuple[Ran, list[str]]:
-    """CMD in K, with the copy's gate's environment: its exit and output (stdout and stderr
-    together), and PROBE's lines."""
     probe = s.root / "probe"
     probe.write_text("")
     p = subprocess.run(
-        list(cmd),
+        ["just", recipe],  # noqa: S607
         cwd=k,
         env=gate_env(s, probe, **env),
         stdout=subprocess.PIPE,

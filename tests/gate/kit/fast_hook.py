@@ -18,10 +18,11 @@ budget (gate-budget.toml test_cpu_seconds): a refused commit leaves nothing behi
 from __future__ import annotations
 
 import re
+import subprocess
 from typing import TYPE_CHECKING
 
-from gate_recipes_first import DASH, copy_run, kit_copy
-from testkit import Scratch, main
+from gate_recipes_first import DASH, gate_env, kit_copy
+from testkit import Ran, Scratch, main
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -35,6 +36,23 @@ d="$(mktemp -d)"
 git -C "$d" init -q
 echo "b $(git -C "$d" rev-parse --absolute-git-dir) $d/.git" >> "$PROBE"
 """
+
+
+def copy_run(s: Scratch, w: Path, *cmd: str) -> tuple[Ran, list[str]]:
+    """CMD in W in the env a copy's gate runs in: its exit and output (stdout and stderr
+    together), and PROBE's lines."""
+    probe = s.root / "probe"
+    probe.write_text("")
+    p = subprocess.run(
+        list(cmd),
+        cwd=w,
+        env=gate_env(s, probe),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+        check=False,
+    )
+    return Ran(p.returncode, p.stdout, ""), probe.read_text().splitlines()
 
 
 def head(s: Scratch, k: Path) -> str:
