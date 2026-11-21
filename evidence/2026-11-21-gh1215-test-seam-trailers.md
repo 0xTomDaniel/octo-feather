@@ -6,7 +6,23 @@ Fix: `octo-feather-lane skills TICKET`, the supervisor's hand-off check, reads t
 
 Smoke: .agents/skills/tdd/SKILL.md .skillfile/patches/skills/tdd/SKILL.md.patch
 
-The smoke is the help section the pointer names and the refusal it prepares a worker for, run for real (script /tmp/demo1215/smoke.sh): real gh, the kit repo's real commit 646363b8, lane gh1186's real spawn line (cwd pointed at a scratch worktree), the worker's real Pi session, a scratch state dir. No headless role ran the changed skill (owed: docs/owed-evals/1215.md).
+The smoke is one headless implementer run with the patched skill (below, review finding unexercised-smoke at ffba6ee7), then the help section the pointer names and the refusal it prepares a worker for, run for real (script /tmp/demo1215/smoke.sh): real gh, the kit repo's real commit 646363b8, lane gh1186's real spawn line (cwd pointed at a scratch worktree), the worker's real Pi session, a scratch state dir. One run, no eval suite: the eval cases stay owed (docs/owed-evals/1215.md).
+
+## Live smoke: a headless implementer with the patched tdd, 2026-11-21
+
+Run: `pi-role agents/implementer.md --mode json -p <brief>` from this branch (be69c051 plus gh1121; its .agents/skills/tdd/SKILL.md the patched one), cwd a scratch git repo of fixture python-app (`check-evals --export`, committed on main, `uv sync --locked`), 11:59:00Z to 12:00:09Z, model anthropic claude-opus-5-5, Pi session 01a1fdf9-5e5b-7759-93ec-feb1f825f234 (transcript kept at $(octo-feather-state)/smoke/gh1215-implementer-01a1fdf9.jsonl, sha256 37e049199d0d46a03034e528ca0a63b1320c732b59d14104d7012e8f77cc72ec). Env: this branch's scripts/ first on PATH, GH_REPO=0xTomDaniel/octo-feather, no Herdr variables (no route to any pane). The ticket: real #1015 (closed scratch issue of lane gh987), whose comment `Seam: app#acceptance-greet: `app greet`` was written 2026-11-18T20:45:00Z, before the run. The brief: evals/seam-record case implementer-rework-new-seam's task word for word, its sandbox line dropped; it names no trailer and no seam.
+
+What the role did (its tool calls, in order): read the github-issues and implement skills; read #1015 with `issue-view 1015 --notes`; read python and tdd SKILL.md; ran `octo-feather-lane seam 1015 app#acceptance-greet 'app greet'` (exit 0; no comment posted: the record was there); wrote the test and the command; `uv run pytest -q`, `just check` green; then, at commit time, `octo-feather-lane --help 2>&1 | grep -n -i 'trailer'` (the pointer's target) and committed:
+
+```
+$ git log -1 --format=%B 7d48293 | git interpret-trailers --parse
+Seam: app#acceptance-greet: `app greet`
+$ octo-feather-lane seam 1015 app#acceptance-greet 'app greet' --before 7d48293
+1015: seam app#acceptance-greet `app greet` recorded at 2026-11-18T20:45:00Z (https://github.com/0xTomDaniel/octo-feather/issues/1015#issuecomment-6991114927), before commit 7d48293c
+exit=0
+```
+
+Result: the test commit (7d48293, src/app/cli.py and tests/test_cli.py) carries the trailer in the ticket record's form, matching #1015's record written before it. One run, so a behaviour seen once, not a rate: the rate is the owed eval's (implementer-test-commit-trailer, against the baseline before the pointer).
 
 Removed: nothing from tdd; the patch adds one pointer sentence to Seams step 1. Incident that justifies it: lane gh1186 #1210, test commit 646363b8 at seams not on the ticket before it (#1121).
 
@@ -54,7 +70,8 @@ the worker's message, as herdr-say delivers it:
 Ticket 1210: your test commits are refused: 646363b8: adds or changes test tests/gate/heavy_slot.py, tests/gate/kit/fast_slot_free.py, tests/gate/kit/gate_recipes_first.py and 1 more with no `Seam:` trailer (form Seam: <spec>#<anchor>: `<seam>` (a rule-only ticket: Seam: rule: `<seam>`), the ticket record's form). Fix: each commit that adds or changes a test carries one git trailer per seam its tests drive, exactly `Seam: <id>: `<seam>`` (a rule-only ticket: `Seam: rule: `<seam>``), each the same id and seam as a `Seam:` record on ticket 1210 (its body or a comment) written before that commit. Records on 1210 now: Seam: quality#acceptance-fast-slot-free: `just fast` (written 2026-11-21T02:52:25Z); Seam: quality#acceptance-fast-slot-free: `just check` (written 2026-11-21T04:36:25Z); Seam: quality#acceptance-fast-slot-free: `just test` (written 2026-11-21T04:36:25Z). A seam your tests drive that is not there: post `Seam: <id>: `<seam>`` on 1210 with the tracker skill's issue-comment and tell me (a record written after the commit is late: I ask the owner). Add the trailers, keeping each author time: git rebase -i 9552080bd55f, mark each test commit edit, at each run git commit --amend --no-edit --trailer 'Seam: <id>: `<seam>`' (once per seam), then git rebase --continue; or, for every commit since 9552080bd55f: git rebase 9552080bd55f --exec 'git commit --amend --no-edit --trailer "Seam: <id>: \`<seam>\`"'. Check each with octo-feather-lane seam 1210 <id> '<seam>' --before <commit>, then hand off again.
 
 $ (in the worker worktree, the message's own command, <id> <seam> filled from its records) git rebase 9552080bd55f --exec 'git commit --amend --no-edit --trailer "Seam: quality#acceptance-fast-slot-free: \`just fast\`"'
-Successfully rebased and updated detached HEAD.
+
+Successfully rebased and updated detached HEAD.
 7748246d author 2026-11-21T03:04:59+00:00
 Seam: quality#acceptance-fast-slot-free: `just fast`
 
