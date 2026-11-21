@@ -12,8 +12,8 @@ test_cpu_seconds = 10
 heavy_items = 30
 # fast_workers: the fast tier's fixed worker count, the cap (quality #recipes-static-first, #1210; how the gate applies
 # it: tests/gate/heavy_slot.py); just fast runs on it. Picked from measurement on the factory's 8-vCPU box, fast runs
-# alone and beside a full gate: the #1210 PR's Validation.
-fast_workers = 2
+# alone and beside a full gate: evidence/2026-11-21-fast-slot-free.md.
+fast_workers = 3
 heavy_slots = 1
 eval_slots = 1
 # slot_grace_seconds: the slot queue's grace (#976), what it means: octo-feather-slot --help.

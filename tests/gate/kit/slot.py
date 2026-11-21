@@ -1,6 +1,8 @@
 """The heavy-run and eval slots (#668; owner ruling #660 2026-11-06), through the commands: the
 gate's plugin as `just check-tests` loads it (`python -m pytest -p tests.gate.heavy_slot`) over a
-scratch suite of 30 or 31 items, octo-feather-slot (grant, status) and octo-feather-qa, as an
+scratch suite of 30 or 31 items (end-to-end by pytest's e2e marker, as a full gate holds its e2e
+tests: a run holding none on few workers is the fast tier's, which asks no slot, quality
+#recipes-static-first), octo-feather-slot (grant, status) and octo-feather-qa, as an
 implementer of lane gh7 (its pane in gh7's space, its parent gh7's supervisor) or the director,
 with a scratch XDG_STATE_HOME holding the box's slot files and the session's lane records.
 
@@ -101,7 +103,10 @@ def suite(s: Scratch, name: str, n: int, extra: str = "", *, trend: bool = False
     (d / "pytest.ini").write_text(f"[pytest]\naddopts = -p no:cacheprovider{junit}\n")
     if trend:
         shutil.copy(ROOT / "tests" / "gate" / "conftest.py", d)
-    many = f"import pytest\n@pytest.mark.parametrize('n', range({n}))\ndef test_n(n): pass\n"
+    many = (
+        "import pytest\n@pytest.mark.e2e\n"
+        f"@pytest.mark.parametrize('n', range({n}))\ndef test_n(n): pass\n"
+    )
     (d / "test_many.py").write_text(many)
     if extra:
         (d / "test_extra.py").write_text(extra)
@@ -235,7 +240,10 @@ def sandboxed(s: Scratch) -> None:
         "&& echo $out | grep -q 'heavy slot: free: outside a Herdr agent'"
     )
     files = {"qc.toml": QC_TOML.format(cmd=run)}
-    many = "import pytest\n@pytest.mark.parametrize('n', range(31))\ndef test_n(n): pass\n"
+    many = (
+        "import pytest\n@pytest.mark.e2e\n"
+        "@pytest.mark.parametrize('n', range(31))\ndef test_n(n): pass\n"
+    )
     files |= {"big/pytest.ini": "[pytest]\naddopts = -p no:cacheprovider\n"}
     files |= {"big/test_many.py": many}
     target(s, files)
