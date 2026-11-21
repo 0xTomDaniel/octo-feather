@@ -3,9 +3,8 @@
 copy of the kit's tracked files without its tests, as tests/fast.sh builds one. The copy's
 justfile declares two static checks, GATE_RECIPES "check-dashes check-probe" (check-probe, added
 to it, logs its name), and its test items are tests/a.sh and tests/b.sh, each logging its name,
-tests/a.sh end-to-end by its header (`# gate: e2e`), so a `just check` holds an e2e item and asks
-the slot, while `just fast` holds none and asks nothing (the fast tier: quality
-#recipes-static-first, #acceptance-fast-slot-free);
+tests/a.sh end-to-end by its header (`# gate: e2e`), so `just check` asks the slot and `just fast`
+does not (quality #recipes-static-first);
 its octo-feather-slot is a stand-in (the box's slot, a system a scratch run must not reach) that
 logs each call and answers as the real one does for a lane (scripts/octo-feather-slot --help,
 hold): without a grant (the default) `later:` to `hold --if-granted` and `free:` to a plain hold
@@ -124,24 +123,32 @@ def kit_copy(s: Scratch) -> Path:
     return k
 
 
+def gate_env(s: Scratch, probe: Path, **env: str) -> dict[str, str]:
+    """The env a copy's gate runs in: S's but the kit gate's own, PROBE its log, ENV over it."""
+    run_env = {k: v for k, v in s.env.items() if k not in OUTER}
+    return (
+        run_env
+        | tool_homes()
+        | {
+            "npm_config_store_dir": pnpm_store(),
+            "MISE_STATE_DIR": str(s.root / "user-mise"),
+            "XDG_STATE_HOME": str(s.root / "state"),
+            "GATE_WORKERS": "2",
+            "PROBE": str(probe),
+            "PYTEST_ADDOPTS": "--color=no",
+            **env,
+        }
+    )
+
+
 def gate(s: Scratch, k: Path, recipe: str, **env: str) -> tuple[Ran, list[str]]:
     """`just RECIPE` in K: its exit and output (stdout and stderr together), and PROBE's lines."""
     probe = s.root / "probe"
     probe.write_text("")
-    run_env = {k: v for k, v in s.env.items() if k not in OUTER}
-    run_env |= tool_homes() | {
-        "npm_config_store_dir": pnpm_store(),
-        "MISE_STATE_DIR": str(s.root / "user-mise"),
-        "XDG_STATE_HOME": str(s.root / "state"),
-        "GATE_WORKERS": "2",
-        "PROBE": str(probe),
-        "PYTEST_ADDOPTS": "--color=no",
-        **env,
-    }
     p = subprocess.run(
         ["just", recipe],  # noqa: S607
         cwd=k,
-        env=run_env,
+        env=gate_env(s, probe, **env),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
