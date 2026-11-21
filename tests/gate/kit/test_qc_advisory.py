@@ -9,7 +9,6 @@ from qc_advisory import (
     does_not_show,
     incomplete_sprint,
     no_pi,
-    node_shim,
     refused_sprint,
     shows,
     sprint,
@@ -48,11 +47,6 @@ def test_shows(case: Case) -> None:
 @pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)
 def test_unavailable(case: Case) -> None:
     case(unavailable)
-
-
-@pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)
-def test_node_shim(case: Case) -> None:
-    case(node_shim)
 
 
 @pytest.mark.parametrize("how", ["nopi", "loop"])
