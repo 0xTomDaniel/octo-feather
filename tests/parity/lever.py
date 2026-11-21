@@ -25,7 +25,10 @@ The old side must have run what it covers, each an exact fact; the lever refuses
                          run goes under just fast-map's configuration (COVERAGE_PROCESS_START
                          tests/gate/coverage.toml, COV_MAP_DIR, the item's GATE_ITEM dir) and
                          `octo-feather-gate map` names the files; for a Python file the kit
-                         venv runs
+                         venv runs. Only a case with a coverage fact is measured: coverage.py
+                         fails at exit in a process that cannot write its data file (one in
+                         the qc sandbox, where only overlays are writable), so a case whose
+                         old test starts that sandbox uses exec facts
       exec SUFFIX        a process of the old run (strace -ff, execve) ran a file whose path
                          ends in SUFFIX as its program, or as the script its interpreter
                          (python, node) was given first: a file outside the kit venv, which
@@ -320,10 +323,17 @@ class Lever:
             cov, tr = Path(w) / "cov", Path(w) / "trace"
             cov.mkdir()
             tr.mkdir()
-            env = {
-                "COV_MAP_DIR": str(cov),
-                "COVERAGE_PROCESS_START": str(k / "tests/gate/coverage.toml"),
-            }
+            # Measured only when a fact asks: coverage.py fails at exit in a process that cannot
+            # write its data file (one inside the qc sandbox, where only overlays are writable).
+            measured = any(h == "coverage" for h in how.values())
+            env = (
+                {
+                    "COV_MAP_DIR": str(cov),
+                    "COVERAGE_PROCESS_START": str(k / "tests/gate/coverage.toml"),
+                }
+                if measured
+                else {}
+            )
             cmd += [f"--junitxml={cov / 'junit.xml'}"]
             traced = any(not h.startswith("coverage") for h in how.values())
             if traced:
@@ -347,7 +357,9 @@ class Lever:
                 ]
             rc = sh(cmd, k, log, env)
             missing = check_ran(
-                how, Trace(tr) if traced else None, covered(k, cov, cov / "junit.xml", old)
+                how,
+                Trace(tr) if traced else None,
+                covered(k, cov, cov / "junit.xml", old) if measured else set(),
             )
         if missing:
             shells = sorted(p for p in files if p != old and p.endswith(".sh"))

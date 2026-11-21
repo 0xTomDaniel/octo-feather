@@ -1,0 +1,13 @@
+Seeded defect: the per-run GitHub snapshot is never removed after the run (octo-feather-qc --help, GitHub evidence; #235).
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -976,7 +976,7 @@ def main(argv: list[str]) -> int:
+             restore(*(g.status for g in groups))
+         finally:   # a killed run's 2nd signal may kill restore's git: the snapshot goes anyway
+             if "dir" in gh:
+-                drop(gh["dir"])
++                pass
+ 
+ 
+ def judge(g: Named, head: str, model: str, gh: dict[str, Any], *, nosb: bool) -> None:

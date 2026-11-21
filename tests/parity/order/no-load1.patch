@@ -1,0 +1,13 @@
+Seeded defect: the trend line carries no load1_start or load1_end.
+diff --git a/tests/gate/conftest.py b/tests/gate/conftest.py
+index 759ac217..3f32c2f2 100644
+--- a/tests/gate/conftest.py
++++ b/tests/gate/conftest.py
+@@ -591,7 +591,6 @@ def pytest_sessionfinish(session: pytest.Session):   # its exit: session.exitsta
+             raise OSError("no --junitxml for this run")
+         stopped = session.shouldfail or session.shouldstop   # it ran part of its items: no full run
+         entry = _entry(xml_path, session.exitstatus, "subset" if stopped else _tier(session.config))
+-        entry |= {"load1_start": config.stash.get(_LOAD_START, None), "load1_end": _load1()}
+         line = json.dumps(entry, separators=(",", ":"))
+         d = _state_dir()
+         os.makedirs(d, exist_ok=True)
