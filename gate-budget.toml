@@ -10,6 +10,10 @@ trend_runs = 5
 test_cpu_seconds = 10
 # heavy_items, heavy_slots, eval_slots: the box's run slots (#668), what each means: octo-feather-slot --help.
 heavy_items = 30
+# fast_workers: the fast tier's fixed worker count, the cap (quality #recipes-static-first, #1210; how the gate applies
+# it: tests/gate/heavy_slot.py); just fast runs on it. Picked from measurement on the factory's 8-vCPU box, fast runs
+# alone and beside a full gate: evidence/2026-11-21-fast-slot-free.md.
+fast_workers = 3
 heavy_slots = 1
 eval_slots = 1
 # slot_grace_seconds: the slot queue's grace (#976), what it means: octo-feather-slot --help.
