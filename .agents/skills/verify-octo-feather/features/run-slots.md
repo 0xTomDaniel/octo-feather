@@ -33,7 +33,7 @@ Drive criterion: `quality#acceptance-verify-map-current`
 
 ## How to get to it (user POV)
 
-- A worker or supervisor in a lane runs a gate over more than heavy_items items (`just check`, `just integrate --full`, `just fast-map`) or `just qa`; without its lane's grant the run stops with the refusal, which names the command to ask the director for. `just fast` asks no slot (quality #recipes-static-first) and says `heavy slot: not needed: fast tier, N workers (cap C)`.
+- A worker or supervisor in a lane runs a gate over more than heavy_items items (`just check`, `just integrate --full`, `just fast-map`) or `just qa`; without its lane's grant the run stops with the refusal, which names the command to ask the director for. The runs exempt from the slot: quality #recipes-static-first.
 - The director runs `octo-feather-slot grant <lane> --kind heavy|eval`, `octo-feather-slot queue <lane> --kind heavy|eval` and `octo-feather-slot status`; a queued lane's supervisor is told through `herdr-say` when the slot passes to it. The rule, the queue, the files and the lane lookup: `octo-feather-slot --help`.
 
 ## Driving it with verify-octo-feather
