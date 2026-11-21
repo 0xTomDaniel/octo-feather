@@ -1,0 +1,10 @@
+# The parity lever's case for tests/gate/kit/test_lane_judge.py::test_rerun_in_place at a00d2e09: its reruns now run on the threshold items' kit copy, test_threshold's two runs merged into them (#1208; tests/parity/lever.py --help).
+old = "tests/gate/kit/test_lane_judge.py::test_rerun_in_place"
+old_at = "a00d2e09"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): the scenario module its item runs.
+needs = ["tests/gate/kit/lane_judge.py"]
+new = "tests/gate/kit/test_lane_judge.py::test_rerun_in_place"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: octo-feather-lane, run as its program (strace); never coverage, which fails inside the qc sandbox the judge starts.
+[ran]
+"scripts/octo-feather-lane" = "exec scripts/octo-feather-lane"

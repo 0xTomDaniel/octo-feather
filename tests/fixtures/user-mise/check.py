@@ -6,7 +6,8 @@ the global ~/.config/mise/config.toml, pnpm's store named, the kit clone's uncom
 files committed, mise's shims, the kit's mise config tracked (the user has run mise there).
 `check.py assert SECTION`: one section of #493's fixture assertions (1)-(5), one ok or FAIL line
 each, exit 1 on any FAIL (one gate item per section, #508): `sandbox` the fixture's preconditions
-and the qc sandbox proof; `install-check:EXPR` the install-check gate items pytest's -k EXPR picks;
+and the qc sandbox proof; `install-check:EXPR` the install-check gate items pytest's -k EXPR picks,
+each run, none skipped;
 `templates` install-check from a venv PATH, README's install step and the template repos. Each
 ends with (5).
 
@@ -26,6 +27,7 @@ import shutil
 import stat
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import cast
 
@@ -343,15 +345,36 @@ def sandbox() -> None:
 
 def install_check(expr: str) -> None:
     """(1), (5): the install-check gate items -k EXPR picks in the kit copy, the state dir
-    counted around them (#493 AC7)."""
+    counted around them (#493 AC7). Each picked item must run, none skipped: on Linux this fixture
+    is the only place their facts run (#1200), so a skip here (exit 77) would pass unproved; the
+    items and their results come from the run's junit xml."""
     n0 = state_entries()
-    rc, out, _ = user(["just", "test", "-k", expr], cwd=K, env=("GATE_WORKERS=1",))
+    junit = T / "install-check-junit.xml"
+    rc, out, _ = user(
+        ["just", "test", "-k", expr, f"--junitxml={junit}"], cwd=K, env=("GATE_WORKERS=1",)
+    )
     n1 = state_entries()
     want(
         f"(1) HERDR_SESSION=fixture just test -k '{expr}' passes in the kit under the user's"
         f" HOME (exit {rc})",
         rc == 0,
         out,
+    )
+    # The inner run's own pytest report, written just now: not untrusted input.
+    cases = ET.parse(junit).getroot().iter("testcase") if junit.is_file() else iter(())  # noqa: S314
+    ran: list[str] = []
+    skipped: list[str] = []
+    for case in cases:
+        name = case.get("name", "?")
+        skip = case.find("skipped")
+        (ran if skip is None else skipped).append(
+            name if skip is None else f"{name} ({skip.get('message', '')})"
+        )
+    want(
+        f"(1) every install-check item -k '{expr}' picks ran in the fixture, none skipped"
+        f" (ran: {', '.join(ran) or 'none'}; skipped: {', '.join(skipped) or 'none'})",
+        bool(ran) and not skipped,
+        f"no junit xml at {junit}" if not junit.is_file() else "",
     )
     say(
         f"user-mise: the fixture user's mise state dir ({H}/.local/state/mise, inside the fixture"

@@ -1,0 +1,23 @@
+Seeded defect: a shim's sender returns before the recorder has written its entry.
+diff --git a/scripts/octo-feather-qc-sandbox b/scripts/octo-feather-qc-sandbox
+index d6e12b0e..7da7bb8e 100755
+--- a/scripts/octo-feather-qc-sandbox
++++ b/scripts/octo-feather-qc-sandbox
+@@ -364,6 +364,8 @@ class Recorder:
+ 
+     def call_end(self, st: dict[str, Any]) -> None:
+         """One shim call, recorded at its close (schema.md, Attempt record; Run record)."""
++        if st.get("program"):
++            time.sleep(1)
+         raw, rc = st.get("argv"), st.get("exit")
+         if not isinstance(raw, list):
+             return None
+@@ -613,7 +615,7 @@ rc = subprocess.run([REAL, *PRE, *args], env=env, close_fds=False).returncode
+ rc = 128 - rc if rc < 0 else rc
+ try:   # then wait for the recorder's close: it has written this call's entry (a recorder gone ends the wait too)
+     c.send(json.dumps({"t": "exit", "exit": rc}).encode()); c.shutdown(socket.SHUT_WR)
+-    while c.recv(16): pass
++    pass
+ except OSError:
+     pass
+ sys.exit(rc)

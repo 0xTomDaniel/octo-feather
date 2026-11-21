@@ -10,7 +10,8 @@ file under tests/ the old test needs at old_at (`needs`: the libraries it source
 and helpers it runs or reads; a dir stands for every file under it), the new test (`new`, a
 pytest path), and how the old run shows it ran each file a defect patches (`ran`, file: fact);
 each *.patch there is one seeded defect in a kit command, its first line saying what it breaks.
-In one scratch copy of the kit's files (tracked, and new ones git would track), a git repo,
+In one scratch copy of the kit's files (tracked, and new ones git would track), a git repo
+holding the kit's history too (fetched, refs/kit/head: a commit a kit file names resolves),
 first with no defect, then with each patch applied in turn (git apply), the lever runs the old
 test with it and its `needs` restored from old_at, then the new one on the kit's own files,
 each through the copy's `just test` (the old as its gate item or its pytest id, the new as its
@@ -25,7 +26,10 @@ The old side must have run what it covers, each an exact fact; the lever refuses
                          run goes under just fast-map's configuration (COVERAGE_PROCESS_START
                          tests/gate/coverage.toml, COV_MAP_DIR, the item's GATE_ITEM dir) and
                          `octo-feather-gate map` names the files; for a Python file the kit
-                         venv runs
+                         venv runs. Only a case with a coverage fact is measured: coverage.py
+                         fails at exit in a process that cannot write its data file (one in
+                         the qc sandbox, where only overlays are writable), so a case whose
+                         old test starts that sandbox uses exec facts
       exec SUFFIX        a process of the old run (strace -ff, execve) ran a file whose path
                          ends in SUFFIX as its program, or as the script its interpreter
                          (python, node) was given first: a file outside the kit venv, which
@@ -116,6 +120,10 @@ def copy(dest: Path) -> None:
     g = ["git", "-c", "user.name=lever", "-c", "user.email=lever@t", "-c", "commit.gpgsign=false"]
     for a in (["init", "-q"], ["add", "-A"], ["commit", "-qm", "parity copy"]):
         subprocess.run([*g, *a], cwd=dest, capture_output=True, check=True)
+    # The kit's history, its objects copied into the copy's own .git (no link into the kit's), so a
+    # commit a kit file names resolves there: check-evals' history fixtures (repo kit, #1204).
+    fetch = ["fetch", "-q", "--no-tags", str(ROOT), "+HEAD:refs/kit/head"]
+    subprocess.run([*g, *fetch], cwd=dest, capture_output=True, check=True)
 
 
 def old_files(old: str, old_at: str, needs: list[str]) -> dict[str, bytes]:
@@ -320,10 +328,17 @@ class Lever:
             cov, tr = Path(w) / "cov", Path(w) / "trace"
             cov.mkdir()
             tr.mkdir()
-            env = {
-                "COV_MAP_DIR": str(cov),
-                "COVERAGE_PROCESS_START": str(k / "tests/gate/coverage.toml"),
-            }
+            # Measured only when a fact asks: coverage.py fails at exit in a process that cannot
+            # write its data file (one inside the qc sandbox, where only overlays are writable).
+            measured = any(h == "coverage" for h in how.values())
+            env = (
+                {
+                    "COV_MAP_DIR": str(cov),
+                    "COVERAGE_PROCESS_START": str(k / "tests/gate/coverage.toml"),
+                }
+                if measured
+                else {}
+            )
             cmd += [f"--junitxml={cov / 'junit.xml'}"]
             traced = any(not h.startswith("coverage") for h in how.values())
             if traced:
@@ -347,7 +362,9 @@ class Lever:
                 ]
             rc = sh(cmd, k, log, env)
             missing = check_ran(
-                how, Trace(tr) if traced else None, covered(k, cov, cov / "junit.xml", old)
+                how,
+                Trace(tr) if traced else None,
+                covered(k, cov, cov / "junit.xml", old) if measured else set(),
             )
         if missing:
             shells = sorted(p for p in files if p != old and p.endswith(".sh"))

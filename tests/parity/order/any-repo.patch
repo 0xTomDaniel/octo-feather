@@ -1,0 +1,14 @@
+Seeded defect: a trend line of any repo counts as this repo's.
+diff --git a/tests/gate/conftest.py b/tests/gate/conftest.py
+index 759ac217..3fb3dd9b 100644
+--- a/tests/gate/conftest.py
++++ b/tests/gate/conftest.py
+@@ -182,7 +182,7 @@ def _last_seconds() -> dict[str, float]:
+                 m = _REPO.search(line)   # lines of other repos skip the parse
+                 try:   # a line not of the runner's form: skipped from its first bad field
+                     named = json.loads(m.group(1)) if m else None
+-                    into = last if named == repo else theirs if named in others else None
++                    into = last if named is not None else theirs if named in others else None
+                     if into is None:
+                         continue
+                     d: Any = json.loads(line)
