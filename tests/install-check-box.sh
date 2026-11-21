@@ -10,4 +10,7 @@
 #     UNREADABLE IN THE QC SANDBOX, none MISSING, both naming agent-browser install; ffmpeg ok, absent OPTIONAL with
 #     exit 0; the sharing MANUAL step always. herdr, gh, jq and git absent: MISSING with each install command, exit 1.
 # Run by `just check`: its scenario `box` in tests/gate/kit/install_check.py, whose box is tests/gate/kit/testkit/install_check.py.
+# Each install-check fact runs once per platform (#1200): on Linux tests/user-mise-ic-box.sh runs this item inside the
+# user-mise fixture (USER_MISE_FIXTURE set), so here it skips (exit 77); on macOS, where user-mise skips, it runs here.
+[[ "$(uname -s)" == Darwin || -n "${USER_MISE_FIXTURE:-}" ]] || { echo "install-check-box: skipped on Linux, tests/user-mise-ic-box.sh runs it inside the user-mise fixture"; exit 77; }
 exec python3 "$(dirname "$0")/gate/kit/install_check.py" box

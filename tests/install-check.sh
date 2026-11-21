@@ -17,4 +17,7 @@
 #     kit refuses, naming it. The box python3 at 3.11 or later ok; a python3 reporting 3.10: WRONG VERSION, exit 1.
 #     Uses the box's uv Python installs (UV_PYTHON_INSTALL_DIR kept while HOME is a fresh dir); installs nothing.
 # Run by `just check`: its scenario `tracker` in tests/gate/kit/install_check.py, whose box is tests/gate/kit/testkit/install_check.py.
+# Each install-check fact runs once per platform (#1200): on Linux tests/user-mise-ic.sh runs this item inside the
+# user-mise fixture (USER_MISE_FIXTURE set), so here it skips (exit 77); on macOS, where user-mise skips, it runs here.
+[[ "$(uname -s)" == Darwin || -n "${USER_MISE_FIXTURE:-}" ]] || { echo "install-check: skipped on Linux, tests/user-mise-ic.sh runs it inside the user-mise fixture"; exit 77; }
 exec python3 "$(dirname "$0")/gate/kit/install_check.py" tracker
