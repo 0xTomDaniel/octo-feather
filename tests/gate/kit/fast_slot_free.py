@@ -4,8 +4,9 @@
 each logging its name to PROBE, tests/a.sh end-to-end by its header) whose octo-feather-slot is the
 kit's own, run against a scratch XDG_STATE_HOME (the box's slot files and lane records, as
 tests/gate/kit/slot.py builds them; the box's own never touched). The copy's gate-budget.toml says
-heavy_items 2, so every run here is over it, and fast_workers CAP. Lane gh8 holds the heavy grant, and its run holds the slot's lock (`octo-feather-slot hold`, its
-stdin kept open); the runs are an implementer of lane gh7, which holds no grant.
+heavy_items 2, so every run here is over it, and fast_workers CAP. Lane gh8 holds the heavy
+grant, and its run holds the slot's lock (`octo-feather-slot hold`, its stdin kept open); the runs
+are an implementer of lane gh7, which holds no grant.
 
 fast: `just fast`, the caller's GATE_WORKERS 8, starts at once: it says it runs as the fast tier on
 CAP workers, runs the static checks and tests/b.sh (never the e2e tests/a.sh) and passes; gh8's run
@@ -25,14 +26,20 @@ from gate_recipes_first import gate, kit_copy
 from testkit import ROOT, Scratch, main
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Generator
     from pathlib import Path
 
 CAP = 2
 REFUSED = 75
 LANES = {"gh7": "w9:p1", "gh8": "w8:p1"}
 DIRECTOR = {"OCTO_FEATHER_ROLE": "director", "HERDR_PANE_ID": "w1:p1"}
-PANE = ("HERDR_PANE_ID", "HERDR_SESSION", "OCTO_FEATHER_PARENT", "HERDR_WORKSPACE_ID", "OCTO_FEATHER_SPEND_SPACE")
+PANE = (
+    "HERDR_PANE_ID",
+    "HERDR_SESSION",
+    "OCTO_FEATHER_PARENT",
+    "HERDR_WORKSPACE_ID",
+    "OCTO_FEATHER_SPEND_SPACE",
+)
 
 
 def agent(space: str) -> dict[str, str]:
@@ -59,22 +66,25 @@ def box(s: Scratch) -> Path:
     slot = (ROOT / "scripts" / "octo-feather-slot").read_text()
     (k / "scripts" / "octo-feather-slot").write_text(slot)
     budget = k / "gate-budget.toml"
-    text = re.sub(r"^heavy_items = \d+$", "heavy_items = 2", budget.read_text(), flags=re.M)
-    budget.write_text(re.sub(r"^fast_workers = \d+$", f"fast_workers = {CAP}", text, flags=re.M))
+    text = re.sub(r"^heavy_items = \d+$", "heavy_items = 2", budget.read_text(), flags=re.MULTILINE)
+    cap = f"fast_workers = {CAP}"
+    budget.write_text(re.sub(r"^fast_workers = \d+$", cap, text, flags=re.MULTILINE))
     s.git(k, "commit", "-qam", "the slot, the budget")
-    s.run([str(k / "scripts" / "octo-feather-slot"), "grant", "gh8", "--kind", "heavy"], env=DIRECTOR)
+    grant = [str(k / "scripts" / "octo-feather-slot"), "grant", "gh8", "--kind", "heavy"]
+    s.run(grant, env=DIRECTOR)
     return k
 
 
 @contextmanager
-def held(s: Scratch, k: Path) -> Iterator[int]:
+def held(s: Scratch, k: Path) -> Generator[int]:
     """Lane gh8's run holding the heavy slot's lock while the block runs; its pid. The run is a
     shell this scenario starts, beside the runs it makes, never their ancestor (one would be
     nested under it: octo-feather-slot --help)."""
     slot = [str(k / "scripts" / "octo-feather-slot"), "hold", "--kind", "heavy", "--items", "31"]
     hold = ["sh", "-c", '"$@"; :', "sh", *slot]  # `; :`: sh waits for it, never execs it
     env = {**s.env, **agent("w8")}
-    with subprocess.Popen(hold, env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True) as p:
+    pipe = subprocess.PIPE
+    with subprocess.Popen(hold, env=env, stdin=pipe, stdout=pipe, text=True) as p:
         assert p.stdout is not None
         said = p.stdout.readline()
         assert said.startswith("held: the heavy slot for lane gh8"), said
