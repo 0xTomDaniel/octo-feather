@@ -260,16 +260,18 @@ git log -S, its committer time), printing `<ticket>: ok; notice: no `Skills:` li
 rule (<sha12>, <time>): not checked; the line it owes: ...`; a kit with no such history passes it the same, naming
 that. A draft (`ticket`) has no such time: it always fails with no line.
 
-  octo-feather-lane seam TICKET <spec>#<anchor> SEAM [--before REV]
-                                   is SEAM written down for that criterion on TICKET (before REV)
+  octo-feather-lane seam TICKET <spec>#<anchor>|rule SEAM [--before REV]
+                                   is SEAM written down for that criterion, or its rule, on TICKET (before REV)
 
 `seam` checks the `Seam:` record contract (skills spec #skill-tdd, #skill-to-tickets; AGENTS.md Rules,
-integration test seam; correction lane #987). It reads TICKET through the tracker skill's `issue-view KEY --notes`
+integration test seam; correction lanes #987, #1121). It reads TICKET through the tracker skill's `issue-view KEY --notes`
 (skills spec #tracker-script-issue-view). A record is a line at column 0, outside fences and HTML comments as
 `ticket` reads them, `Seam: <spec>#<anchor>: `<seam>`` (the colon after the id optional), then any note; the seam
 is its first code span, compared exactly (`herdr-spawn` is not `scripts/herdr-spawn`). Anything else naming a
 seam (a table, prose) is no record: whether it agreed a seam stays with review. <spec>#<anchor> must be an item of
-the body's `## Acceptance criteria`, else class seam-off-criteria, exit 1. Without --before: exit 0 when a note
+the body's `## Acceptance criteria`, else class seam-off-criteria, exit 1. A ticket serving a rule (an item `rule:
+<rule> (<owner>)`, as `ticket` reads it) records `Seam: rule: `<seam>``, checked with the id `rule`: one record for
+the ticket's rules, else exactly as a criterion's; `rule` on a ticket with no `rule:` item is seam-off-criteria. Without --before: exit 0 when a note
 holds the record, printing `<ticket>: seam <id> `<seam>` recorded at <time> (<url>)`. With --before REV (the
 commit adding the test, in the git repo here; its author time, git %aI, kept through rebase and cherry-pick), per
 note holding the record: before when it was written and last changed (null: never) strictly before REV; formed
@@ -2095,9 +2097,11 @@ def cmd_ticket(args: list[str]) -> int:
     return 1 if fails else 0
 
 
-# A seam record: column 0, outside fences and comments (structure), `Seam: <spec>#<anchor>: `<seam>``, then any note.
-SEAM_LINE = re.compile(r"^Seam:[ \t]+([a-z0-9][a-z0-9._-]*#[A-Za-z0-9][A-Za-z0-9_-]*):?[ \t]+`([^`]+)`")
-SEAM_FORM = "`Seam: <spec>#<anchor>: `<seam>``, its own line at column 0 (octo-feather-lane --help (seam))"
+# A seam record: column 0, outside fences and comments (structure), `Seam: <spec>#<anchor>: `<seam>``, or on a ticket
+# serving a rule `Seam: rule: `<seam>``, then any note.
+SEAM_LINE = re.compile(r"^Seam:[ \t]+(rule|[a-z0-9][a-z0-9._-]*#[A-Za-z0-9][A-Za-z0-9_-]*):?[ \t]+`([^`]+)`")
+SEAM_FORM = ("`Seam: <spec>#<anchor>: `<seam>`` (a rule-only ticket: `Seam: rule: `<seam>``), its own line at column 0 "
+             "(octo-feather-lane --help (seam))")
 
 
 def iso_time(s: str, what: str) -> "dtm.datetime":
@@ -2133,13 +2137,13 @@ def ticket_notes(key: str) -> "tuple[str, list[tuple[str, str | None, str, str]]
 
 
 def cmd_seam(args: list[str]) -> int:
-    """Is SEAM written down for CRITERION on TICKET, before REV's test when --before names one (AGENTS.md Rules,
-    integration test seam; correction lane #987)."""
+    """Is SEAM written down for CRITERION (or `rule`, a ticket serving a rule) on TICKET, before REV's test when --before
+    names one (AGENTS.md Rules, integration test seam; correction lanes #987, #1121)."""
     rev = None
     if len(args) == 5 and args[3] == "--before":
         rev, args = args[4], args[:3]
-    if len(args) != 3 or not all(a.strip() for a in args) or not CRITERION.fullmatch(args[1]):
-        raise Unchecked("usage: octo-feather-lane seam TICKET <spec>#<anchor> SEAM [--before REV] (got "
+    if len(args) != 3 or not all(a.strip() for a in args) or not (args[1] == "rule" or CRITERION.fullmatch(args[1])):
+        raise Unchecked("usage: octo-feather-lane seam TICKET <spec>#<anchor>|rule SEAM [--before REV] (got "
                         f"{' '.join(args) or 'nothing'})")
     key, crit, seam = args
     before = None
@@ -2159,10 +2163,18 @@ def cmd_seam(args: list[str]) -> int:
         print(f"{name}: class: {cls}: {problem}; fix: {fix}")
         return 1
 
-    criteria = {"#".join(m.groups()) for m in (CRITERION.match(i) for i in criteria_items(notes[0][3]) or []) if m}
-    if crit not in criteria:
+    items = criteria_items(notes[0][3]) or []
+    criteria = {"#".join(m.groups()) for m in (CRITERION.match(i) for i in items) if m}
+    if crit == "rule" and not any(RULE.match(i) for i in items):
+        return fail("seam-off-criteria", f"rule is not an acceptance item of {name} (no `rule:` item; criteria: "
+                    f"{', '.join(sorted(criteria)) or 'none'})", "name a criterion the ticket's `## Acceptance criteria` "
+                    f"lists; `rule` only on a ticket with an item {RULE_FORM}")
+    if crit != "rule" and crit not in criteria:
+        rule_only = "" if criteria or not any(RULE.match(i) for i in items) else (
+            f"; {name} serves a rule: record `Seam: rule: `{seam}`` and run seam {name} rule '{seam}'")
         return fail("seam-off-criteria", f"{crit} is not an acceptance item of {name} ({', '.join(sorted(criteria)) or 'none'})",
-                    "name a criterion the ticket's `## Acceptance criteria` lists, or ask your supervisor to add it to the ticket")
+                    "name a criterion the ticket's `## Acceptance criteria` lists, or ask your supervisor to add it to the ticket"
+                    + rule_only)
     held = [(iso_time(w, "issue-view notes time"), None if c is None else iso_time(c, "issue-view notes time"), u)
             for w, c, u, body in notes for l in structure(body) if (m := SEAM_LINE.match(l)) and m.groups() == (crit, seam)]
 
