@@ -260,16 +260,18 @@ git log -S, its committer time), printing `<ticket>: ok; notice: no `Skills:` li
 rule (<sha12>, <time>): not checked; the line it owes: ...`; a kit with no such history passes it the same, naming
 that. A draft (`ticket`) has no such time: it always fails with no line.
 
-  octo-feather-lane seam TICKET <spec>#<anchor> SEAM [--before REV]
-                                   is SEAM written down for that criterion on TICKET (before REV)
+  octo-feather-lane seam TICKET <spec>#<anchor>|rule SEAM [--before REV]
+                                   is SEAM written down for that criterion, or its rule, on TICKET (before REV)
 
 `seam` checks the `Seam:` record contract (skills spec #skill-tdd, #skill-to-tickets; AGENTS.md Rules,
-integration test seam; correction lane #987). It reads TICKET through the tracker skill's `issue-view KEY --notes`
+integration test seam; correction lanes #987, #1121). It reads TICKET through the tracker skill's `issue-view KEY --notes`
 (skills spec #tracker-script-issue-view). A record is a line at column 0, outside fences and HTML comments as
 `ticket` reads them, `Seam: <spec>#<anchor>: `<seam>`` (the colon after the id optional), then any note; the seam
 is its first code span, compared exactly (`herdr-spawn` is not `scripts/herdr-spawn`). Anything else naming a
 seam (a table, prose) is no record: whether it agreed a seam stays with review. <spec>#<anchor> must be an item of
-the body's `## Acceptance criteria`, else class seam-off-criteria, exit 1. Without --before: exit 0 when a note
+the body's `## Acceptance criteria`, else class seam-off-criteria, exit 1. A ticket serving a rule (an item `rule:
+<rule> (<owner>)`, as `ticket` reads it) records `Seam: rule: `<seam>``, checked with the id `rule`: one record for
+the ticket's rules, else exactly as a criterion's; `rule` on a ticket with no `rule:` item is seam-off-criteria. Without --before: exit 0 when a note
 holds the record, printing `<ticket>: seam <id> `<seam>` recorded at <time> (<url>)`. With --before REV (the
 commit adding the test, in the git repo here; its author time, git %aI, kept through rebase and cherry-pick), per
 note holding the record: before when it was written and last changed (null: never) strictly before REV; formed
@@ -280,9 +282,10 @@ unlisted-test-seam, printed as `ticket` prints its failures: no record, or every
 writer runs it before the first test at a seam, and with --before on the commit adding one. Exit 2, unchecked,
 also when nothing could be read: usage, git, or issue-view's error (a tracker that cannot give a time exits
 non-zero naming it); never reported as late. Whether SEAM is the seam the test drives stays with review
-(docs/adr/0008 rung 3).
+(docs/adr/0008 rung 3). `skills` (below) runs this same check on each `Seam:` trailer of a worker's test commit.
 
-  octo-feather-lane skills TICKET  TICKET's Skills: line against its worker's Pi session, at hand-off
+  octo-feather-lane skills TICKET  TICKET's Skills: line against its worker's Pi session, and its worker's
+                                   test commits against their `Seam:` trailers and TICKET's records, at hand-off
 
 `skills` (spec issue-lifecycle #lanes-tickets, #acceptance-ticket-skills) is run by the supervisor when it consumes
 a worker's result, in its own pane (HERDR_PANE_ID) and the lane worktree. It reads TICKET as `seam` does
@@ -312,6 +315,35 @@ skills-unchecked, blocking: false, summary, ticket}, saying `recorded in <log>` 
 error records nothing.
 The limit: it proves a load, never that the skill was applied, nor that the line named the right skills; review
 judges those.
+
+Test seams (correction lane #1121, ticket #1215; the rule: AGENTS.md Rules, a test's seam written down from the
+ticket before any test, docs/adr/0002), after the skills, with or without a `Skills:` line. The worker's result: the
+non-merge commits of its worktree's HEAD (the spawn line's `cwd`) that the lane worktree's HEAD lacks (`git rev-list
+--no-merges <worker HEAD> --not HEAD`), so run it before integrating them; a worker whose cwd is the lane worktree
+itself has no commits apart, said so, none checked. A test commit adds or changes (git diff-tree --diff-filter=AM,
+no renames) a test file: a path under the repo's top-level tests/, or one a popular runner collects by its own
+default pattern (pytest's test_*.py and *_test.py, Jest's and Vitest's __tests__/ and *.test|spec.{js,jsx,ts,tsx,
+mjs,cjs,mts,cts}, go's *_test.go). Its known misses: a test that a runner's own configuration collects elsewhere,
+since no repo's runner configuration is read. Each test commit declares the seams its tests drive, one git
+trailer per seam in the ticket record's form, `Seam: <spec>#<anchor>: `<seam>`` or `Seam: rule: `<seam>``
+(read with `git interpret-trailers --parse`); each one is judged as `seam TICKET <id> <seam> --before <commit>`
+judges it (above), printing its line. A miss: a test commit with no `Seam:` trailer, one off the form, or a
+declared seam `seam --before` fails (exit 1: unlisted-test-seam, no record or a late one; seam-off-criteria). It
+prints `<ticket>: commit <sha8> ...` or seam's line, then `<ticket>: test seams: worker <name>, <n> commits the
+lane head lacks, <k> adding or changing a test`. Each miss logs one finding line, in the same write as the
+skills' ones: {at, kind: finding, source: skills, class: unlisted-test-seam, blocking, summary, ticket, commit}.
+Sent back once, counted by the log as for a skill: the first time for a ticket (no blocking unlisted-test-seam
+finding for it in the log) logs blocking true, prints the fix `<ticket>: fix: send <worker> back before integrate:
+herdr-say <pane> <message>` and exits 1, the message shell-quoted and enough alone for a worker to fix it in one step:
+each miss, the exact trailer, the ticket's records it must match (body or comment, written before the commit), the
+tracker skill's issue-comment for a seam not there (and to tell the supervisor), and the git commands that add the
+trailers keeping each author time (git rebase -i with git commit --amend --trailer, or git rebase --exec); later misses for that ticket log blocking false and
+print `<ticket>: test seams: sent back once already; this miss stands recorded, not blocking`. Exit 2, could not
+check, never blocking, recorded as skills-unchecked above, only when no first miss exits 1: a spawn line with no
+cwd, a worker worktree or commit git cannot read, or a declared seam `seam --before` leaves unchecked (exit 2).
+The limit: it proves a declaration and its record's time, a check on a declaration: whether a commit's tests drive
+the seams its trailers declare, and whether every seam they drive is declared, stays with review (docs/adr/0008
+rung 3).
 
   octo-feather-lane done PARENT    the lane's close (spec issue-lifecycle #gates-pr-line): move
                                    every ticket of PARENT, then PARENT, to done
@@ -2095,9 +2127,10 @@ def cmd_ticket(args: list[str]) -> int:
     return 1 if fails else 0
 
 
-# A seam record: column 0, outside fences and comments (structure), `Seam: <spec>#<anchor>: `<seam>``, then any note.
-SEAM_LINE = re.compile(r"^Seam:[ \t]+([a-z0-9][a-z0-9._-]*#[A-Za-z0-9][A-Za-z0-9_-]*):?[ \t]+`([^`]+)`")
-SEAM_FORM = "`Seam: <spec>#<anchor>: `<seam>``, its own line at column 0 (octo-feather-lane --help (seam))"
+# A seam record, on a ticket or as a test commit's trailer (form and reading: --help, seam and skills).
+SEAM_LINE = re.compile(r"^Seam:[ \t]+(rule|[a-z0-9][a-z0-9._-]*#[A-Za-z0-9][A-Za-z0-9_-]*):?[ \t]+`([^`]+)`")
+SEAM_FORM = ("`Seam: <spec>#<anchor>: `<seam>`` (a rule-only ticket: `Seam: rule: `<seam>``), its own line at column 0 "
+             "(octo-feather-lane --help (seam))")
 
 
 def iso_time(s: str, what: str) -> "dtm.datetime":
@@ -2132,37 +2165,39 @@ def ticket_notes(key: str) -> "tuple[str, list[tuple[str, str | None, str, str]]
     return name, notes
 
 
-def cmd_seam(args: list[str]) -> int:
-    """Is SEAM written down for CRITERION on TICKET, before REV's test when --before names one (AGENTS.md Rules,
-    integration test seam; correction lane #987)."""
-    rev = None
-    if len(args) == 5 and args[3] == "--before":
-        rev, args = args[4], args[:3]
-    if len(args) != 3 or not all(a.strip() for a in args) or not CRITERION.fullmatch(args[1]):
-        raise Unchecked("usage: octo-feather-lane seam TICKET <spec>#<anchor> SEAM [--before REV] (got "
-                        f"{' '.join(args) or 'nothing'})")
-    key, crit, seam = args
-    before = None
-    if rev is not None:
-        try:
-            p = subprocess.run(["git", "log", "-1", "--format=%H %aI", rev, "--"], capture_output=True, text=True, timeout=60)
-        except (OSError, subprocess.TimeoutExpired) as e:
-            raise Unchecked(f"git did not run ({e})") from e
-        if p.returncode or not p.stdout.strip():
-            raise Unchecked(f"--before {rev}: no commit in the git repo here ({' '.join(p.stderr.split())[:200]}): "
-                            "name the commit that adds the test, from the repo that holds it")
-        sha, at = p.stdout.split()
-        before = (sha[:8], iso_time(at, f"{rev}'s author time"))
-    name, notes = ticket_notes(key)
+def commit_time(rev: str) -> "tuple[str, dtm.datetime]":
+    """REV's full SHA and author time (git %aI, kept through rebase and cherry-pick) in the git repo here; Unchecked
+    when git cannot give them."""
+    try:
+        p = subprocess.run(["git", "log", "-1", "--format=%H %aI", rev, "--"], capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise Unchecked(f"git did not run ({e})") from e
+    if p.returncode or not p.stdout.strip():
+        raise Unchecked(f"--before {rev}: no commit in the git repo here ({' '.join(p.stderr.split())[:200]}): "
+                        "name the commit that adds the test, from the repo that holds it")
+    sha, at = p.stdout.split()
+    return sha, iso_time(at, f"{rev}'s author time")
 
-    def fail(cls: str, problem: str, fix: str) -> int:
-        print(f"{name}: class: {cls}: {problem}; fix: {fix}")
-        return 1
 
-    criteria = {"#".join(m.groups()) for m in (CRITERION.match(i) for i in criteria_items(notes[0][3]) or []) if m}
-    if crit not in criteria:
+def seam_verdict(name: str, notes: "list[tuple[str, str | None, str, str]]", crit: str, seam: str,
+                 before: "tuple[str, dtm.datetime] | None") -> "tuple[int, str]":
+    """Is SEAM recorded for CRIT on ticket NAME (its NOTES), before commit BEFORE (sha, author time) when given: the
+    exit and the line `seam` prints (--help, seam). `seam` and `skills` (a test commit's `Seam:` trailers) judge by it."""
+    def fail(cls: str, problem: str, fix: str) -> "tuple[int, str]":
+        return 1, f"{name}: class: {cls}: {problem}; fix: {fix}"
+
+    items = criteria_items(notes[0][3]) or []
+    criteria = {"#".join(m.groups()) for m in (CRITERION.match(i) for i in items) if m}
+    if crit == "rule" and not any(RULE.match(i) for i in items):
+        return fail("seam-off-criteria", f"rule is not an acceptance item of {name} (no `rule:` item; criteria: "
+                    f"{', '.join(sorted(criteria)) or 'none'})", "name a criterion the ticket's `## Acceptance criteria` "
+                    f"lists; `rule` only on a ticket with an item {RULE_FORM}")
+    if crit != "rule" and crit not in criteria:
+        rule_only = "" if criteria or not any(RULE.match(i) for i in items) else (
+            f"; {name} serves a rule: record `Seam: rule: `{seam}`` and run seam {name} rule '{seam}'")
         return fail("seam-off-criteria", f"{crit} is not an acceptance item of {name} ({', '.join(sorted(criteria)) or 'none'})",
-                    "name a criterion the ticket's `## Acceptance criteria` lists, or ask your supervisor to add it to the ticket")
+                    "name a criterion the ticket's `## Acceptance criteria` lists, or ask your supervisor to add it to the ticket"
+                    + rule_only)
     held = [(iso_time(w, "issue-view notes time"), None if c is None else iso_time(c, "issue-view notes time"), u)
             for w, c, u, body in notes for l in structure(body) if (m := SEAM_LINE.match(l)) and m.groups() == (crit, seam)]
 
@@ -2175,25 +2210,42 @@ def cmd_seam(args: list[str]) -> int:
                     "before writing the test" + ("; a test already written: tell your supervisor" if before else ""))
     if before is None:
         w, c, u = min(held, key=lambda h: h[1] or h[0])
-        print(f"{name}: seam {crit} `{seam}` recorded at {utc(c or w)} ({u})")
-        return 0
+        return 0, f"{name}: seam {crit} `{seam}` recorded at {utc(c or w)} ({u})"
     sha, rev_at = before
     ok = [h for h in held if h[0] < rev_at and (h[1] is None or h[1] < rev_at)]
     if ok:
         w, c, u = min(ok, key=lambda h: h[1] or h[0])
-        print(f"{name}: seam {crit} `{seam}` recorded at {utc(c or w)} ({u}), before commit {sha}")
-        return 0
+        return 0, f"{name}: seam {crit} `{seam}` recorded at {utc(c or w)} ({u}), before commit {sha}"
     unknown = [h for h in held if h[0] < rev_at]
     if unknown:
         w, c, u = unknown[0]
-        print(f"{name}: unchecked: `Seam:` record for {crit} `{seam}` written at {utc(w)} ({u}) but its text changed at "
-              f"{utc(cast('dtm.datetime', c))}, not before commit {sha} at {utc(rev_at)}: the tracker cannot say whether "
-              "the record was there at the commit; review judges it")
-        return 2
+        return 2, (f"{name}: unchecked: `Seam:` record for {crit} `{seam}` written at {utc(w)} ({u}) but its text changed "
+                   f"at {utc(cast('dtm.datetime', c))}, not before commit {sha} at {utc(rev_at)}: the tracker cannot say "
+                   "whether the record was there at the commit; review judges it")
     w, _, u = min(held)
     return fail("unlisted-test-seam", f"`Seam:` record for {crit} `{seam}` on {name} written at {utc(w)} ({u}), after "
                 f"commit {sha} at {utc(rev_at)}", "record each seam before its first test; this one is late: tell your "
                 "supervisor, who asks the owner")
+
+
+def cmd_seam(args: list[str]) -> int:
+    """Is SEAM written down for CRITERION (or `rule`, a ticket serving a rule) on TICKET, before REV's test when --before
+    names one (rules: --help, seam)."""
+    rev = None
+    if len(args) == 5 and args[3] == "--before":
+        rev, args = args[4], args[:3]
+    if len(args) != 3 or not all(a.strip() for a in args) or not (args[1] == "rule" or CRITERION.fullmatch(args[1])):
+        raise Unchecked("usage: octo-feather-lane seam TICKET <spec>#<anchor>|rule SEAM [--before REV] (got "
+                        f"{' '.join(args) or 'nothing'})")
+    key, crit, seam = args
+    before = None
+    if rev is not None:
+        sha, at = commit_time(rev)
+        before = (sha[:8], at)
+    name, notes = ticket_notes(key)
+    code, line = seam_verdict(name, notes, crit, seam, before)
+    print(line)
+    return code
 
 
 # --- spend (spec spend, issue #185) ---
@@ -2762,12 +2814,9 @@ def cmd_skills(args: list[str]) -> int:
 
 
 def skills_check(key: str) -> int:
-    """cmd_skills' comparison of KEY; Unchecked when it cannot run."""
+    """cmd_skills' comparison of KEY: its skills, then its worker's test seams; Unchecked when it cannot run."""
     name, notes = ticket_notes(key)
     named = skills_named(by_change(notes))
-    if not named:
-        print(f"{name}: skills: " + ("none named" if named == [] else f"no `Skills:` line ({SKILLS_FORM})") + "; nothing compared")
-        return 0
     pane = os.environ.get("HERDR_PANE_ID", "")
     if not pane:
         raise Unchecked("HERDR_PANE_ID is unset: run this in the supervisor's pane, whose lane hand-off log holds the worker's spawn line")
@@ -2798,48 +2847,185 @@ def skills_check(key: str) -> int:
                         "(it records the line), or name the ticket its worker was spawned for")
     spawn = spawns[-1]
     worker, wpane = str(spawn.get("name") or "the worker"), str(spawn.get("pane") or "")
-    files = sorted(sessions_dir().glob(f"*/*_{sid}.jsonl"))
-    if len(files) != 1:
-        raise Unchecked(f"{len(files) or 'no'} Pi session files for session {sid} ({worker}) under {sessions_dir()}: "
-                        "the reader needs exactly one")
-    try:
-        reach = session_reach(files[0], dtm.datetime.min.replace(tzinfo=dtm.timezone.utc))
-    except (OSError, ValueError) as e:
-        raise Unchecked(f"cannot read Pi session {files[0]} ({e})") from e
-    reach = reach or SessionReach("no role", {}, set())
-    print(f"{name}: worker {worker} ({wpane}), Pi session {files[0]}")
-    missed: list[tuple[str, str]] = []
-    for s in named:
-        said = "loaded" if s in reach.read else "not loaded" if s in reach.offered else "not offered"
-        print(f"{name}: skill {s}: {said}")
-        if said != "loaded":
-            missed.append((s, said))
-    if not missed:
-        return 0
-    # The send-back counted by the log: a blocking skill-not-loaded finding for this ticket and skill (--help, skills).
-    sent = {(str(r.get("ticket")), str(r.get("skill"))) for r in lines if r.get("kind") == "finding"
-            and r.get("source") == "skills" and r.get("class") == "skill-not-loaded" and r.get("blocking") is True}
     at = f"{dtm.datetime.now(dtm.timezone.utc):%Y-%m-%dT%H:%M:%SZ}"
-    found = [{"at": at, "kind": "finding", "source": "skills", "class": "skill-not-loaded", "blocking": (name, s) not in sent,
-              "summary": f"{worker} handed off without loading {s} ({said} in its Pi session), which ticket {name} names"
-              + ("" if (name, s) not in sent else "; sent back once already, the miss stands recorded"),
-              "ticket": name, "skill": s} for s, said in missed]
+    found: list[dict[str, object]] = []
+    back: list[str] = []
+    if not named:
+        print(f"{name}: skills: " + ("none named" if named == [] else f"no `Skills:` line ({SKILLS_FORM})") + "; nothing compared")
+    else:
+        files = sorted(sessions_dir().glob(f"*/*_{sid}.jsonl"))
+        if len(files) != 1:
+            raise Unchecked(f"{len(files) or 'no'} Pi session files for session {sid} ({worker}) under {sessions_dir()}: "
+                            "the reader needs exactly one")
+        try:
+            reach = session_reach(files[0], dtm.datetime.min.replace(tzinfo=dtm.timezone.utc))
+        except (OSError, ValueError) as e:
+            raise Unchecked(f"cannot read Pi session {files[0]} ({e})") from e
+        reach = reach or SessionReach("no role", {}, set())
+        print(f"{name}: worker {worker} ({wpane}), Pi session {files[0]}")
+        missed: list[tuple[str, str]] = []
+        for s in named:
+            said = "loaded" if s in reach.read else "not loaded" if s in reach.offered else "not offered"
+            print(f"{name}: skill {s}: {said}")
+            if said != "loaded":
+                missed.append((s, said))
+        # The send-back counted by the log: a blocking skill-not-loaded finding for this ticket and skill (--help, skills).
+        sent = {(str(r.get("ticket")), str(r.get("skill"))) for r in lines if r.get("kind") == "finding"
+                and r.get("source") == "skills" and r.get("class") == "skill-not-loaded" and r.get("blocking") is True}
+        found += [cast("dict[str, object]", {"at": at, "kind": "finding", "source": "skills", "class": "skill-not-loaded", "blocking": (name, s) not in sent,
+                   "summary": f"{worker} handed off without loading {s} ({said} in its Pi session), which ticket {name} names"
+                   + ("" if (name, s) not in sent else "; sent back once already, the miss stands recorded"),
+                   "ticket": name, "skill": s}) for s, said in missed]
+        back = [s for s, _ in missed if (name, s) not in sent]
+        for s, _ in missed:
+            if s not in back:
+                print(f"{name}: skill {s}: sent back once already; this miss stands recorded, not blocking (finding in {log})")
+    late, unchecked = test_seams(name, notes, worker, str(spawn.get("cwd") or ""))
+    seam_back = False
+    if late:
+        sent_seam = any(r.get("kind") == "finding" and r.get("source") == "skills" and r.get("class") == "unlisted-test-seam"
+                        and r.get("blocking") is True and str(r.get("ticket")) == name for r in lines)
+        seam_back = not sent_seam
+        found += [cast("dict[str, object]", {"at": at, "kind": "finding", "source": "skills", "class": "unlisted-test-seam", "blocking": seam_back,
+                   "summary": f"{worker} handed off test commit {sha[:8]} of ticket {name}: {why}"
+                   + ("" if seam_back else "; sent back once already, the miss stands recorded"),
+                   "ticket": name, "commit": sha}) for sha, why in late]
+        if not seam_back:
+            print(f"{name}: test seams: sent back once already; this miss stands recorded, not blocking (finding in {log})")
+    if found:
+        try:
+            with log.open("a", encoding="utf-8") as f:
+                f.write("".join(encode(x) + "\n" for x in found))
+        except OSError as e:
+            raise Unchecked(f"cannot append to {log} ({e}): fix its permissions, then rerun") from e
+    if back:
+        print(f"{name}: {len(back)} blocking finding line(s) in {log}, class skill-not-loaded: {', '.join(back)}")
+        print(f"{name}: fix: send {worker} back before integrate: herdr-say {wpane} 'Load {', '.join(back)} (read each SKILL.md "
+              f"by path), apply it to ticket {name}, then hand off again'; integrate once octo-feather-lane skills {name} no "
+              "longer exits 1")
+    if seam_back:
+        print(f"{name}: {len(late)} blocking finding line(s) in {log}, class unlisted-test-seam: "
+              + ", ".join(sha[:8] for sha, _ in late))
+        say = seam_send_back(name, notes, late)
+        print(f"{name}: fix: send {worker} back before integrate: herdr-say {wpane} {shlex.quote(say)}; integrate once "
+              f"octo-feather-lane skills {name} no longer exits 1")
+    if back or seam_back:
+        return 1
+    if unchecked:
+        raise Unchecked("; ".join(unchecked))
+    return 0
+
+
+# A test file, its runners' default patterns and its known misses: --help, skills (Test seams).
+TEST_PATH = re.compile(r"tests/.+|(?:.*/)?__tests__/.+|(?:.*/)?(?:test_[^/]*\.py|[^/]*_test\.py|[^/]*\.(?:test|spec)\.[cm]?[jt]sx?"
+                       r"|[^/]*_test\.go)")
+TRAILER_FORM = "Seam: <spec>#<anchor>: `<seam>` (a rule-only ticket: Seam: rule: `<seam>`), the ticket record's form"
+
+
+def git_out(*args: str, cwd: str | None = None, stdin: str | None = None) -> str:
+    """git ARGS' stdout (in CWD); Unchecked naming git's error when it fails."""
     try:
-        with log.open("a", encoding="utf-8") as f:
-            f.write("".join(encode(cast("dict[str, object]", x)) + "\n" for x in found))
-    except OSError as e:
-        raise Unchecked(f"cannot append to {log} ({e}): fix its permissions, then rerun") from e
-    back = [s for s, _ in missed if (name, s) not in sent]
-    for s, _ in missed:
-        if s not in back:
-            print(f"{name}: skill {s}: sent back once already; this miss stands recorded, not blocking (finding in {log})")
-    if not back:
-        return 0
-    print(f"{name}: {len(back)} blocking finding line(s) in {log}, class skill-not-loaded: {', '.join(back)}")
-    skills = ", ".join(back)
-    print(f"{name}: fix: send {worker} back before integrate: herdr-say {wpane} 'Load {skills} (read each SKILL.md by "
-          f"path), apply it to ticket {name}, then hand off again'; integrate once octo-feather-lane skills {name} no longer exits 1")
-    return 1
+        p = subprocess.run(["git", *args], cwd=cwd, input=stdin, capture_output=True, text=True, timeout=60)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise Unchecked(f"git {args[0]} did not run in {cwd or '.'} ({e})") from e
+    if p.returncode:
+        raise Unchecked(f"git {' '.join(args[:3])} failed in {cwd or '.'}: {' '.join(p.stderr.split())[:200]}")
+    return p.stdout
+
+
+def seam_send_back(name: str, notes: "list[tuple[str, str | None, str, str]]", late: "list[tuple[str, str]]") -> str:
+    """The worker's send-back for LATE test commits of ticket NAME: alone, enough to fix them in one step (--help,
+    skills, Test seams): each commit's miss, the exact trailer, the ticket's records it must match, and the git commands
+    that add it, keeping the author time."""
+    items = criteria_items(notes[0][3]) or []
+    ids = {"#".join(m.groups()) for m in (CRITERION.match(i) for i in items) if m}
+    ids |= {"rule"} if any(RULE.match(i) for i in items) else set()
+    recs = list(dict.fromkeys((m[1], m[2], w) for w, _, _, body in notes for l in structure(body)
+                              if (m := SEAM_LINE.match(l)) and m[1] in ids))   # as the notes hold them
+    try:
+        head = subprocess.run(["git", "rev-parse", "--short=12", "--verify", "-q", "HEAD"], capture_output=True, text=True,
+                              timeout=60).stdout.strip() or "<lane head>"
+    except (OSError, subprocess.TimeoutExpired):
+        head = "<lane head>"
+    misses = "; ".join(f"{sha[:8]}: {why}" for sha, why in late)
+    have = ("; ".join(f"Seam: {i}: `{sm}` (written {w})" for i, sm, w in recs)) if recs else "none"
+    return (f"Ticket {name}: your test commits are refused: {misses}. Fix: each commit that adds or changes a test carries "
+            f"one git trailer per seam its tests drive, exactly `Seam: <id>: `<seam>`` (a rule-only ticket: `Seam: rule: "
+            f"`<seam>``), each the same id and seam as a `Seam:` record on ticket {name} (its body or a comment) written "
+            f"before that commit. Records on {name} now: {have}. A seam your tests drive that is not there: post `Seam: "
+            f"<id>: `<seam>`` on {name} with the tracker skill's issue-comment and tell me (a record written after the "
+            f"commit is late: I ask the owner). Add the trailers, keeping each author time: git rebase -i {head}, mark each "
+            f"test commit edit, at each run git commit --amend --no-edit --trailer 'Seam: <id>: `<seam>`' (once per seam), "
+            f"then git rebase --continue; or, for every commit since {head}: git rebase {head} --exec 'git commit --amend "
+            f"--no-edit --trailer \"Seam: <id>: \\`<seam>\\`\"'. Check each with octo-feather-lane seam {name} <id> '<seam>' "
+            f"--before <commit>, then hand off again.")
+
+
+def test_seams(name: str, notes: "list[tuple[str, str | None, str, str]]", worker: str, cwd: str
+               ) -> "tuple[list[tuple[str, str]], list[str]]":
+    """The worker's commits the lane head lacks that add or change a test (TEST_PATH), each against its `Seam:`
+    trailers and ticket NAME's records before it (seam_verdict, as `seam --before`); prints each verdict. The late
+    ones (full sha, why) and the reasons a commit or the whole result could not be judged (--help, skills)."""
+    if not cwd:
+        return [], [f"the spawn line of {worker} names no cwd: its commits cannot be found"]
+    try:
+        theirs = git_out("rev-parse", "--show-toplevel", cwd=cwd).strip()
+    except Unchecked as e:
+        return [], [f"worker worktree {cwd} is no git worktree git can read ({e})"]
+    try:
+        ours = git_out("rev-parse", "--show-toplevel").strip()
+    except Unchecked as e:
+        return [], [f"this directory is no git worktree ({e}): run skills in the lane worktree"]
+    if Path(theirs).resolve() == Path(ours).resolve():
+        print(f"{name}: test seams: worker {worker} works in this worktree ({cwd}): its commits are the lane head's, "
+              "none apart to check")
+        return [], []
+    try:
+        head = git_out("rev-parse", "--verify", "-q", "HEAD", cwd=cwd).strip()
+        here = subprocess.run(["git", "rev-parse", "--verify", "-q", "HEAD"], capture_output=True, text=True,
+                              timeout=60).stdout.strip()
+        shas = git_out("rev-list", "--no-merges", "--reverse", head, *(["--not", here] if here else [])).split()
+    except (Unchecked, OSError, subprocess.TimeoutExpired) as e:
+        return [], [f"worker {worker}'s commits in {cwd} cannot be listed ({e})"]
+    late: list[tuple[str, str]] = []
+    unchecked: list[str] = []
+    tests = 0
+    for sha in shas:
+        try:
+            files = [f for f in git_out("diff-tree", "--root", "--no-commit-id", "-r", "--name-only", "--no-renames",
+                                        "--diff-filter=AM", sha).splitlines() if TEST_PATH.fullmatch(f)]
+            if not files:
+                continue
+            tests += 1
+            msg = git_out("log", "-1", "--format=%B", sha)
+            trailers = git_out("interpret-trailers", "--parse", stdin=msg).splitlines()
+            _, at = commit_time(sha)
+        except Unchecked as e:
+            unchecked.append(f"commit {sha[:8]}: {e}")
+            continue
+        shown = ", ".join(files[:3]) + (f" and {len(files) - 3} more" if len(files) > 3 else "")
+        seams = [t for t in trailers if re.match(r"(?i)seam\s*:", t)]
+        if not seams:
+            why = f"adds or changes test {shown} with no `Seam:` trailer (form {TRAILER_FORM})"
+            print(f"{name}: commit {sha[:8]} {why}")
+            late.append((sha, why))
+            continue
+        for t in seams:
+            m = SEAM_LINE.match(t)
+            if not m:
+                why = f"trailer {t!r} is off the form {TRAILER_FORM}"
+                print(f"{name}: commit {sha[:8]} {why}")
+                late.append((sha, why))
+                continue
+            code, line = seam_verdict(name, notes, m[1], m[2], (sha[:8], at))
+            print(line)
+            if code == 1:
+                late.append((sha, line.split(": class: ", 1)[-1]))
+            elif code == 2:
+                unchecked.append(line)
+    print(f"{name}: test seams: worker {worker}, {len(shas)} commit{'' if len(shas) == 1 else 's'} the lane head lacks, "
+          + (f"{tests} adding or changing a test" if tests else "none adding or changing a test"))
+    return late, unchecked
 
 
 class ReportSources:
