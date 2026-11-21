@@ -335,8 +335,13 @@
       "pr": null
     },
     "acceptance-fast-slot-free": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1212,
+      "record": "20261121T043123Z-1812c83c",
+      "commit": "804916bbc8b344261cd83fff110bc5cd989457e6",
+      "tests": [
+        "tests/gate/kit/test_fast_slot_free.py"
+      ]
     },
     "acceptance-fast-hook": {
       "status": "planned",
