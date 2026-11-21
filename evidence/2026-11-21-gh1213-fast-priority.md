@@ -57,3 +57,17 @@ Each fast run (worst case, 322 items, all passed): wall = waiting for a turn + r
 A waiting run said, e.g.: `fast tier: waiting my turn, 2 fast runs at once (fast_runs, gate-budget.toml), held by: pid 3617145 in /home/exedev/src/octo-feather-gh1186-g5 since 2026-11-21T08:52:21Z; pid 3617359 in ...`, then `fast tier: my turn after 642 s waiting, fast-0.lock taken`.
 
 Against the pass line: no failure anywhere, gate or fast, no earlyoom kill, MemAvailable never under 6.3 GiB (pass). Full gate +19.2% at C and +17.0% at D over mean(A, E): over "about 15%" by 2 to 4 points (miss, narrowly; steal was 15% in A and E, 10% in C and D). Fast runs all finish, but not in a few minutes: running 4.8 to 11.0 min, wall up to 21.0 min with waiting (miss on "a few minutes").
+
+### The common case: a one-script fast run (f1dab12a), 09:37 to 09:57Z
+
+The set: at this head `just fast-list` selects all 322 for any change (the branch's diff since its last recorded full pass, c1518fc4, touches shared machinery: the spec, the justfile), so no one-script set exists here; the 66-item set of evidence/2026-11-21-fast-slot-free.md came from an older map head. The one-script set instead: `just fast-list` at c1518fc4 with an uncommitted comment line in scripts/octo-feather-handoff, 150 of 455 (17 static, 133 tests), its ids run at f1dab12a as `just fast` runs them after select, `GATE_WORKERS=3 just check-tests <ids>` (the gate decides the tier: `heavy slot: not needed: fast tier, 3 workers (cap 3), at the lowest priority`). Full gate `just check` in g0 under the lane's grant; (iii)'s two worst-case runs `just fast` in g1 and g2 (322 items), the one-script run started once both said they held their turns.
+
+| run | wall s = waiting + running | exit | items | load1 start/end | steal % | MemAvailable min MiB | full gate wall s (exit) |
+|---|---|---|---|---|---|---|---|
+| (i) one-script alone | 107.2 = 0 + 107.2 | 0 | 150 passed | 1.41/4.78 | 7.6 | 11123 | |
+| (ii) beside a full gate | 271.4 = 0 + 271.4 | 0 | 150 passed | 7.14/16.69 | 12.0 | 9838 | 334.1 (0) |
+| (iii) third fast run, beside a full gate | 648.1 = 535 + 113.1 | 0 | 150 passed | 27.85/6.23 | 11.5 | 6636 | 376.8 (0) |
+| (iii) worst-case fast, turn 1 | 583.6 = 0 + 583.6 | 0 | 322 passed | 14.19/9.02 | 11.8 | 6636 | |
+| (iii) worst-case fast, turn 2 | 585.5 = 0 + 585.5 | 0 | 322 passed | 14.19/9.02 | 11.8 | 6636 | |
+
+(iii)'s one-script run said `fast tier: waiting my turn, 2 fast runs at once (fast_runs, gate-budget.toml), held by: pid 184082 in .../octo-feather-gh1186-g1 since 2026-11-21T09:45:23Z; pid 185241 in .../octo-feather-gh1186-g2 since 2026-11-21T09:45:26Z`. No earlyoom kill. Full gate alone in step 2: 320.3 s (mean A, E): (ii) +4.3%, (iii) +17.6%.
