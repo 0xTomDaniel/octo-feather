@@ -26,6 +26,9 @@ from testkit import Scratch, main
 if TYPE_CHECKING:
     from pathlib import Path
 
+# The file the commits add, in no kit copy: kit_copy takes every file git lists, staged ones too,
+# so a hook running this test copies what its own commit stages.
+RED = "hook-red.txt"
 GIT = ("git", "-c", "user.email=t@t", "-c", "user.name=t", "-c", "commit.gpgsign=false")
 INNER = """#!/usr/bin/env bash
 d="$(mktemp -d)"
@@ -39,7 +42,7 @@ def head(s: Scratch, k: Path) -> str:
 
 
 def worktree(s: Scratch) -> Path:
-    """The copy's worktree, `just setup` run in it, one em dash staged in red.txt."""
+    """The copy's worktree, `just setup` run in it, one em dash staged in RED."""
     (s.root / "user-mise").mkdir()
     k = kit_copy(s)
     (k / "tests" / "b.sh").write_text(INNER)
@@ -49,12 +52,13 @@ def worktree(s: Scratch) -> Path:
     )
     budget.write_text(one)
     s.git(k, "commit", "-qam", "b runs git, one fast worker")
+    assert not (k / RED).exists(), f"{RED} is in the kit copy already"
     w = s.root / "wt"
     s.git(k, "worktree", "add", "-q", "-b", "gh1", str(w))
     ran, _ = copy_run(s, w, "just", "setup")
     assert ran.rc == 0, f"just setup: exit {ran.rc}\n{ran.out}"
-    (w / "red.txt").write_text(f"one {DASH} dash\n")
-    s.git(w, "add", "red.txt")
+    (w / RED).write_text(f"one {DASH} dash\n")
+    s.git(w, "add", RED)
     return w
 
 
@@ -66,14 +70,14 @@ def red(s: Scratch) -> None:
     assert ran.rc != 0, said
     assert "heavy slot: not needed: fast tier" in ran.out, f"want the fast tier: {said}"
     assert "test_recipe[check-dashes]" in ran.out, said
-    assert f"red.txt:1:one {DASH} dash" in ran.out, said
+    assert f"{RED}:1:one {DASH} dash" in ran.out, said
     assert head(s, w) == before, f"want no commit: {said}"
 
 
 def green(s: Scratch) -> None:
     w = worktree(s)
-    (w / "red.txt").write_text("one dash, gone\n")
-    s.git(w, "add", "red.txt")
+    (w / RED).write_text("one dash, gone\n")
+    s.git(w, "add", RED)
     ran, probe = copy_run(s, w, *GIT, "commit", "-m", "green")
     said = f"git commit (green): exit {ran.rc}\nprobe: {probe}\n{ran.out}"
     assert ran.rc == 0, said
