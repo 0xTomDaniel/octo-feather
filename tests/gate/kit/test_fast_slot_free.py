@@ -4,7 +4,7 @@ docstring), each run as that file's command through `case` (tests/gate/kit/conft
 from collections.abc import Callable
 
 import pytest
-from fast_slot_free import fast, heavy
+from fast_slot_free import fast, heavy, turn
 
 Case = Callable[..., None]
 
@@ -18,3 +18,8 @@ def test_fast_takes_no_slot(case: Case) -> None:
 @pytest.mark.parametrize("how", ["check", "workers"])
 def test_heavy_run_asks(case: Case, how: str) -> None:
     case(heavy, how)
+
+
+@pytest.mark.criterion("quality#acceptance-fast-slot-free")
+def test_fast_waits_its_turn(case: Case) -> None:
+    case(turn)
