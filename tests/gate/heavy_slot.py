@@ -44,8 +44,10 @@ fast-I.lock in octo-feather-slot's slots dir (its --help, Files), kept for the p
 (the kernel drops it when it exits or crashes), and writes beside it fast-I.run.json (pid, cwd,
 since). With every token held it waits its turn, never refused, saying so once and for whom (each
 holder's pid, checkout and start), and tries again each second, so it takes whichever frees
-first. A run nested in a holder (a holder's pid among its ancestors: a kit test's gate run) takes
-none. No fast_runs, or no slots dir it can make: no count.
+first. A run nested under a process holding the heavy slot or a fast-run turn (its pid in the
+run's ancestry, by its run record in the slots dir: octo-feather-slot's own nested rule) takes
+none: a kit test's gate run inside a full gate or a fast run, which must not wait behind other
+fast runs. No fast_runs, or no slots dir it can make: no count.
 Any other run asks as above. An item is end-to-end by pytest's e2e marker (a tests/*.sh by its
 `# gate: e2e` header: tests/gate/test_gate.py marks it), read where the items are: without xdist
 from the session's, under xdist each worker writes the e2e ids it collected beside VERDICT before
@@ -187,19 +189,13 @@ def _ancestors() -> set[int]:
     return pids
 
 
-def _holder(lock: Path) -> dict[str, object] | None:
-    """LOCK's run record when another process holds LOCK, else None (LOCK free)."""
-    with lock.open("a") as f:
-        try:
-            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        except BlockingIOError:
-            try:
-                return cast(
-                    "dict[str, object]", json.loads(lock.with_suffix(".run.json").read_text())
-                )
-            except (OSError, ValueError):
-                return {}
-    return None
+def _record(f: Path) -> dict[str, object]:
+    """A run record, KIND-I.run.json or fast-I.run.json ({pid, ...}); {} unreadable."""
+    try:
+        v = json.loads(f.read_text())
+    except (OSError, ValueError):
+        return {}
+    return cast("dict[str, object]", v) if isinstance(v, dict) else {}
 
 
 def _wait_turn(config: pytest.Config) -> None:
@@ -215,10 +211,10 @@ def _wait_turn(config: pytest.Config) -> None:
         return
     if not os.access(slots, os.W_OK):
         return
-    locks = [slots / f"fast-{i}.lock" for i in range(n)]
     mine = _ancestors()
-    if any((h or {}).get("pid") in mine for h in map(_holder, locks)):
-        return  # nested in a run holding a token
+    if any(_record(f).get("pid") in mine for f in slots.glob("*.run.json")):
+        return  # under a run holding the heavy slot or a turn (a live ancestor: no stale record)
+    locks = [slots / f"fast-{i}.lock" for i in range(n)]
     waited, start = False, time.monotonic()
     while True:
         held: list[dict[str, object]] = []
@@ -228,7 +224,7 @@ def _wait_turn(config: pytest.Config) -> None:
                 fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
             except BlockingIOError:
                 f.close()
-                held.append(_holder(lock) or {})
+                held.append(_record(lock.with_suffix(".run.json")))
                 continue
             since = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
             run = {"pid": os.getpid(), "cwd": str(Path.cwd()), "since": since}
