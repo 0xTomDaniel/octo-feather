@@ -69,16 +69,6 @@ def qa(s: Scratch) -> None:
     selection(q)
     coverage(q)
 
-    # A failed sandbox proof (raw herdr reaches a live session) is a FAIL; the case never runs.
-    out = q.run(1, Q, "--evals", str(t / "evals"), "--case", "reads", env={"FAKE_HERDR_LEAK": "1"})
-    if not grep(
-        "sandbox: proof failed, case not run: .*FAIL live Herdr unreachable",
-        q.line("FAIL", "reads"),
-    ):
-        fail(f"proof failure not a FAIL: {out}")
-    if (q.last() / "trig" / "reads" / "transcript.jsonl").exists():
-        fail("case ran after a failed proof")
-
     # Inside a check run (marker set) it refuses before any case: 70.
     out = q.run(70, Q, "--evals", str(t / "evals"), env={"OCTO_FEATHER_CHECK_RUN": '{"just":1}'})
     if grep("qa: run ", out):
@@ -148,9 +138,28 @@ def selection(q: Qa) -> None:
         fail(f"sample line does not say its seed and size: {s1}")
     if not grep("^qa: train score 1/1", out):
         fail(f"no train score in a sample: {out}")
-    q.run(1, Q, "--evals", str(t / "evals"), "--sample", "2")
+    # The same sample again, its run the failed sandbox proof's (#1204: one run, not two; the
+    # sample line is printed before any case).
+    q.run(1, Q, "--evals", str(t / "evals"), "--sample", "2", env={"FAKE_HERDR_LEAK": "1"})
     if sampled() != s1:
         fail(f"--sample not deterministic: {s1} vs {sampled()}")
+    proof_failed(q, re.findall(r"trig/([a-z]+) \(should_trigger", s1))
+
+
+def proof_failed(q: Qa, picks: list[str]) -> None:
+    """A failed sandbox proof (raw herdr reaches a live session) is a FAIL; the case never runs:
+    the last run's PICKS."""
+    out = q.out
+    for c in picks:
+        if not grep(
+            "sandbox: proof failed, case not run: .*FAIL live Herdr unreachable",
+            q.line("FAIL", c),
+        ):
+            fail(f"proof failure not a FAIL: {out}")
+        if (q.last() / "trig" / c / "transcript.jsonl").exists():
+            fail("case ran after a failed proof")
+    if len(picks) != 2 or len(lines(r"^(PASS|FAIL) ", out).splitlines()) != 2:
+        fail(f"--sample 2 with a failed proof: want its 2 picks' FAIL lines: {out}")
 
 
 def artifacts(q: Qa) -> None:
@@ -210,7 +219,8 @@ def load_text(x: str) -> object:
 
 def coverage(q: Qa) -> None:
     """Coverage (rule: schema.md, Coverage): the kit's suite passes; then one held-out near miss
-    dropped; {tracker} on a role's skills line resolved per fixture."""
+    dropped; {tracker} on a role's skills line resolved per fixture. The near miss and the
+    {tracker} pair dropped from one copy, one check-evals run, not two (#1204): each gap named."""
     t = q.t
     tree(ROOT / "evals", t / "kit-evals")
     drop(
@@ -219,32 +229,33 @@ def coverage(q: Qa) -> None:
         'and e[x["id"]]["facts"] == [{"fact": "skill_not_read", "skill": "pull"}]',
         "no held-out near miss for implementer pull in the kit suite",
     )
+    # {tracker} on a role's skills line (rule: schema.md, Coverage): fixtures with no
+    # .octo-feather.toml, one naming linear, one naming an unknown tracker.
+    drop(
+        t / "kit-evals" / "skill-triggers",
+        'x["role"] == "supervisor" and x["should_trigger"] and x["split"] == "train" '
+        'and e[x["id"]]["facts"] == [{"fact": "skill_read", "skill": "github-issues"}]',
+        "no train should case for supervisor github-issues in the kit suite",
+    )
     out = q.run(1, C, str(t / "kit-evals"))
     if (
         "skill-triggers: role implementer skill pull: no case for should_trigger false split held-out"
         not in out
     ):
         fail(f"coverage gap not named: {out}")
-    # {tracker} on a role's skills line (rule: schema.md, Coverage): fixtures with no
-    # .octo-feather.toml, one naming linear, one naming an unknown tracker.
-    tree(ROOT / "evals", t / "trk-evals")
-    drop(
-        t / "trk-evals" / "skill-triggers",
-        'x["role"] == "supervisor" and x["should_trigger"] and x["split"] == "train" '
-        'and e[x["id"]]["facts"] == [{"fact": "skill_read", "skill": "github-issues"}]',
-        "no train should case for supervisor github-issues in the kit suite",
-    )
-    out = q.run(1, C, str(t / "trk-evals"))
     if (
         "skill-triggers: role supervisor skill github-issues: no case for should_trigger true split train;"
         not in out
     ):
         fail(f"a {{tracker}} gap not named as github-issues: {out}")
-    if count(": role .* skill ", out) != 1:
-        fail(f"only the dropped {{tracker}} pair should be missing: {out}")
+    if count(": role .* skill ", out) != 2:
+        fail(f"only the two dropped pairs should be missing: {out}")
     tree(ROOT / "evals", t / "lin-evals")
     toml = t / "lin-evals" / "fixtures" / "lane-mini" / ".octo-feather.toml"
     toml.write_text('tracker = "linear"\n')
+    # The unknown tracker on another fixture of the same copy: one run, not two (#1204).
+    jira = t / "lin-evals" / "fixtures" / "kit-mini" / ".octo-feather.toml"
+    jira.write_text('tracker = "jira"\n')
     out = q.run(1, C, str(t / "lin-evals"))
     for r in ("director", "implementer", "supervisor"):
         if (
@@ -254,10 +265,8 @@ def coverage(q: Qa) -> None:
             fail(f"a fixture's linear tracker did not add {r} linear: {out}")
     if grep(r"skill {tracker}\|skill github-issues:", out):
         fail(f"{{tracker}} left unresolved, or github-issues dropped: {out}")
-    toml.write_text('tracker = "jira"\n')
-    out = q.run(1, C, str(t / "lin-evals"))
     if (
-        "fixtures/lane-mini/.octo-feather.toml: field tracker: 'jira' has no kit tracker skill"
+        "fixtures/kit-mini/.octo-feather.toml: field tracker: 'jira' has no kit tracker skill"
         not in out
     ):
         fail(f"unknown tracker not named: {out}")
@@ -333,6 +342,7 @@ def baseline(s: Scratch) -> None:
     kq, ev = str(k), str(t / "evals")
     want = data.baseline(c1, c2)
     # Baseline c1 beside the head c2: one evaluation naming the baseline, runs interleaved, exit 0.
+    # Its 4 sandboxed runs stay (#1204): interleaving and the tokens spread need 2 runs a kit.
     out = q.run(0, kq, "--evals", ev, "--case", "reads", "--runs", "2", "--baseline", c1[:9])
     q.check([w for w in want["compared"] if w.text.startswith(("^qa: run ", "; baseline kit "))])
     if (
@@ -341,7 +351,7 @@ def baseline(s: Scratch) -> None:
     ):
         fail(f"runs not interleaved: {out}")
     # The exit status follows the current kit only: the change side c1 fails beside a passing
-    # baseline c2.
+    # baseline c2. Its own evaluation (#1204): a run has one exit, and the one above must be 0.
     q.run(1, kq, "--evals", ev, "--case", "reads", "--kit-ref", c1, "--baseline", c2)
     q.check(want["reverse"])
     # An unknown baseline: 64 before any run.
@@ -584,58 +594,61 @@ def spend(q: Qa) -> None:
 
 def tail(q: Qa) -> None:
     """--classifier, its aliases, best's tie-break, an unscored kit model, a partly answering
-    classifier, a dead bench command."""
+    classifier, a dead bench command: in 5 bench runs, not 7 (#1204). Two runs each prove the facts
+    of two old ones, which no other's settings decide; three stay alone (why: at each)."""
     t, jg = q.t, str(q.t / "jg")
 
     def jl(w: str) -> None:
         if w not in q.out:
             fail(f"bench: no '{w}' in: {q.out}")
 
-    q.run(0, Q, "--evals", jg, "--classifier", "stub/first", "--classifier", "stub/nope")
-    jl("bench jb: benched only --classifier stub/first, stub/nope (not available: stub/nope)")
-    jl("DONE bench jb: kit model stub/first, best stub/first")
-    # A --classifier naming a listed moving alias or yes/no only (rule: schema.md, Bench, Classes;
-    # a call kills the stub run).
-    cl = ["stub/p/q-latest", "stub/p/q-1.2:free", "stub/p/q-1.2", "stub/ynr"]
+    # --classifier with an unknown id, and best's tie-break (schema.md, Bench): cheap-train costs
+    # less on train, more in all; the kit's model, not benched, not scored.
+    cl = ["stub/cheap-total", "stub/cheap-train", "stub/nope"]
     q.run(0, Q, "--evals", jg, *[x for c in cl for x in ("--classifier", c)])
     jl(
-        "bench jb: benched only --classifier stub/p/q-latest, stub/p/q-1.2:free, stub/p/q-1.2, stub/ynr"
+        "bench jb: benched only --classifier stub/cheap-total, stub/cheap-train, stub/nope (not available: stub/nope)"
+    )
+    if not has(r"^  kit +stub/first +not scored: not benched$", q.out):
+        fail(f"bench: kit model not benched not shown: {q.out}")
+    jl("DONE bench jb: kit model stub/first not scored (not benched), best stub/cheap-train")
+    # A --classifier naming a listed moving alias or yes/no only (rule: schema.md, Bench, Classes;
+    # a call kills the stub run), beside the kit's model benched but unscored (schema.md, Bench: a
+    # bench FAILS): yesno cannot accept the question's form, every case refused.
+    jm = t / "jg" / "judgment-model.json"
+    dump(jm, {"model": "stub/yesno", "evidence": "evidence/jb.md"})
+    cl = ["stub/p/q-latest", "stub/p/q-1.2:free", "stub/p/q-1.2", "stub/ynr", "stub/yesno"]
+    q.run(1, Q, "--evals", jg, *[x for c in cl for x in ("--classifier", c)])
+    jl(
+        "bench jb: benched only --classifier stub/p/q-latest, stub/p/q-1.2:free, stub/p/q-1.2, stub/ynr, stub/yesno"
     )
     jl("bench jb: skipped: yes/no only stub/ynr; never called")
     jl("bench jb: skipped: moving alias (1): stub/p/q-1.2:free; never called")
     if grep("unclassified id", q.out):
         fail(f"bench: an unclassified flag with every benched id pinned: {q.out}")
-    if not has(r"^  kit +stub/first +not scored: not benched$", q.out):
-        fail(f"bench: kit model not benched not shown: {q.out}")
-    jl("DONE bench jb: kit model stub/first not scored (not benched), best stub/p/q-1.2")
     if grep("not available", q.out):
         fail(f"bench: a skipped alias named not available: {q.out}")
+    jl(
+        "FAILED bench jb: the kit's judgment model stub/yesno was not scored (answered 0 of 12 train cases, first error: Stub API error (400): "
+    )
     b = load(q.last() / "jb" / "bench.json")
     ok = at(b, "skipped") == ["stub/p/q-1.2:free", "stub/ynr"] and at(b, "unclassified") == []
-    if not (ok and at(b, "benched") == ["stub/p/q-latest", "stub/p/q-1.2"]):
-        fail("bench: --classifier aliases not recorded skipped")
-    # Best's tie-break (schema.md, Bench): cheap-train costs less on train, more in all.
-    q.run(
-        0, Q, "--evals", jg, "--classifier", "stub/cheap-total", "--classifier", "stub/cheap-train"
-    )
-    jl("DONE bench jb: kit model stub/first not scored (not benched), best stub/cheap-train")
-    # The kit's model benched but unscored (schema.md, Bench: a bench FAILS) (broken: every case
-    # refused; yesno: cannot accept the question's form, every case refused).
-    jm = t / "jg" / "judgment-model.json"
+    if not (ok and at(b, "benched") == ["stub/p/q-latest", "stub/p/q-1.2", "stub/yesno"]):
+        fail(f"bench: --classifier aliases not recorded skipped: {b}")
+    if at(b, "best", "model") != "stub/p/q-1.2":
+        fail(f"bench: best not stub/p/q-1.2: {b}")
+    # The kit's model benched but unscored (schema.md, Bench: a bench FAILS), broken: every case
+    # refused. Its own run: a run has one kit model (judgment-model.json), yesno's above.
     dump(jm, {"model": "stub/broken", "evidence": "evidence/jb.md"})
     q.run(1, Q, "--evals", jg)
     down = "stub provider down " + "x" * 400 + " end"
     jl(
         f"FAILED bench jb: the kit's judgment model stub/broken was not scored (answered 0 of 12 train cases, first error: {down})"
     )
-    dump(jm, {"model": "stub/yesno", "evidence": "evidence/jb.md"})
-    q.run(1, Q, "--evals", jg, "--classifier", "stub/yesno", "--classifier", "stub/first")
-    jl(
-        "FAILED bench jb: the kit's judgment model stub/yesno was not scored (answered 0 of 12 train cases, first error: Stub API error (400): "
-    )
     shutil.copy(t / "jg-good" / "judgment-model.json", jm)
     # A classifier that answers some cases (rule: schema.md, Bench, Unavailable): first refuses
-    # a STUB-REFUSE state.
+    # a STUB-REFUSE state. Its own run: the state is refused for every classifier, so none is
+    # eligible as best and a kit model's fact cannot share it.
     cj = t / "jg" / "jb" / "cases.json"
     edit(cj, "c[0]['state'] += ' STUB-REFUSE'", "c")
     q.run(1, Q, "--evals", jg, "--classifier", "stub/first")
@@ -647,7 +660,8 @@ def tail(q: Qa) -> None:
     if grep("unavailable stub/first", q.out):
         fail(f"bench: a partly answering classifier listed unavailable: {q.out}")
     shutil.copy(t / "jg-good" / "jb" / "cases.json", cj)
-    # A pi that dies before the command prints its result: the bench fails, naming it.
+    # A pi that dies before the command prints its result: the bench fails, naming it. Its own run:
+    # the dead pi prints none of the lines the other facts read.
     edit(cj, "c[0]['state'] += ' STUB-DIE'", "c")
     q.run(1, Q, "--evals", jg, "--classifier", "stub/first")
     jl("FAILED bench jb: the bench command printed no bench result:")
