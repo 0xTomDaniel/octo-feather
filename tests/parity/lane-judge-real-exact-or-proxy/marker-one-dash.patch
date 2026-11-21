@@ -1,0 +1,14 @@
+Seeded defect: merge-ask reads a judgment comment's marker only for a question named with one dash, so exact-or-proxy's judgment is not shown.
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index 9c74bc77..ef52e1a5 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -2229,7 +2229,7 @@ def judgment_lines(comments: list[Comment]) -> list[str]:
+     out: list[str] = []
+     for c in comments:
+         b = c.body.lstrip()
+-        m = re.match(r"<!-- octo-feather-model-judgment: ([\w.-]+) -->", b)
++        m = re.match(r"<!-- octo-feather-model-judgment: (\w+-\w+) -->", b)
+         if not m:
+             continue
+         hdr = b.split("\n### ", 1)[0].split("\n")
