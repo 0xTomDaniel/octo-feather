@@ -268,14 +268,16 @@ check-tests *args:
     exit "$rc"
 
 # The fast tier (quality #recipe-fast; when it suffices: issue-lifecycle #lanes-checkpoints): the gate items
-# scripts/octo-feather-gate select chooses, each named with why, through check-tests.
+# scripts/octo-feather-gate select chooses, each named with why, through check-tests on fast_workers workers
+# (gate-budget.toml, the cap), so it takes no heavy slot (quality #recipes-static-first: tests/gate/heavy_slot.py).
 fast:
     #!/usr/bin/env bash
     set -euo pipefail
     cd "$root"
     ids="$(python3 "$root/scripts/octo-feather-gate" select)"
     mapfile -t ids <<<"$ids"
-    just check-tests "${ids[@]}"
+    cap="$(python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["fast_workers"])' "$root/gate-budget.toml")"
+    GATE_WORKERS="$cap" just check-tests "${ids[@]}"
 
 # The dry run of just fast: the items it would select, each with why, and the count; runs none.
 fast-list:

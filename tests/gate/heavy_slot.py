@@ -25,7 +25,18 @@ as it knows its count. Under xdist a worker holds its next item before it runs
 one, so the controller cannot hold items back: it hands them out as ever, and a worker about to
 run a non-static item waits for the controller's verdict, a file named in VERDICT (set before
 the workers start), `go` once the slot is held, else `stop`, on which the worker skips the item
-unrun and unreported; without xdist the session stops after the last static check."""
+unrun and unreported; without xdist the session stops after the last static check.
+
+The fast tier takes no slot (quality #recipes-static-first, #acceptance-fast-slot-free; #1210): a
+run holding no end-to-end item, on no more workers than fast_workers in the kit's gate-budget.toml
+(the cap; `just fast` runs on it), asks nothing, early or late, whatever the slot's state, and says
+`heavy slot: not needed: fast tier, N workers (cap C)` once it knows its items; its static checks
+still run first. Any other run asks as above: it is told by what it holds, never by a flag. An
+item is end-to-end by pytest's e2e marker (a tests/*.sh by its `# gate: e2e` header:
+tests/gate/test_gate.py marks it), read where the items are: without xdist from the session's,
+under xdist each worker writes the e2e ids it collected beside VERDICT before it reports its
+collection, and the controller reads the first worker's. Workers: xdist's (its node specs), else
+1. No cap set, or no e2e ids read: no run is fast tier."""
 
 from __future__ import annotations
 
@@ -39,6 +50,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Protocol, cast
 
 import pytest
+import tomllib
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -46,6 +58,7 @@ if TYPE_CHECKING:
 SLOT = Path(__file__).resolve().parents[2] / "scripts" / "octo-feather-slot"
 STATIC = "tests/gate/test_gate.py::test_recipe["  # a static check's node id (test_gate.py)
 VERDICT = "OCTO_FEATHER_GATE_VERDICT"
+BUDGET, CAP = SLOT.parents[1] / "gate-budget.toml", "fast_workers"
 _asked: list[subprocess.Popen[str]] = []  # the hold, kept for this process's life
 
 
@@ -59,6 +72,7 @@ class _Run:
         self.decided = False
         self.verdict: Path | None = None
         self.held_early = False  # the slot held from before the static checks (--if-granted)
+        self.fast = False  # fast tier: no e2e item, on no more workers than the cap; asks nothing
         self.session: pytest.Session | None = None
 
 
@@ -67,9 +81,12 @@ _run = _Run()
 
 class _Node(Protocol):  # what this reads of xdist's WorkerController
     config: pytest.Config
+    workerinput: dict[str, object]
 
 
 class _Nodes(Protocol):  # xdist's NodeManager
+    specs: list[object]
+
     def teardown_nodes(self) -> None: ...
 
 
@@ -87,8 +104,25 @@ def _name(nodeid: str) -> str:
     return nodeid[len(STATIC) : -1]
 
 
+def _cap() -> int | None:
+    try:
+        v = tomllib.loads(BUDGET.read_text(encoding="utf-8")).get(CAP)
+    except (OSError, ValueError):
+        return None
+    return v if isinstance(v, int) and not isinstance(v, bool) and v >= 1 else None
+
+
+def _workers(config: pytest.Config) -> int:
+    dsession = cast("_DSession | None", config.pluginmanager.getplugin("dsession"))
+    return len(dsession.nodemanager.specs) if dsession is not None else 1
+
+
+def _e2e_file(workerid: object) -> Path:
+    return Path(os.environ[VERDICT]).parent / f"e2e-{workerid}"
+
+
 def _ask(config: pytest.Config, items: int, *, if_granted: bool = False) -> None:
-    if _asked or hasattr(config, "workerinput") or config.getoption("collectonly"):
+    if _asked or _run.fast or hasattr(config, "workerinput") or config.getoption("collectonly"):
         return
     early = ["--if-granted"] if if_granted else []
     p = subprocess.Popen(
@@ -121,12 +155,18 @@ def _ask(config: pytest.Config, items: int, *, if_granted: bool = False) -> None
     os._exit(p.wait() or 75)
 
 
-def _counted(config: pytest.Config, ids: Sequence[str]) -> None:
-    """The run's items known: the slot asked now when none is a static check, else after them."""
+def _counted(config: pytest.Config, ids: Sequence[str], e2e: set[str] | None) -> None:
+    """The run's items known (E2E: its e2e ids, None unread): a fast-tier run asks nothing; else
+    the slot asked now when none is a static check, else after them."""
     if _run.left is not None or hasattr(config, "workerinput") or config.getoption("collectonly"):
         return
     _run.items = len(ids)
     _run.left = {i for i in ids if _static(i)}
+    cap, workers = _cap(), _workers(config)
+    _run.fast = cap is not None and e2e is not None and not e2e & set(ids) and workers <= cap
+    if _run.fast:
+        tier = f"fast tier, {workers} worker{'s' * (workers != 1)} (cap {cap})"
+        config.get_terminal_writer().line(f"heavy slot: not needed: {tier}")
     if not _run.left:
         _decide(config)
     else:
@@ -179,19 +219,32 @@ def pytest_sessionstart(session: pytest.Session) -> None:
     _run.session = session
 
 
+def _e2e(items: Sequence[pytest.Item]) -> set[str]:
+    return {i.nodeid for i in items if i.get_closest_marker("e2e") is not None}
+
+
 @pytest.hookimpl(trylast=True)  # after conftest.py's longest first
-def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     items.sort(key=lambda i: not _static(i.nodeid))  # stable: each part keeps its order
+    worker = cast("dict[str, object] | None", getattr(config, "workerinput", None))
+    if worker is not None and VERDICT in os.environ:  # before xdist reports the collection
+        f = _e2e_file(worker["workerid"])
+        f.with_suffix(".tmp").write_text("\n".join(sorted(_e2e(items))))
+        f.with_suffix(".tmp").replace(f)
 
 
 @pytest.hookimpl(trylast=True)
 def pytest_collection_finish(session: pytest.Session) -> None:
-    _counted(session.config, [i.nodeid for i in session.items])
+    _counted(session.config, [i.nodeid for i in session.items], _e2e(session.items))
 
 
 @pytest.hookimpl(optionalhook=True)
 def pytest_xdist_node_collection_finished(node: _Node, ids: Sequence[str]) -> None:
-    _counted(node.config, ids)
+    try:
+        e2e: set[str] | None = set(_e2e_file(node.workerinput["workerid"]).read_text().split("\n"))
+    except OSError:
+        e2e = None
+    _counted(node.config, ids, e2e)
 
 
 def pytest_runtest_logreport(report: pytest.TestReport) -> None:
