@@ -2,7 +2,9 @@
 #acceptance-gate-recipes-first; #1019), through `just fast` and `just check` in a throwaway git
 copy of the kit's tracked files without its tests, as tests/fast.sh builds one. The copy's
 justfile declares two static checks, GATE_RECIPES "check-dashes check-probe" (check-probe, added
-to it, logs its name), and its test items are tests/a.sh and tests/b.sh, each logging its name;
+to it, logs its name), and its test items are tests/a.sh and tests/b.sh, each logging its name,
+tests/a.sh end-to-end by its header (`# gate: e2e`), so `just check` asks the slot and `just fast`
+does not (quality #recipes-static-first);
 its octo-feather-slot is a stand-in (the box's slot, a system a scratch run must not reach) that
 logs each call and answers as the real one does for a lane (scripts/octo-feather-slot --help,
 hold): without a grant (the default) `later:` to `hold --if-granted` and `free:` to a plain hold
@@ -14,7 +16,8 @@ red (fast, check or nested, the lane without a grant; granted, `just check` with
 dash committed in the copy makes check-dashes red. `just fast`, `just check` and a nested `just
 check` (GATE_NESTED, as a gate item runs a copy's gate: sequential) each exit non-zero, naming
 check-dashes and showing its output, the file and line it found; no test item ran, no trend line
-says full, and the slot was asked only `--if-granted`: never a slot the lane does not hold.
+says full, and the slot was asked only `--if-granted`: never a slot the lane does not hold (`just
+fast`, the fast tier, asked nothing at all).
 Granted, that first ask took the lane's slot, before any static check, and the slot was released
 at the run's end.
 green: with the dash gone, `just check` passes: the slot asked `--if-granted` (later), then
@@ -106,7 +109,8 @@ def kit_copy(s: Scratch) -> Path:
     )
     jf.write_text(text + '\ncheck-probe:\n    @echo check-probe >> "$PROBE"\n')
     for n in SCRIPTS:
-        (k / "tests" / f"{n}.sh").write_text(f'#!/usr/bin/env bash\necho {n} >> "$PROBE"\n')
+        e2e = "# gate: e2e\n" if n == "a" else ""
+        (k / "tests" / f"{n}.sh").write_text(f'#!/usr/bin/env bash\n{e2e}echo {n} >> "$PROBE"\n')
         (k / "tests" / f"{n}.sh").chmod(0o755)
     (k / "scripts" / "octo-feather-slot").write_text(SLOT)
     pkg = json.loads((k / "package.json").read_text())
@@ -119,24 +123,32 @@ def kit_copy(s: Scratch) -> Path:
     return k
 
 
+def gate_env(s: Scratch, probe: Path, **env: str) -> dict[str, str]:
+    """The env a copy's gate runs in: S's but the kit gate's own, PROBE its log, ENV over it."""
+    run_env = {k: v for k, v in s.env.items() if k not in OUTER}
+    return (
+        run_env
+        | tool_homes()
+        | {
+            "npm_config_store_dir": pnpm_store(),
+            "MISE_STATE_DIR": str(s.root / "user-mise"),
+            "XDG_STATE_HOME": str(s.root / "state"),
+            "GATE_WORKERS": "2",
+            "PROBE": str(probe),
+            "PYTEST_ADDOPTS": "--color=no",
+            **env,
+        }
+    )
+
+
 def gate(s: Scratch, k: Path, recipe: str, **env: str) -> tuple[Ran, list[str]]:
     """`just RECIPE` in K: its exit and output (stdout and stderr together), and PROBE's lines."""
     probe = s.root / "probe"
     probe.write_text("")
-    run_env = {k: v for k, v in s.env.items() if k not in OUTER}
-    run_env |= tool_homes() | {
-        "npm_config_store_dir": pnpm_store(),
-        "MISE_STATE_DIR": str(s.root / "user-mise"),
-        "XDG_STATE_HOME": str(s.root / "state"),
-        "GATE_WORKERS": "2",
-        "PROBE": str(probe),
-        "PYTEST_ADDOPTS": "--color=no",
-        **env,
-    }
     p = subprocess.run(
         ["just", recipe],  # noqa: S607
         cwd=k,
-        env=run_env,
+        env=gate_env(s, probe, **env),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
@@ -173,6 +185,9 @@ def red(s: Scratch, how: str) -> None:
         assert probe[0] == EARLY, f"want the lane's slot taken first: {said}"
         assert asked == [EARLY, "slot released"], f"want it held, then released: {said}"
         assert "the heavy slot its lane held is released at the run's end" in ran.out, said
+    elif how == "fast":
+        assert asked == [], f"want no ask: the fast tier takes no slot: {said}"
+        assert "heavy slot: not needed: fast tier, " in ran.out, said
     else:
         assert asked == [EARLY], f"want only the --if-granted ask: {said}"
     full = [t for t in trend(s) if t.get("tier") == "full"]
