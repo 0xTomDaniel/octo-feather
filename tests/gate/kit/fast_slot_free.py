@@ -50,7 +50,8 @@ lock='import fcntl, sys; fcntl.flock(open(sys.argv[1]), fcntl.LOCK_SH)'
 [[ -z "${HOLD:-}" ]] || python3 -c "$lock" "$HOLD"
 echo "a $(nice) $(ionice)" >> "$PROBE"
 """
-B_SH = '#!/usr/bin/env bash\necho "b $(nice) $(ionice)" >> "$PROBE"\n'
+B_SH = A_SH.replace("# gate: e2e\n", "").replace('"a ', '"b ')  # waits on HOLD too, no e2e
+WAIT = "fast tier: waiting my turn, 1 fast run at once (fast_runs, gate-budget.toml), held by: pid "
 REFUSED = 75
 LANES = {"gh7": "w9:p1", "gh8": "w8:p1"}
 DIRECTOR = {"OCTO_FEATHER_ROLE": "director", "HERDR_PANE_ID": "w1:p1"}
@@ -95,7 +96,8 @@ def box(s: Scratch) -> Path:
     budget = k / "gate-budget.toml"
     text = re.sub(r"^heavy_items = \d+$", "heavy_items = 1", budget.read_text(), flags=re.MULTILINE)
     cap = f"fast_workers = {CAP}"
-    budget.write_text(re.sub(r"^fast_workers = \d+$", cap, text, flags=re.MULTILINE))
+    text = re.sub(r"^fast_workers = \d+$", cap, text, flags=re.MULTILINE)
+    budget.write_text(re.sub(r"^fast_runs = \d+$", "fast_runs = 1", text, flags=re.MULTILINE))
     s.git(k, "commit", "-qam", "the slot, the budget, a.sh waiting on HOLD")
     grant = [str(k / "scripts" / "octo-feather-slot"), "grant", "gh8", "--kind", "heavy"]
     s.run(grant, env=DIRECTOR)
@@ -125,13 +127,13 @@ def status(s: Scratch, k: Path) -> str:
     return s.run([str(k / "scripts" / "octo-feather-slot"), "status"]).out
 
 
-def held_now(p: subprocess.Popen[str]) -> str:
-    """P's output, read as it runs, up to its line saying it holds gh8's slot."""
+def held_now(p: subprocess.Popen[str], until: str = HELD) -> str:
+    """P's output, read as it runs, up to its line starting UNTIL (default: it holds gh8's slot)."""
     assert p.stdout is not None
     seen = ""
     for line in p.stdout:
         seen += line
-        if line.startswith(HELD):
+        if line.startswith(until):
             return seen
     return seen  # it ended without: the caller's assertion names it
 
@@ -199,5 +201,47 @@ def heavy(s: Scratch, how: str) -> None:
         assert f"run holding it now: pid {pid} of lane gh8" in st, st
 
 
+def turn(s: Scratch) -> None:
+    """fast_runs 1 (#1213): gh8's `just fast` takes the box's one fast-run turn, its tests/b.sh
+    then waiting on a lock this scenario holds. gh7's `just fast`, started meanwhile, says it waits
+    its turn and for whom (the holder's pid and checkout), and has run nothing; released, gh8's run
+    ends, gh7's takes the turn, says so, and both pass, each item run once."""
+    k = box(s)
+    hold, probe8, probe7 = s.root / "hold", s.root / "probe-gh8", s.root / "probe-gh7"
+    for f in (hold, probe8, probe7):
+        f.write_text("")
+    env8 = gate_env(s, probe8, HOLD=str(hold), PYTHONUNBUFFERED="1", **agent("w8"))
+    env7 = gate_env(s, probe7, PYTHONUNBUFFERED="1", **agent("w9"))
+    out, cmd = subprocess.STDOUT, ["just", "fast"]
+    with hold.open() as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        try:
+            with subprocess.Popen(cmd, cwd=k, env=env8, stdout=PIPE, stderr=out, text=True) as p8:
+                seen8 = held_now(p8, "heavy slot: not needed: fast tier")
+                assert "not needed: fast tier" in seen8, f"gh8's just fast:\n{seen8}"
+                with subprocess.Popen(
+                    cmd, cwd=k, env=env7, stdout=PIPE, stderr=out, text=True
+                ) as p7:
+                    seen7 = held_now(p7, "fast tier: waiting my turn")
+                    said = f"gh7's just fast:\n{seen7}"
+                    assert WAIT in seen7, said
+                    assert re.search(rf"held by: pid \d+ in {re.escape(str(k))} since ", seen7), (
+                        said
+                    )
+                    assert probe7.read_text() == "", f"gh7 ran an item while waiting: {said}"
+                    fcntl.flock(lock, fcntl.LOCK_UN)
+                    assert p7.stdout is not None
+                    seen7 += p7.stdout.read()
+                assert p8.stdout is not None
+                seen8 += p8.stdout.read()
+        finally:
+            fcntl.flock(lock, fcntl.LOCK_UN)
+    for lane, p, seen, probe in (("gh8", p8, seen8, probe8), ("gh7", p7, seen7, probe7)):
+        said = f"{lane}'s just fast: exit {p.returncode}\n{seen}"
+        assert p.returncode == 0, said
+        assert sorted(logged(probe.read_text().splitlines())) == ["b", "check-probe"], said
+    assert re.search(r"fast tier: my turn after \d+ s waiting, fast-0.lock taken", seen7), seen7
+
+
 if __name__ == "__main__":
-    main(fast, heavy)
+    main(fast, heavy, turn)

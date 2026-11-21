@@ -38,7 +38,14 @@ sets it on each of its threads before its first item, nice 19 (os.setpriority) a
 idle class, and every process an item starts inherits it. The run is known fast only once its
 items are, after its processes start, so the recipe cannot set it (nice(1) on `just fast`): a
 `just fast` run selecting an e2e item is no fast-tier run and keeps its priority, as every other
-run does.
+run does. Box-wide, at most fast_runs (gate-budget.toml) fast-tier runs run at once (#1213): before
+its first item such a run's controller takes one of fast_runs tokens, an flock(2) on
+fast-I.lock in octo-feather-slot's slots dir (its --help, Files), kept for the process's life
+(the kernel drops it when it exits or crashes), and writes beside it fast-I.run.json (pid, cwd,
+since). With every token held it waits its turn, never refused, saying so once and for whom (each
+holder's pid, checkout and start), and tries again each second, so it takes whichever frees
+first. A run nested in a holder (a holder's pid among its ancestors: a kit test's gate run) takes
+none. No fast_runs, or no slots dir it can make: no count.
 Any other run asks as above. An item is end-to-end by pytest's e2e marker (a tests/*.sh by its
 `# gate: e2e` header: tests/gate/test_gate.py marks it), read where the items are: without xdist
 from the session's, under xdist each worker writes the e2e ids it collected beside VERDICT before
@@ -47,6 +54,8 @@ specs), else 1. No cap set, or no e2e ids read: no run is fast tier."""
 
 from __future__ import annotations
 
+import fcntl
+import json
 import os
 import shutil
 import subprocess
@@ -67,8 +76,9 @@ STATIC = "tests/gate/test_gate.py::test_recipe["  # a static check's node id (te
 VERDICT = "OCTO_FEATHER_GATE_VERDICT"
 FAST = "fast"  # beside VERDICT: the run is the fast tier
 LOWEST = "at the lowest priority (nice 19, disk idle)"
-BUDGET, CAP = SLOT.parents[1] / "gate-budget.toml", "fast_workers"
+BUDGET, CAP, RUNS = SLOT.parents[1] / "gate-budget.toml", "fast_workers", "fast_runs"
 _asked: list[subprocess.Popen[str]] = []  # the hold, kept for this process's life
+_turn: list[object] = []  # the fast-run token's open lock file, kept for this process's life
 
 
 class _Run:
@@ -113,9 +123,9 @@ def _name(nodeid: str) -> str:
     return nodeid[len(STATIC) : -1]
 
 
-def _cap() -> int | None:
+def _cap(key: str = CAP) -> int | None:
     try:
-        v = tomllib.loads(BUDGET.read_text(encoding="utf-8")).get(CAP)
+        v = tomllib.loads(BUDGET.read_text(encoding="utf-8")).get(key)
     except (OSError, ValueError):
         return None
     return v if isinstance(v, int) and not isinstance(v, bool) and v >= 1 else None
@@ -164,6 +174,84 @@ def _ask(config: pytest.Config, items: int, *, if_granted: bool = False) -> None
     os._exit(p.wait() or 75)
 
 
+def _ancestors() -> set[int]:
+    pids: set[int] = set()
+    pid = os.getpid()
+    while pid > 1:
+        try:
+            stat = Path(f"/proc/{pid}/stat").read_text()
+        except OSError:
+            break
+        pid = int(stat.rsplit(")", 1)[1].split()[1])  # the field after the command: ppid
+        pids.add(pid)
+    return pids
+
+
+def _holder(lock: Path) -> dict[str, object] | None:
+    """LOCK's run record when another process holds LOCK, else None (LOCK free)."""
+    with lock.open("a") as f:
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            try:
+                return cast(
+                    "dict[str, object]", json.loads(lock.with_suffix(".run.json").read_text())
+                )
+            except (OSError, ValueError):
+                return {}
+    return None
+
+
+def _wait_turn(config: pytest.Config) -> None:
+    """A fast-tier run's turn: one of the box's fast_runs tokens, taken, or waited for."""
+    n = _cap(RUNS)
+    slots = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
+    slots = slots / "octo-feather" / "slots"
+    if n is None:
+        return
+    try:
+        slots.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        return
+    if not os.access(slots, os.W_OK):
+        return
+    locks = [slots / f"fast-{i}.lock" for i in range(n)]
+    mine = _ancestors()
+    if any((h or {}).get("pid") in mine for h in map(_holder, locks)):
+        return  # nested in a run holding a token
+    waited, start = False, time.monotonic()
+    while True:
+        held: list[dict[str, object]] = []
+        for lock in locks:
+            f = lock.open("a")
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                f.close()
+                held.append(_holder(lock) or {})
+                continue
+            since = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+            run = {"pid": os.getpid(), "cwd": str(Path.cwd()), "since": since}
+            lock.with_suffix(".run.json").write_text(json.dumps(run))
+            _turn.append(f)
+            if waited:
+                waited_s = time.monotonic() - start
+                line = f"fast tier: my turn after {waited_s:.0f} s waiting, {lock.name} taken"
+                config.get_terminal_writer().line(line)
+            return
+        if not waited:
+            who = "; ".join(
+                f"pid {h.get('pid')} in {h.get('cwd')} since {h.get('since')}" for h in held
+            )
+            limit = f"{n} fast run{'s' * (n != 1)} at once ({RUNS}, gate-budget.toml)"
+            config.get_terminal_writer().line(
+                f"fast tier: waiting my turn, {limit}, held by: {who}"
+            )
+            config.get_terminal_writer().flush()
+            waited = True
+        time.sleep(1)
+
+
 def _counted(config: pytest.Config, ids: Sequence[str], e2e: set[str] | None) -> None:
     """The run's items known (E2E: its e2e ids, None unread): a fast-tier run asks nothing; else
     the slot asked now when none is a static check, else after them."""
@@ -175,6 +263,7 @@ def _counted(config: pytest.Config, ids: Sequence[str], e2e: set[str] | None) ->
     _run.fast = cap is not None and e2e is not None and not e2e & set(ids) and workers <= cap
     if _run.fast:
         tier = f"fast tier, {workers} worker{'s' * (workers != 1)} (cap {cap}), {LOWEST}"
+        _wait_turn(config)
         config.get_terminal_writer().line(f"heavy slot: not needed: {tier}")
         if _run.verdict is not None:
             (_run.verdict.parent / FAST).write_text("")
