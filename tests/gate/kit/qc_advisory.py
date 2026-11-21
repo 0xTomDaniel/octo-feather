@@ -7,7 +7,9 @@ the criterion's text, the demo's command and output; the answer and confidence s
 result, labelled an advisory model judgment, and in the report's results. Whatever the model
 says or when it fails, the verdicts, exit status and status commit are the same. One qc run per
 scenario (the sandboxed classify is the behaviour under test); the target is prepared once per
-gate run."""
+gate run. Each run starts a qc sandbox per demo and one for the advice: a run holds one
+classifier boundary (the stub's answer, the pi and node on PATH), so a scenario stays its own run
+only where its boundary differs from every other's, and runs only the demos its facts need."""
 
 from __future__ import annotations
 
@@ -129,8 +131,13 @@ def does_not_show(s: Scratch) -> None:
 
 def shows(s: Scratch) -> None:
     """The failing demo, the model says shows: still a failure. Its state is exactly the
-    criterion's text, command and output."""
-    q = Run(s, IDS[1:], STUB_ANSWER="shows", STUB_CONFIDENCE="0.77", STUB_WANT=B_STATE)
+    criterion's text, command and output. Run from a bare pane (#465): the node first on PATH is
+    mise's shim (a link to mise named node). In qc's advice run (a scratch dir pinning no node;
+    the sandbox turns the shims' system fallback off) it resolves no version; the answer still
+    comes."""
+    q = Run(
+        s, IDS[1:], shim_path(s), STUB_ANSWER="shows", STUB_CONFIDENCE="0.77", STUB_WANT=B_STATE
+    )
     assert q.adv(IDS[1]) == SAID.format("shows", "0.770", MODEL), q.out
     a = q.advisory(IDS[1])
     assert (a["answer"], a["confidence"]) == ("shows", 0.77), a
@@ -144,17 +151,14 @@ def unavailable(s: Scratch) -> None:
         assert q.advisory(i)["unavailable"] == "stub: provider error"
 
 
-def node_shim(s: Scratch) -> None:
-    """From a bare pane (#465): the node first on PATH is mise's shim (a link to mise named node).
-    In qc's advice run (a scratch dir pinning no node; the sandbox turns the shims' system fallback
-    off) it resolves no version; the answer still comes."""
+def shim_path(s: Scratch) -> str:
+    """S's PATH with mise's node shim first: a link to mise named node (#465)."""
     shim = s.root / "shim"
     shim.mkdir()
     mise = shutil.which("mise", path=s.env["PATH"])
     assert mise, "no mise on PATH"
     (shim / "node").symlink_to(mise)
-    q = Run(s, IDS[:1], f"{shim}{os.pathsep}{s.env['PATH']}", STUB_ANSWER="does-not-show")
-    assert q.adv(IDS[0]) == SAID.format("does-not-show", "0.910", MODEL), q.out
+    return f"{shim}{os.pathsep}{s.env['PATH']}"
 
 
 def no_pi(s: Scratch, how: str) -> None:
@@ -162,7 +166,8 @@ def no_pi(s: Scratch, how: str) -> None:
     running the bare name pi (loop), #493 AC1: the shim refuses both
     (scripts/octo-feather-qc-sandbox, its pi shim): each advisory unavailable naming pi's exit 127,
     the run ending before LIMIT_S. PATH with every pi gone: each dir holding one mirrored minus
-    it."""
+    it. nopi runs both demos (each criterion's advisory); loop, whose refusal fails the same
+    advice call, the failing one only."""
     assert shutil.which("pi", path=s.env["PATH"]) == str(s.bin / "pi"), (
         "the first pi on PATH is not the stub"
     )
@@ -186,13 +191,14 @@ def no_pi(s: Scratch, how: str) -> None:
         (loop / "pi").write_text('#!/bin/sh\nexec pi "$@"\n')
         (loop / "pi").chmod(0o755)
         path = f"{loop}{os.pathsep}{path}"
-    q = Run(s, IDS, path)
+    ids = IDS if how == "nopi" else IDS[1:]
+    q = Run(s, ids, path)
     assert q.seconds < LIMIT_S, f"{how}: qc took {q.seconds:.0f} s (limit {LIMIT_S})"
     refused = (
         rf"  advisory model judgment unavailable \(criterion-evidence by {re.escape(MODEL)}\): "
         r".*pi exit 127.*; the result stands as decided"
     )
-    for i in IDS:
+    for i in ids:
         assert re.fullmatch(refused, q.adv(i)), (
             f"{how}: {i}: no advisory unavailable naming pi exit 127: {q.out}"
         )
@@ -284,7 +290,6 @@ if __name__ == "__main__":
         does_not_show,
         shows,
         unavailable,
-        node_shim,
         no_pi,
         sprint,
         refused_sprint,
