@@ -1,0 +1,13 @@
+# The parity lever's case for the order scenario: its -n 0 run moved from the suite's own history
+# to a fresh worktree reading the suite's (#1202; tests/parity/lever.py --help).
+old = "tests/gate/kit/test_order.py::test_longest_first_order"
+old_at = "a00d2e09"
+# The old item's scenario file and the testkit it runs on.
+needs = ["tests/gate/kit/order.py", "tests/gate/kit/testkit"]
+new = "tests/gate/kit/test_order.py::test_longest_first_order"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): the scenario
+# reads the kit's conftest.py and runs its copy in a scratch suite's pytest, outside coverage.py's
+# measure: opened.
+[ran]
+"tests/gate/conftest.py" = "open tests/gate/conftest.py"
