@@ -10,7 +10,8 @@ file under tests/ the old test needs at old_at (`needs`: the libraries it source
 and helpers it runs or reads; a dir stands for every file under it), the new test (`new`, a
 pytest path), and how the old run shows it ran each file a defect patches (`ran`, file: fact);
 each *.patch there is one seeded defect in a kit command, its first line saying what it breaks.
-In one scratch copy of the kit's files (tracked, and new ones git would track), a git repo,
+In one scratch copy of the kit's files (tracked, and new ones git would track), a git repo
+holding the kit's history too (fetched, refs/kit/head: a commit a kit file names resolves),
 first with no defect, then with each patch applied in turn (git apply), the lever runs the old
 test with it and its `needs` restored from old_at, then the new one on the kit's own files,
 each through the copy's `just test` (the old as its gate item or its pytest id, the new as its
@@ -119,6 +120,10 @@ def copy(dest: Path) -> None:
     g = ["git", "-c", "user.name=lever", "-c", "user.email=lever@t", "-c", "commit.gpgsign=false"]
     for a in (["init", "-q"], ["add", "-A"], ["commit", "-qm", "parity copy"]):
         subprocess.run([*g, *a], cwd=dest, capture_output=True, check=True)
+    # The kit's history, its objects copied into the copy's own .git (no link into the kit's), so a
+    # commit a kit file names resolves there: check-evals' history fixtures (repo kit, #1204).
+    fetch = ["fetch", "-q", "--no-tags", str(ROOT), "+HEAD:refs/kit/head"]
+    subprocess.run([*g, *fetch], cwd=dest, capture_output=True, check=True)
 
 
 def old_files(old: str, old_at: str, needs: list[str]) -> dict[str, bytes]:
