@@ -48,9 +48,8 @@
 
 The rule (owner ruling #660 2026-11-06, director design, #668). Two independent kinds, each with
 its own grants and locks; they may run together:
-  heavy  a gate run selecting more than heavy_items items (fast-map and timing are full runs),
-         but a fast-tier run (`just fast`), which asks no slot: quality #recipes-static-first,
-         tests/gate/heavy_slot.py.
+  heavy  a gate run selecting more than heavy_items items (fast-map and timing are full runs);
+         the runs it exempts: quality #recipes-static-first (tests/gate/heavy_slot.py).
   eval   model evals through octo-feather-qa.
 Counts: heavy_slots, eval_slots and heavy_items in the kit's gate-budget.toml (defaults 1, 1 and
 30). A run needs a slot only inside a Herdr agent (HERDR_PANE_ID or OCTO_FEATHER_ROLE set): CI and

@@ -27,16 +27,14 @@ run a non-static item waits for the controller's verdict, a file named in VERDIC
 the workers start), `go` once the slot is held, else `stop`, on which the worker skips the item
 unrun and unreported; without xdist the session stops after the last static check.
 
-The fast tier takes no slot (quality #recipes-static-first, #acceptance-fast-slot-free; #1210): a
-run holding no end-to-end item, on no more workers than fast_workers in the kit's gate-budget.toml
-(the cap; `just fast` runs on it), asks nothing, early or late, whatever the slot's state, and says
-`heavy slot: not needed: fast tier, N workers (cap C)` once it knows its items; its static checks
-still run first. Any other run asks as above: it is told by what it holds, never by a flag. An
-item is end-to-end by pytest's e2e marker (a tests/*.sh by its `# gate: e2e` header:
-tests/gate/test_gate.py marks it), read where the items are: without xdist from the session's,
-under xdist each worker writes the e2e ids it collected beside VERDICT before it reports its
-collection, and the controller reads the first worker's. Workers: xdist's (its node specs), else
-1. No cap set, or no e2e ids read: no run is fast tier."""
+The fast tier's exemption (which runs: quality #recipes-static-first; #1210), its cap fast_workers
+in the kit's gate-budget.toml: such a run asks nothing, early or late, and says `heavy slot: not
+needed: fast tier, N workers (cap C)` once it knows its items; its static checks still run first.
+Any other run asks as above. An item is end-to-end by pytest's e2e marker (a tests/*.sh by its
+`# gate: e2e` header: tests/gate/test_gate.py marks it), read where the items are: without xdist
+from the session's, under xdist each worker writes the e2e ids it collected beside VERDICT before
+it reports its collection, and the controller reads the first worker's. Workers: xdist's (its node
+specs), else 1. No cap set, or no e2e ids read: no run is fast tier."""
 
 from __future__ import annotations
 
@@ -72,7 +70,7 @@ class _Run:
         self.decided = False
         self.verdict: Path | None = None
         self.held_early = False  # the slot held from before the static checks (--if-granted)
-        self.fast = False  # fast tier: no e2e item, on no more workers than the cap; asks nothing
+        self.fast = False  # the fast tier's run (quality #recipes-static-first): asks nothing
         self.session: pytest.Session | None = None
 
 

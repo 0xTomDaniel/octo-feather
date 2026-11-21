@@ -275,7 +275,7 @@ setup:
 
 # The fast tier (quality #recipe-fast; when it suffices: issue-lifecycle #lanes-checkpoints): the gate items
 # scripts/octo-feather-gate select chooses, each named with why, through check-tests on fast_workers workers
-# (gate-budget.toml, the cap), so it takes no heavy slot (quality #recipes-static-first: tests/gate/heavy_slot.py).
+# (gate-budget.toml; its heavy slot: quality #recipes-static-first, tests/gate/heavy_slot.py).
 fast:
     #!/usr/bin/env bash
     set -euo pipefail
