@@ -1,12 +1,15 @@
-# The parity lever's case for tests/qa-fixture-base.sh, its setup moved from tests/lib/qa.sh's bash, its assertions into typed Python
-# on the testkit's stand-ins (#998; tests/parity/lever.py --help).
+# The parity lever's case for tests/qa-fixture-base.sh: its main, head and seq cases merged into one
+# sandboxed case (#1206; earlier #998; tests/parity/lever.py --help).
 old = "tests/qa-fixture-base.sh"
-old_at = "0ba3d1db"
+old_at = "a00d2e09"
 # Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
-needs = ["tests/lib/qa.sh", "tests/gate/kit/testkit/pi_agent.py"]
+needs = ["tests/gate/kit/qa_sections.py", "tests/gate/kit/testkit"]
 # The same script, as its gate item: its id kept.
 new = "tests/gate/test_gate.py::test_script[tests/qa-fixture-base.sh]"
 
-# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit script run by the kit venv's python: coverage.py measures it; exec: check-evals, run by the python3 on PATH, outside the kit venv.
+# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python
+# kit script run by the kit venv's python: coverage.py measures it; exec: check-evals, run by the
+# python3 on PATH, outside the kit venv.
 [ran]
 "scripts/check-evals" = "exec scripts/check-evals"
+"scripts/octo-feather-qa" = "coverage"
