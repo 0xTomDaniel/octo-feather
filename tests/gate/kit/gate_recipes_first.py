@@ -126,6 +126,12 @@ def kit_copy(s: Scratch) -> Path:
 
 def gate(s: Scratch, k: Path, recipe: str, **env: str) -> tuple[Ran, list[str]]:
     """`just RECIPE` in K: its exit and output (stdout and stderr together), and PROBE's lines."""
+    return copy_run(s, k, "just", recipe, **env)
+
+
+def copy_run(s: Scratch, k: Path, *cmd: str, **env: str) -> tuple[Ran, list[str]]:
+    """CMD in K, with the copy's gate's environment: its exit and output (stdout and stderr
+    together), and PROBE's lines."""
     probe = s.root / "probe"
     probe.write_text("")
     run_env = {k: v for k, v in s.env.items() if k not in OUTER}
@@ -139,7 +145,7 @@ def gate(s: Scratch, k: Path, recipe: str, **env: str) -> tuple[Ran, list[str]]:
         **env,
     }
     p = subprocess.run(
-        ["just", recipe],  # noqa: S607
+        list(cmd),
         cwd=k,
         env=run_env,
         stdout=subprocess.PIPE,
