@@ -1,10 +1,24 @@
-# The parity lever's case for tests/install-check-models.sh, its setup and assertions moved from tests/lib/install-check.sh's bash into typed Python on the testkit's stand-ins (#996; tests/parity/lever.py --help).
+# The parity lever's case for tests/install-check-models.sh, its setup and assertions moved from tests/lib/install-check.sh's bash into typed Python on the testkit's stand-ins (#996), then on Linux run only inside the user-mise fixture by tests/user-mise-ic.sh (#1200: each install-check fact once per platform; tests/parity/lever.py --help).
 old = "tests/install-check-models.sh"
-old_at = "ee42108a"
-# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
-needs = ["tests/lib/install-check.sh", "tests/fixtures/install-check"]
-# The same script, as its gate item: its id kept (tests/user-mise-ic*.sh pick it by -k).
-new = "tests/gate/test_gate.py::test_script[tests/install-check-models.sh]"
+old_at = "a00d2e09"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help); the testkit by file, not
+# its dir: the lever restores a symlink (testkit/linear/linear) as a plain file holding its target, so it stays the copy's.
+needs = [
+    "tests/gate/kit/install_check.py",
+    "tests/gate/kit/testkit/__init__.py",
+    "tests/gate/kit/testkit/install_check.py",
+    "tests/gate/kit/testkit/jsonwalk.py",
+    "tests/gate/kit/testkit/linear.py",
+    "tests/gate/kit/testkit/gh.py",
+    "tests/gate/kit/testkit/herdr.py",
+    "tests/gate/kit/testkit/systemd.py",
+    "tests/gate/kit/testkit/pi_agent.py",
+    "tests/gate/kit/testkit/recordings/install-check.json",
+    "tests/fixtures/install-check",
+]
+# On Linux tests/install-check-models.sh skips outside the fixture (exit 77), so its facts are proved by tests/user-mise-ic.sh, which runs it
+# inside the user-mise fixture; on macOS the item itself runs them.
+new = "tests/gate/test_gate.py::test_script[tests/user-mise-ic.sh]"
 
 # How the clean old run shows it ran each file a defect patches (lever.py --help): run: just read the justfile to run the recipe the defect patches.
 [ran]

@@ -1,0 +1,14 @@
+Seeded defect: a kit model left out by --classifier is not said to be not benched.
+diff --git a/scripts/octo-feather-qa b/scripts/octo-feather-qa
+index 86981513..2eeb6a78 100755
+--- a/scripts/octo-feather-qa
++++ b/scripts/octo-feather-qa
+@@ -704,7 +704,7 @@ def bench_metrics(bench, cases, labels, kit_model=None, ruled=None):
+             k = next((m for m in models if m["model"] == kit_model), None)
+             kit["why"] = ((("yes/no only" if kit_model in (ruled or {}).get("yes_no_only", {}) else "a moving alias")
+                            if kit_model in (bench.get("skipped") or [])
+-                           else "not benched") if k is None else f"answered {k['train']['answered']} of {n_train} train cases"
++                           else "absent") if k is None else f"answered {k['train']['answered']} of {n_train} train cases"
+                           + (f", first error: {k['first_error']}" if k["first_error"] else ""))
+         else:
+             t = c["train"]["_terms"]; n = len(t); mean = sum(t) / n

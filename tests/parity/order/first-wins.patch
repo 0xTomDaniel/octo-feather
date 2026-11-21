@@ -1,0 +1,14 @@
+Seeded defect: an item's seconds come from the first line naming it, not the last.
+diff --git a/tests/gate/conftest.py b/tests/gate/conftest.py
+index 759ac217..2a7702eb 100644
+--- a/tests/gate/conftest.py
++++ b/tests/gate/conftest.py
+@@ -188,7 +188,7 @@ def _last_seconds() -> dict[str, float]:
+                     d: Any = json.loads(line)
+                     if d["repo"] == named:
+                         for s in d["steps"]:
+-                            into[str(s.get(NODE) or s["name"])] = float(s["seconds"])
++                            into.setdefault(str(s.get(NODE) or s["name"]), float(s["seconds"]))
+                 except (ValueError, KeyError, TypeError):
+                     continue
+     except OSError:

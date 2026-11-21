@@ -1,0 +1,14 @@
+Seeded defect: a --classifier naming a listed yes/no only classifier benches it.
+diff --git a/scripts/octo-feather-qa b/scripts/octo-feather-qa
+index 86981513..c7c89895 100755
+--- a/scripts/octo-feather-qa
++++ b/scripts/octo-feather-qa
+@@ -797,7 +797,7 @@ def run_bench(qc, d, suite, picked, requested, runid, out, kit_model):
+     ruled = classifier_lists(d.parent)
+     inp = {"question": q["question"], "labels": q["labels"], "criteria": {lb: q["label_help"][lb] for lb in q["labels"]},
+            "cases": [{"id": c["id"], "state": c["state"]} for c, _ in picked], "classifiers": requested or None,
+-           "skip": ruled["moving_alias"] + list(ruled["yes_no_only"])}
++           "skip": ruled["moving_alias"] + ([] if requested else list(ruled["yes_no_only"]))}
+     bench, run, rec, problem = classify(qc, inp, tmo, f"qa-{runid}-bench", out, purpose="bench")
+     res["seconds"] = round(time.time() - t0, 1)
+     if problem:

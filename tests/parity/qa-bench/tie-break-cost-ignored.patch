@@ -1,0 +1,14 @@
+Seeded defect: best's tie-break skips train cost, going to the name.
+diff --git a/scripts/octo-feather-qa b/scripts/octo-feather-qa
+index 86981513..0b586c7c 100755
+--- a/scripts/octo-feather-qa
++++ b/scripts/octo-feather-qa
+@@ -694,7 +694,7 @@ def bench_metrics(bench, cases, labels, kit_model=None, ruled=None):
+                        "available": any(r["choice"] in labels for r in rows)})
+     n_train = sum(c["split"] == "train" for c, _ in cases)
+     eligible = [m for m in models if n_train and m["train"]["answered"] == n_train]
+-    eligible.sort(key=lambda m: (-m["train"]["accuracy"], m["train"]["brier"], m["train_cost_usd"], m["model"]))
++    eligible.sort(key=lambda m: (-m["train"]["accuracy"], m["train"]["brier"], m["model"]))
+     best = {"model": eligible[0]["model"], "rule": BEST_RULE} if eligible else None
+     kit = None
+     if kit_model is not None:
