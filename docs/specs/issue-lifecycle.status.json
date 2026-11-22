@@ -324,9 +324,9 @@
     },
     "acceptance-ticket-skills": {
       "status": "built",
-      "pr": 1171,
-      "record": "20261120T041917Z-e303c5bf",
-      "commit": "ad5f43e0aa2eaa2ac8c7fa534e7e1da30f44a02a",
+      "pr": 1233,
+      "record": "20261122T210910Z-38027494",
+      "commit": "7e4f88e561bf672e12d3b9d45bd191c540ef4119",
       "tests": []
     },
     "acceptance-lane-start": {
