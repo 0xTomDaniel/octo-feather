@@ -2342,7 +2342,8 @@ CHECK_FORM = (
     "what), else one line each `Check: <path>: <rule> (<owner>) | reads: <what it reads> | "
     "class: exact|proxy|declaration` (docs/adr/0008)"
 )
-# The declaration class (docs/adr/0008 rung 2): merge-ask shows its lines apart.
+# The declaration class: docs/adr/0008 rung 2; how merge-ask shows it: spec issue-lifecycle
+# #lanes-one-head.
 DECLARATION = "| class: declaration"
 JUDGMENT_FIELDS = (
     "Judgment",
