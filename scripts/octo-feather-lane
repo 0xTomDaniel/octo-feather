@@ -248,8 +248,9 @@ build describes is review's and the qc judge's (docs/adr/0008, #118). Each failu
 at the current directory; on GitHub it works under the qc judge's offline gh).
 
 A ticket's skills (spec issue-lifecycle #lanes-tickets): one line at column 0, outside fences and HTML comments as
-the body is read above, `Skills: <skill>, <skill>` (a name may be backticked) or `Skills: none`, under the to-tickets
-template's `## Skills` heading; with several, the last counts. Every ticket carries one (owner ruling 2026-11-19 on
+the body is read above, `Skills: <skill>, <skill>` (a name may be backticked; a trailing .;:!? is no part of it)
+or `Skills: none`, under the to-tickets template's `## Skills` heading; with several, the last counts. Every ticket
+carries one (owner ruling 2026-11-19 on
 #1099): none is class missing-skills. `ticket` reads the draft's line; `tickets`, as `skills`, the latest line of
 each ticket's body and comments (a line set later is a comment; `issue-view KEY --notes`, as `seam` reads them, by
 each note's last change), so a later comment's line replaces the body's and is the one checked. Each name must be a skill agents/implementer.md is offered as pi-role
@@ -442,7 +443,8 @@ After the lanes:
                                                  did not fail (top level: its result's isError not true; in a
                                                  batch: the call's status ok in the result's nestedCalls, as Pi
                                                  records them) and whose own arguments open <folder>/SKILL.md:
-                                                 the read tool's path; in bash (shell words), a file operand of
+                                                 the read tool's path; in bash (shell words; # opens a comment
+                                                 only at a word's start, as in bash), a file operand of
                                                  cat, head, tail, sed, less, more, bat or nl, or a < input (not
                                                  sed's script text, an option's value, a > target, a heredoc
                                                  body, sed -i). A codemode batch's source is never read: a batch
@@ -1661,7 +1663,9 @@ def skills_named(bodies: list[str]) -> list[str] | None:
                 got = m.group(1)
     if got is None or got.lower() == "none":
         return None if got is None else []
-    return list(dict.fromkeys(s.strip().strip("`") for s in got.split(",") if s.strip().strip("`")))
+    # A name is read without the sentence's trailing punctuation: `Skills: tdd, python.` names python (#1231).
+    names = (s.strip().rstrip(".;:!?").strip("`") for s in got.split(","))
+    return list(dict.fromkeys(s for s in names if s))
 
 
 # missing-skills on every ticket since the commit adding this line (owner ruling 2026-11-19 on #1099; transition: --help, ticket)
@@ -2545,6 +2549,9 @@ VALUED = {"head": {"-n", "-c"}, "tail": {"-n", "-c"}, "sed": {"-l"}, "nl": {"-b"
 SHELL_STOP = {"|", "||", "&", "&&", ";", ";;", "(", ")", "\n"}
 SHELL_LEAD = {"{", "}", "!", "then", "do", "else", "time", "if", "while", "until", "exec", "command"}
 HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?^\s*\2\s*$", re.S | re.M)
+# A `#` inside a word, which bash keeps in the word but shlex takes as a comment's start (#1231): hidden from shlex as
+# NUL, which no shell word holds, and put back in each word. Bash opens a comment only at a word's start.
+MID_WORD_HASH = re.compile(r"(?<=[^\s;&|()<>])#")
 STAMP = re.compile(r'"timestamp":\s*"([^"]+)"')
 
 def sessions_dir() -> Path:
@@ -2561,10 +2568,10 @@ def skill_operand(word: str) -> str | None:
 def shell_reads(cmd: str) -> list[str]:
     """The skill folders whose SKILL.md a shell command CMD opens as a reader's file operand (rules: --help, report)."""
     try:
-        lex = shlex.shlex(HEREDOC.sub("", cmd), posix=True, punctuation_chars=";&|()<>\n")
+        lex = shlex.shlex(MID_WORD_HASH.sub("\0", HEREDOC.sub("", cmd)), posix=True, punctuation_chars=";&|()<>\n")
         lex.whitespace = " \t\r"
         lex.whitespace_split = True
-        words = list(lex)
+        words = [w.replace("\0", "#") for w in lex]
     except ValueError:
         return []   # unbalanced quotes: nothing resolved, nothing counted
     out: list[str] = []
