@@ -3,13 +3,17 @@ each run as that file's command through `case` (tests/gate/kit/conftest.py)."""
 
 from collections.abc import Callable
 
-from lane_seam import github, linear
+from lane_seam import github, linear, rule
 
 Case = Callable[..., None]
 
 
 def test_lane_seam_github(case: Case) -> None:
     case(github)
+
+
+def test_lane_seam_rule(case: Case) -> None:
+    case(rule)
 
 
 def test_lane_seam_linear(case: Case) -> None:
