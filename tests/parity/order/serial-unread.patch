@@ -1,0 +1,14 @@
+Seeded defect: a run without xdist (-n 0) reads no history: collection order.
+diff --git a/tests/gate/conftest.py b/tests/gate/conftest.py
+index 759ac217..04d0c22e 100644
+--- a/tests/gate/conftest.py
++++ b/tests/gate/conftest.py
+@@ -317,7 +317,7 @@ def _source(item: pytest.Item) -> str:
+ 
+ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+     given: dict[str, Any] = getattr(config, "workerinput", {})   # an xdist worker's: the controller's read
+-    _longest_first(items, given.get(LAST) or config.stash.get(_LAST, None) or {})
++    _longest_first(items, given.get(LAST) or {})
+     if tags := os.environ.get(TAGS):
+         Path(tags).write_text(json.dumps({i.nodeid: _tags(i) for i in items if _tags(i)}))
+     if listed := os.environ.get(ITEMS):

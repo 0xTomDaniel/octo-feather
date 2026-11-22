@@ -1,0 +1,14 @@
+Seeded defect: a --classifier naming no available classifier is not named.
+diff --git a/scripts/octo-feather-qa b/scripts/octo-feather-qa
+index 86981513..e39c129e 100755
+--- a/scripts/octo-feather-qa
++++ b/scripts/octo-feather-qa
+@@ -735,7 +735,7 @@ def bench_report(suite, q, cases, bench, models, best, kit, requested, ruled):
+            f"bench {suite['suite']}: classifiers available ({len(bench.get('available') or [])}): {', '.join(bench.get('available') or []) or 'none'}"]
+     if requested:
+         miss = [m for m in requested if m not in (bench.get("benched") or []) + (bench.get("skipped") or [])]
+-        out.append(f"bench {suite['suite']}: benched only --classifier {', '.join(requested)}" + (f" (not available: {', '.join(miss)})" if miss else ""))
++        out.append(f"bench {suite['suite']}: benched only --classifier {', '.join(requested)}" + "")
+     moving = [m for m in bench.get("skipped") or [] if m in ruled["moving_alias"]]
+     if moving:
+         out.append(f"bench {suite['suite']}: skipped: moving alias ({len(moving)}): {', '.join(moving)}; never "

@@ -1,0 +1,14 @@
+Seeded defect: a branch holds its fixture's own dir, not its based tree.
+diff --git a/scripts/octo-feather-qa b/scripts/octo-feather-qa
+index 86981513..89ab894d 100755
+--- a/scripts/octo-feather-qa
++++ b/scripts/octo-feather-qa
+@@ -384,7 +384,7 @@ def fixture_copy(src, scratch, case=None, evals=None):
+         steps = [["checkout", "-q", "-b", b["branch"], back], ["rm", "-rq", "--", "."]]
+         for a in steps:
+             subprocess.run(["git", *a], cwd=cast("Path", repo), env=env, check=True, capture_output=True)
+-        shutil.copytree(fixture_src(*cast("tuple[Path, object, Path]", (evals, b["fixture"], scratch))), cast("Path", repo),
++        shutil.copytree(evals / "fixtures" / b["fixture"], cast("Path", repo),
+                         symlinks=True, dirs_exist_ok=True)
+         for a in (["add", "-A"], [*commit, b["message"]], ["checkout", "-q", back]):
+             subprocess.run(["git", *a], cwd=cast("Path", repo), env=env, check=True, capture_output=True)

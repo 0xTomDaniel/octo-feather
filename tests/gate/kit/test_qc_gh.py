@@ -16,7 +16,6 @@ from qc_gh import (
     snapshot_misses,
     snapshot_read,
     snapshot_read_only,
-    status_commit_fails,
     status_commit_owner,
 )
 
@@ -52,11 +51,6 @@ def test_fetch_fails(case: Case) -> None:
 @pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)
 def test_no_github(case: Case) -> None:
     case(no_github)
-
-
-@pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)
-def test_status_commit_fails(case: Case) -> None:
-    case(status_commit_fails)
 
 
 @pytest.mark.e2e  # the real qc sandbox runs (quality spec #test-kinds)

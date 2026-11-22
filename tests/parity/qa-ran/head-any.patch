@@ -1,0 +1,14 @@
+Seeded defect: ran's {head} matches any sha, not only the case's head.
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index 404ccdfd..61b50691 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -623,7 +623,7 @@ def arg_matches(want: str, got: str, head: str | None) -> bool:
+     if "{head}" not in want or not head:
+         return want == got
+     m = re.fullmatch("([0-9a-f]{7,40})".join(map(re.escape, want.split("{head}"))), got)
+-    return m is not None and all(head.startswith(g) for g in m.groups())
++    return m is not None
+ 
+ 
+ def args_match(want: list[str], got: list[str], head: str | None) -> bool:

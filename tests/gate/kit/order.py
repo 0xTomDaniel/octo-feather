@@ -3,10 +3,12 @@ scenarios (testkit.main).
 
 The kit's runner (tests/gate/conftest.py and test_gate.py, copied unchanged) runs by pytest as
 a command on five items, tests/a.sh to e.sh, each appending its worker and name to a log as it
-starts, so the log is the order the workers received them. The suite is a git repo; its trend
-file is written before each run: none (no history), or the fake history: an older line of this
-repo (e.sh 50 s), a later one (a 1, c 3, d 2, e 0.5; b.sh absent) and a line of another repo
-(e.sh 100 s), which must not count.
+starts, so the log is the order the workers received them. The suite is a git repo with a second
+worktree, fresh; the trend file is written before each run: none (no history), or the fake
+history: an older line of the suite (e.sh 50 s), a later one (a 1, c 3, d 2, e 0.5; b.sh absent)
+and a line of another repo (e.sh 100 s), which must not count. The suite, with history of its
+own, keeps to it beside a line of the fresh worktree (a 1, e 9); the fresh worktree, with none,
+runs by the suite's.
 """
 
 from __future__ import annotations
@@ -15,9 +17,12 @@ import json
 import os
 import shutil
 import subprocess
-from typing import cast
+from typing import TYPE_CHECKING, cast
 
 from testkit import ROOT, Scratch, main
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 SCRIPTS = ("a", "b", "c", "d", "e")
 SAME = ("m1", "m2")  # modules holding one same-named item each
@@ -71,8 +76,13 @@ def longest_first(s: Scratch) -> None:
     git = shutil.which("git")
     assert git, "no git on PATH"
     subprocess.run([git, "init", "-q", str(suite)], check=True)
+    s.git(suite, "add", "-A")
+    s.git(suite, "commit", "-qm", "suite")
+    fresh = s.root / "w"
+    s.git(suite, "worktree", "add", "-q", "--detach", str(fresh))
     top = [git, "rev-parse", "--show-toplevel"]
     repo = subprocess.run(top, cwd=suite, capture_output=True, text=True, check=True).stdout.strip()
+    wt = subprocess.run(top, cwd=fresh, capture_output=True, text=True, check=True).stdout.strip()
     history = "\n".join(
         (
             _line(repo, {"e": 50}),
@@ -80,18 +90,21 @@ def longest_first(s: Scratch) -> None:
             _line(repo + "-other", {"e": 100}),
         )
     )
+    with_fresh = history + "\n" + _line(wt, {"a": 1, "e": 9})
     env = {k: v for k, v in os.environ.items() if k not in DROP}
     env |= {"XDG_STATE_HOME": str(s.root / "xdg"), "GATE_RECIPES": "", "ORDER_LOG": str(log)}
     trend = s.root / "xdg" / "octo-feather" / "check-runs.jsonl"
     trend.parent.mkdir(parents=True)
     uv = ["uv", "run", "--project", str(ROOT), "--locked", "--offline", "--no-sync", "pytest"]
 
-    def run(past: str, workers: int) -> tuple[list[list[str]], dict[str, object]]:
+    def run(
+        past: str, workers: int, cwd: Path = suite
+    ) -> tuple[list[list[str]], dict[str, object]]:
         trend.write_text(past + "\n" if past else "")
         log.write_text("")
         p = subprocess.run(
             [*uv, "-n", str(workers)],
-            cwd=suite,
+            cwd=cwd,
             env=env,
             capture_output=True,
             text=True,
@@ -106,10 +119,11 @@ def longest_first(s: Scratch) -> None:
     # Recorded ones longest first in their places; b keeps its place; m1 and m2, one name in two
     # modules, each by its own node id.
     want = ["c", "b", "d", "a", "e", "m2", "m1"]
-    for workers in (1, 0):
-        started, trend_line = run(history, workers)
-        got = [n for _, n in started]
-        assert got == want, f"-n {workers}: {got}, want {want}"
+    started, trend_line = run(with_fresh, 1)
+    got = [n for _, n in started]
+    assert got == want, f"-n 1, own history beside the fresh worktree's: {got}, want {want}"
+    got = [n for _, n in run(history, 0, fresh)[0]]
+    assert got == want, f"-n 0, fresh worktree, the suite's history: {got}, want {want}"
     first: dict[str, str] = {}
     for worker, name in run(history, 2)[0]:
         first.setdefault(worker, name)

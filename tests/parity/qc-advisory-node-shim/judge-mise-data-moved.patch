@@ -1,0 +1,13 @@
+Seeded defect: the judge's mise data dir is not the one mise reports: mise finds none of the box's installs, so the kit's pinned node is gone and the bare node on PATH (a mise shim from a bare pane) runs (#465, #496; scripts/octo-feather-qc-sandbox 6b).
+diff --git a/scripts/octo-feather-qc-sandbox b/scripts/octo-feather-qc-sandbox
+index d6e12b0e..fa5a8e90 100755
+--- a/scripts/octo-feather-qc-sandbox
++++ b/scripts/octo-feather-qc-sandbox
+@@ -1179,6 +1179,7 @@ def setup(judge: list[str]) -> NoReturn:
+         MISE_NOT_FOUND_SYSTEM_FALLBACK="0",
+         **menv,
+     )
++    jenv["MISE_DATA_DIR"] = f"{SCR}/mise/state"
+     open(f"{SCR}/bin/pi", "w").write(pishim(realpi, SCR))
+     if HERDR:
+         open(f"{SCR}/bin/herdr", "w").write(

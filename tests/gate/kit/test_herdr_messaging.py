@@ -12,6 +12,7 @@ from herdr_messaging import (
     herdr_malformed,
     parent_gone,
     parent_resumed,
+    parked_resumed,
     post_merge_busy,
     queued_completion,
     repoint_record,
@@ -121,6 +122,10 @@ def test_fresh_worker_session(case: Case) -> None:
 
 def test_parent_resumed(case: Case) -> None:
     case(parent_resumed)
+
+
+def test_parked_resumed(case: Case) -> None:
+    case(parked_resumed)
 
 
 def test_director_moved(case: Case) -> None:
