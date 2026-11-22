@@ -63,7 +63,7 @@ A tracker that cannot be read or written refuses the archive, its reflections' l
 
   octo-feather-lane verdict PR HEAD REPORT|- [--resolution] [--repo O/R]
                                    create, or update in place, the PR's one review verdict
-                                   comment (marker, head, verdict, findings); prints its URL
+                                   comment (marker, head, verdict, check set, rounds, findings); prints its URL
   octo-feather-lane resolution MERGE
                                    the code reviewer's brief after a main merge that resolved a conflict or
                                    changed anything beyond git's automatic merge (when: issue-lifecycle
@@ -102,6 +102,15 @@ verdict, neither check form, both, a malformed Check line, a class other than ex
 a `class: proxy` line with `Verdict: clear` (a proxy check blocks). The comment's header carries
 the lines; merge-ask prints them under the section for the owner. HEAD is the head the review judged, H, a commit
 of the PR (7+ hex prefix); the comment names it (`Head:`) and the PR's head when posted (`PR head:`).
+Review rounds (rule: issue-lifecycle #lanes-one-head, #acceptance-verdict-covers-lane): the report's one `Range:`
+line (its form: Report fields, above). Refused: no Range, `to` not HEAD, `from` not an ancestor of `to`, and a
+`from` that is neither a commit of the PR's base branch (a full round) nor exactly the head the last posted round
+ended on (a delta round), naming that head and the two ways out. The comment keeps every posted round under
+`### Rounds` (`- Round N: <from>..<to>, full|delta, verdict V`, its check lines under it), a report of the last
+round's range replacing that round; its header's `Check:` lines are the lane's check set: the latest full round's,
+then each later delta's, a later line for the same path and rule replacing the earlier. A comment posted before
+rounds counts as one round, the whole lane ending at its Head (`legacy`), so the next round may be a delta from
+it. --resolution comments take no Range.
 With --resolution, HEAD is such a merge, the review covering what `resolution` prints for it alone: the PR's one
 comment for that merge names it (`Merge:`) and its resolution's files (`Files:`); refused for a commit that is no
 merge or a merge with nothing beyond git's automatic merge.
@@ -160,7 +169,10 @@ Insufficient evidence (quality spec #qc-results) is never triaged: the check fai
 says it, or whose latest result in the qc reports at the judged head says it (octo-feather-qc --help, Report;
 OCTO_FEATHER_QC_DIR as there), with what is missing, until a rerun of just qc gives it pass or fail.
 The verdict comment must also carry its check classes (`Checks: none` or `Check:` lines, no
-`class: proxy`). Pass: the section on stdout, then `Decision sources`, one line per row: the decision source
+`class: proxy`), and its rounds (verdict, above) must chain from BASE to its Head: walking back from the last round
+while each starts where the one before it ended, the first is a full round starting off the PR's commits or a
+legacy comment; else the check names the range the rounds cover and the lane before them no posted round covers.
+Pass prints them under `Review rounds`, after `Review check classes`. Pass: the section on stdout, then `Decision sources`, one line per row: the decision source
 of the criterion's latest result in the qc reports at the judged head (as for insufficient evidence, above), or
 `no qc result at the judged head`, shown only (quality spec #qc-results); `Review check classes` (below); then `Gate time`, the full gate on the final head (the passed
 full run, check-runs.jsonl in the state dir, on the PR head or the latest lane commit before it that has one)
@@ -1128,11 +1140,67 @@ def cmd_verdict(args: list[str]) -> int:
         print(f"verdict: {said} ({verdict}, resolution of merge {judged[:12]})", file=sys.stderr)
         print(out)
         return 0
-    body = f"{MARKER}\n## Code review verdict\n\nHead: {judged}\nPR head: {head}\nVerdict: {verdict}\n" + "".join(f"{c}\n" for c in cls) + f"\n### Findings\n\n{report.strip()}\n"
+    rounds = review_rounds(report, judged, cast("dict[str, Any]", d), merge_ask.Round("", judged, "", verdict, tuple(cls)))
+    lines = [ln for n, r in enumerate(rounds, 1) for ln in r.line(n)]
+    body = (f"{MARKER}\n## Code review verdict\n\nHead: {judged}\nPR head: {head}\nVerdict: {verdict}\n"
+            + "".join(f"{c}\n" for c in merge_ask.check_set(rounds)) + f"\n{merge_ask.ROUNDS}\n\n" + "".join(f"{x}\n" for x in lines)
+            + f"\n### Findings\n\n{report.strip()}\n")
     out, said = post_comment(pr, repo, d["comments"], MARKER, body, "verdict")
     print(f"verdict: {said} ({verdict}, head {judged[:12]})", file=sys.stderr)
     print(out)
     return 0
+
+
+RANGE_LINE = re.compile(r"^Range:[ \t]*(.*?)\s*$")
+RANGE = re.compile(r"`?([0-9a-fA-F]{7,40})\.\.([0-9a-fA-F]{7,40})`?")
+
+
+def review_rounds(report: str, judged: str, d: dict[str, Any], new: "merge_ask.Round") -> "list[merge_ask.Round]":
+    """The verdict comment's rounds (in PR D's one verdict comment) with NEW, the review REPORT of JUDGED, added; its
+    Range checked against git (#1220; the rules: --help, verdict, Review rounds)."""
+    said = [m.group(1) for l in outside(report) if (m := RANGE_LINE.match(l))]
+    form = "`Range: <from>..<to>`, the commit the review diffed from and the head it reviewed (scope: .agents/skills/code-review/SKILL.md (Verdict step))"
+    if not said:
+        raise Refuse(f"report names no Range: add {form}, then rerun")
+    if len(set(said)) > 1:
+        raise Refuse(f"report gives Ranges that disagree ({', '.join(said)}): keep one {form}, then rerun")
+    m = RANGE.fullmatch(said[0])
+    if not m:
+        raise Refuse(f"`Range: {said[0]}` is not {form}, each a commit sha (7 to 40 hex); fix the report, then rerun")
+    ends: list[str] = []
+    for x in m.groups():
+        rc, sha = git("rev-parse", "--verify", "-q", f"{x}^{{commit}}", ok=(0, 1, 128))
+        if rc:
+            raise Refuse(f"Range {said[0]}: {x} is not a commit here: git fetch origin, or fix the report's Range")
+        ends.append(sha.strip())
+    start, end = ends
+    if end != judged:
+        raise Refuse(f"Range {said[0]} ends at {end[:12]}, not HEAD {judged[:12]}: the Range's head is the head the review "
+                     "judged; fix the report's Range or HEAD, then rerun")
+    if git("merge-base", "--is-ancestor", start, end, ok=(0, 1))[0]:
+        raise Refuse(f"Range {said[0]}: {start[:12]} is not an ancestor of {end[:12]}: a review diffs from a commit "
+                     "before the head it reviews; fix the report's Range, then rerun")
+    mine = [c for c in cast("list[dict[str, str]]", d["comments"] or []) if (c.get("body") or "").lstrip().startswith(MARKER)]
+    rounds = merge_ask.posted_rounds(mine[0]["body"])[0] if len(mine) == 1 else []
+    for k, r in enumerate(rounds):   # a legacy Head as a commit here, so a delta may start on it
+        if r.kind == "legacy":
+            rc, sha = git("rev-parse", "--verify", "-q", f"{r.end}^{{commit}}", ok=(0, 1, 128))
+            rounds[k] = dataclasses.replace(r, end=sha.strip() if not rc else r.end)
+    last = rounds[-1] if rounds else None
+    base = pr_base(cast("str | None", d["baseRefName"]) or "", None)
+    if last and (last.start, last.end) == (start, end):   # a rerun of the last round's review
+        kind, rounds = last.kind, rounds[:-1]
+    elif last and start == last.end:
+        kind = "delta"
+    elif not git("merge-base", "--is-ancestor", start, base, ok=(0, 1, 128))[0]:
+        kind = "full"
+    else:
+        fork = git("merge-base", base, end, ok=(0, 1))[1].strip()[:12] or base
+        at = f"at {last.end[:12]}, the head the last posted round ended on" if last else "at the head of a posted round (none is posted)"
+        raise Refuse(f"Range {said[0]} starts neither on {base} (a full round: the lane from main) nor {at} (a delta "
+                     f"round): post the round that reviewed up to {start[:12]} first, or review the lane from "
+                     f"{fork} ({base}) and post that report")
+    return [*rounds, dataclasses.replace(new, start=start, kind=kind)]
 
 
 def merge_resolution(merge: str) -> tuple[str, list[str]]:
@@ -1454,6 +1522,9 @@ def cmd_merge_ask(args: list[str]) -> int:
         print("\n".join(a.judgments))
     print("\nReview check classes (from the verdict comment, docs/adr/0008):")
     print("\n".join(f"- {c}" for c in a.classes))
+    if a.rounds:
+        print("\nReview rounds (from the verdict comment, issue-lifecycle #lanes-one-head):")
+        print("\n".join(a.rounds))
     print("\n" + "\n".join(gate_time))
     print("\n" + "\n".join(a.order))   # shown only, after the pass was decided above (spec #gates-merge-order)
     return 0
