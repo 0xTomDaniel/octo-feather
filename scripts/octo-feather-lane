@@ -248,8 +248,9 @@ build describes is review's and the qc judge's (docs/adr/0008, #118). Each failu
 at the current directory; on GitHub it works under the qc judge's offline gh).
 
 A ticket's skills (spec issue-lifecycle #lanes-tickets): one line at column 0, outside fences and HTML comments as
-the body is read above, `Skills: <skill>, <skill>` (a name may be backticked) or `Skills: none`, under the to-tickets
-template's `## Skills` heading; with several, the last counts. Every ticket carries one (owner ruling 2026-11-19 on
+the body is read above, `Skills: <skill>, <skill>` (a name may be backticked; a trailing .;:!? is no part of it)
+or `Skills: none`, under the to-tickets template's `## Skills` heading; with several, the last counts. Every ticket
+carries one (owner ruling 2026-11-19 on
 #1099): none is class missing-skills. `ticket` reads the draft's line; `tickets`, as `skills`, the latest line of
 each ticket's body and comments (a line set later is a comment; `issue-view KEY --notes`, as `seam` reads them, by
 each note's last change), so a later comment's line replaces the body's and is the one checked. Each name must be a skill agents/implementer.md is offered as pi-role
@@ -297,15 +298,22 @@ name's, so `implementer-gh40` is 40's, `implementer-eng-123` ENG-123's; a ticket
 its `session` the Pi session file sessions/*/*_<session>.jsonl (PI_CODING_AGENT_DIR, else
 ~/.pi/agent), read by the factory report's skill-reach reader (report, skill reach: a load is a read or bash call
 that opened <skill>/SKILL.md and did not fail, never a mention), the whole session. Prints
-`<ticket>: worker <name> (<pane>), Pi session <file>`, then per named skill `<ticket>: skill <skill>: loaded`, `not
-loaded` (offered, never read) or `not offered` (not in the session's offered list, never read). Each skill not
-loaded is a miss: one finding line per miss appended to that log in one write (comms spec #handoff-kind-finding):
+`<ticket>: worker <name> (<pane>), Pi session <file>`, then per named skill `<ticket>: skill <skill>: loaded`,
+`cannot tell (<call> names its SKILL.md; ...)`, `not loaded` (offered, never read) or `not offered` (not in the
+session's offered list, never read). Cannot tell: never read, but a call that did not fail, as a read is judged
+(top level, or a codemode batch's nested call; a batch with a nestedCalls record is judged by those calls alone),
+names its SKILL.md in its arguments: `<folder>/SKILL.md` (never SKILL.md.patch) with the folder literal, or a computed folder piece ($var,
+glob, brace) with the folder a word of the call (a bare `*` names every folder); a write or edit names none.
+Each cannot-tell appends one finding line {at, kind: finding, source: skills, class: skills-unchecked, blocking:
+false, summary (naming the call), ticket, skill} in the same write as the misses and prints `<ticket>: <N>
+non-blocking finding line(s) in <log>, class skills-unchecked: ...`; it never sends back. Each skill neither
+loaded nor cannot-tell is a miss: one finding line per miss appended to that log in one write (comms spec #handoff-kind-finding):
 {at, kind: finding, source: skills, class: skill-not-loaded, blocking, summary, ticket, skill}. A miss sends the
 worker back once (owner ruling 2026-11-19 on #1099), counted by that log alone: the first miss of a ticket and skill
 (no skills finding with blocking true for them in the log) logs blocking true, prints `<ticket>: fix: send <worker>
 back before integrate: herdr-say <pane> '...'` and exits 1; a later miss of the same ticket and skill logs blocking
 false, prints `<ticket>: skill <skill>: sent back once already; this miss stands recorded, not blocking` and, when
-no other skill is a first miss, exits 0. Exit 0 also with no miss, with `Skills: none` or with no line (nothing
+no other skill is a first miss, exits 0, or 2 with a cannot-tell. Exit 0 also with no miss and no cannot-tell, with `Skills: none` or with no line (nothing
 compared; `ticket` and `tickets` fail the last). Exit 2, could not check, never blocking (supervisor ruling on
 #1099: only a real miss, exit 1, sends the worker back): a tracker error, no HERDR_PANE_ID, a pane owning no record,
 no spawn line with a session for TICKET, not exactly one session file, or one it cannot read. It names the cause and
@@ -442,12 +450,13 @@ After the lanes:
                                                  did not fail (top level: its result's isError not true; in a
                                                  batch: the call's status ok in the result's nestedCalls, as Pi
                                                  records them) and whose own arguments open <folder>/SKILL.md:
-                                                 the read tool's path; in bash (shell words), a file operand of
+                                                 the read tool's path; in bash (shell words; # opens a comment
+                                                 only at a word's start, as in bash), a file operand of
                                                  cat, head, tail, sed, less, more, bat or nl, or a < input (not
                                                  sed's script text, an option's value, a > target, a heredoc
                                                  body, sed -i). A codemode batch's source is never read: a batch
                                                  with no nestedCalls record counts no read. A path in text, a
-                                                 pattern, a grep, a write or edit is no read, and a computed
+                                                 pattern, a grep, a write or edit is no read (skills: cannot tell), and a computed
                                                  path ($var, ${...}, a glob) is not resolved, so not counted:
                                                  the count may miss reads, never makes one up. A folder an
                                                  offered skill's location names counts as
@@ -1661,7 +1670,9 @@ def skills_named(bodies: list[str]) -> list[str] | None:
                 got = m.group(1)
     if got is None or got.lower() == "none":
         return None if got is None else []
-    return list(dict.fromkeys(s.strip().strip("`") for s in got.split(",") if s.strip().strip("`")))
+    # trailing punctuation: --help (ticket)
+    names = (s.strip().rstrip(".;:!?").strip("`") for s in got.split(","))
+    return list(dict.fromkeys(s for s in names if s))
 
 
 # missing-skills on every ticket since the commit adding this line (owner ruling 2026-11-19 on #1099; transition: --help, ticket)
@@ -2545,7 +2556,12 @@ VALUED = {"head": {"-n", "-c"}, "tail": {"-n", "-c"}, "sed": {"-l"}, "nl": {"-b"
 SHELL_STOP = {"|", "||", "&", "&&", ";", ";;", "(", ")", "\n"}
 SHELL_LEAD = {"{", "}", "!", "then", "do", "else", "time", "if", "while", "until", "exec", "command"}
 HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?^\s*\2\s*$", re.S | re.M)
+# A `#` inside a word, hidden from shlex as NUL (no shell word holds one) and put back in each word. Rule: --help (report).
+MID_WORD_HASH = re.compile(r"(?<=[^\s;&|()<>])#")
 STAMP = re.compile(r'"timestamp":\s*"([^"]+)"')
+# A call naming a SKILL.md, read or not (rules: --help, skills): the path's folder piece; `*` stands for every folder.
+SKILL_NAMED = re.compile(r"([^\s'\"=;|&()<>]*)/SKILL\.md(?!\.?\w)")
+WRITERS = {"write", "edit"}
 
 def sessions_dir() -> Path:
     """Pi's session folder: PI_CODING_AGENT_DIR (else ~/.pi/agent)/sessions, as Pi and octo-feather-qc read it."""
@@ -2561,10 +2577,10 @@ def skill_operand(word: str) -> str | None:
 def shell_reads(cmd: str) -> list[str]:
     """The skill folders whose SKILL.md a shell command CMD opens as a reader's file operand (rules: --help, report)."""
     try:
-        lex = shlex.shlex(HEREDOC.sub("", cmd), posix=True, punctuation_chars=";&|()<>\n")
+        lex = shlex.shlex(MID_WORD_HASH.sub("\0", HEREDOC.sub("", cmd)), posix=True, punctuation_chars=";&|()<>\n")
         lex.whitespace = " \t\r"
         lex.whitespace_split = True
-        words = list(lex)
+        words = [w.replace("\0", "#") for w in lex]
     except ValueError:
         return []   # unbalanced quotes: nothing resolved, nothing counted
     out: list[str] = []
@@ -2625,12 +2641,39 @@ def tool_reads(name: object, args: object) -> list[str]:
     return shell_reads(arg)
 
 
+def call_names(name: object, args: object) -> tuple[set[str], str]:
+    """The folders whose SKILL.md one call's arguments ARGS name, read or not, and the call as said (--help, skills):
+    a literal folder piece names that folder; a computed one ($var, glob, brace) names each word of the call (`*` for
+    a bare wildcard: every folder). A write or edit names none."""
+    def strings(x: object) -> list[str]:
+        if isinstance(x, str):
+            return [x]
+        vals: list[object] = list(cast("dict[str, object]", x).values()) if isinstance(x, dict) else (
+            cast("list[object]", x) if isinstance(x, list) else [])
+        return [s for v in vals for s in strings(v)]
+    text = " ".join(" ".join(strings(args)).split())
+    if str(name) in WRITERS or "SKILL.md" not in text:
+        return set(), ""
+    out: set[str] = set()
+    for m in SKILL_NAMED.finditer(text):
+        seg = m.group(1).rsplit("/", 1)[-1].strip("`")
+        if not re.search(r"[$*?\[{]", seg):
+            out.add(seg)
+        else:
+            out |= set(re.findall(r"[A-Za-z0-9_.-]+", text)) | ({"*"} if re.fullmatch(r"[*?]+", seg) else set())
+    i = text.find("SKILL.md")
+    cut = ("..." if i > 100 else "") + text[max(0, i - 100):i + 30] + ("..." if i + 30 < len(text) else "")
+    return out, f"{name} `{cut}`"
+
+
 @dataclasses.dataclass(frozen=True)
 class SessionReach:
-    """One Pi session's role, the skills it was offered ({name: folder}) and the skills it read (by offered name)."""
+    """One Pi session's role, the skills it was offered ({name: folder}), the skills it read (by offered name) and the
+    folders whose SKILL.md a successful call named ({folder: that call}, the first; `*` any folder)."""
     role: str
     offered: dict[str, str]
     read: set[str]
+    named: dict[str, str] = dataclasses.field(default_factory=dict)
 
 
 def session_reach(path: Path, since: dtm.datetime) -> SessionReach | None:
@@ -2639,7 +2682,8 @@ def session_reach(path: Path, since: dtm.datetime) -> SessionReach | None:
     role: str | None = None
     offered: dict[str, str] = {}
     folders: set[str] = set()
-    pending: dict[str, list[str]] = {}   # a read or bash call's id: the skill folders it would read, until its result
+    named: dict[str, str] = {}
+    pending: dict[str, tuple[list[str], set[str], str]] = {}   # a call's id: the folders it would read and names, until its result
     with path.open(encoding="utf-8", errors="replace") as fh:
         head: object = json.loads(fh.readline() or "null")
         hd = cast("dict[str, object]", head) if isinstance(head, dict) else {}
@@ -2669,25 +2713,33 @@ def session_reach(path: Path, since: dtm.datetime) -> SessionReach | None:
             elif m.get("role") == "assistant" and isinstance(content := m.get("content"), list):
                 for x in cast("list[object]", content):
                     c = cast("dict[str, object]", x) if isinstance(x, dict) else {}
-                    if c.get("type") == "toolCall" and (got := tool_reads(c.get("name"), c.get("arguments"))):
-                        pending[str(c.get("id"))] = got
+                    if c.get("type") != "toolCall":
+                        continue
+                    got = tool_reads(c.get("name"), c.get("arguments"))
+                    names, said = call_names(c.get("name"), c.get("arguments"))
+                    if got or names:
+                        pending[str(c.get("id"))] = got, names, said
             elif m.get("role") == "toolResult":
-                did = pending.pop(str(m.get("toolCallId")), [])
+                did, names, said = pending.pop(str(m.get("toolCallId")), ([], set(), ""))
                 at = utc(e.get("timestamp"))
                 if at is None or at <= since:
                     continue   # a result before the window, or at no readable time: no read counted
-                if m.get("isError") is not True:
-                    folders |= set(did)
                 nested = m.get("nestedCalls")
                 calls = cast("dict[str, object]", nested).get("calls") if isinstance(nested, dict) else None
+                if m.get("isError") is not True:
+                    folders |= set(did)
+                    # a call whose result records its nested calls is judged by them, never by its own source
+                    named |= {f: said for f in names if f not in named} if not isinstance(calls, list) else {}
                 for x in cast("list[object]", calls) if isinstance(calls, list) else []:
                     c = cast("dict[str, object]", x) if isinstance(x, dict) else {}
                     if c.get("status") == "ok":
                         folders |= set(tool_reads(c.get("name"), c.get("arguments")))
+                        names, said = call_names(c.get("name"), c.get("arguments"))
+                        named |= {f: said for f in names if f not in named}
     if not active:
         return None
     by_folder = {f: n for n, f in offered.items()}
-    return SessionReach(role or "no role", offered, {by_folder.get(f, f) for f in folders})
+    return SessionReach(role or "no role", offered, {by_folder.get(f, f) for f in folders}, named)
 
 
 @dataclasses.dataclass
@@ -2821,12 +2873,16 @@ def skills_check(key: str) -> int:
     reach = reach or SessionReach("no role", {}, set())
     print(f"{name}: worker {worker} ({wpane}), Pi session {files[0]}")
     missed: list[tuple[str, str]] = []
+    unclear: list[tuple[str, str]] = []   # a skill whose SKILL.md only an unresolved call names: cannot tell (--help, skills)
     for s in named:
-        said = "loaded" if s in reach.read else "not loaded" if s in reach.offered else "not offered"
-        print(f"{name}: skill {s}: {said}")
-        if said != "loaded":
+        call = reach.named.get(reach.offered.get(s, s)) or reach.named.get("*")
+        said = "loaded" if s in reach.read else "cannot tell" if call else "not loaded" if s in reach.offered else "not offered"
+        print(f"{name}: skill {s}: {said}" + (f" ({call} names its SKILL.md; the reader cannot resolve it to a read)" if call and said != "loaded" else ""))
+        if said == "cannot tell":
+            unclear.append((s, str(call)))
+        elif said != "loaded":
             missed.append((s, said))
-    if not missed:
+    if not missed and not unclear:
         return 0
     # The send-back counted by the log: a blocking skill-not-loaded finding for this ticket and skill (--help, skills).
     sent = {(str(r.get("ticket")), str(r.get("skill"))) for r in lines if r.get("kind") == "finding"
@@ -2836,6 +2892,10 @@ def skills_check(key: str) -> int:
               "summary": f"{worker} handed off without loading {s} ({said} in its Pi session), which ticket {name} names"
               + ("" if (name, s) not in sent else "; sent back once already, the miss stands recorded"),
               "ticket": name, "skill": s} for s, said in missed]
+    found += [{"at": at, "kind": "finding", "source": "skills", "class": "skills-unchecked", "blocking": False,
+               "summary": f"{worker}'s Pi session names {s}'s SKILL.md, which ticket {name} names, only in a call the "
+               f"reader cannot resolve to a read ({call}): cannot tell whether it was loaded", "ticket": name, "skill": s}
+              for s, call in unclear]
     try:
         with log.open("a", encoding="utf-8") as f:
             f.write("".join(encode(cast("dict[str, object]", x)) + "\n" for x in found))
@@ -2845,8 +2905,11 @@ def skills_check(key: str) -> int:
     for s, _ in missed:
         if s not in back:
             print(f"{name}: skill {s}: sent back once already; this miss stands recorded, not blocking (finding in {log})")
+    if unclear:
+        print(f"{name}: {len(unclear)} non-blocking finding line(s) in {log}, class skills-unchecked: "
+              f"{', '.join(s for s, _ in unclear)}: cannot tell, could not check; only exit 1 sends the worker back")
     if not back:
-        return 0
+        return 2 if unclear else 0
     print(f"{name}: {len(back)} blocking finding line(s) in {log}, class skill-not-loaded: {', '.join(back)}")
     skills = ", ".join(back)
     print(f"{name}: fix: send {worker} back before integrate: herdr-say {wpane} 'Load {skills} (read each SKILL.md by "
