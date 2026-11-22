@@ -83,8 +83,10 @@ ROWS = (  # finding, case, command, result
     (
         FINDINGS[9],
         "4a4ad833, #1099",
-        f"{SEAM} 1099 issue-lifecycle#acceptance-tracer-tickets 'octo-feather-lane tickets' "
-        "--before 4a4ad833",
+        (
+            f"{SEAM} 1099 issue-lifecycle#acceptance-tracer-tickets 'octo-feather-lane tickets' "
+            "--before 4a4ad833"
+        ),
         "caught",
     ),
     (
@@ -120,8 +122,10 @@ ROWS = (  # finding, case, command, result
     (
         "clean gh905",
         "74f0f749, #1155",
-        f"{SEAM} 1155 issue-lifecycle#acceptance-lane-start 'octo-feather-lane start' "
-        "--before 74f0f749",
+        (
+            f"{SEAM} 1155 issue-lifecycle#acceptance-lane-start 'octo-feather-lane start' "
+            "--before 74f0f749"
+        ),
         "pass",
     ),
     (
@@ -220,7 +224,7 @@ def untrue(s: Scratch) -> None:
     ln.section(table(tuple(rows)))
     err = ln.ask(want=1).err
     gaps = [x for x in err.splitlines() if x.startswith("  - Replay: ")]
-    assert len(gaps) == 3, err  # noqa: PLR2004  the three rows changed, nothing else
+    assert len(gaps) == 3, err  # the three rows changed, nothing else
     for who, claim, tail in (
         (FINDINGS[1], "missed", "fix: post `Seam: rule: `check-evals --export`` on 990 with the"),
         (
