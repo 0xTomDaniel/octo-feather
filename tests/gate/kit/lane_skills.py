@@ -13,9 +13,14 @@ is a scratch one: lane gh644's record with the supervisor's pane; its hand-off l
 are the real herdr-spawn's, each worker spawned the kit's standard way (`implementer-<lane key>`,
 #1169) from the supervisor's pane through the testkit's Herdr (testkit/herdr.py, its FAKE_HERDR
 world), the recorded session file named by the session id herdr-spawn gave, as Pi names the file
-of a `--session-id` launch.
+of a `--session-id` launch. Issue-view 1199 --notes is recorded too (2026-11-22, `Skills: tdd,
+python` in its body), and #1199's implementer session 97e2c882 (lane gh1197) is trimmed the same
+way to its lines 1, 4, 14 and 15: its one bash call reading tdd's and python's SKILL.md after the
+word `quality#acceptance-gate-time-targets` (line 14) and that call's result.
 
-Linear (scenario linear): LINEAR_API_KEY is not set in the factory (director decision on #921);
+Linear (scenario linear, and misread's `Skills: tdd, python.`: #1134, #1136 and #1137 had that
+line, but each now has a later corrected one, so no real gh answer holds it): LINEAR_API_KEY is
+not set in the factory (director decision on #921);
 ENG-123's answers are a tape built here, its source saying so (testkit/linear.py replays it).
 """
 
@@ -34,6 +39,7 @@ TAPE = Path(__file__).parent / "testkit" / "recordings" / "lane-skills.json"
 TICKETS = Path(__file__).parent / "testkit" / "recordings" / "lane-tickets-644.json"
 SESSION = "4fd43c0c-7119-4cb4-866f-e114e16ecdb4"
 RECORDED = next((FIXTURES / "lane-skills" / "sessions").glob(f"*/*_{SESSION}.jsonl"))
+HASHED = next((FIXTURES / "lane-skills" / "sessions").glob("*/*_97e2c882-*.jsonl"))
 SPAWN = ROOT / ".agents" / "skills" / "herdr-comms" / "assets" / "herdr-spawn"
 SUP = "w1:p0"  # the supervisor's pane, the lane record's `supervisor`
 
@@ -58,17 +64,20 @@ def world(s: Scratch) -> Path:
     return lanes / "gh644.handoffs.jsonl"
 
 
-def spawn(s: Scratch, name: str, lines: int | None = None) -> tuple[str, Path]:
+def spawn(
+    s: Scratch, name: str, lines: int | None = None, recorded: Path = RECORDED
+) -> tuple[str, Path]:
     """NAME spawned as an implementer in repo t by the real herdr-spawn from the supervisor's pane
-    (it appends the spawn line to the lane log); its Pi session file the recorded one (its first
+    (it appends the spawn line to the lane log); its Pi session file the RECORDED one (its first
     LINES lines, else all) under the session id herdr-spawn printed. Its pane and that file."""
     cmd = [str(SPAWN), "--workspace", "w1", "--name", name, "--role", "implementer"]
     out = s.run([*cmd, "--cwd", str(s.root / "t")]).out
     got = dict(x.split("=", 1) for x in out.split())
-    to = s.root / "pi" / "sessions" / RECORDED.parent.name
+    to = s.root / "pi" / "sessions" / recorded.parent.name
     to.mkdir(parents=True, exist_ok=True)
-    f = to / RECORDED.name.replace(SESSION, got["provider_session_id"])
-    f.write_text("".join(RECORDED.read_text().splitlines(keepends=True)[:lines]))
+    sid = recorded.stem.split("_", 1)[1]
+    f = to / recorded.name.replace(sid, got["provider_session_id"])
+    f.write_text("".join(recorded.read_text().splitlines(keepends=True)[:lines]))
     return got["pane"], f
 
 
@@ -271,7 +280,8 @@ def demo(s: Scratch) -> None:
     """The ticket's demo (#1170): worker implementer-gh1094 spawned by herdr-spawn, its session
     the recorded one up to its offered skills (lines 1 and 4: nothing read). #1094 names
     eval-cases: `skills 1094` exits 1 printing the send-back. The worker then loads it (the
-    recorded call and results, lines 12 to 14, appended to its session): exit 0, `loaded`."""
+    recorded call and results, lines 12 to 14, appended to its session): exit 0, `loaded`. Then
+    #1231's part (misread)."""
     log = world(s)
     worker, session = spawn(s, "implementer-gh1094", lines=2)
     sys.stdout.write(f"herdr-spawn's spawn line in {log.name}:\n{log.read_text()}")
@@ -287,6 +297,52 @@ def demo(s: Scratch) -> None:
     out = skills(s, "1094")
     sys.stdout.write(f"octo-feather-lane skills 1094 (exit 0):\n{out}\n")
     assert out.splitlines()[1:] == ["1094: skill eval-cases: loaded"], out
+    misread(s, log)
+
+
+def misread(s: Scratch, log: Path) -> None:
+    """#1231's part of the demo, in the same lane state: #1199's worker before its one bash call
+    (the recorded session's lines 1 and 2) read neither tdd nor python: exit 1, a blocking finding
+    each and the send-back line. With that call and its result (the recorded lines 3 and 4), which
+    reads both SKILL.md files after the word `quality#acceptance-gate-time-targets`, as bash runs
+    it (a `#` inside a word starts no comment): both `loaded`, exit 0, no finding logged. A
+    Linear ticket whose line is `Skills: tdd, python.` (a trailing period) with that worker: both
+    `loaded`, exit 0, never `not offered`."""
+    worker, session = spawn(s, "implementer-gh1199", lines=2, recorded=HASHED)
+    before = len(findings(log))
+    out = skills(s, "1199", want=1)
+    sys.stdout.write(f"octo-feather-lane skills 1199, before its bash call (exit 1):\n{out}\n")
+    assert out.splitlines()[1:3] == [
+        "1199: skill tdd: not loaded",
+        "1199: skill python: not loaded",
+    ], out
+    fix = "1199: fix: send implementer-gh1199 back before integrate: "
+    fix += f"herdr-say {worker} 'Load tdd, python ("
+    assert fix in out, out
+    got = [strip(f) for f in findings(log)][before:]
+    assert got == [miss(k, blocking=True, ticket="1199") for k in ("tdd", "python")], got
+    with session.open("a") as f:
+        f.write("".join(HASHED.read_text().splitlines(keepends=True)[2:]))
+    n = log.read_text()
+    out = skills(s, "1199")
+    said = "octo-feather-lane skills 1199, its bash call after a mid-word # (exit 0)"
+    sys.stdout.write(f"{said}:\n{out}\n")
+    assert out.splitlines()[1:] == ["1199: skill tdd: loaded", "1199: skill python: loaded"], out
+    assert log.read_text() == n, "a loaded skill logged a finding"
+    fl = s.root / "fl"
+    path = f"{s.bin}{os.pathsep}{HERE / 'linear'}{os.pathsep}{s.env['PATH']}"
+    s.env |= {"FAKE_LINEAR": str(fl), "PATH": path}
+    (s.root / "t" / ".octo-feather.toml").write_text('tracker = "linear"\n')
+    spawn(s, "implementer-eng-123", recorded=HASHED)
+    linear_tape(fl, "## What to build\n\nx\n\n## Skills\n\nSkills: tdd, python.\n")
+    n = log.read_text()
+    out = skills(s, "ENG-123")
+    sys.stdout.write(f"octo-feather-lane skills ENG-123, `Skills: tdd, python.` (exit 0):\n{out}\n")
+    assert out.splitlines()[1:] == [
+        "ENG-123: skill tdd: loaded",
+        "ENG-123: skill python: loaded",
+    ], out
+    assert log.read_text() == n, "a loaded skill logged a finding"
 
 
 if __name__ == "__main__":
