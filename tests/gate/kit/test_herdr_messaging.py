@@ -12,9 +12,11 @@ from herdr_messaging import (
     herdr_malformed,
     parent_gone,
     parent_resumed,
+    parked_resumed,
     post_merge_busy,
     queued_completion,
     repoint_record,
+    repoint_refused,
     result_compacting,
     result_resumed,
     results_listing,
@@ -107,6 +109,10 @@ def test_parent_resumed(case: Case) -> None:
     case(parent_resumed)
 
 
+def test_parked_resumed(case: Case) -> None:
+    case(parked_resumed)
+
+
 def test_director_moved(case: Case) -> None:
     case(director_moved)
 
@@ -130,6 +136,10 @@ def test_director_prune(case: Case) -> None:
 
 def test_repoint_record(case: Case) -> None:
     case(repoint_record)
+
+
+def test_repoint_refused(case: Case) -> None:
+    case(repoint_refused)
 
 
 def test_herdr_malformed(case: Case) -> None:
