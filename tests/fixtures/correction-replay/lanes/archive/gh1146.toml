@@ -1,8 +1,0 @@
-supervisor = "w8Z:p2"
-repository = "0xTomDaniel/octo-feather"
-issue = "gh1146"
-goal = "Merge-ask as a module"
-started_at = "2026-11-20T00:38:51Z"
-waiting_on = ""
-last_handoff_at = "2026-11-20T18:47:53Z"
-pr = 1164

@@ -1,8 +1,0 @@
-supervisor = "w8E:pG"
-repository = "0xTomDaniel/octo-feather"
-issue = "gh1085"
-goal = "Eval grading as a module"
-started_at = "2026-11-19T19:19:43Z"
-waiting_on = ""
-last_handoff_at = "2026-11-20T16:12:34Z"
-pr = 1123

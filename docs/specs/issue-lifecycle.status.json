@@ -212,38 +212,23 @@
     "acceptance-verdict-covers-lane": {
       "status": "built",
       "pr": 1223,
-      "record": "20261122T181521Z-1b112b47",
-      "commit": "7da9e76ae298aed1764a07f36f1989b9fc564203",
+      "record": "20261122T172308Z-667ddff2",
+      "commit": "6b87efcb3976d430ecb30135eed6c5e01c71f8bd",
       "tests": [
         "tests/gate/kit/lane_verdict_rounds.py"
       ]
     },
     "acceptance-declaration-check-shown": {
-      "status": "built",
-      "pr": 1223,
-      "record": "20261122T181521Z-1b55320a",
-      "commit": "7da9e76ae298aed1764a07f36f1989b9fc564203",
-      "tests": [
-        "tests/gate/kit/lane_verdict_rounds.py"
-      ]
+      "status": "planned",
+      "pr": null
     },
     "acceptance-correction-replay-missing": {
-      "status": "built",
-      "pr": 1223,
-      "record": "20261122T181521Z-2f17091e",
-      "commit": "7da9e76ae298aed1764a07f36f1989b9fc564203",
-      "tests": [
-        "tests/gate/kit/lane_correction_replay.py"
-      ]
+      "status": "planned",
+      "pr": null
     },
     "acceptance-correction-replay-shown": {
-      "status": "built",
-      "pr": 1223,
-      "record": "20261122T181521Z-9db441d9",
-      "commit": "7da9e76ae298aed1764a07f36f1989b9fc564203",
-      "tests": [
-        "tests/gate/kit/lane_correction_replay.py"
-      ]
+      "status": "planned",
+      "pr": null
     },
     "acceptance-merge-approved-head": {
       "status": "built",

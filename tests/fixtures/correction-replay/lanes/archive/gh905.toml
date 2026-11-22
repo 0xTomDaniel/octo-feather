@@ -1,8 +1,0 @@
-supervisor = "w8R:pB"
-repository = "0xTomDaniel/octo-feather"
-issue = "gh905"
-goal = "Lane start as one command"
-pr = 1166
-started_at = "2026-11-20T01:05:44Z"
-waiting_on = ""
-last_handoff_at = "2026-11-20T19:24:38Z"
