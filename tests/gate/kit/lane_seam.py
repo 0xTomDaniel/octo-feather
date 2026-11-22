@@ -6,8 +6,12 @@ issue-view --notes it reads (skills spec #tracker-script-issue-view), offline.
 GitHub answers only real gh's, unmodified (testkit/recordings/lane-seam.json): #876, lane gh840's
 ticket, holds no `Seam:` record for the herdr-spawn seam its test (74f80a78) was written at; #1009
 holds two `Seam:` lines, written 2026-11-18T20:29:48Z. A scratch commit carries 74f80a78's author
-time (before the record: late) and another a later one (after it). No real ticket holds a `Seam:`
-record in a comment or one edited after a test, so those cases are Linear's.
+time (before the record: late) and another a later one (after it). Rule-only tickets (acceptance
+item `rule: ...`, no criterion; correction lane #1121, ticket #1214): #1214 holds `Seam: rule:
+`octo-feather-lane seam`` in its body, written 2026-11-21T11:03:42Z; #1168, lane gh1167's, wrote its
+seam as `Seam: owner ruling ...: `scripts/check-vendored` ...`, no record (finding
+seam-rule-ticket-unsupported). No real ticket holds a `Seam:` record in a comment or one edited
+after a test, so those cases are Linear's.
 
 Linear: LINEAR_API_KEY is not set in the factory (director decision on #921); its answers are a
 tape built here, its source saying so (testkit/linear.py replays it)."""
@@ -27,6 +31,7 @@ GH_VIEW = ROOT / ".agents" / "skills" / "github-issues" / "scripts" / "issue-vie
 LIN_VIEW = ROOT / ".agents" / "skills" / "linear" / "scripts" / "issue-view"
 TEST_AT = "2026-11-18T03:24:33+00:00"  # 74f80a78's author time on origin/gh840
 LATER_AT = "2026-11-18T21:00:00+00:00"  # a test commit after #1009's Seam: lines
+RULE_AT = "2026-11-21T12:00:00+00:00"  # a test commit after #1214's body
 PUBLIC = "quality#acceptance-public-surfaces"
 TRACKER = "skills#acceptance-tracker-scripts"
 
@@ -80,6 +85,37 @@ def github(s: Scratch) -> None:
     assert "class: seam-off-criteria: roles#acceptance-delegated-pr" in r.out, r.out
     asked = {" ".join(x.split(" ", 2)[:2]) for x in s.gh.log()}
     assert asked == {"issue view", "api graphql"}, f"gh asked: {s.gh.log()}"
+
+
+def rule(s: Scratch) -> None:
+    """A rule-only ticket's record `Seam: rule: `<seam>``, checked as `seam TICKET rule SEAM`:
+    #1214's passes (exit 0, naming its body), before a later commit too, and is late for a commit
+    at 74f80a78's time (exit 1, unlisted-test-seam); #1168's prose seam is no record (exit 1);
+    a criterion id on #1168 is seam-off-criteria, its fix naming the rule form; `rule` on #1009,
+    which lists no rule item, is seam-off-criteria."""
+    s.gh.store("tape.json", json.loads(TAPE.read_text()))
+    s.git(s.root, "init", "-q", "-b", "main", "t")
+    early, late = commit(s, "t", TEST_AT), commit(s, "t", RULE_AT)
+    url = "https://github.com/0xTomDaniel/octo-feather/issues/1214"
+    ok = f"1214: seam rule `octo-feather-lane seam` recorded at 2026-11-21T11:03:42Z ({url})"
+    r = seam(s, "t", "1214", "rule", "octo-feather-lane seam")
+    assert r.out == ok, f"#1214: {r.out}"
+    r = seam(s, "t", "1214", "rule", "octo-feather-lane seam", "--before", late)
+    assert r.out == f"{ok}, before commit {late[:8]}", f"#1214 before: {r.out}"
+    r = seam(s, "t", "1214", "rule", "octo-feather-lane seam", "--before", early, want=1)
+    assert r.out.startswith("1214: class: unlisted-test-seam: `Seam:` record for rule "), r.out
+    assert f"({url}), after commit {early[:8]}" in r.out, f"#1214 late: {r.out}"
+    r = seam(s, "t", "1168", "rule", "scripts/check-vendored", want=1)
+    cv = "`scripts/check-vendored`"
+    no = f"1168: class: unlisted-test-seam: no `Seam:` record for rule {cv} on 1168"
+    assert r.out.startswith(no), f"#1168: {r.out}"
+    assert "post `Seam: rule: `scripts/check-vendored`` on 1168" in r.out, f"#1168: {r.out}"
+    r = seam(s, "t", "1168", PUBLIC, "scripts/check-vendored", want=1)
+    fix = f"; 1168 serves a rule: record `Seam: rule: {cv}` and run seam 1168 rule "
+    assert "class: seam-off-criteria" in r.out, f"#1168 by criterion: {r.out}"
+    assert fix in r.out, f"#1168 by criterion: {r.out}"
+    r = seam(s, "t", "1009", "rule", "issue-view", want=1)
+    assert r.out.startswith("1009: class: seam-off-criteria: rule is not an acceptance item"), r.out
 
 
 SOURCE = (
@@ -190,7 +226,12 @@ def linear(s: Scratch) -> None:
     assert "the description's last edit time cannot be given" in r.err, r.err
     r = seam(s, "t", *args, want=2)
     assert "the description's last edit time cannot be given" in r.err, r.err
+    owned = "rule: x (ADR 0002)"
+    rule_desc = DESC.replace(f"{CRIT}: x", owned)
+    linear_tape(fl, rule_desc, [{**note(W0, W2), "body": "Seam: rule: `herdr-spawn`"}], [])
+    r = seam(s, "t", "ENG-1", "rule", "herdr-spawn", "--before", sha, want=2)
+    assert r.out.startswith("ENG-1: unchecked: `Seam:` record for rule `herdr-spawn`"), r.out
 
 
 if __name__ == "__main__":
-    main(github, linear)
+    main(github, rule, linear)
