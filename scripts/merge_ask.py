@@ -54,6 +54,7 @@ __all__ = [  # check's interface, then the helpers octo-feather-lane's other com
     "Commit",
     "Gate",
     "Git",
+    "Kind",
     "Merge",
     "NoParent",
     "NoWorkflow",
@@ -100,7 +101,7 @@ import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import NamedTuple, TypedDict, cast
+from typing import Literal, NamedTuple, TypedDict, cast
 
 import tomllib
 from tracker_calls import KIT, gh, tracker, utc
@@ -2446,6 +2447,7 @@ ROUND_LINE = re.compile(
     r"verdict (clear|blocking)$"
 )
 ROUND_CHECK = re.compile(r"^  - (Checks?: .*)$")
+Kind = Literal["full", "delta", "legacy"]
 
 
 @dataclass(frozen=True)
@@ -2456,7 +2458,7 @@ class Round:
 
     start: str
     end: str
-    kind: str
+    kind: Kind
     verdict: str
     checks: tuple[str, ...]
 
@@ -2491,7 +2493,8 @@ def posted_rounds(body: str) -> tuple[list[Round], list[str]]:
     for ln in hdr.split(f"\n{ROUNDS}\n", 1)[1].split("\n"):
         if m := ROUND_LINE.match(ln):
             start = "" if m.group(3) == "legacy" else m.group(1).lower()
-            rounds.append(Round(start, m.group(2).lower(), m.group(3), m.group(4), ()))
+            kind = cast("Kind", m.group(3))
+            rounds.append(Round(start, m.group(2).lower(), kind, m.group(4), ()))
         elif (c := ROUND_CHECK.match(ln)) and rounds:
             r = rounds[-1]
             rounds[-1] = dataclasses.replace(r, checks=(*r.checks, c.group(1)))
