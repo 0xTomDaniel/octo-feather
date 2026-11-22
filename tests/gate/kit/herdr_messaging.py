@@ -384,10 +384,14 @@ SAY = str(ASSETS / "herdr-say")
 
 def director_parks(s: Scratch, d: Path) -> dict[str, str]:
     """The director spawns general-worker-a1 in w0 (a process standing in for it), parks it with
-    `herdr-close --park`, appending the line to the director log after a note line: that line."""
+    `herdr-close --park`, which appends its line to the director log after a note line: that
+    line."""
     state = state_dir(s)
     (state / "lanes").mkdir(parents=True)
     (state / "director.toml").write_text('pane = "w0:p1"\n')
+    dlog = state / "director.handoffs.jsonl"
+    note = {"at": "2026-11-13T00:00:00Z", "kind": "note", "text": "t"}
+    dlog.write_text(json.dumps(note) + "\n")
     s.identity()
     wt = s.root / "wt"
     wt.mkdir()
@@ -399,11 +403,11 @@ def director_parks(s: Scratch, d: Path) -> dict[str, str]:
         park = s.run([str(ASSETS / "herdr-close"), "--park", got["pane"]], env=DIRECTOR)
     finally:
         worker.kill()
-    dlog = state / "director.handoffs.jsonl"
-    note = {"at": "2026-11-13T00:00:00Z", "kind": "note", "text": "t"}
-    dlog.write_text(json.dumps(note) + "\n" + park.out + "\n")
-    show(f"herdr-close --park {got['pane']} >> director.handoffs.jsonl: {park.out}")
-    line = json.loads(park.out)
+    assert not park.out, park.out
+    log = dlog.read_text().splitlines()
+    assert [json.loads(x)["kind"] for x in log] == ["note", "spawn", "parked"], log
+    show(f"herdr-close --park {got['pane']}: director.handoffs.jsonl gained {log[-1]}")
+    line = json.loads(log[-1])
     want = {"name": "general-worker-a1", "role": "general-worker", "parent": "w0:p1", "label": "a1"}
     assert {k: line[k] for k in want} == want, line
     assert line["session"] == got["provider_session_id"], (line, got)
@@ -503,7 +507,7 @@ def parent_resumed(s: Scratch) -> None:
     nothing; the director then edits the record
     by hand and the next send follows it; that pane gone with no parked line, the director gets the
     one parent-gone alert, exit 68. Parked with `herdr-close --park` and resumed the same way:
-    the same. Each observation printed, for the qc demo."""
+    parked_resumed. Each observation printed, for the qc demo."""
     d, sup, worker = supervised(s)
     record = state_dir(s) / "lanes" / "gh7.toml"
     before = record.read_text()
@@ -535,22 +539,27 @@ def parent_resumed(s: Scratch) -> None:
     assert "parent w9:p1 is gone" in alerts[0], alerts
     show(f"record pane w9:p1 gone, no parked line: exit 68, director received: {alerts}")
 
-    parked_resumed(sub(s, "parked"))
-
 
 def parked_resumed(s: Scratch) -> None:
-    """parent_resumed's park: the supervisor parked with herdr-close --park, its line in the lane
-    log, resumed by octo-feather-start --resume; the implementer's --parent lands there."""
+    """parent_resumed's park, its own item (each half under the per-test CPU budget): the
+    director parks the supervisor with herdr-close --park, which appends its line to the lane log
+    (herdr-say --parked finds it), resumed by octo-feather-start --resume; the implementer's
+    --parent lands there, the director receiving nothing."""
     d, sup, worker = supervised(s)
     record = state_dir(s) / "lanes" / "gh7.toml"
     p = tab_process(s, d, sup["pane"], s.root / "target")
     try:
-        park = s.run([str(ASSETS / "herdr-close"), "--park", sup["pane"]])
+        park = s.run([str(ASSETS / "herdr-close"), "--park", sup["pane"]], env=DIRECTOR)
     finally:
         p.kill()
-    with (state_dir(s) / "lanes" / "gh7.handoffs.jsonl").open("a") as f:
-        f.write(park.out + "\n")
-    new = start(s, "--name", "gh7", "--resume", json.loads(park.out)["session"])["pane"]
+    assert not park.out, park.out
+    log = (state_dir(s) / "lanes" / "gh7.handoffs.jsonl").read_text().splitlines()
+    line = json.loads(log[-1])
+    assert (line["kind"], line["pane"]) == ("parked", sup["pane"]), log
+    found = s.run([SAY, "--parked", sup["pane"]], env=DIRECTOR).out
+    assert json.loads(found) == line | {"lane": "gh7"}, found
+    show(f"director parked supervisor {sup['pane']}: lane log gh7 gained {log[-1]}")
+    new = start(s, "--name", "gh7", "--resume", line["session"])["pane"]
     assert f'supervisor = "{new}"' in record.read_text(), record.read_text()
     s.run([SAY, "--parent", RESULT], env=worker)
     assert to(d, new) == [noted(s, worker)], lines(d / "prompts")
@@ -775,16 +784,9 @@ def repoint_record(s: Scratch) -> None:
     `supervisor` key at all: each record parses after, every key equal but `supervisor`, now the
     resumed pane (comments are not kept); one holding a table or an array: the start still runs
     the agent, warns that the record was not repointed, naming the key, and the record is byte
-    for byte unchanged; the director's record the same through `--director --resume`."""
-    d = herdr_world(s, {"w0:p1": agent("w0:p1", "director", "idle")})
-    s.env["HERDR_SESSION"] = f"repoint-{os.getpid()}"
-    s.identity()
-    s.git(s.root, "init", "-q", "-b", "main", "target")
-    state = state_dir(s)
-    (state / "lanes").mkdir(parents=True)
-    stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-    with (state / "director.handoffs.jsonl").open("a") as f:  # no background reflection
-        f.write(json.dumps({"at": stamp, "kind": "reflection"}) + "\n")
+    for byte unchanged; the director's record the same through `--director --resume`. The table,
+    the array and the director's record: repoint_refused."""
+    d, state = repoint_world(s)
     record = state / "lanes" / "gh7.toml"
     for case, text in RECORDS.items():
         record.write_text(text)
@@ -794,6 +796,31 @@ def repoint_record(s: Scratch) -> None:
         want = {k: v for k, v in tomllib.loads(text).items() if k != "supervisor"}
         assert got == {"supervisor": new, **want}, (case, record.read_text())
         show(f"resume over {case}: {record.read_text()!r}")
+
+
+def repoint_world(s: Scratch) -> tuple[Path, Path]:
+    """Director w0:p1 in a Herdr world, a target repo and a state dir with no lane record yet
+    and a reflection just run (no background one): the world and the state dir."""
+    d = herdr_world(s, {"w0:p1": agent("w0:p1", "director", "idle")})
+    s.env["HERDR_SESSION"] = f"repoint-{os.getpid()}"
+    s.identity()
+    s.git(s.root, "init", "-q", "-b", "main", "target")
+    state = state_dir(s)
+    (state / "lanes").mkdir(parents=True)
+    stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    with (state / "director.handoffs.jsonl").open("a") as f:  # no background reflection
+        f.write(json.dumps({"at": stamp, "kind": "reflection"}) + "\n")
+    return d, state
+
+
+def repoint_refused(s: Scratch) -> None:
+    """repoint_record's second half, its own item (each half under the per-test CPU budget):
+    `--name gh7 --resume S` over a lane record holding a table or an array still runs the agent,
+    warns that the record was not repointed, naming the key, and the record is byte for byte
+    unchanged; an indented director's record, through `--director --resume`, parses after,
+    `pane` the resumed pane, `name` kept."""
+    d, state = repoint_world(s)
+    record = state / "lanes" / "gh7.toml"
     for bad, key in (('supervisor = "w1:p1"\n[extra]\nx = 1\n', "extra"), ("ids = [1]\n", "ids")):
         record.write_text(bad)
         cmd = [kit("octo-feather-start"), "--cwd", str(s.root / "target")]
@@ -1326,11 +1353,13 @@ if __name__ == "__main__":
         queued_completion,
         fresh_worker_session,
         parent_resumed,
+        parked_resumed,
         director_moved,
         result_compacting,
         result_resumed,
         results_listing,
         director_prune,
         repoint_record,
+        repoint_refused,
         herdr_malformed,
     )
