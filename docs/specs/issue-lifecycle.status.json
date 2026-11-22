@@ -209,6 +209,22 @@
       "status": "built",
       "pr": 180
     },
+    "acceptance-verdict-covers-lane": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-declaration-check-shown": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-correction-replay-missing": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-correction-replay-shown": {
+      "status": "planned",
+      "pr": null
+    },
     "acceptance-merge-approved-head": {
       "status": "built",
       "pr": 103
