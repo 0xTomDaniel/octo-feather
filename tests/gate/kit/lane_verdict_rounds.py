@@ -15,6 +15,10 @@ The three code-reviewer reports are the lane's result files verbatim
 reviewer would write. round3-alone.md is the verdict comment holding round 3 alone, as verdict
 writes rounds; verdict itself refuses to post it there. The legacy comment is the one the old
 verdict posted for round 3 (comment 7062437841 at 2026-11-21T12:15:27Z: its header and report).
+
+A declaration-only check (issue-lifecycle #acceptance-declaration-check-shown; #1221): round 2's
+trailer line as it should have read, `class: declaration` (DECLARED), swapped into round 2's
+recorded report; nothing else in it changes but, where a scenario says so, its verdict.
 """
 
 from __future__ import annotations
@@ -47,6 +51,9 @@ ROUND2_CHECKS = [  # round 2's report's two Check lines, as recorded
         "ticket notes, handoff log | class: exact"
     ),
 ]
+EXACT, TRAILER = ROUND2_CHECKS
+DECLARED = TRAILER.replace("| class: exact", "| class: declaration")
+DECLARATION_HEAD = "Declaration checks (stopgaps; owner rules at merge): 1"
 
 
 class Lane:
@@ -252,5 +259,57 @@ def legacy(s: Scratch) -> None:
     assert f"### Rounds\n\n{rounds}\n### Findings\n" in b, f"the delta after a legacy comment: {b}"
 
 
+def reclassed(ln: Lane, cls: str, rng: str, verdict: str = "blocking") -> str:
+    """Round 2's recorded report, its trailer line classed CLS and its verdict VERDICT, with
+    `Range: RNG`."""
+    text = fixture("verdict-rounds/round2.md")
+    assert TRAILER in text and "\nVerdict: blocking\n" in text, "round2.md is not as recorded"
+    text = text.replace(TRAILER, TRAILER.replace("| class: exact", f"| class: {cls}"))
+    p = ln.s.root / f"round2-{cls}-{verdict}.md"
+    p.write_text(text.replace("\nVerdict: blocking\n", f"\nVerdict: {verdict}\n") + f"Range: {rng}\n")
+    return str(p)
+
+
+def declaration_shown(s: Scratch) -> None:
+    """issue-lifecycle#acceptance-declaration-check-shown, merge-ask: the recorded PR #1216, round 2
+    posted with its trailer line classed declaration, round 3 (clear) chained after it; merge-ask
+    passes, the exact line alone under `Review check classes`, the declaration line under its own
+    heading, and the rounds keep it under round 1."""
+    ln = Lane(s)
+    ln.pr()
+    url = ln.lane("verdict", str(PR), R2[:12], reclassed(ln, "declaration", "6eaf8c7b..ffba6ee7")).out
+    ln.verdict(R3, "round3", "ffba6ee7..2dc6f718")
+    assert f"Verdict: clear\n{EXACT}\n{DECLARED}\n\n### Rounds\n" in ln.body(), ln.body()
+    ln.keep_body(url)
+    out = ln.ask().out.split("\n")
+    classes = out.index("Review check classes (from the verdict comment, docs/adr/0008):")
+    assert out[classes + 1 : classes + 3] == [f"- {EXACT}", ""], out
+    i = out.index(DECLARATION_HEAD)
+    assert out[i + 1 : i + 3] == [f"- {DECLARED}", ""], out
+    i = out.index("Review rounds (from the verdict comment, issue-lifecycle #lanes-one-head):")
+    assert out[i + 2 : i + 4] == [f"  - {EXACT}", f"  - {DECLARED}"], out
+
+
+def declaration_verdict(s: Scratch) -> None:
+    """issue-lifecycle#acceptance-declaration-check-shown, verdict: round 2's report, clear, its
+    trailer line classed proxy or another class (`stopgap`), is refused, writing nothing; classed
+    declaration, it is posted, a full round over the lane; merge-ask passes and shows it apart."""
+    ln = Lane(s)
+    ln.pr()
+    for cls, want in (
+        ("proxy", "report says `Verdict: clear` with a proxy check"),
+        ("stopgap", "has class 'stopgap'; write `class: exact`, `class: proxy` or `class: declaration`"),
+    ):
+        r = ln.lane("verdict", str(PR), R3[:12], reclassed(ln, cls, "6eaf8c7b..2dc6f718", "clear"), want=1)
+        assert want in r.err, f"{cls}: want {want!r}: {r.err}"
+    assert s.gh.writes() == 0, "a refused verdict wrote"
+    report = reclassed(ln, "declaration", "6eaf8c7b..2dc6f718", "clear")
+    url = ln.lane("verdict", str(PR), R3[:12], report).out
+    assert f"- Round 1: {MAIN}..{R3}, full, verdict clear\n  - {EXACT}\n  - {DECLARED}\n" in ln.body()
+    ln.keep_body(url)
+    out = ln.ask().out.split("\n")
+    assert out[out.index(DECLARATION_HEAD) + 1] == f"- {DECLARED}", out
+
+
 if __name__ == "__main__":
-    main(covers_lane, range_refusals, legacy)
+    main(covers_lane, range_refusals, legacy, declaration_shown, declaration_verdict)

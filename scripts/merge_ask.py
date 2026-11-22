@@ -2302,8 +2302,10 @@ CHECKS_LINE = re.compile(r"^Checks:[ \t]*(.*?)\s*$")
 CHECK_FORM = (
     "`Checks: none` when the diff adds or changes nothing to classify (docs/adr/0008, Who builds "
     "what), else one line each `Check: <path>: <rule> (<owner>) | reads: <what it reads> | "
-    "class: exact|proxy` (docs/adr/0008)"
+    "class: exact|proxy|declaration` (docs/adr/0008)"
 )
+# The declaration class (docs/adr/0008 rung 2): merge-ask shows its lines apart.
+DECLARATION = "| class: declaration"
 JUDGMENT_FIELDS = (
     "Judgment",
     "Question",
@@ -2394,7 +2396,7 @@ def check_lines(text: str) -> tuple[list[str], list[str]]:
             if not s:
                 why.append(
                     f"check line `{ln.strip()}` is not `Check: <path>: <rule> (<owner>) | "
-                    "reads: <what it reads> | class: exact|proxy`"
+                    "reads: <what it reads> | class: exact|proxy|declaration`"
                 )
                 continue
             path, rule, reads, cls = s.groups()
@@ -2407,10 +2409,10 @@ def check_lines(text: str) -> tuple[list[str], list[str]]:
                 )
                 continue
             rule = f"{o.group(1)} ({o.group(2).strip()})"
-            if cls.lower() not in ("exact", "proxy"):
+            if cls.lower() not in ("exact", "proxy", "declaration"):
                 why.append(
-                    f"check line for {path} has class {cls!r}; write `class: exact` or "
-                    "`class: proxy` (docs/adr/0008)"
+                    f"check line for {path} has class {cls!r}; write `class: exact`, "
+                    "`class: proxy` or `class: declaration` (docs/adr/0008)"
                 )
                 continue
             checks.append(

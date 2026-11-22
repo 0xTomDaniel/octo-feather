@@ -71,11 +71,11 @@ Owners: none
 
 Then classify every check, and every other decision docs/adr/0008 "Who builds what" classifies, that the diff adds or changes (Check: GLOSSARY.md), one line each, or the one line `Checks: none`:
 
-`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`
+`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy|declaration`
 
 `<path>` is one path with no spaces: the check's own file (a product command's: the file holding its decision), or `justfile:<recipe>` for a recipe.
 
-`<rule>` (the owned rule), `<owner>`, `exact` and `proxy` are as docs/adr/0008 rung 2 defines them. A proxy check blocks, class `proxy-check`.
+`<rule>` (the owned rule), `<owner>`, `exact`, `proxy` and `declaration` are as docs/adr/0008 rung 2 defines them. A proxy check blocks, class `proxy-check`.
 
 **Prior art.** Infrastructure is a parser, test runner, protocol, file format or scheduler. A writer (implementer) reports one line per piece of infrastructure its diff adds or uses, or the one line `Prior art: none` when it touches none:
 

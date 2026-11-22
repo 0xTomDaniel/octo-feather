@@ -159,6 +159,10 @@ covers = ["scripts/octo-feather-lane", "agents/code-reviewer.md", "agents/superv
 [demo."issue-lifecycle#acceptance-verdict-covers-lane"]
 covers = ["scripts/octo-feather-lane", "scripts/merge_ask.py", ".skillfile/patches/skills/code-review/SKILL.md.patch", ".agents/skills/code-review/SKILL.md"]
 
+# Proven by tests/gate/kit/test_lane_verdict_rounds.py's tagged items (the rule: issue-lifecycle #lanes-one-head; docs/adr/0008).
+[demo."issue-lifecycle#acceptance-declaration-check-shown"]
+covers = ["scripts/octo-feather-lane", "scripts/merge_ask.py", ".skillfile/patches/skills/code-review/SKILL.md.patch", ".agents/skills/code-review/SKILL.md"]
+
 # Proven by tests/gate/kit/test_lane_ci_start.py's tagged items (the rule: issue-lifecycle #lanes-one-head); the role naming the
 # command: owed eval docs/owed-evals/589.md.
 [demo."issue-lifecycle#acceptance-ci-alongside"]
