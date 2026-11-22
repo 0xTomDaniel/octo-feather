@@ -124,3 +124,15 @@ herdr-close on its space w2 or its supervisor tab, who closes it, lines read>"`,
 2. .agents/skills/herdr-comms/SKILL.md lines 162-164 ...; docs/specs/comms.spec.html line 258 (#transport-close-space);
    docs/specs/issue-lifecycle.spec.html line 187; agents/director.md line 99.
 ```
+
+## Repin run 20261122T162704Z-4a14c2
+
+The lane's repin run (`--runs 3 --baseline origin/main`), its generated evidence in
+evidence/2026-11-22-gh1075-supervisor-repin.md, holds this case too:
+
+- head, kit 0363d3e9: PASS 3/3 (pass rate 1.00, stddev 0.00).
+- base, origin/main b6d61e56: FAIL 0/3 (pass rate 0.00, stddev 0.00): no `octo-feather-lane merge 12 {head}` in any run
+  (runs 1 and 3 ran `gh pr merge`, run 2 `octo-feather-lane done 12` and `post-merge` by hand) and one
+  `herdr-say --parent` in each (a BLOCKED or close report).
+
+Pin: `octo-feather-qa --verdict 20261122T162704Z-4a14c2/supervisor-notifications/merge-approved-lane-merge-archive`
