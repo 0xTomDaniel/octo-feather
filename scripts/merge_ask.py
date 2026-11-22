@@ -7,7 +7,8 @@ The design: issue #1146 (its design comment); the rules: issue-lifecycle spec #g
 (octo-feather-lane --help, merge-ask, its Checks line). Imported by scripts/octo-feather-lane
 (`merge-ask` builds one snapshot, checks it and prints check's groups around its own `Checks:
 missing` item; `verdict` and `fields` share the review comment's and the report's parsers
-below); how a command finds this module: the docstring of scripts/correction_lanes.py. Standard
+below, and `verdict` its review rounds: Round, posted_rounds, check_set); how a command finds
+this module: the docstring of scripts/correction_lanes.py. Standard
 library only (AGENTS.md Rules, kit scripts). The head proof (#lanes-one-head), the carried
 checks, the full pass and the gate time (#lanes-checkpoints) are judged here too (#1150).
 
@@ -53,6 +54,7 @@ __all__ = [  # check's interface, then the helpers octo-feather-lane's other com
     "Commit",
     "Gate",
     "Git",
+    "Kind",
     "Merge",
     "NoParent",
     "NoWorkflow",
@@ -61,6 +63,7 @@ __all__ = [  # check's interface, then the helpers octo-feather-lane's other com
     "Pin",
     "Policy",
     "Reported",
+    "Round",
     "Sibling",
     "Snapshot",
     "Trend",
@@ -71,11 +74,13 @@ __all__ = [  # check's interface, then the helpers octo-feather-lane's other com
     "budget_parse",
     "check",
     "check_runs",
+    "check_set",
     "ci_workflows",
     "full_pass",
     "git",
     "numbered_jsonl",
     "passed_full",
+    "posted_rounds",
     "pr_base",
     "resolution_files",
     "snapshot",
@@ -96,7 +101,7 @@ import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import NamedTuple, TypedDict, cast
+from typing import Literal, NamedTuple, TypedDict, cast
 
 import tomllib
 from tracker_calls import KIT, gh, tracker, utc
@@ -341,6 +346,9 @@ class Snapshot:
     gate: Gate | None = None
     trend: Trend | None = None
     runs: list[dict[str, object]] | Unread | None = None
+    # the review rounds' chain (#1220, spec #lanes-one-head): FORK, git merge-base of the head
+    # and the base, '' when not read
+    fork: str = ""
 
 
 @dataclass(frozen=True)
@@ -358,7 +366,8 @@ class Ask:
     (shown only, spec #gates-merge-order, on any Ask); NO_CI, the no-CI fact's line on a pass,
     else ''; CURRENT, the head's checks after the current-head projection (the rollup when it
     could not be made); CARRIED_OK, a line per skipped check carried; GATE_TIME, the gate time
-    lines (shown only, spec #lanes-checkpoints)."""
+    lines (shown only, spec #lanes-checkpoints); ROUNDS, the verdict comment's review rounds, one
+    line each, its check lines indented under it."""
 
     head: list[str]
     checks: list[str] = dataclasses.field(default_factory=list)
@@ -379,6 +388,7 @@ class Ask:
     abort: str = ""
     carried_ok: list[str] = dataclasses.field(default_factory=list)
     gate_time: list[str] = dataclasses.field(default_factory=list)
+    rounds: list[str] = dataclasses.field(default_factory=list)
 
     @property
     def gaps(self) -> list[str]:
@@ -431,6 +441,10 @@ def snapshot(  # noqa: PLR0913  each read's input, the command's reader among th
     base_branch = str(view["baseRefName"] or "")
     order = _order(pr, head, base_branch or "main", pr_base(base_branch, base), repo)
     g = _git_facts(head, pr_base(base_branch, base), files, err)
+    try:
+        fork = git("merge-base", head, pr_base(base_branch, base), err=_Unread)[1].strip()
+    except _Unread:
+        fork = ""
     s = Snapshot(
         body,
         branch,
@@ -448,6 +462,7 @@ def snapshot(  # noqa: PLR0913  each read's input, the command's reader among th
         git=g,
         gate=_gate_facts(g, head),
         trend=_trend(trend, head),
+        fork=fork,
     )
     # the judged head's check runs: read only when a check skipped on the head and a Judged proof
     # carries it (the rules' own judged head and proof, over the facts read above)
@@ -948,7 +963,7 @@ def _check(s: Snapshot) -> Ask:
     except _AbortError as e:
         return Ask([], checks, no_ci, current, abort=str(e))
     # --- the review verdict and its check classes, Built, Failed, the rows against them ---
-    rest, classes = review(s, lines, judged, resolved)
+    rest, classes, rounds = review(s, lines, judged, resolved)
     gaps, built = built_ids(s, lines, no_crit=no_crit)
     rest += gaps
     gaps, fails = failed(s, lines)
@@ -972,6 +987,7 @@ def _check(s: Snapshot) -> Ask:
         full=full,
         carried_ok=carried_ok,
         gate_time=gate_time(s.git, s.trend, head) if s.trend else [],
+        rounds=rounds,
     )
 
 
@@ -1237,13 +1253,15 @@ def sources(s: Snapshot, rows: dict[str, str], judged: str | None) -> list[str]:
 
 def review(  # noqa: C901  one branch per verdict gap, in the order printed
     s: Snapshot, lines: list[str], judged: str | None, resolved: dict[str, str]
-) -> tuple[list[str], list[str]]:
-    """(the gaps of the Review verdict and Reviewed lines, the review's check classes): this PR's
-    marker comment, on the JUDGED head or one the head proof carries to it, clear, with usable
-    check classes and no proxy (docs/adr/0008)."""
+) -> tuple[list[str], list[str], list[str]]:
+    """(the gaps of the Review verdict and Reviewed lines, the review's check classes, its rounds'
+    lines): this PR's marker comment, on the JUDGED head or one the head proof carries to it,
+    clear, with usable check classes and no proxy (docs/adr/0008), its rounds chained from the
+    base to its head (spec #lanes-one-head)."""
     pr, head = s.pr, s.head
     miss: list[str] = []
     review_checks: list[str] = []
+    shown: list[str] = []
     rproof: str | None = None
     rwhy: list[str] = []
     rv = field(lines, "Review verdict")
@@ -1322,13 +1340,17 @@ def review(  # noqa: C901  one branch per verdict gap, in the order printed
                     "(docs/adr/0008); delete or replace it, review again, and post the verdict "
                     "with `octo-feather-lane verdict`"
                 )
+            rounds, bad = posted_rounds(cb)
+            shown = [ln for n, r in enumerate(rounds, 1) for ln in r.shown(n)]
+            miss += [f"Review verdict: {w}" for w in bad]
+            miss += [f"Review verdict: {w}" for w in chain_gaps(s, rounds)]
     rl = field(lines, "Reviewed")
     if rproof and (not rl or rl[1].strip("`") != rproof):
         miss.append(
             f"Reviewed: {'names ' + repr(rl[1]) if rl else 'missing'}; add the check's proof "
             f"line `Reviewed: {rproof}`"
         )
-    return miss, review_checks
+    return miss, review_checks, shown
 
 
 # --- the head proof, the carried checks, the full pass and the gate time (#1150) ---
@@ -2413,6 +2435,111 @@ def check_lines(text: str) -> tuple[list[str], list[str]]:
 
 def head_matches(named: str, head: str) -> bool:
     return bool(SHA.fullmatch(named)) and head.lower().startswith(named.lower())
+
+
+# The review rounds of the verdict comment (#1220, spec #lanes-one-head): octo-feather-lane
+# verdict writes them under ROUNDS, one ROUND_LINE each, its check lines under it; merge-ask reads
+# them. A comment with no ROUNDS section (posted before rounds) is one legacy round: the whole
+# lane, ending at its Head (#1218 design, term 1).
+ROUNDS = "### Rounds"
+ROUND_LINE = re.compile(
+    r"^- Round \d+: (\S+)\.\.([0-9a-f]{7,40}), (full|delta|legacy)(?: \([^()]*\))?, "
+    r"verdict (clear|blocking)$"
+)
+ROUND_CHECK = re.compile(r"^  - (Checks?: .*)$")
+Kind = Literal["full", "delta", "legacy"]
+
+
+@dataclass(frozen=True)
+class Round:
+    """One posted review round: START..END the range its reviewer diffed (START '' for a legacy
+    round, the whole lane), KIND full (START on the base), delta (START the previous round's END)
+    or legacy, its VERDICT and its CHECKS (normalized check lines, `Checks: none` alone)."""
+
+    start: str
+    end: str
+    kind: Kind
+    verdict: str
+    checks: tuple[str, ...]
+
+    def line(self, n: int) -> list[str]:
+        """Its lines in the comment, as round N."""
+        kind = "legacy (posted before rounds)" if self.kind == "legacy" else self.kind
+        head = f"- Round {n}: {self.start or 'lane'}..{self.end}, {kind}, verdict {self.verdict}"
+        return [head, *(f"  - {c}" for c in self.checks)]
+
+    def shown(self, n: int) -> list[str]:
+        """Its lines as merge-ask prints them, as round N."""
+        span = (
+            f"the lane to {self.end[:12]}, posted before rounds (counted whole)"
+            if self.kind == "legacy"
+            else f"{self.start[:12]}..{self.end[:12]} {self.kind}"
+        )
+        return [f"- Round {n}: {span}, verdict {self.verdict}", *(f"  - {c}" for c in self.checks)]
+
+
+def posted_rounds(body: str) -> tuple[list[Round], list[str]]:
+    """(the rounds of the verdict comment BODY, why a line of its rounds is unreadable); one
+    legacy round when it has no rounds section, none when it names no Head either."""
+    hdr = body.split("\n### Findings", 1)[0]
+    if f"\n{ROUNDS}\n" not in hdr:
+        h, vs = HEAD_LINE.search(hdr), verdicts(hdr)
+        if not h:
+            return [], []
+        cls = tuple(check_lines(hdr)[0])
+        return [Round("", h.group(1).lower(), "legacy", vs[-1] if vs else "", cls)], []
+    rounds: list[Round] = []
+    bad: list[str] = []
+    for ln in hdr.split(f"\n{ROUNDS}\n", 1)[1].split("\n"):
+        if m := ROUND_LINE.match(ln):
+            start = "" if m.group(3) == "legacy" else m.group(1).lower()
+            kind = cast("Kind", m.group(3))
+            rounds.append(Round(start, m.group(2).lower(), kind, m.group(4), ()))
+        elif (c := ROUND_CHECK.match(ln)) and rounds:
+            r = rounds[-1]
+            rounds[-1] = dataclasses.replace(r, checks=(*r.checks, c.group(1)))
+        elif ln.strip():
+            bad.append(
+                f"unreadable round line `{ln.strip()[:80]}` in the comment's {ROUNDS}; post the "
+                "next round with `octo-feather-lane verdict`, which rewrites them"
+            )
+    return rounds, bad
+
+
+def check_set(rounds: list[Round]) -> list[str]:
+    """The lane's check lines over ROUNDS: the latest full (or legacy) round's, then each later
+    delta's, a later line for the same path and rule replacing the earlier one; `Checks: none`
+    when none."""
+    i = max((k for k, r in enumerate(rounds) if r.kind != "delta"), default=0)
+    out: dict[tuple[str, ...], str] = {}
+    for r in rounds[i:]:
+        for c in r.checks:
+            s = CHECK_SHAPE.fullmatch(c[len("Check: ") :]) if c.startswith("Check: ") else None
+            if s:
+                out[s.groups()[:2]] = c
+    return list(out.values()) or ["Checks: none"]
+
+
+def chain_gaps(s: Snapshot, rounds: list[Round]) -> list[str]:
+    """Why ROUNDS, S's verdict comment's, do not chain from the base to their last head (the rule:
+    octo-feather-lane --help, merge-ask)."""
+    if not rounds:
+        return []
+    i = len(rounds) - 1
+    while i > 0 and rounds[i].start == rounds[i - 1].end:
+        i -= 1
+    first, lane = rounds[i], {oid.lower() for oid, _ in s.commits}
+    if first.kind == "legacy" or (first.kind == "full" and first.start not in lane):
+        return []
+    fork = s.fork[:12] or (s.git.base if s.git else "the base")
+    a, b = first.start[:12], rounds[-1].end[:12]
+    return [
+        (
+            f"the review rounds cover {a}..{b} only: no posted round covers {fork}..{a}, the lane "
+            f"before them; post the round that reviewed up to {a} with `octo-feather-lane "
+            f"verdict`, or review the lane from {fork} and post that round"
+        )
+    ]
 
 
 # The merge-order rule, pure (spec #gates-merge-order)

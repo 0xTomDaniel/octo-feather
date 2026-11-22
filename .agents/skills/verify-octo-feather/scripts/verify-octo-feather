@@ -2884,6 +2884,8 @@ def drive_pilot_pr(f: Feature) -> None:
                 and (st["acceptance-a"]["status"], st["acceptance-a"]["pr"], st["acceptance-b"]["status"]) == ("built", int(pr), "planned"))
     f.check("qc", recorded)
     git(lane, "push", "-q")
+    with (sc / "report").open("a") as rep:   # the review's Range, main to J (code-review skill, Report fields)
+        rep.write(f"Range: {git(r, 'rev-parse', 'main')}..{j}\n")
     f.run("verdict", "octo-feather-lane", "verdict", pr, j, str(sc / "report"))
     f.check("verdict", lambda c: c.code == 0 and f"(clear, head {j[:12]})" in c.err)
     f.run("pr-view", "gh", "pr", "view", pr, "--json", "isDraft,headRefOid,comments")

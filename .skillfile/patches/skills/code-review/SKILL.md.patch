@@ -1,4 +1,4 @@
-# reason: ADR 0007 fresh reviewer; ADR 0015 escalation (intro line); one Standards pass, no Spec pass (Verdict step, Block); issue #118 the Check lines (Verdict step); issue #124 the Owner lines (Verdict step, Owner paragraphs); issue #121 the scope the verdict reader reads (director ruling 2026-10-23); issue #157 one owner for report-field form (Verdict step, Report fields); issue #160 the writer side and search width (Verdict step, Owner paragraphs); issue #191 product-command decisions on the Check lines (Verdict step, Report fields); issue #200 where a restatement blocks (Verdict step, Owner paragraphs); issue #254 the Prior art field and its review (Verdict step, Report fields and Prior art); issue #269 the prose-duty block (Verdict step, Duties); issues #640 and #466 (Verdict step, Owner paragraphs)
+# reason: ADR 0007 fresh reviewer; ADR 0015 escalation (intro line); one Standards pass, no Spec pass (Verdict step, Block); issue #118 the Check lines (Verdict step); issue #124 the Owner lines (Verdict step, Owner paragraphs); issue #121 the scope the verdict reader reads (director ruling 2026-10-23); issue #157 one owner for report-field form (Verdict step, Report fields); issue #160 the writer side and search width (Verdict step, Owner paragraphs); issue #191 product-command decisions on the Check lines (Verdict step, Report fields); issue #200 where a restatement blocks (Verdict step, Owner paragraphs); issue #254 the Prior art field and its review (Verdict step, Report fields and Prior art); issue #269 the prose-duty block (Verdict step, Duties); issues #640 and #466 (Verdict step, Owner paragraphs); issue #1220 the Range field (Verdict step, Report fields)
 --- a/SKILL.md
 +++ b/SKILL.md
 @@ -1,37 +1,23 @@
@@ -44,7 +44,7 @@
  
  Search the repo for every file that documents how code should be written. When `CODING_STANDARDS.md` or `CONTRIBUTING.md` exists, it must be on the list.
  
-@@ -55,35 +41,65 @@
+@@ -55,35 +41,68 @@
  - **Middle Man**: a class or function that mostly just delegates onward. → cut it, call the real target direct.
  - **Refused Bequest**: a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
  
@@ -69,15 +69,18 @@
 +- **Block**: a breach of a documented hard standard of the repo (cite file and rule), or a named simplification that lists the lines it deletes.
 +- **Never a block**: every baseline smell, preferences, and any finding that cannot name a consequence.
 +
-+**Report fields.** This step owns the form of every report field it names (`Verdict:`, `Check:` or `Checks: none`, `Owner:` or `Owners: none`, `Prior art:`), for every role that reports one, the implementer's check field included (docs/adr/0008 rung 3 names them). Each is a plain line: its label at column 0, then its value, outside code blocks. A report with one check and no owned rule ends:
++**Report fields.** This step owns the form of every report field it names (`Verdict:`, `Range:`, `Check:` or `Checks: none`, `Owner:` or `Owners: none`, `Prior art:`), for every role that reports one, the implementer's check field included (docs/adr/0008 rung 3 names them). Each is a plain line: its label at column 0, then its value, outside code blocks. A report with one check and no owned rule ends:
 +
 +```
 +Verdict: blocking
++Range: 6eaf8c7b..ffba6ee7
 +Check: scripts/check-test-surface: tests drive the CLI, never an internal function (AGENTS.md Rules) | reads: tests/*.py import lines | class: proxy
 +Owners: none
 +```
 +
 +`Checks:` takes only `none`: a report with `Check:` lines has no `Checks:` line. Failure examples, each read as a missing or refused field: `## Verdict: blocking`, a heading (gh122 and gh124 reviewers); a bare `Checks:` line heading the `Check:` lines (gh157 implementers, 3 of 3 runs); a bullet or bold label (`- Verdict: clear`, `**Verdict:** clear`).
++
++`Range: <from>..<to>` names the diff the review read, each end a commit sha: `<from>` the fixed point step 1 pinned, `<to>` the head reviewed. A review of the whole lane gives the commit of main it diffed from; a review of only what changed since an earlier posted round gives that round's head. `octo-feather-lane verdict` refuses a report without it (its `--help`, verdict). Failure example: PR #1216's round 3 read only `git diff ffba6ee7 2dc6f718`, said so in prose, and was posted as the whole lane's verdict, `Checks: none` (#1219).
 +
 +Then classify every check, and every other decision docs/adr/0008 "Who builds what" classifies, that the diff adds or changes (Check: GLOSSARY.md), one line each, or the one line `Checks: none`:
 +

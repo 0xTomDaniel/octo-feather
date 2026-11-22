@@ -56,15 +56,18 @@ Report the findings, each marked **block** or **note**, then the verdict: the on
 - **Block**: a breach of a documented hard standard of the repo (cite file and rule), or a named simplification that lists the lines it deletes.
 - **Never a block**: every baseline smell, preferences, and any finding that cannot name a consequence.
 
-**Report fields.** This step owns the form of every report field it names (`Verdict:`, `Check:` or `Checks: none`, `Owner:` or `Owners: none`, `Prior art:`), for every role that reports one, the implementer's check field included (docs/adr/0008 rung 3 names them). Each is a plain line: its label at column 0, then its value, outside code blocks. A report with one check and no owned rule ends:
+**Report fields.** This step owns the form of every report field it names (`Verdict:`, `Range:`, `Check:` or `Checks: none`, `Owner:` or `Owners: none`, `Prior art:`), for every role that reports one, the implementer's check field included (docs/adr/0008 rung 3 names them). Each is a plain line: its label at column 0, then its value, outside code blocks. A report with one check and no owned rule ends:
 
 ```
 Verdict: blocking
+Range: 6eaf8c7b..ffba6ee7
 Check: scripts/check-test-surface: tests drive the CLI, never an internal function (AGENTS.md Rules) | reads: tests/*.py import lines | class: proxy
 Owners: none
 ```
 
 `Checks:` takes only `none`: a report with `Check:` lines has no `Checks:` line. Failure examples, each read as a missing or refused field: `## Verdict: blocking`, a heading (gh122 and gh124 reviewers); a bare `Checks:` line heading the `Check:` lines (gh157 implementers, 3 of 3 runs); a bullet or bold label (`- Verdict: clear`, `**Verdict:** clear`).
+
+`Range: <from>..<to>` names the diff the review read, each end a commit sha: `<from>` the fixed point step 1 pinned, `<to>` the head reviewed. A review of the whole lane gives the commit of main it diffed from; a review of only what changed since an earlier posted round gives that round's head. `octo-feather-lane verdict` refuses a report without it (its `--help`, verdict). Failure example: PR #1216's round 3 read only `git diff ffba6ee7 2dc6f718`, said so in prose, and was posted as the whole lane's verdict, `Checks: none` (#1219).
 
 Then classify every check, and every other decision docs/adr/0008 "Who builds what" classifies, that the diff adds or changes (Check: GLOSSARY.md), one line each, or the one line `Checks: none`:
 
