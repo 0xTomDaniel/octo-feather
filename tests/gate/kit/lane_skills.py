@@ -13,8 +13,9 @@ is a scratch one: lane gh644's record with the supervisor's pane; its hand-off l
 are the real herdr-spawn's, each worker spawned the kit's standard way (`implementer-<lane key>`,
 #1169) from the supervisor's pane through the testkit's Herdr (testkit/herdr.py, its FAKE_HERDR
 world), the recorded session file named by the session id herdr-spawn gave, as Pi names the file
-of a `--session-id` launch. Issue-view 1199 --notes is recorded too (2026-11-22, `Skills: tdd,
-python` in its body), and #1199's implementer session 97e2c882 (lane gh1197) is trimmed the same
+of a `--session-id` launch. Issue-view 1199 --notes is recorded apart (lane-skills-1199.json,
+2026-11-22, `Skills: tdd, python` in its body; lane-skills.json stays the 2 tickets other users
+replay), and #1199's implementer session 97e2c882 (lane gh1197) is trimmed the same
 way to its lines 1, 4, 14 and 15: its one bash call reading tdd's and python's SKILL.md after the
 word `quality#acceptance-gate-time-targets` (line 14) and that call's result.
 
@@ -36,6 +37,7 @@ from lane_tickets import NOTES, VIEW
 from testkit import FIXTURES, HERE, ROOT, Scratch, kit, main
 
 TAPE = Path(__file__).parent / "testkit" / "recordings" / "lane-skills.json"
+TAPE_1199 = TAPE.with_name("lane-skills-1199.json")
 TICKETS = Path(__file__).parent / "testkit" / "recordings" / "lane-tickets-644.json"
 SESSION = "4fd43c0c-7119-4cb4-866f-e114e16ecdb4"
 RECORDED = next((FIXTURES / "lane-skills" / "sessions").glob(f"*/*_{SESSION}.jsonl"))
@@ -48,7 +50,7 @@ def world(s: Scratch) -> Path:
     """The scratch lane gh644 (its record; the testkit's Herdr, empty, the caller's Herdr and kit
     vars cleared; the caller the supervisor's pane) and the target repo t; the lane hand-off log's
     path, which each spawn writes."""
-    s.gh.store("tape.json", json.loads(TAPE.read_text()))
+    s.gh.store("tape.json", json.loads(TAPE.read_text()) + json.loads(TAPE_1199.read_text()))
     d = s.root / "herdr"
     d.mkdir()
     (d / "agents.json").write_text("{}")
