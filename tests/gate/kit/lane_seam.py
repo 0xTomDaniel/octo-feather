@@ -88,11 +88,11 @@ def github(s: Scratch) -> None:
 
 
 def rule(s: Scratch) -> None:
-    """A rule-only ticket's record (its form: octo-feather-lane --help, seam), checked with the id
-    `rule`: #1214's passes (exit 0, naming its body), before a later commit too, and is late for a
-    commit at 74f80a78's time (exit 1, unlisted-test-seam); #1168's prose seam is no record (exit
-    1); a criterion id on #1168 is seam-off-criteria, its fix naming the rule form; `rule` on
-    #1009, which lists no rule item, is seam-off-criteria."""
+    """A rule-only ticket's record `Seam: rule: `<seam>``, checked as `seam TICKET rule SEAM`:
+    #1214's passes (exit 0, naming its body), before a later commit too, and is late for a commit
+    at 74f80a78's time (exit 1, unlisted-test-seam); #1168's prose seam is no record (exit 1);
+    a criterion id on #1168 is seam-off-criteria, its fix naming the rule form; `rule` on #1009,
+    which lists no rule item, is seam-off-criteria."""
     s.gh.store("tape.json", json.loads(TAPE.read_text()))
     s.git(s.root, "init", "-q", "-b", "main", "t")
     early, late = commit(s, "t", TEST_AT), commit(s, "t", RULE_AT)
