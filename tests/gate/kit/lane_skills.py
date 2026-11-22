@@ -17,7 +17,11 @@ of a `--session-id` launch. Issue-view 1199 --notes is recorded apart (lane-skil
 2026-11-22, `Skills: tdd, python` in its body; lane-skills.json stays the 2 tickets other users
 replay), and #1199's implementer session 97e2c882 (lane gh1197) is trimmed the same
 way to its lines 1, 4, 14 and 15: its one bash call reading tdd's and python's SKILL.md after the
-word `quality#acceptance-gate-time-targets` (line 14) and that call's result.
+word `quality#acceptance-gate-time-targets` (line 14) and that call's result. Issue-view 1152
+--notes likewise (lane-skills-1152.json, 2026-11-22, `Skills: tdd, codebase-design, python` in
+its body), and #1152's implementer session 131b16c8 (lane gh1146) trimmed to its lines 1, 4, 21
+and 22: its one call naming python's SKILL.md, `grep -n -A25 ... .agents/skills/python/SKILL.md`
+(line 21), and that call's result; it read none of the three.
 
 Linear (scenario linear, and misread's `Skills: tdd, python.`: #1134, #1136 and #1137 had that
 line, but each now has a later corrected one, so no real gh answer holds it): LINEAR_API_KEY is
@@ -38,10 +42,12 @@ from testkit import FIXTURES, HERE, ROOT, Scratch, kit, main
 
 TAPE = Path(__file__).parent / "testkit" / "recordings" / "lane-skills.json"
 TAPE_1199 = TAPE.with_name("lane-skills-1199.json")
+TAPE_1152 = TAPE.with_name("lane-skills-1152.json")
 TICKETS = Path(__file__).parent / "testkit" / "recordings" / "lane-tickets-644.json"
 SESSION = "4fd43c0c-7119-4cb4-866f-e114e16ecdb4"
 RECORDED = next((FIXTURES / "lane-skills" / "sessions").glob(f"*/*_{SESSION}.jsonl"))
 HASHED = next((FIXTURES / "lane-skills" / "sessions").glob("*/*_97e2c882-*.jsonl"))
+GREPPED = next((FIXTURES / "lane-skills" / "sessions").glob("*/*_131b16c8-*.jsonl"))
 SPAWN = ROOT / ".agents" / "skills" / "herdr-comms" / "assets" / "herdr-spawn"
 SUP = "w1:p0"  # the supervisor's pane, the lane record's `supervisor`
 
@@ -50,7 +56,8 @@ def world(s: Scratch) -> Path:
     """The scratch lane gh644 (its record; the testkit's Herdr, empty, the caller's Herdr and kit
     vars cleared; the caller the supervisor's pane) and the target repo t; the lane hand-off log's
     path, which each spawn writes."""
-    s.gh.store("tape.json", json.loads(TAPE.read_text()) + json.loads(TAPE_1199.read_text()))
+    tapes = (TAPE, TAPE_1199, TAPE_1152)
+    s.gh.store("tape.json", [r for t in tapes for r in json.loads(t.read_text())])
     d = s.root / "herdr"
     d.mkdir()
     (d / "agents.json").write_text("{}")
@@ -85,11 +92,20 @@ def spawn(
 
 def skills(s: Scratch, ticket: str, want: int = 0, **env: str) -> str:
     """`octo-feather-lane skills TICKET` in repo t exiting WANT, the tape replayed afresh; its
-    stdout."""
+    stdout (with exit 2, then its stderr)."""
     for d in (s.gh.dir, Path(s.env.get("FAKE_LINEAR", s.gh.dir))):
         (d / "log").write_text("")
     r = s.run([kit("octo-feather-lane"), "skills", ticket], want=want, cwd=s.root / "t", env=env)
-    return r.out if want != 2 else r.err
+    return r.out if want != 2 else r.out + r.err
+
+
+def use_linear(s: Scratch) -> Path:
+    """Repo t's tracker Linear, through the testkit's Linear (testkit/linear.py); its tape dir."""
+    fl = s.root / "fl"
+    path = f"{s.bin}{os.pathsep}{HERE / 'linear'}{os.pathsep}{s.env['PATH']}"
+    s.env |= {"FAKE_LINEAR": str(fl), "PATH": path}
+    (s.root / "t" / ".octo-feather.toml").write_text('tracker = "linear"\n')
+    return fl
 
 
 def findings(log: Path) -> list[dict[str, object]]:
@@ -260,10 +276,7 @@ def linear(s: Scratch) -> None:
     ENG-123 and tdd, prints the send-back by the worker's pane, exit 1. Naming eval-cases, which it
     loaded: `loaded`, exit 0."""
     log = world(s)
-    fl = s.root / "fl"
-    path = f"{s.bin}{os.pathsep}{HERE / 'linear'}{os.pathsep}{s.env['PATH']}"
-    s.env |= {"FAKE_LINEAR": str(fl), "PATH": path}
-    (s.root / "t" / ".octo-feather.toml").write_text('tracker = "linear"\n')
+    fl = use_linear(s)
     worker, _ = spawn(s, "implementer-eng-123")
     linear_tape(fl, "## What to build\n\nx\n\nSkills: tdd\n")
     out = skills(s, "ENG-123", want=1)
@@ -283,7 +296,7 @@ def demo(s: Scratch) -> None:
     the recorded one up to its offered skills (lines 1 and 4: nothing read). #1094 names
     eval-cases: `skills 1094` exits 1 printing the send-back. The worker then loads it (the
     recorded call and results, lines 12 to 14, appended to its session): exit 0, `loaded`. Then
-    #1231's part (misread)."""
+    #1231's part (misread), then #1232's (cannot_tell)."""
     log = world(s)
     worker, session = spawn(s, "implementer-gh1094", lines=2)
     sys.stdout.write(f"herdr-spawn's spawn line in {log.name}:\n{log.read_text()}")
@@ -300,16 +313,17 @@ def demo(s: Scratch) -> None:
     sys.stdout.write(f"octo-feather-lane skills 1094 (exit 0):\n{out}\n")
     assert out.splitlines()[1:] == ["1094: skill eval-cases: loaded"], out
     misread(s, log)
+    cannot_tell(s, log)
 
 
 def misread(s: Scratch, log: Path) -> None:
     """#1231's part of the demo, in the same lane state: #1199's worker before its one bash call
     (the recorded session's lines 1 and 2) read neither tdd nor python: exit 1, a blocking finding
     each and the send-back line. With that call and its result (the recorded lines 3 and 4), which
-    reads both SKILL.md files after the word `quality#acceptance-gate-time-targets`, as bash runs
-    it (a `#` inside a word starts no comment): both `loaded`, exit 0, no finding logged. A
-    Linear ticket whose line is `Skills: tdd, python.` (a trailing period) with that worker: both
-    `loaded`, exit 0, never `not offered`."""
+    reads both SKILL.md files after the word `quality#acceptance-gate-time-targets` (the `#` rule:
+    octo-feather-lane --help, report): both `loaded`, exit 0, no finding logged. A Linear ticket
+    whose line is `Skills: tdd, python.` (form: --help, ticket) with that worker: both `loaded`,
+    exit 0, never `not offered`."""
     worker, session = spawn(s, "implementer-gh1199", lines=2, recorded=HASHED)
     before = len(findings(log))
     out = skills(s, "1199", want=1)
@@ -331,10 +345,7 @@ def misread(s: Scratch, log: Path) -> None:
     sys.stdout.write(f"{said}:\n{out}\n")
     assert out.splitlines()[1:] == ["1199: skill tdd: loaded", "1199: skill python: loaded"], out
     assert log.read_text() == n, "a loaded skill logged a finding"
-    fl = s.root / "fl"
-    path = f"{s.bin}{os.pathsep}{HERE / 'linear'}{os.pathsep}{s.env['PATH']}"
-    s.env |= {"FAKE_LINEAR": str(fl), "PATH": path}
-    (s.root / "t" / ".octo-feather.toml").write_text('tracker = "linear"\n')
+    fl = use_linear(s)
     spawn(s, "implementer-eng-123", recorded=HASHED)
     linear_tape(fl, "## What to build\n\nx\n\n## Skills\n\nSkills: tdd, python.\n")
     n = log.read_text()
@@ -345,6 +356,63 @@ def misread(s: Scratch, log: Path) -> None:
         "ENG-123: skill python: loaded",
     ], out
     assert log.read_text() == n, "a loaded skill logged a finding"
+
+
+def unchecked(sk: str, ticket: str) -> dict[str, object]:
+    """A cannot-tell finding line for TICKET and SK, as the log holds it."""
+    return miss(sk, blocking=False, ticket=ticket) | {"class": "skills-unchecked"}
+
+
+def cannot_tell(s: Scratch, log: Path) -> None:
+    """#1232's part of the demo, in the same lane state (GitHub again): #1152's worker, whose only
+    call naming python's SKILL.md is a successful `grep -n -A25 ... python/SKILL.md`, never named
+    tdd's or codebase-design's. `skills 1152`: tdd and codebase-design `not loaded`, python `cannot
+    tell` naming that grep; tdd and codebase-design are sent back (blocking finding lines), python
+    is one non-blocking skills-unchecked line, absent from the send-back: exit 1. Run again: both
+    misses sent back once already, python cannot tell: exit 2, no send-back. A Linear ticket naming
+    python alone, its worker's session that one: `cannot tell`, exit 2, one skills-unchecked line,
+    no send-back."""
+    (s.root / "t" / ".octo-feather.toml").unlink(missing_ok=True)
+    worker, _ = spawn(s, "implementer-gh1152", recorded=GREPPED)
+    before = len(findings(log))
+    out = skills(s, "1152", want=1)
+    said = "octo-feather-lane skills 1152, python named only by a grep (exit 1)"
+    sys.stdout.write(f"{said}:\n{out}\n")
+    lines = out.splitlines()
+    assert lines[1:3] == [
+        "1152: skill tdd: not loaded",
+        "1152: skill codebase-design: not loaded",
+    ], out
+    assert lines[3].startswith("1152: skill python: cannot tell (bash `"), out
+    assert "grep -n -A25" in lines[3], out
+    assert f"herdr-say {worker} 'Load tdd, codebase-design (" in out, out
+    got = [strip(f) for f in findings(log)][before:]
+    want = [miss(k, blocking=True, ticket="1152") for k in ("tdd", "codebase-design")]
+    assert got == [*want, unchecked("python", "1152")], got
+    assert "grep -n -A25" in str(findings(log)[-1]["summary"]), findings(log)[-1]
+    before = len(findings(log))
+    out = skills(s, "1152", want=2)
+    said = "octo-feather-lane skills 1152 again, misses sent back once (exit 2)"
+    sys.stdout.write(f"{said}:\n{out}\n")
+    assert lines[3] in out, out
+    assert "sent back once already" in out, out
+    assert "fix:" not in out, out
+    got = [strip(f) for f in findings(log)][before:]
+    want = [miss(k, blocking=False, ticket="1152") for k in ("tdd", "codebase-design")]
+    assert got == [*want, unchecked("python", "1152")], got
+    fl = use_linear(s)
+    spawns = map(json.loads, log.read_text().splitlines())
+    sid = [x["session"] for x in spawns if x.get("ticket") == "eng-123"]
+    for f in (s.root / "pi" / "sessions").glob(f"*/*_{sid[-1]}.jsonl"):
+        f.write_text(GREPPED.read_text())  # misread's ENG-123 worker, its session now #1152's
+    linear_tape(fl, "## What to build\n\nx\n\n## Skills\n\nSkills: python\n")
+    before = len(findings(log))
+    out = skills(s, "ENG-123", want=2)
+    sys.stdout.write(f"octo-feather-lane skills ENG-123, `Skills: python` (exit 2):\n{out}\n")
+    assert out.splitlines()[1].startswith("ENG-123: skill python: cannot tell (bash `"), out
+    assert "fix:" not in out, out
+    assert "class skills-unchecked: python" in out, out
+    assert [strip(f) for f in findings(log)][before:] == [unchecked("python", "ENG-123")]
 
 
 if __name__ == "__main__":
