@@ -257,8 +257,8 @@
     "acceptance-close-message": {
       "status": "built",
       "pr": 1153,
-      "record": "20261120T211804Z-0221bd77",
-      "commit": "57783b620d5cffc5c1eb0910c805aee2833fb3cc",
+      "record": "20261122T182645Z-621b1716",
+      "commit": "be68d223633fa7cc9ced58d70b7df0ccc0c74876",
       "tests": [
         "tests/gate/kit/lane_archive_teardown.py"
       ]
@@ -266,8 +266,8 @@
     "acceptance-shared-supervisor-kept": {
       "status": "built",
       "pr": 1153,
-      "record": "20261120T211804Z-2d50c17d",
-      "commit": "57783b620d5cffc5c1eb0910c805aee2833fb3cc",
+      "record": "20261122T182645Z-933768ce",
+      "commit": "be68d223633fa7cc9ced58d70b7df0ccc0c74876",
       "tests": [
         "tests/gate/kit/lane_archive_teardown.py"
       ]
