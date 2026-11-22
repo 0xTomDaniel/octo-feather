@@ -210,8 +210,13 @@
       "pr": 180
     },
     "acceptance-verdict-covers-lane": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1223,
+      "record": "20261122T172308Z-667ddff2",
+      "commit": "6b87efcb3976d430ecb30135eed6c5e01c71f8bd",
+      "tests": [
+        "tests/gate/kit/lane_verdict_rounds.py"
+      ]
     },
     "acceptance-declaration-check-shown": {
       "status": "planned",
