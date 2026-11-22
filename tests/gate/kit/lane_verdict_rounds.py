@@ -263,10 +263,13 @@ def reclassed(ln: Lane, cls: str, rng: str, verdict: str = "blocking") -> str:
     """Round 2's recorded report, its trailer line classed CLS and its verdict VERDICT, with
     `Range: RNG`."""
     text = fixture("verdict-rounds/round2.md")
-    assert TRAILER in text and "\nVerdict: blocking\n" in text, "round2.md is not as recorded"
+    assert TRAILER in text, "round2.md is not as recorded"
+    assert "\nVerdict: blocking\n" in text, "round2.md is not as recorded"
     text = text.replace(TRAILER, TRAILER.replace("| class: exact", f"| class: {cls}"))
     p = ln.s.root / f"round2-{cls}-{verdict}.md"
-    p.write_text(text.replace("\nVerdict: blocking\n", f"\nVerdict: {verdict}\n") + f"Range: {rng}\n")
+    p.write_text(
+        text.replace("\nVerdict: blocking\n", f"\nVerdict: {verdict}\n") + f"Range: {rng}\n"
+    )
     return str(p)
 
 
@@ -277,7 +280,9 @@ def declaration_shown(s: Scratch) -> None:
     heading, and the rounds keep it under round 1."""
     ln = Lane(s)
     ln.pr()
-    url = ln.lane("verdict", str(PR), R2[:12], reclassed(ln, "declaration", "6eaf8c7b..ffba6ee7")).out
+    url = ln.lane(
+        "verdict", str(PR), R2[:12], reclassed(ln, "declaration", "6eaf8c7b..ffba6ee7")
+    ).out
     ln.verdict(R3, "round3", "ffba6ee7..2dc6f718")
     assert f"Verdict: clear\n{EXACT}\n{DECLARED}\n\n### Rounds\n" in ln.body(), ln.body()
     ln.keep_body(url)
@@ -298,14 +303,21 @@ def declaration_verdict(s: Scratch) -> None:
     ln.pr()
     for cls, want in (
         ("proxy", "report says `Verdict: clear` with a proxy check"),
-        ("stopgap", "has class 'stopgap'; write `class: exact`, `class: proxy` or `class: declaration`"),
+        (
+            "stopgap",
+            "has class 'stopgap'; write `class: exact`, `class: proxy` or `class: declaration`",
+        ),
     ):
-        r = ln.lane("verdict", str(PR), R3[:12], reclassed(ln, cls, "6eaf8c7b..2dc6f718", "clear"), want=1)
+        r = ln.lane(
+            "verdict", str(PR), R3[:12], reclassed(ln, cls, "6eaf8c7b..2dc6f718", "clear"), want=1
+        )
         assert want in r.err, f"{cls}: want {want!r}: {r.err}"
     assert s.gh.writes() == 0, "a refused verdict wrote"
     report = reclassed(ln, "declaration", "6eaf8c7b..2dc6f718", "clear")
     url = ln.lane("verdict", str(PR), R3[:12], report).out
-    assert f"- Round 1: {MAIN}..{R3}, full, verdict clear\n  - {EXACT}\n  - {DECLARED}\n" in ln.body()
+    assert (
+        f"- Round 1: {MAIN}..{R3}, full, verdict clear\n  - {EXACT}\n  - {DECLARED}\n" in ln.body()
+    )
     ln.keep_body(url)
     out = ln.ask().out.split("\n")
     assert out[out.index(DECLARATION_HEAD) + 1] == f"- {DECLARED}", out
