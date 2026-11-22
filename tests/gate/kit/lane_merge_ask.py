@@ -457,7 +457,9 @@ def verdict_refusals(s: Scratch) -> None:
     )
     report(f"{proxy} | class: proxy\nVerdict: clear\n", blocks, regex=True)
     meaning = "Check: scripts/check-x: r (ADR 1) | reads: y | class: meaning\nVerdict: blocking\n"
-    report(meaning, "has class 'meaning'; write `class: exact` or `class: proxy`")
+    report(
+        meaning, "has class 'meaning'; write `class: exact`, `class: proxy` or `class: declaration`"
+    )
     shape = "check line `Check: scripts/check-x is a fact` is not `Check: <path>"
     report("Check: scripts/check-x is a fact\nVerdict: clear\n", shape)
     owner = "check line for scripts/x names no owner: write its rule as stated where it is owned"

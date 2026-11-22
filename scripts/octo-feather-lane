@@ -98,8 +98,8 @@ report, a file or - for stdin. Its fields (the verdict, the check field, the Own
 reader scope: .agents/skills/code-review/SKILL.md step 4, **Report fields**. The last verdict line
 in scope is the verdict, and lines that disagree are refused. What the check field classifies:
 docs/adr/0008, Who builds what. Refused: no
-verdict, neither check form, both, a malformed Check line, a class other than exact or proxy, and
-a `class: proxy` line with `Verdict: clear` (a proxy check blocks). The comment's header carries
+verdict, neither check form, both, a malformed Check line, a class other than exact, proxy or declaration, and
+a `class: proxy` line with `Verdict: clear` (a proxy check blocks; a declaration one does not). The comment's header carries
 the lines; merge-ask prints them under the section for the owner. HEAD is the head the review judged, H, a commit
 of the PR (7+ hex prefix); the comment names it (`Head:`) and the PR's head when posted (`PR head:`).
 Review rounds (rule: issue-lifecycle #lanes-one-head, #acceptance-verdict-covers-lane): the report's one `Range:`
@@ -180,7 +180,8 @@ against gate-budget.toml at the PR head, in the report's lines (report, above; t
 head's history), flagged and shown only: the code reviewer judges it, no gate reads it, and the ask passes or
 fails the same without it (spec issue-lifecycle #lanes-checkpoints; on a failure the block goes to stderr before
 the items). `Review check classes` lists the comment's
-lines for the owner (send it all with herdr-say --parent). Failure: each missing item
+lines for the owner, its `class: declaration` lines apart under `Declaration checks (stopgaps; owner rules at
+merge): <n>` after it (docs/adr/0008; spec issue-lifecycle #acceptance-declaration-check-shown), shown only (send it all with herdr-say --parent). Failure: each missing item
 with its fix on stderr, exit 1.
 
 `Merge order` (spec issue-lifecycle #gates-merge-order), shown only, after `Gate time` on a pass, and on stderr
@@ -1540,8 +1541,12 @@ def cmd_merge_ask(args: list[str]) -> int:
     if a.judgments:   # shown only, after the pass was decided above
         print("\nModel judgments (advisory, spec judgment#rule-advisory: no gate reads them; this merge ask is ready or not without them):")
         print("\n".join(a.judgments))
+    declared = [c for c in a.classes if c.endswith(merge_ask.DECLARATION)]   # shown only, apart (docs/adr/0008)
     print("\nReview check classes (from the verdict comment, docs/adr/0008):")
-    print("\n".join(f"- {c}" for c in a.classes))
+    print("\n".join(f"- {c}" for c in a.classes if c not in declared) or "- none but the declaration checks below")
+    if declared:
+        print(f"\nDeclaration checks (stopgaps; owner rules at merge): {len(declared)}")
+        print("\n".join(f"- {c}" for c in declared))
     if a.rounds:
         print("\nReview rounds (from the verdict comment, issue-lifecycle #lanes-one-head):")
         print("\n".join(a.rounds))
