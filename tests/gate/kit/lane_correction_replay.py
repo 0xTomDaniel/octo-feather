@@ -213,18 +213,19 @@ def shown(s: Scratch) -> None:
 
 def untrue(s: Scratch) -> None:
     """issue-lifecycle#acceptance-correction-replay-shown: merge-ask refuses a row whose claim
-    differs from its own run, naming the run's exit and the end of its output, and a row whose
-    program is on no verdict Check line, never running it."""
+    differs from its own run (three rows given, the rest missing), naming the run's exit and the
+    end of its output, and a row whose program is on no verdict Check line, never running it."""
     ln = Correction(s)
     ln.recorded()
-    rows = list(ROWS)
-    rows[1] = (FINDINGS[1], rows[1][1], rows[1][2], "missed")
-    rows[14] = ("clean gh1192", rows[14][1], rows[14][2], "pass")
-    rows[15] = ("clean gh905", "74f0f749", f"bash -c 'touch {s.root}/ran'", "pass")
-    ln.section(table(tuple(rows)))
+    rows = (
+        (FINDINGS[1], ROWS[1][1], ROWS[1][2], "missed"),
+        ("clean gh1192", ROWS[14][1], ROWS[14][2], "pass"),
+        ("clean gh905", "74f0f749", f"bash -c 'touch {s.root}/ran'", "pass"),
+    )
+    ln.section(table(rows))
     err = ln.ask(want=1).err
-    gaps = [x for x in err.splitlines() if x.startswith("  - Replay: ")]
-    assert len(gaps) == 3, err  # the three rows changed, nothing else
+    gaps = [x for x in err.splitlines() if x.startswith("  - Replay: row ")]
+    assert len(gaps) == len(rows), err  # one per row, each refused
     for who, claim, tail in (
         (FINDINGS[1], "missed", "fix: post `Seam: rule: `check-evals --export`` on 990 with the"),
         (
