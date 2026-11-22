@@ -14,7 +14,7 @@ checks, the full pass and the gate time (#lanes-checkpoints) are judged here too
 
 Interface:
 
-    snapshot(pr, repo, files, read, qc_dir, trend, err=..., lanes, base=None) -> Snapshot
+    snapshot(pr, repo, files, read, qc_dir, trend, err=..., base=None) -> Snapshot
         The one reader: the status FILES (--status), then PR in REPO (None: this directory's)
         through READ, the command's reader ((gh pr view's JSON: body, headRefName, headRefOid,
         statusCheckRollup, baseRefName, comments; the PR's commits or why they are unread)),
@@ -34,10 +34,7 @@ Interface:
         full pass's (Gate: octo-feather-gate config and passed, read along the lane until one
         carries over), the gate time's (Trend: TREND, the state dir's check-runs.jsonl, the
         head's history, gate-budget.toml at the head) and the judged head's check runs, read
-        only when a check skipped on the head and a Judged proof carries it. A correction lane's
-        replay (Replay, #1222; read only when the verdict comment lists a Check line): its parent
-        issue through the tracker skill's issue-view, the clean sample from LANES (the state
-        dir's lanes/) and each `## Replay` row's command run at the head (replay_rows).
+        only when a check skipped on the head and a Judged proof carries it.
     check(s) -> Ask
         Pure, no I/O. Each refusal line the merge ask prints for S, in order, by rule, in the
         parts the command's own item goes between; none when S passes; with what a passing ask
@@ -107,7 +104,6 @@ from pathlib import Path
 from typing import Literal, NamedTuple, TypedDict, cast
 
 import tomllib
-from correction_lanes import MARK, Refused, lane_logs, lane_record, quoted
 from tracker_calls import KIT, gh, tracker, utc
 
 # GitHub's closing keywords: a PR body line with one closes that GitHub issue at merge, named
@@ -316,31 +312,6 @@ class Order:
 
 
 @dataclass(frozen=True)
-class Replayed:
-    """A replay row's command as merge-ask ran it at the PR head: its EXIT (None: it did not run)
-    and its OUT, stdout then stderr (or why it did not run)."""
-
-    exit: int | None
-    out: str
-
-
-@dataclass(frozen=True)
-class Replay:
-    """A correction lane's replay facts (spec issue-lifecycle #lanes-correction, #1222): KEY its
-    parent issue, CLS the class its title's marker (correction_lanes.MARK) names, PATHS the
-    verdict's Check paths, FINDINGS the ids (`<lane> <at>`) of the finding lines its body and
-    comments quote (correction_lanes.quoted), SAMPLE the clean lanes the fixed rule picks
-    (_sample), RUNS each replayed row's command, by its cell text."""
-
-    key: str
-    cls: str
-    paths: tuple[str, ...]
-    findings: tuple[str, ...]
-    sample: tuple[str, ...]
-    runs: dict[str, Replayed]
-
-
-@dataclass(frozen=True)
 class Snapshot:
     """A PR's facts, read once."""
 
@@ -378,9 +349,6 @@ class Snapshot:
     # the review rounds' chain (#1220, spec #lanes-one-head): FORK, git merge-base of the head
     # and the base, '' when not read
     fork: str = ""
-    # the correction lane's replay (#1222): None when the lane is none or its verdict lists no
-    # check
-    replay: Replay | Unread | None = None
 
 
 @dataclass(frozen=True)
@@ -421,7 +389,6 @@ class Ask:
     carried_ok: list[str] = dataclasses.field(default_factory=list)
     gate_time: list[str] = dataclasses.field(default_factory=list)
     rounds: list[str] = dataclasses.field(default_factory=list)
-    replay: str = ""  # the correction lane's `Replay:` line (#1222), '' for none
 
     @property
     def gaps(self) -> list[str]:
@@ -449,7 +416,6 @@ def snapshot(  # noqa: PLR0913  each read's input, the command's reader among th
     *,
     trend: Path,
     err: type[Exception],
-    lanes: Path,
     base: str | None = None,
 ) -> Snapshot:
     specs = statuses(files, err) if files else {}
@@ -501,7 +467,6 @@ def snapshot(  # noqa: PLR0913  each read's input, the command's reader among th
     # the judged head's check runs: read only when a check skipped on the head and a Judged proof
     # carries it (the rules' own judged head and proof, over the facts read above)
     a = _check(s)
-    s = dataclasses.replace(s, replay=_replay(s, a.classes, repo, lanes))
     if a.refusal or a.abort or not _skipped(a.current) or not a.proof:
         return s
     if not a.judged_head or a.judged_head == head.lower():
@@ -1005,8 +970,6 @@ def _check(s: Snapshot) -> Ask:
     rest += gaps
     if t is not None:
         rest += rows_against(rows, built, fails)
-    gaps, replayed = replay(s)
-    rest += gaps
     return Ask(
         first,
         checks,
@@ -1025,7 +988,6 @@ def _check(s: Snapshot) -> Ask:
         carried_ok=carried_ok,
         gate_time=gate_time(s.git, s.trend, head) if s.trend else [],
         rounds=rounds,
-        replay=replayed,
     )
 
 
@@ -2582,126 +2544,6 @@ def chain_gaps(s: Snapshot, rounds: list[Round]) -> list[str]:
     ]
 
 
-# The correction lane's replay, pure (#1222; spec issue-lifecycle #lanes-correction; the rule:
-# octo-feather-lane --help, merge-ask). Its reads: _replay, at the end.
-
-REPLAY = re.compile(r"##\s+replay\s*", re.IGNORECASE)
-REPLAY_CELLS = 4  # finding | case | command | result
-CLAIMS = {"caught": "caught", "missed": "pass", "pass": "pass"}  # a result, the run it claims
-NOT_REPLAYABLE = "not replayable:"
-TAIL = 300  # characters of a run's output a refusal quotes
-
-
-class Row(NamedTuple):
-    """A `## Replay` row: FINDING (an id `<lane> <at>`, `trigger` or `clean <lane>`), CASE, the
-    COMMAND cell's text (backticks cut) and its RESULT."""
-
-    finding: str
-    case: str
-    command: str
-    result: str
-
-
-def replay_rows(body: str) -> tuple[list[Row], list[str]] | None:
-    """(the `## Replay` section's table rows in BODY, why a line of it is unreadable); None when
-    BODY has no such section."""
-    lines = (body or "").replace("\r\n", "\n").split("\n")
-    start = next((i for i, ln in enumerate(lines) if REPLAY.fullmatch(ln.strip())), None)
-    if start is None:
-        return None
-    rows: list[Row] = []
-    bad: list[str] = []
-    for ln in lines[start + 1 :]:
-        if re.match(r"#{1,2}\s", ln):
-            break
-        if not ln.strip().startswith("|"):
-            continue
-        cells = [c.strip() for c in ln.strip().strip("|").split("|")]
-        if cells[0].lower() == "finding" or all(re.fullmatch(r":?-+:?", c) for c in cells):
-            continue
-        if len(cells) != REPLAY_CELLS:
-            bad.append(f"row `{ln.strip()[:80]}` is not `| finding | case | command | result |`")
-            continue
-        rows.append(Row(cells[0], cells[1], cells[2].strip("`"), cells[3].strip("`")))
-    return rows, bad
-
-
-def _ran(run: Replayed, cls: str) -> str | None:
-    """What RUN shows for the issue's class CLS, `caught` or `pass` (the rule: octo-feather-lane
-    --help, merge-ask), else None."""
-    if run.exit == 0:
-        return "pass"
-    return "caught" if run.exit is not None and cls in run.out else None
-
-
-def replay(s: Snapshot) -> tuple[list[str], str]:
-    """(the gaps of S's `## Replay` table, its `Replay:` line) for a correction lane; ([], '')
-    for any other lane."""
-    r = s.replay
-    if r is None:
-        return [], ""
-    if isinstance(r, Unread):
-        return [f"Replay: {r.why}"], ""
-    table = replay_rows(s.body)
-    rows, bad = table or ([], [])
-    gaps = [f"Replay: {w}" for w in bad]
-    if table is None:
-        gaps.append(
-            f"Replay: no `## Replay` section; #{r.key} is a correction lane ({r.cls}) and the "
-            "verdict lists a check: add `| finding | case | command | result |`, a row per "
-            "finding and per clean lane below (octo-feather-lane --help, merge-ask)"
-        )
-    findings = r.findings or ("trigger",)
-    named = {row.finding for row in rows}
-    gaps += [
-        f"Replay: no row for finding `{f}`" + (" (the issue lists no finding)" * (f == "trigger"))
-        for f in findings
-        if f not in named
-    ]
-    gaps += [
-        f"Replay: no row for clean lane `clean {x}`" for x in r.sample if f"clean {x}" not in named
-    ]
-    shown: dict[str, list[str]] = {}  # each row's finding, the results its runs showed
-    for row in rows:
-        if row.result.startswith(NOT_REPLAYABLE) and row.result[len(NOT_REPLAYABLE) :].strip():
-            shown.setdefault(row.finding, [])
-            continue
-        claim = CLAIMS.get(row.result)
-        if claim is None:
-            gaps.append(
-                f"Replay: row `{row.finding}` result `{row.result}` is none of caught, missed, "
-                "pass, `not replayable: <why>`"
-            )
-            continue
-        if _program(row.command) not in r.paths:
-            gaps.append(
-                f"Replay: row `{row.finding}` runs `{row.command}`, whose program is no path on a "
-                f"verdict Check line ({', '.join(r.paths)}): replay the lane's own check"
-            )
-            continue
-        run = r.runs.get(row.command, Replayed(None, "not run"))
-        got = _ran(run, r.cls)
-        if got != claim:
-            said = " ".join(run.out.split())[-TAIL:]
-            how = f"exited {run.exit}" if run.exit is not None else "did not run"
-            needs = f"a non-zero exit naming {r.cls}" if claim == "caught" else "exit 0"
-            gaps.append(
-                f"Replay: row `{row.finding}` claims {row.result} ({needs}); its run at "
-                f"{s.head[:12]} {how}: ...{said}"
-            )
-            continue
-        shown.setdefault(row.finding, []).append(claim)
-    k = sum("caught" in shown.get(f, []) for f in findings)
-    m = sum(f in shown and not shown[f] for f in findings)
-    clean = [shown[f"clean {x}"] for x in r.sample if shown.get(f"clean {x}")]
-    refused = sum("caught" in c for c in clean)
-    line = (
-        f"Replay: caught {k} of {len(findings)} ({m} not replayable); false refusals {refused} of "
-        f"{len(clean)} clean"
-    )
-    return gaps, line
-
-
 # The merge-order rule, pure (spec #gates-merge-order)
 
 # The freshness tail of an octo-feather-qa --verdict line (its --help, Verdict): fresh, stale with
@@ -2976,125 +2818,3 @@ def _order(pr: int, head: str, base_branch: str, base: str, repo: str | None) ->
             unread.append(f"pinned runs {' '.join(pins)}: {e}")
     prs = [Sibling(n, b, c, [Pin(p, *said[p]) for p in ps if p in said]) for n, b, c, ps in found]
     return Order(base_branch, prs, unread)
-
-
-# The correction lane's replay reads (#1222; the rule: replay, above)
-
-MARKED = re.compile(
-    re.escape(MARK.split("{}")[0]) + r"([^\]\s]+)[^\]]*" + re.escape(MARK.split("{}")[1])
-)
-REPLAY_TIMEOUT = 120  # seconds a row's run may take, then it counts as not run
-SAMPLE = 5  # the clean lanes the fixed rule names (#1218 design, term 4)
-
-
-def _replay(
-    s: Snapshot, classes: list[str], repo: str | None, lanes: Path
-) -> Replay | Unread | None:
-    """S's Replay when its parent issue's title carries the correction-lane marker and CLASSES,
-    the verdict's check lines, name a Check path; None when not; Unread naming the read that
-    failed. REPO gh's (None: this directory's), LANES the state dir's lanes/."""
-    shapes = (CHECK_SHAPE.fullmatch(c.removeprefix("Check: ")) for c in classes)
-    paths = tuple(dict.fromkeys(m.group(1) for m in shapes if m))
-    if not paths or not isinstance(s.parent, ParentLine):
-        return None
-    key = s.parent.key
-    try:
-        cls = _marked(key)
-        if cls is None:
-            return None
-        got = json.loads(tracker("issue-view", key, "--notes", err=_Unread))
-        notes = cast("list[dict[str, object]]", got["notes"])
-        texts = [str(n.get("body") or "") for n in notes]
-        findings = tuple(dict.fromkeys(f"{run} {at}" for t in texts for _, (run, at) in quoted(t)))
-        sample = _sample(s, cls, repo, lanes)
-        commands = dict.fromkeys(
-            row.command
-            for row in (replay_rows(s.body) or ([], []))[0]
-            if row.result in CLAIMS and _program(row.command) in paths
-        )
-        runs = _runs(s.head, list(commands)) if commands else {}
-    except _Unread as e:
-        return Unread(f"cannot read correction lane facts for #{key} ({e}); fix it, then rerun")
-    except (ValueError, KeyError, TypeError, AttributeError) as e:
-        return Unread(f"issue-view {key} printed no issue with notes ({e}); fix it, then rerun")
-    return Replay(key, cls, paths, findings, sample, runs)
-
-
-def _marked(key: str) -> str | None:
-    """The class issue KEY's title marker (correction_lanes.MARK) names; None for no marker."""
-    view: object = json.loads(tracker("issue-view", key, err=_Unread))
-    title = cast("dict[str, object]", view).get("title") if isinstance(view, dict) else None
-    if not isinstance(title, str):
-        msg = f"issue-view {key} printed no title"
-        raise _Unread(msg)
-    m = MARKED.search(title)
-    return m.group(1) if m else None
-
-
-def _runs(head: str, commands: list[str]) -> dict[str, Replayed]:
-    """Each of COMMANDS run in a scratch detached worktree at HEAD (_run)."""
-    with tempfile.TemporaryDirectory(prefix="merge-ask-replay-") as tmp:
-        wt = str(Path(tmp) / "head")
-        git("worktree", "add", "-q", "--detach", wt, head, err=_Unread)
-        try:
-            return {c: _run(c, wt) for c in commands}
-        finally:
-            git("worktree", "remove", "--force", wt, ok=(0, 128), err=_Unread)
-
-
-def _program(command: str) -> str | None:
-    """COMMAND's program, split as a shell would without one; None when it cannot be split."""
-    try:
-        argv = shlex.split(command)
-    except ValueError:
-        return None
-    return argv[0] if argv else None
-
-
-def _run(command: str, at: str) -> Replayed:
-    """COMMAND run at AT, no shell, REPLAY_TIMEOUT."""
-    try:
-        p = subprocess.run(
-            shlex.split(command),
-            cwd=at,
-            capture_output=True,
-            text=True,
-            stdin=subprocess.DEVNULL,
-            timeout=REPLAY_TIMEOUT,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
-        return Replayed(None, f"timed out after {REPLAY_TIMEOUT}s")
-    except OSError as e:
-        return Replayed(None, str(e))
-    return Replayed(p.returncode, p.stdout + p.stderr)
-
-
-def _sample(s: Snapshot, cls: str, repo: str | None, lanes: Path) -> tuple[str, ...]:
-    """The clean sample's lanes for the issue's class CLS (the rule: octo-feather-lane --help,
-    merge-ask), REPO the PR's (None: this directory's gh repo), LANES the state dir's lanes/."""
-    name = repo or str(
-        json.loads(
-            gh(["repo", "view", "--json", "nameWithOwner"], "check gh auth status", err=_Unread)
-        )["nameWithOwner"]
-    )
-    shas = [oid for oid, _ in s.commits] or [s.head]
-    times = git("show", "-s", "--format=%ct", *shas, err=_Unread)[1].split()
-    first = dt.datetime.fromtimestamp(min(int(t) for t in times), dt.timezone.utc)
-    found: list[tuple[dt.datetime, str]] = []
-    for lane, path, lines in lane_logs(lanes):
-        if path.parent.name != "archive" or not lines:
-            continue
-        try:
-            rec = lane_record(lanes, lane)
-        except Refused as e:
-            raise _Unread(str(e)) from e
-        if not rec or str(rec[1].get("repository") or "").lower() != name.lower():
-            continue
-        last = utc(lines[-1].get("at"))
-        if last is None or last >= first:
-            continue
-        if any(d.get("kind") == "finding" and d.get("class") == cls for d in lines):
-            continue
-        found.append((last, lane))
-    return tuple(lane for _, lane in sorted(found, reverse=True)[:SAMPLE])

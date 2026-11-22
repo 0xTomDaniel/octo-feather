@@ -1,8 +1,0 @@
-supervisor = "w91:p2"
-repository = "0xTomDaniel/octo-feather"
-issue = "gh1192"
-pr = 1195
-goal = "Verify drives green on main"
-started_at = "2026-11-20T19:36:24Z"
-waiting_on = ""
-last_handoff_at = "2026-11-20T21:33:53Z"

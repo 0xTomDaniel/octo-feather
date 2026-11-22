@@ -1,8 +1,0 @@
-supervisor = "w8N:p9"
-repository = "0xTomDaniel/octo-feather"
-issue = "gh1132"
-goal = "Tests overwrite launch file"
-started_at = "2026-11-19T23:18:18Z"
-waiting_on = ""
-last_handoff_at = "2026-11-20T18:06:01Z"
-pr = 1145
