@@ -25,7 +25,7 @@ Preconditions:
 
 Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive qc-eval-verdict`. Evidence: `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/qc-eval-verdict/`.
 
-The drive makes a scratch target (a role, a stand-in launcher answering `pi-role --json` with the skill `s` and an extension it launches, suite `s1` with case `c1`, fixture `fx`, the kit's `tests/fixtures/spec-status/good/demo.spec.html` and its status file), scratch box state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/qc-eval-verdict/state`) and, in its `qa/`, a stored run of `s1/c1` in `octo-feather-qa`'s layout (two passed runs, kit sha the target's first commit). Each case resets the target to that head, then makes its change.
+The drive makes a scratch target (a role launching the skill `s` and the extension `e.ts`, the tracker skill pi-role needs, its `scripts/pi-role` a link to the kit's real one so the launcher answers `--launch-set` as `octo-feather-qa --verdict` asks it, suite `s1` with case `c1`, fixture `fx`, the kit's `tests/fixtures/spec-status/good/demo.spec.html` and its status file), scratch box state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/qc-eval-verdict/state`) and, in its `qa/`, a stored run of `s1/c1` in `octo-feather-qa`'s layout (two passed runs, kit sha the target's first commit). Each case resets the target to that head, then makes its change.
 
 - **Fresh** (`fresh`, `second-head`). Observe exit 0 and the lines Sub-features names.
 - **Stale** (`stale`). Observe exit 2 and the role file named.

@@ -1,0 +1,17 @@
+Seeded defect: a ran count decides pass as soon as it has that many runs, before the run ends.
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index 404ccdfd..3e9ddd50 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -665,8 +665,10 @@ def ran_count(
+     )
+     if len(hits) > n:
+         return "fail", f"{name}: {said}"
+-    if not final:
++    if not final and len(hits) != n:
+         return "open", f"{name}: {said} so far"
++    if not final:
++        return "pass", f"{name}: {said} so far"
+     return (
+         "pass" if len(hits) == n else "fail"
+     ), f"{name}: {said} ({len(record)} entries in the record)"

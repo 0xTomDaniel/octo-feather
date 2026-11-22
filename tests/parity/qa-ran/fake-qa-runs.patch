@@ -1,0 +1,14 @@
+Seeded defect: the fake_qa octo-feather-qa ignores --runs, answering with one run.
+diff --git a/scripts/octo-feather-qa b/scripts/octo-feather-qa
+index 86981513..96c18d51 100755
+--- a/scripts/octo-feather-qa
++++ b/scripts/octo-feather-qa
+@@ -228,7 +228,7 @@ for x in it:
+ runs = o.get("runs", "1")
+ if not (runs.isdigit() and int(runs) > 0):
+     print(f"octo-feather-qa: --runs needs a positive integer, got {runs!r}", file=sys.stderr); sys.exit(64)
+-runs = int(runs)
++runs = 1
+ git = lambda *g: subprocess.run(["git", *g], capture_output=True, text=True).stdout.strip()
+ def sha(ref, opt):
+     s = git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}")

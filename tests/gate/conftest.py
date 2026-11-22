@@ -20,7 +20,8 @@ warning on stderr, never a failure: the trend line never changes the run's exit 
 Also copyable unchanged: longest items first (#618; gate-time discipline: quality spec #test-kinds). The run reads
 this repo's trend lines (repo the same git top level) once, on the controller, before any item runs: each item's
 wall seconds on the last line that has its node id (a step's node; on a line before node ids, its name, the junit
-testcase name, pytest's item name). Items with a
+testcase name, pytest's item name). With no line of its own (a fresh worktree), the lines of the same repository's
+other worktrees (`git worktree list`) stand in, read the same way (#1202). Items with a
 record are reordered among their own places, longest first (ties keep collection order); an item with none keeps
 its place; no history at all leaves collection order. xdist workers get the controller's read (pytest_configure_node),
 so every worker collects the same order. Under xdist's --dist load (the default with -n) the run deals the order out
@@ -164,26 +165,35 @@ def _load1() -> float | None:
         return None
 
 
+_REPO = re.compile(r'"repo":("(?:[^"\\]|\\.)*")')   # a trend line's repo, as _entry writes it
+
+
 def _last_seconds() -> dict[str, float]:
-    """Each item's wall seconds on the last trend line of this repo that names it ({} without history)."""
+    """Each item's wall seconds on the last trend line of this repo that names it; with no line of this repo, on the
+    last line naming it of another worktree of the same repository ({} without either)."""
     repo = _git("rev-parse", "--show-toplevel") or os.getcwd()
-    mark = '"repo":' + json.dumps(repo)   # as _entry writes it: lines of other repos skip the parse
+    listed = (_git("worktree", "list", "--porcelain", "-z") or "").split("\0")
+    others = {w.removeprefix("worktree ") for w in listed if w.startswith("worktree ")} - {repo}
     last: dict[str, float] = {}
+    theirs: dict[str, float] = {}
     try:
         with open(os.path.join(_state_dir(), TREND)) as f:
             for line in f:
-                if mark not in line:
-                    continue
+                m = _REPO.search(line)   # lines of other repos skip the parse
                 try:   # a line not of the runner's form: skipped from its first bad field
+                    named = json.loads(m.group(1)) if m else None
+                    into = last if named == repo else theirs if named in others else None
+                    if into is None:
+                        continue
                     d: Any = json.loads(line)
-                    if d["repo"] == repo:
+                    if d["repo"] == named:
                         for s in d["steps"]:
-                            last[str(s.get(NODE) or s["name"])] = float(s["seconds"])
+                            into[str(s.get(NODE) or s["name"])] = float(s["seconds"])
                 except (ValueError, KeyError, TypeError):
                     continue
     except OSError:
         return {}
-    return last
+    return last or theirs
 
 
 def _longest_first(items: list[pytest.Item], last: dict[str, float]) -> None:

@@ -1,0 +1,14 @@
+Seeded defect: a stand-in ignores an answer's argc, answering a call with other arguments too.
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index 404ccdfd..e85877ce 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -830,7 +830,7 @@ import json, os, sys
+ log, me = os.environ["QA_STAND_LOG"], ["@NAME@", *sys.argv[1:]]
+ seen = [json.loads(l) for l in open(log)] if os.path.exists(log) else []
+ for a in @ANSWERS@:
+-    if me[1:1 + len(a["args"])] == a["args"] and a.get("argc", len(me) - 1) == len(me) - 1 \
++    if me[1:1 + len(a["args"])] == a["args"] \
+             and ("after" not in a or any(c[:len(a["after"])] == a["after"] for c in seen)):
+         open(log, "a").write(json.dumps(me) + "\n")
+         sys.stdout.write(a["stdout"]); sys.exit(a["exit"])

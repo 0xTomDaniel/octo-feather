@@ -28,7 +28,7 @@ Herdr is the one stand-in: the kit's testkit Herdr (`tests/gate/kit/testkit/herd
 
 - **Delivered once** (`delivered-once`). Compaction 2 s. Run `herdr-say --parent 'DONE commit abc123: the completion'`. Observe exit 0, `took the message queued during its compaction; delivered once, not resent` on stderr, `.obs.delivered` 1 (the world's `prompts`), `.obs.attempts` 1 (`agent prompt` lines in its `log`); the drive prints `delivered-once: delivered 1, attempts 1`.
 - **Still queued** (`still-queued`). Compaction 1 h, `--timeout 1`. Observe exit 1, the last stderr line `still holds the message queued (compacting) at the bound: queued, not consumed; not resent, do not resend`, delivered 0, attempts 1.
-- **Side effects.** Every cwd stays empty and the kit's `git status` unchanged.
+- **Side effects.** Every cwd stays empty and the kit's `git status` unchanged; the driver's own `~/.local/state/octo-feather` (its lane logs and result file) unchanged (each case's environment: the helper's `case_env`).
 
 ## Gotchas
 
