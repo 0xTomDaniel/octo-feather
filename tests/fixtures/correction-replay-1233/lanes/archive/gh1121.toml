@@ -1,0 +1,8 @@
+supervisor = "w94:p8"
+repository = "0xTomDaniel/octo-feather"
+issue = "gh1121"
+goal = "Seams on the ticket by structure"
+started_at = "2026-11-21T11:00:44Z"
+waiting_on = ""
+last_handoff_at = "2026-11-22T16:45:00Z"
+pr = 1216

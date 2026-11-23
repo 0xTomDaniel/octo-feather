@@ -1,0 +1,8 @@
+supervisor = "w98:p2"
+repository = "0xTomDaniel/octo-feather"
+issue = "gh1228"
+goal = "Skills check without false send-backs"
+started_at = "2026-11-22T20:35:58Z"
+waiting_on = ""
+last_handoff_at = "2026-11-22T21:50:42Z"
+pr = 1233

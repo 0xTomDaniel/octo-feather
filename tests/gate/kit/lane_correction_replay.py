@@ -24,7 +24,13 @@ not replayable. Run on GitHub (2026-11-22) the rows gave what ROWS claims: nine 
 clean gh1192 refused (#1193 holds no Seam record).
 
 The trigger case: #1121 marked but quoting no finding line (built, as the notes query answers:
-testkit/recordings/lane-skills.json's shape), no archived lane: one `trigger` row, no clean one.
+testkit/recordings/lane-skills.json's shape), no archived lane: one `trigger` row, no clean one;
+masked adds a Pi session to the box, which every row's sandbox masks (#1241).
+
+The recorded #1233 case (#1241; Recorded1233): #1228's 17 send-back items, 10 finding ids, each
+row declared not replayable (the skills check needs the worker's Pi session and the caller's
+Herdr pane, neither of which the sandbox serves); the replay done outside merge-ask is lane
+gh1228's, /home/exedev/scratch/gh1228-replay/TABLE.md section 1.
 """
 
 from __future__ import annotations
@@ -33,8 +39,8 @@ import json
 import re
 import shutil
 
-from lane_verdict_rounds import PR, R2, R3, Lane
-from testkit import FIXTURES, HERE, ROOT, Scratch, main
+from lane_verdict_rounds import PR, R2, R3, G, L, Lane
+from testkit import FIXTURES, HERE, ROOT, Ran, Scratch, fixture, main
 from testkit.qc_box import mise_dir
 
 REPO = "0xTomDaniel/octo-feather"
@@ -333,5 +339,182 @@ def contained(s: Scratch) -> None:
     assert left == [], f"a row's write persists: {left}"
 
 
+def masked(s: Scratch) -> None:
+    """issue-lifecycle#acceptance-correction-replay-shown, a read the sandbox masks (#1241): Pi's
+    sessions, which the box holds (one session here), are masked in every row's sandbox, so
+    `octo-feather-lane report`, whose skill reach reads them, finds none there and exits 0. Its
+    rows, one claiming caught and one pass, are each shown not replayable, naming the masked read
+    from the sandbox's attempt record; neither is refused as untrue nor counted as a run."""
+    ln = Correction(s, lanes=False)
+    ln.trigger()
+    s.env.pop("PI_CODING_AGENT_DIR", None)
+    box = s.home / ".pi" / "agent" / "sessions" / "--w--"
+    box.mkdir(parents=True)
+    (box / "2026-11-23T00-00-00-000Z_s1.jsonl").write_text(
+        '{"type":"session","timestamp":"2026-11-23T00:00:00.000Z"}\n'
+    )
+    rows = (
+        ("trigger", "#1121", "scripts/octo-feather-lane report", "caught"),
+        ("trigger", "#1121", "scripts/octo-feather-lane report", "pass"),
+    )
+    ln.section(table(rows))
+    out = ln.ask().out
+    want = "\nReplay: caught 0 of 1 (1 not replayable); false refusals 0 of 0 clean\n"
+    assert want in out, out
+    said = out.split(want, 1)[1].split("\n\n", 1)[0].splitlines()
+    mask = f"open {s.home}/.pi/agent/sessions: tmpfs mask over {s.home}/.pi/agent/sessions"
+    assert len(said) == len(rows), said
+    for line in said:
+        assert line.startswith("- `trigger`: not replayable: "), line
+        assert mask in line, line
+
+
+# The recorded #1233 case (#1241): PR #1233 (lane gh1228, parent #1228), the change to the skills
+# check that #1228's 17 send-back items asked for.
+PR_1233 = 1233
+HEAD_1233 = "0b665281fec8d1aa37e80ad960a58a2dee687b03"
+MAIN_1233 = "30086cb1"  # #1233's base on main (its merge-base)
+VERDICT_1233 = "https://github.com/0xTomDaniel/octo-feather/pull/1233#issuecomment-7085862927"
+MARKED_1228 = "[correction-lane skill-not-loaded] "
+MASKED = "not replayable: Pi sessions are masked in the qc sandbox"
+LIVE = "; lane gh1075's hand-off log is live, masked too"
+STATUS_1233 = "docs/specs/issue-lifecycle.status.json"
+CLEAN_1233 = ("gh1227", "gh1074", "gh905", "gh1146", "gh1132")
+
+
+class Recorded1233:
+    """PR #1233 offline as recorded: the scratch repo R at its head 0b665281 (the kit's own
+    commits through git alternates, origin/main at its base 30086cb1, the full gate pass recorded
+    there), the PR in the fake gh with its body and its verdict comment verbatim
+    (tests/fixtures/correction-replay-1233/pr-body.md, verdict.md: two Check lines on
+    scripts/octo-feather-lane), its checks passing; #1228 as GitHub answered issue-view 1228
+    --notes (testkit/recordings/correction-replay-1233.json, unmodified) but for what makes it a
+    correction lane, which reflect never filed it as: its title marker, and one comment quoting the
+    17 send-back items as reflect quotes finding lines (findings.jsonl: each line verbatim from
+    its lane's hand-off log, gh1075 live, the rest archived). The 17 items are 10 finding ids:
+    a ticket's misses share one write, so one `at`. The state dir's archived lanes
+    (lanes/archive: each record verbatim, each log cut to its finding lines and last line) give
+    the clean sample gh1227, gh1074, gh905, gh1146, gh1132; gh1121, gh1197 and gh1192 hold the
+    class, gh706 is the sixth, gh1228 ended after #1233's first commit."""
+
+    def __init__(self, s: Scratch) -> None:
+        self.s, self.r = s, s.root / "repo"
+        s.env.pop("HERDR_SESSION", None)
+        s.env["XDG_STATE_HOME"] = str(s.root / "xdg")
+        s.prepare("correction-replay-1233", Recorded1233.build)
+        at = FIXTURES / "correction-replay-1233"
+        shutil.copytree(at / "lanes", s.root / "xdg" / "octo-feather" / "lanes")
+        s.gh.store("repo.json", {"nameWithOwner": REPO})
+        s.gh.store(f"pr/{PR_1233}.diff", "")
+        self.items = [json.loads(x) for x in (at / "findings.jsonl").read_text().splitlines()]
+        tape = json.loads((HERE / "recordings" / "correction-replay-1233.json").read_text())
+        quotes = "".join(
+            f"- {i['lane']} {i['line']['at']} {i['line']['source']}: {i['line']['summary']}\n"
+            for i in self.items
+        )
+        note = {
+            "url": f"https://github.com/{REPO}/issues/1228#issuecomment-recorded-1241",
+            "createdAt": "2026-11-23T00:00:00Z",
+            "lastEditedAt": None,
+            "body": "Recorded for #1241, not on GitHub: #1228 is not reflect-filed; the 17 "
+            "send-back items its comment and REPORT.md section 2 count, quoted as reflect quotes "
+            "finding lines:\n\n" + quotes,
+        }
+        for rec in tape:
+            d = json.loads(rec["out"])
+            if rec["request"].startswith("issue view"):
+                d["title"] = MARKED_1228 + d["title"]
+            else:
+                d["data"]["repository"]["issue"]["comments"]["nodes"].append(note)
+            rec["out"] = json.dumps(d)
+            rec["source"] += "; built for #1241: title marker, the quoting comment"
+        s.gh.store("recorded.json", tape * 4)
+        self.body = fixture("correction-replay-1233/pr-body.md")
+        self.pr: dict[str, object] = {
+            "number": PR_1233,
+            "baseRefName": "main",
+            "headRefName": "gh1228",
+            "headRefOid": HEAD_1233,
+            "body": self.body,
+            "statusCheckRollup": [
+                {
+                    "__typename": "CheckRun",
+                    "name": n,
+                    "status": "COMPLETED",
+                    "conclusion": "SUCCESS",
+                }
+                for n in ("scope", "check")
+            ],
+            "comments": [
+                {"url": VERDICT_1233, "body": fixture("correction-replay-1233/verdict.md")}
+            ],
+        }
+        s.gh.put(PR_1233, self.pr)
+
+    @staticmethod
+    def build(s: Scratch) -> None:
+        r = s.root / "repo"
+        r.mkdir()
+        common = ["git", "-C", str(ROOT), "rev-parse", "--path-format=absolute", "--git-common-dir"]
+        s.run(["git", "init", "-q", "-b", "gh1228", str(r)])
+        (r / ".git" / "objects" / "info" / "alternates").write_text(
+            s.run(common).out + "/objects\n"
+        )
+        for k, v in (
+            ("user.email", "t@example.com"),
+            ("user.name", "t"),
+            ("commit.gpgsign", "false"),
+        ):
+            s.run(["git", "-C", str(r), "config", k, v])
+        s.run(["git", "-C", str(r), "remote", "add", "origin", f"https://github.com/{REPO}.git"])
+        main_sha = s.run(["git", "-C", str(r), "rev-parse", MAIN_1233]).out
+        s.run(["git", "-C", str(r), "update-ref", "refs/remotes/origin/main", main_sha])
+        s.run(["git", "-C", str(r), "reset", "-q", "--hard", HEAD_1233])
+        s.run([G, "record", "--reason", "lane final head", "--seconds", "1"], cwd=r)
+
+    def rows(self) -> tuple[tuple[str, str, str, str], ...]:
+        """One row per send-back item, each declared not replayable, and one per clean lane."""
+        items = tuple(
+            (
+                f"{i['lane']} {i['line']['at']}",
+                f"#{i['line']['ticket']} {i['line']['skill']}",
+                NONE,
+                MASKED + (LIVE if i["lane"] == "gh1075" else ""),
+            )
+            for i in self.items
+        )
+        return items + tuple((f"clean {x}", f"lane {x}", NONE, MASKED) for x in CLEAN_1233)
+
+    def ask(self, more: str = "", want: int = 0) -> Ran:
+        self.s.gh.put(PR_1233, self.pr | {"body": self.body + more})
+        cmd = [L, "merge-ask", str(PR_1233), "--base", "origin/main", "--status", STATUS_1233]
+        return self.s.run(cmd, want=want, cwd=self.r)
+
+
+def recorded_1233(s: Scratch) -> None:
+    """issue-lifecycle#acceptance-correction-replay-missing and -shown, the recorded #1233 case:
+    with no `## Replay` merge-ask refuses naming each of #1228's 10 finding ids (its 17 items)
+    and each clean lane; with a row per item, each declaring the read the qc sandbox masks (the
+    worker's Pi session; gh1075's live log), and a row per clean lane, it passes printing
+    caught 0 of 10, all 10 not replayable, each row with its reason. The replay done outside
+    merge-ask, at each finding's time: /home/exedev/scratch/gh1228-replay/TABLE.md section 1."""
+    ln = Recorded1233(s)
+    err = ln.ask(want=1).err
+    ids = list(dict.fromkeys(f"{i['lane']} {i['line']['at']}" for i in ln.items))
+    assert len(ln.items) == 17, ln.items
+    assert len(ids) == 10, ids
+    named = [x for x in err.splitlines() if x.startswith("  - Replay: no row for ")]
+    assert named == [
+        *(f"  - Replay: no row for finding `{f}`" for f in ids),
+        *(f"  - Replay: no row for clean lane `clean {x}`" for x in CLEAN_1233),
+    ], err
+    rows = ln.rows()
+    out = ln.ask(table(rows)).out
+    want = "\nReplay: caught 0 of 10 (10 not replayable); false refusals 0 of 0 clean\n"
+    assert want in out, out
+    said = out.split(want, 1)[1].split("\n\n", 1)[0].splitlines()
+    assert said == [f"- `{f}`: {r} (as the row says; not run)" for f, _, _, r in rows], said
+
+
 if __name__ == "__main__":
-    main(missing, shown, untrue, contained)
+    main(missing, shown, untrue, contained, masked, recorded_1233)
