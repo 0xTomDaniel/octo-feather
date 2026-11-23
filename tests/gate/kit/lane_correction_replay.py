@@ -38,15 +38,132 @@ from __future__ import annotations
 import json
 import re
 import shutil
+from typing import TYPE_CHECKING, Any, TypedDict, cast
 
+import jsonschema
 from lane_verdict_rounds import PR, R2, R3, G, L, Lane
 from testkit import FIXTURES, HERE, ROOT, Ran, Scratch, fixture, main
 from testkit.qc_box import mise_dir
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 REPO = "0xTomDaniel/octo-feather"
 SEAM = "scripts/octo-feather-lane seam"
 NOTES = ROOT / ".agents" / "skills" / "github-issues" / "scripts" / "notes.graphql"
 TRIGGER = "[correction-lane unlisted-test-seam] repeated finding class: unlisted-test-seam"
+
+# The recordings and fixtures read here, each validated once by the kit's pinned jsonschema
+# (quality spec #edge-validation-kit), then typed: the fields read, each required with its type.
+TEXT = {"type": "string"}
+RECORDING = {  # testkit/recordings/*.json, as testkit/gh.py replays them
+    "type": "array",
+    "items": {
+        "type": "object",
+        "required": ["request", "out", "err", "exit", "source"],
+        "additionalProperties": False,
+        "properties": {
+            "request": TEXT,
+            "out": TEXT,
+            "err": TEXT,
+            "exit": {"type": "integer"},
+            "source": TEXT,
+        },
+    },
+}
+ISSUE = {  # gh issue view N --json ...'s answer, the fields read
+    "type": "object",
+    "required": ["number", "title", "body"],
+    "properties": {"number": {"type": "integer"}, "title": TEXT, "body": TEXT},
+}
+COMMENTS = {  # the notes query's answer (notes.graphql), the path written to
+    "type": "object",
+    "required": ["data"],
+    "properties": {
+        "data": {
+            "type": "object",
+            "required": ["repository"],
+            "properties": {
+                "repository": {
+                    "type": "object",
+                    "required": ["issue"],
+                    "properties": {
+                        "issue": {
+                            "type": "object",
+                            "required": ["comments"],
+                            "properties": {
+                                "comments": {
+                                    "type": "object",
+                                    "required": ["nodes"],
+                                    "properties": {"nodes": {"type": "array"}},
+                                }
+                            },
+                        }
+                    },
+                }
+            },
+        }
+    },
+}
+FINDING_ITEM = {  # tests/fixtures/correction-replay-1233/findings.jsonl, one line
+    "type": "object",
+    "required": ["lane", "line"],
+    "properties": {
+        "lane": TEXT,
+        "line": {
+            "type": "object",
+            "required": ["at", "source", "summary", "ticket", "skill"],
+            "properties": dict.fromkeys(("at", "source", "summary", "ticket", "skill"), TEXT),
+        },
+    },
+}
+
+
+class Recording(TypedDict):
+    request: str
+    out: str
+    err: str
+    exit: int
+    source: str
+
+
+class Issue(TypedDict):
+    number: int
+    title: str
+    body: str
+
+
+class Line(TypedDict):
+    at: str
+    source: str
+    summary: str
+    ticket: str
+    skill: str
+
+
+class Item(TypedDict):
+    lane: str
+    line: Line
+
+
+def valid(text: str, schema: Mapping[str, object], what: str) -> object:
+    """TEXT's JSON once SCHEMA holds for it; else fails naming WHAT and the failing field."""
+    doc: object = json.loads(text)
+    try:
+        jsonschema.validate(doc, schema)
+    except jsonschema.ValidationError as e:
+        at = ".".join(map(str, e.absolute_path)) or "the document"
+        msg = f"{what}: {at}: {e.message}"
+        raise AssertionError(msg) from e
+    return doc
+
+
+def tape(name: str) -> list[Recording]:
+    """testkit/recordings/NAME.json, validated."""
+    p = HERE / "recordings" / f"{name}.json"
+    return cast("list[Recording]", valid(p.read_text(), RECORDING, str(p)))
+
+
 FINDINGS = (  # #1121's finding ids (`<lane> <at>`), in the order its body and comments quote them
     "gh840 2026-11-18T04:20:55Z",
     "gh986 2026-11-18T20:23:18Z",
@@ -162,6 +279,31 @@ ROWS = (  # finding, case, command, result
 )
 
 
+# A Replay section holding what is no row as GitHub renders it: an example table in a fence and
+# one in a comment, each naming a finding; then the table: FINDINGS[2]'s row, an escaped pipe in
+# its result cell, and clean gh1197's row with two cells of four.
+EXAMPLES = f"""
+## Replay
+
+```
+| finding | case | command | result |
+|---|---|---|---|
+| {FINDINGS[0]} | #873 | `bash -c true` | pass |
+```
+
+<!--
+| finding | case | command | result |
+|---|---|---|---|
+| {FINDINGS[1]} | #990 | `bash -c true` | pass |
+-->
+
+| finding | case | command | result |
+|---|---|---|---|
+| {FINDINGS[2]} | #987 | none | not replayable: names no test commit \\| no seam |
+| clean gh1197 | 385b4b03 |
+"""
+
+
 def table(rows: tuple[tuple[str, str, str, str], ...]) -> str:
     """The `## Replay` section holding ROWS."""
     lines = [
@@ -196,11 +338,12 @@ class Correction(Lane):
     def recorded(self) -> None:
         """#1121 and the rows' tickets as GitHub answered (each request up to 8 times), each also
         stored as GitHub's issue of REPO, which the snapshot reads (`gh issue view N -R REPO`)."""
-        tape = json.loads((HERE / "recordings" / "correction-replay-1216.json").read_text())
-        self.s.gh.store("recorded.json", tape * 8)
-        for rec in tape:
+        recs = tape("correction-replay-1216")
+        self.s.gh.store("recorded.json", recs * 8)
+        for rec in recs:
             if m := re.fullmatch(r"issue view (\d+) --json \S+", rec["request"]):
-                self.s.gh.store(f"repos/{REPO}/issue/{m[1]}.json", json.loads(rec["out"]))
+                issue = valid(rec["out"], ISSUE, rec["request"])
+                self.s.gh.store(f"repos/{REPO}/issue/{m[1]}.json", issue)
 
     def trigger(self) -> None:
         """#1121 marked, quoting no finding line: its view, in both stores, and its notes."""
@@ -248,6 +391,32 @@ def missing(s: Scratch) -> None:
         *(f"  - Replay: no row for finding `{f}`" for f in FINDINGS),
         *(f"  - Replay: no row for clean lane `clean {lane}`" for lane in CLEAN),
     ], r.err
+    ln.section(EXAMPLES)  # the section read as GitHub renders it
+    err = ln.ask(want=1).err.splitlines()
+    named = [x for x in err if x.startswith("  - Replay: no row for ")]
+    assert named == [
+        *(f"  - Replay: no row for finding `{f}`" for f in FINDINGS if f != FINDINGS[2]),
+        *(f"  - Replay: no row for clean lane `clean {lane}`" for lane in CLEAN),
+    ], err  # a fenced or commented example is no row; the escaped pipe kept its row whole
+    rows = [x for x in err if x.startswith("  - Replay: row ")]
+    want = (
+        "  - Replay: row `clean gh1197`: command, result empty; a row is "
+        "`| finding | case | command | result |`"
+    )
+    assert rows == [want], err
+    recs = tape("correction-replay-1216")  # #1121's body as GitHub would never give it: null
+    for rec in recs:
+        if rec["request"].startswith("api graphql -F n=1121 "):
+            answer = cast("dict[str, Any]", valid(rec["out"], COMMENTS, rec["request"]))
+            answer["data"]["repository"]["issue"]["body"] = None
+            rec["out"] = json.dumps(answer)
+    s.gh.store("recorded.json", recs * 8)
+    err = ln.ask(want=1).err.splitlines()
+    want = (
+        "  - Replay: cannot read correction lane facts for #1121 (issue-view 1121 --notes "
+        "answered no valid JSON: notes.0.body: None is not of type 'string'); fix it, then rerun"
+    )
+    assert [x for x in err if x.startswith("  - Replay:")] == [want], err
 
 
 def shown(s: Scratch) -> None:
@@ -406,8 +575,9 @@ class Recorded1233:
         shutil.copytree(at / "lanes", s.root / "xdg" / "octo-feather" / "lanes")
         s.gh.store("repo.json", {"nameWithOwner": REPO})
         s.gh.store(f"pr/{PR_1233}.diff", "")
-        self.items = [json.loads(x) for x in (at / "findings.jsonl").read_text().splitlines()]
-        tape = json.loads((HERE / "recordings" / "correction-replay-1233.json").read_text())
+        lines = (at / "findings.jsonl").read_text().splitlines()
+        self.items = [cast("Item", valid(x, FINDING_ITEM, "findings.jsonl")) for x in lines]
+        recs = tape("correction-replay-1233")
         quotes = "".join(
             f"- {i['lane']} {i['line']['at']} {i['line']['source']}: {i['line']['summary']}\n"
             for i in self.items
@@ -420,15 +590,18 @@ class Recorded1233:
             "send-back items its comment and REPORT.md section 2 count, quoted as reflect quotes "
             "finding lines:\n\n" + quotes,
         }
-        for rec in tape:
-            d = json.loads(rec["out"])
+        for rec in recs:
             if rec["request"].startswith("issue view"):
-                d["title"] = MARKED_1228 + d["title"]
+                issue = cast("Issue", valid(rec["out"], ISSUE, rec["request"]))
+                issue["title"] = MARKED_1228 + issue["title"]
+                rec["out"] = json.dumps(issue)
             else:
-                d["data"]["repository"]["issue"]["comments"]["nodes"].append(note)
-            rec["out"] = json.dumps(d)
+                # COMMENTS holds the path to the nodes; the rest of GitHub's answer kept as is
+                answer = cast("dict[str, Any]", valid(rec["out"], COMMENTS, rec["request"]))
+                answer["data"]["repository"]["issue"]["comments"]["nodes"].append(note)
+                rec["out"] = json.dumps(answer)
             rec["source"] += "; built for #1241: title marker, the quoting comment"
-        s.gh.store("recorded.json", tape * 4)
+        s.gh.store("recorded.json", recs * 4)
         self.body = fixture("correction-replay-1233/pr-body.md")
         self.pr: dict[str, object] = {
             "number": PR_1233,

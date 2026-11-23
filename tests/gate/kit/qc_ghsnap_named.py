@@ -12,11 +12,13 @@ number GitHub does not have is named in the summary line and meta.json's absent,
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, TypedDict, cast
 
+import jsonschema
 from testkit import ROOT, Scratch, kit, main
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
     from pathlib import Path
 
 OFFLINE_GH = ROOT / ".agents" / "skills" / "github-pr" / "scripts" / "gh"
@@ -29,6 +31,60 @@ FIELDS = (
     "comments,createdAt,id,labels,milestone,number,parent,state,stateReason,subIssues,"
     "subIssuesSummary,title,updatedAt,url"
 )
+# The answers read here, each validated once by the kit's pinned jsonschema (quality spec
+# #edge-validation-kit), then typed: the fields read, each required with its type.
+NAMES = {"type": "array", "items": {"type": "string"}}
+META = {  # the snapshot's meta.json, the fields read
+    "type": "object",
+    "required": ["capped", "absent"],
+    "properties": {"capped": NAMES, "absent": NAMES},
+}
+VIEWED = {  # gh issue view 1 --json FIELDS: compared whole, so an object of every field asked
+    "type": "object",
+    "required": FIELDS.split(","),
+}
+NOTED = {  # issue-view --notes (github-issues SKILL.md), the fields read
+    "type": "object",
+    "required": ["notes"],
+    "properties": {
+        "notes": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+                "type": "object",
+                "required": ["body"],
+                "properties": {"body": {"type": "string"}},
+            },
+        }
+    },
+}
+
+
+class Meta(TypedDict):
+    capped: list[str]
+    absent: list[str]
+
+
+class Note(TypedDict):
+    body: str
+
+
+class Noted(TypedDict):
+    notes: list[Note]
+
+
+def valid(text: str, schema: Mapping[str, object], what: str) -> object:
+    """TEXT's JSON once SCHEMA holds for it; else fails naming WHAT and the failing field."""
+    doc: object = json.loads(text)
+    try:
+        jsonschema.validate(doc, schema)
+    except jsonschema.ValidationError as e:
+        at = ".".join(map(str, e.absolute_path)) or "the document"
+        msg = f"{what}: {at}: {e.message}"
+        raise AssertionError(msg) from e
+    return doc
+
+
 OLD: dict[str, object] = {
     "number": 1,
     "title": "The parent, filed long ago",
@@ -127,19 +183,19 @@ def named_issue(s: Scratch) -> None:
     line = s.run([kit("octo-feather-qc-ghsnap"), "o/r", str(named), "1", "9999"]).out
     assert "list-only:" not in line, line
     assert "named, not on GitHub: #9999" in line, line
-    meta = json.loads((named / "meta.json").read_text())
+    meta = cast("Meta", valid((named / "meta.json").read_text(), META, "meta.json"))
     assert meta["capped"] == [], meta
     assert "issue #9999" in meta["absent"], meta
-    live = json.loads(s.run(["gh", "issue", "view", "1", "--json", FIELDS]).out)
-    got = json.loads(offline(named, "gh", "issue", "view", "1", "--json", FIELDS))
+    live = valid(s.run(["gh", "issue", "view", "1", "--json", FIELDS]).out, VIEWED, "gh live")
+    got = valid(offline(named, "gh", "issue", "view", "1", "--json", FIELDS), VIEWED, "gh offline")
     assert got == live, f"{got} != {live}"
     (s.gh.dir / "log").write_text(
         ""
     )  # the fake GitHub's notes answer replays afresh for issue-view
-    live = json.loads(s.run([VIEW, "1", "--notes"]).out)
-    got = json.loads(offline(named, VIEW, "1", "--notes"))
-    assert got == live, f"{got} != {live}"
-    assert got["notes"][-1]["body"] == "a late note", got
+    live = cast("Noted", valid(s.run([VIEW, "1", "--notes"]).out, NOTED, "issue-view live"))
+    noted = cast("Noted", valid(offline(named, VIEW, "1", "--notes"), NOTED, "issue-view offline"))
+    assert noted == live, f"{noted} != {live}"
+    assert noted["notes"][-1]["body"] == "a late note", noted
     assert "not in snapshot" in offline(
         named, "gh", "issue", "view", "9999", "--json", "title", want=1
     )
