@@ -32,7 +32,7 @@ from typing import Any, NoReturn, cast
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-eval-verdict", "qc-stale", "spec-revision-init", "gate-tiers", "merge-ask-proof", "pilot-pr", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "template-edge", "qa-runs", "qa-baseline", "qa-analyst", "qa-evidence", "qa-review", "qa-history", "run-slots", "queued-completion",
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-eval-verdict", "qc-stale", "spec-revision-init", "gate-tiers", "kit-hook", "merge-ask-proof", "pilot-pr", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "template-edge", "qa-runs", "qa-baseline", "qa-analyst", "qa-evidence", "qa-review", "qa-history", "run-slots", "queued-completion",
             "parent-resumed", "result-file", "result-missing", "lane-start")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
@@ -2569,6 +2569,19 @@ def drive_qc_stale(f: Feature) -> None:
 RUNNER = "tests/gate/test_gate.py::test_script"   # the gate runner's tests/*.sh items, the gate-tiers kit copy's map
 
 
+def kit_copy(f: Feature, k: Path) -> None:
+    """K a copy of the kit's tracked files without its tests/*.sh and without every pytest test module but the gate's
+    runner (RUNNER's file): its gate items are the static checks and the tests/*.sh a drive writes."""
+    k.mkdir()
+    files = subprocess.run(["git", "-C", f.s.repo, "ls-files", "-z"], check=True, capture_output=True).stdout
+    for rel in filter(None, files.decode().split("\0")):
+        src = Path(f.s.repo) / rel
+        test_module = re.fullmatch(r"tests/(.*/)?(test_[^/]*|[^/]*_test)\.py", rel) is not None   # pytest's python_files
+        if src.is_file() and not re.fullmatch(r"tests/[^/]*\.sh", rel) and (not test_module or rel == RUNNER.partition("::")[0]):
+            (k / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, k / rel)
+
+
 def drive_gate_tiers(f: Feature) -> None:
     """The gate's two tiers. octo-feather-integrate on a scratch lane: the pilot runs the full gate and records the pass,
     a listed rename runs the full gate and a red one rolls back naming the file, an unlisted change runs only the fast
@@ -2641,14 +2654,7 @@ def drive_gate_tiers(f: Feature) -> None:
     # through a link, the copy's uv sync would write the scratch path into the venv's scripts, broken once cleanup
     # removes it (#1193). Each item appends its name to FAST_RAN, the record of what ran.
     k = sc / "kit"
-    k.mkdir()
-    files = subprocess.run(["git", "-C", f.s.repo, "ls-files", "-z"], check=True, capture_output=True).stdout
-    for rel in filter(None, files.decode().split("\0")):
-        src = Path(f.s.repo) / rel
-        test_module = re.fullmatch(r"tests/(.*/)?(test_[^/]*|[^/]*_test)\.py", rel) is not None   # pytest's python_files
-        if src.is_file() and not re.fullmatch(r"tests/[^/]*\.sh", rel) and (not test_module or rel == RUNNER.partition("::")[0]):
-            (k / rel).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, k / rel)
+    kit_copy(f, k)
     for n in ("a", "b"):
         (k / "scripts" / f"fixture-{n}").write_text(f'#!/usr/bin/env python3\nprint("{n} ran")\n')
     (k / "scripts" / "fixture-d").write_text("#!/usr/bin/env bash\necho d ran\n")
@@ -2702,6 +2708,62 @@ def drive_gate_tiers(f: Feature) -> None:
             and "fast: selected 3 of 6 gate items (1 static, 2 of 5 test items)" in c.out)
     f.env = {}
     say(f"gate-tiers evidence: {f.d}")
+
+
+def drive_kit_hook(f: Feature) -> None:
+    """The kit's git hook: just setup in a worktree of a scratch kit copy, then a commit with a red static check
+    refused by the hook's just fast, naming the check, and the fixed commit through, its one test item run."""
+    sc = RUN_DIR / "scratch" / "kit-hook"
+    shutil.rmtree(sc, ignore_errors=True)
+    sc.mkdir(parents=True)
+    (sc / "state").mkdir()
+    ident = {"GIT_AUTHOR_NAME": "verify-octo-feather", "GIT_AUTHOR_EMAIL": "verify@octo-feather.invalid",
+             "GIT_COMMITTER_NAME": "verify-octo-feather", "GIT_COMMITTER_EMAIL": "verify@octo-feather.invalid"}
+
+    def git(at: Path, *args: str) -> str:
+        return subprocess.run(["git", "-C", str(at), "-c", "core.hooksPath=/dev/null", *args], check=True, capture_output=True,
+                              text=True, env=case_env(ident)).stdout.strip()
+
+    # The copy (kit_copy) with one test item, a.sh: it runs git in a repo of its own and records whether git found
+    # that repo, as the kit's own gate items do. Its static checks cut to check-dashes in the copy's justfile: the
+    # hook runs a plain just fast, so just's --set cannot reach it. The kit's venv serves it as in drive_gate_tiers.
+    k, w, ran = sc / "kit", sc / "wt", sc / "ran"
+    kit_copy(f, k)
+    jf = k / "justfile"
+    jf.write_text(re.sub(r"^export GATE_RECIPES := .*$", 'export GATE_RECIPES := "check-dashes"', jf.read_text(),
+                         count=1, flags=re.MULTILINE))
+    (k / "tests" / "a.sh").write_text('#!/usr/bin/env bash\nset -euo pipefail\nd="$(mktemp -d)"\ngit -C "$d" init -q\n'
+                                      '[[ "$(git -C "$d" rev-parse --absolute-git-dir)" == "$d/.git" ]] && w=own || w=other\n'
+                                      'echo "a $w" >> "$FAST_RAN"\n')
+    (k / "tests" / "a.sh").chmod(0o755)
+    git(k, "init", "-q", "-b", "main")
+    git(k, "add", "-A")
+    git(k, "commit", "-q", "-m", "kit copy")
+    git(k, "worktree", "add", "-q", "-b", "gh1", str(w))
+    ran.write_text("")
+    f.env = {**ident, "XDG_STATE_HOME": str(sc / "state"), "FAST_RAN": str(ran),
+             "UV_PROJECT_ENVIRONMENT": os.path.realpath(Path(f.s.repo) / ".venv")}
+    f.run("setup", "env", "-C", str(w), "just", "setup")
+    f.obs("setup", "hooks-path", output(["git", "-C", str(w), "config", "--get", "core.hooksPath"])[1])
+    f.check("setup", lambda c: c.code == 0 and c.o["hooks-path"].strip() == ".githooks")
+    before = git(w, "rev-parse", "HEAD")
+    (w / "hook-red.txt").write_text("one \u2014 dash\n")
+    git(w, "add", "hook-red.txt")
+    f.run("commit-red", "env", "-C", str(w), "git", "commit", "-m", "red")
+    f.obs("commit-red", "head", git(w, "rev-parse", "HEAD") + "\n")
+    f.obs("commit-red", "ran", ran.read_text())
+    f.check("commit-red", lambda c: c.code != 0 and c.o["head"].strip() == before and c.o["ran"] == ""
+            and "heavy slot: not needed: fast tier" in c.out + c.err
+            and "static checks red: check-dashes" in c.out + c.err and "hook-red.txt:1:one \u2014 dash" in c.out + c.err)
+    (w / "hook-red.txt").write_text("one dash, gone\n")
+    git(w, "add", "hook-red.txt")
+    f.run("commit-green", "env", "-C", str(w), "git", "commit", "-m", "green")
+    f.obs("commit-green", "head", git(w, "log", "-1", "--format=%P %s") + "\n")
+    f.obs("commit-green", "ran", ran.read_text())
+    f.check("commit-green", lambda c: c.code == 0 and c.o["head"] == f"{before} green\n" and c.o["ran"] == "a own\n"
+            and "heavy slot: not needed: fast tier" in c.out + c.err)
+    f.env = {}
+    say(f"kit-hook evidence: {f.d}")
 
 
 def drive_merge_ask_proof(f: Feature) -> None:
@@ -3951,6 +4013,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "spec-revision-init": drive_spec_revision_init,
     "qc-insufficient": drive_qc_insufficient,
     "gate-tiers": drive_gate_tiers,
+    "kit-hook": drive_kit_hook,
     "merge-ask-proof": drive_merge_ask_proof,
     "pilot-pr": drive_pilot_pr,
     "template-tiers": drive_template_tiers,
