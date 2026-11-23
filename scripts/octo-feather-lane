@@ -211,8 +211,10 @@ the offline read-only gh over one GitHub snapshot per merge ask (octo-feather-qc
 parent issue and each `#N` of the rows' case cells, so older tickets are in full): its program must be a path on
 a verdict Check line; `caught` holds on a non-zero exit whose output names the class, `missed` and `pass` on exit
 0. A row the sandbox cannot serve (the worktree not at the PR head, no snapshot, the sandbox unavailable or its
-proof failed, an attempt it refused: an offline gh refusal, a write to GitHub included, a masked path or a host,
-or 120 s passed) is shown `not replayable: <reason>`, never judged and never run outside it. It fails naming each
+proof failed, an attempt it refused: an offline gh refusal, a write to GitHub included, a masked path (Pi's
+sessions included) or a host, or 120 s passed) is shown `not replayable: <reason>`, never judged and never run
+outside it. Stated limit: the sandbox unsets the caller's Herdr pane (HERDR_PANE_ID) and masks Pi's sessions, so a
+check that needs the pane (`skills`) cannot run there; its rows declare `not replayable: <reason>`. It fails naming each
 finding and clean lane with no row (all of them with no section), each row whose program is on no Check line,
 and each whose claim differs from its run, with the run's exit and the end of its output. Pass prints
 `Replay: caught k of n (m not replayable); false refusals f of c clean` (c: clean rows run, f: those caught)
