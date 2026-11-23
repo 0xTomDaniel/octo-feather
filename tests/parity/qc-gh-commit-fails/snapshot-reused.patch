@@ -1,13 +1,13 @@
 Seeded defect: a run reuses the GitHub snapshot an earlier run of the same repo fetched, not refetched per run (octo-feather-qc --help, GitHub evidence).
 diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
-index 6e951de0..e651f736 100755
+index 126b557d..c6481f30 100755
 --- a/scripts/octo-feather-qc
 +++ b/scripts/octo-feather-qc
-@@ -188,10 +188,17 @@ def github_snapshot(skip, runid):
+@@ -189,10 +189,17 @@ def github_snapshot(skip, runid, issues: "tuple[int, ...]" = ()):
          return {"off": f"github: SKIPPED (--no-github; {m.group(1)} not fetched, the judge has no GitHub evidence)"}
      snap = Path(tempfile.mkdtemp(prefix=f"qc-ghsnap-{runid}-"))
      try:   # killed mid-fetch (SIGTERM, see main): the partial snapshot goes too
--        p = subprocess.run([str(KIT / "scripts" / "octo-feather-qc-ghsnap"), m.group(1), str(snap)], capture_output=True, text=True)
+-        p = subprocess.run([str(KIT / "scripts" / "octo-feather-qc-ghsnap"), m.group(1), str(snap), *map(str, issues)], capture_output=True, text=True)
 -        if p.returncode:
 -            die(67, f"GitHub snapshot of {m.group(1)} failed; judge not started (rerun with --no-github to judge without it): "
 -                    f"{p.stderr.strip() or p.stdout.strip()}")
@@ -16,7 +16,7 @@ index 6e951de0..e651f736 100755
 +            shutil.copytree(keep, snap, dirs_exist_ok=True)
 +            p = subprocess.CompletedProcess([], 0, (snap / "line").read_text(), "")
 +        else:
-+            p = subprocess.run([str(KIT / "scripts" / "octo-feather-qc-ghsnap"), m.group(1), str(snap)], capture_output=True, text=True)
++            p = subprocess.run([str(KIT / "scripts" / "octo-feather-qc-ghsnap"), m.group(1), str(snap), *map(str, issues)], capture_output=True, text=True)
 +            if p.returncode:
 +                die(67, f"GitHub snapshot of {m.group(1)} failed; judge not started (rerun with --no-github to judge without it): "
 +                        f"{p.stderr.strip() or p.stdout.strip()}")

@@ -106,7 +106,7 @@ import statistics
 import subprocess
 import sys
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal, NamedTuple, ParamSpec, Protocol, TypedDict, TypeVar, cast
@@ -338,7 +338,8 @@ class Replay:
     parent issue, CLS the class its title's marker (correction_lanes.MARK) names, PATHS the
     verdict's Check paths, FINDINGS the ids (`<lane> <at>`) of the finding lines its body and
     comments quote (correction_lanes.quoted), SAMPLE the clean lanes the fixed rule picks
-    (_sample), RUNS each replayed row's sandboxed run, by its row."""
+    (_sample), RUNS each replayed row's sandboxed run, by its row, TABLE the PR body's `## Replay`
+    rows and why a row is unreadable (_replay_table)."""
 
     key: str
     cls: str
@@ -346,6 +347,7 @@ class Replay:
     findings: tuple[str, ...]
     sample: tuple[str, ...]
     runs: "dict[Row, Replayed]"
+    table: "tuple[list[Row], list[str]] | None" = None  # _replay_table's: None, no section
 
 
 @dataclass(frozen=True)
@@ -2596,8 +2598,7 @@ def chain_gaps(s: Snapshot, rounds: list[Round]) -> list[str]:
 # The correction lane's replay, pure (#1222; spec issue-lifecycle #lanes-correction; the rule:
 # octo-feather-lane --help, merge-ask). Its reads: _replay, at the end.
 
-REPLAY = re.compile(r"##\s+replay\s*", re.IGNORECASE)
-REPLAY_CELLS = 4  # finding | case | command | result
+REPLAY_HEAD = ("finding", "case", "command", "result")  # its table's columns, in order
 CLAIMS = {"caught": "caught", "missed": "pass", "pass": "pass"}  # a result, the run it claims
 NOT_REPLAYABLE = "not replayable:"
 TAIL = 300  # characters of a run's output a refusal quotes
@@ -2611,30 +2612,6 @@ class Row(NamedTuple):
     case: str
     command: str
     result: str
-
-
-def replay_rows(body: str) -> tuple[list[Row], list[str]] | None:
-    """(the `## Replay` section's table rows in BODY, why a line of it is unreadable); None when
-    BODY has no such section."""
-    lines = (body or "").replace("\r\n", "\n").split("\n")
-    start = next((i for i, ln in enumerate(lines) if REPLAY.fullmatch(ln.strip())), None)
-    if start is None:
-        return None
-    rows: list[Row] = []
-    bad: list[str] = []
-    for ln in lines[start + 1 :]:
-        if re.match(r"#{1,2}\s", ln):
-            break
-        if not ln.strip().startswith("|"):
-            continue
-        cells = [c.strip() for c in ln.strip().strip("|").split("|")]
-        if cells[0].lower() == "finding" or all(re.fullmatch(r":?-+:?", c) for c in cells):
-            continue
-        if len(cells) != REPLAY_CELLS:
-            bad.append(f"row `{ln.strip()[:80]}` is not `| finding | case | command | result |`")
-            continue
-        rows.append(Row(cells[0], cells[1], cells[2].strip("`"), cells[3].strip("`")))
-    return rows, bad
 
 
 def _ran(run: Replayed, cls: str) -> str | None:
@@ -2653,7 +2630,7 @@ def replay(s: Snapshot) -> tuple[list[str], str]:
         return [], ""
     if isinstance(r, Unread):
         return [f"Replay: {r.why}"], ""
-    table = replay_rows(s.body)
+    table = r.table
     rows, bad = table or ([], [])
     gaps = [f"Replay: {w}" for w in bad]
     if table is None:
@@ -2785,7 +2762,8 @@ GH_PRS = KIT / "schemas" / "gh-pr-list.schema.json"
 # standard library only, so the validation runs in the kit's project environment, never the network.
 KIT_PYTHON = ["uv", "run", "--project", str(KIT), "--locked", "--offline", "--no-dev", "--quiet"]
 VALIDATE = """import json, sys, jsonschema
-schema = json.loads(open(sys.argv[1], encoding="utf-8").read())
+a = sys.argv[1]  # a schema file, or a schema's JSON text
+schema = json.loads(a if a.startswith("{") else open(a, encoding="utf-8").read())
 v = jsonschema.validators.validator_for(schema)
 v.check_schema(schema)
 try:
@@ -3022,14 +3000,15 @@ def _replay(
         cls = _marked(key)
         if cls is None:
             return None
-        got = json.loads(tracker("issue-view", key, "--notes", err=_Unread))
-        notes = cast("list[dict[str, object]]", got["notes"])
-        texts = [str(n.get("body") or "") for n in notes]
+        out = tracker("issue-view", key, "--notes", err=_Unread)
+        got = cast("_Noted", _validated(out, NOTED, f"issue-view {key} --notes"))
+        texts = [n["body"] for n in got["notes"]]
         findings = tuple(dict.fromkeys(f"{run} {at}" for t in texts for _, (run, at) in quoted(t)))
         sample = _sample(s, cls, repo, lanes)
+        table = _replay_table(s.body)
         rows = [
             row
-            for row in dict.fromkeys((replay_rows(s.body) or ([], []))[0])
+            for row in dict.fromkeys((table or ([], []))[0])
             if row.result in CLAIMS and _program(row.command) in paths
         ]
         named = [key, *(t for row in rows for t in re.findall(r"#(\d+)", row.case))]
@@ -3037,20 +3016,153 @@ def _replay(
         runs = _runs(s.head, rows, issues) if rows else {}
     except _Unread as e:
         return Unread(f"cannot read correction lane facts for #{key} ({e}); fix it, then rerun")
-    except (ValueError, KeyError, TypeError, AttributeError) as e:
-        return Unread(f"issue-view {key} printed no issue with notes ({e}); fix it, then rerun")
-    return Replay(key, cls, paths, findings, sample, runs)
+    return Replay(key, cls, paths, findings, sample, runs, table)
 
 
 def _marked(key: str) -> str | None:
     """The class issue KEY's title marker (correction_lanes.MARK) names; None for no marker."""
-    view: object = json.loads(tracker("issue-view", key, err=_Unread))
-    title = cast("dict[str, object]", view).get("title") if isinstance(view, dict) else None
-    if not isinstance(title, str):
-        msg = f"issue-view {key} printed no title"
-        raise _Unread(msg)
-    m = MARKED.search(title)
+    out = tracker("issue-view", key, err=_Unread)
+    view = cast("_Titled", _validated(out, TITLED, f"issue-view {key}"))
+    m = MARKED.search(view["title"])
     return m.group(1) if m else None
+
+
+# Each tracker and gh answer the replay reads, validated once at its edge (quality spec
+# #acceptance-edge-validated) by the kit's locked jsonschema (VALIDATE), then typed: only the
+# fields read, each required with its type; the tools' other fields pass.
+TITLED = {"type": "object", "required": ["title"], "properties": {"title": {"type": "string"}}}
+NOTED = {  # issue-view --notes (github-issues SKILL.md; skills spec #tracker-script-issue-view)
+    "type": "object",
+    "required": ["notes"],
+    "properties": {
+        "notes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["body"],
+                "properties": {"body": {"type": "string"}},
+            },
+        }
+    },
+}
+NAMED_REPO = {  # gh repo view --json nameWithOwner
+    "type": "object",
+    "required": ["nameWithOwner"],
+    "properties": {"nameWithOwner": {"type": "string", "pattern": "^[^/\\s]+/[^/\\s]+$"}},
+}
+
+
+class _Titled(TypedDict):
+    title: str
+
+
+class _Note(TypedDict):
+    body: str
+
+
+class _Noted(TypedDict):
+    notes: list[_Note]
+
+
+class _NamedRepo(TypedDict):
+    nameWithOwner: str  # gh's field
+
+
+def _kit(script: str, *args: str, stdin: str, what: str) -> str:
+    """SCRIPT's stdout, run by the kit's locked Python (KIT_PYTHON, offline) with ARGS and STDIN;
+    _Unread naming WHAT and its stderr when it fails or cannot run."""
+    env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
+    try:
+        p = subprocess.run(
+            [*KIT_PYTHON, "python", "-c", script, *args],
+            input=stdin,
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
+    except OSError as e:
+        msg = f"cannot run uv for the kit's locked environment ({e})"
+        raise _Unread(msg) from e
+    if p.returncode:
+        msg = f"{what}: {_said(p)}"
+        raise _Unread(msg)
+    return p.stdout
+
+
+def _validated(out: str, schema: Mapping[str, object], what: str) -> object:
+    """OUT, WHAT's JSON answer, once SCHEMA holds for it (VALIDATE: the failing field named)."""
+    _kit(VALIDATE, json.dumps(schema), stdin=out, what=f"{what} answered no valid JSON")
+    return json.loads(out)
+
+
+# The `## Replay` section read by a real Markdown engine, markdown-it-py (pinned in pyproject.toml
+# and uv.lock; CommonMark with GitHub's table rule, as GitHub renders a PR body), in the kit's
+# locked environment as VALIDATE is: a table in a fence or an HTML comment is no table, `\\|`
+# stays in its cell, a cell's text is its inline text (backticks cut). The section: the level-2
+# heading `Replay` to the next level-1 or level-2 heading. Prints {"section": bool, "tables":
+# [{"head": [cell...], "rows": [[cell...]...]}...]}, each row padded or cut to its header as
+# GitHub renders it.
+REPLAY_TABLE = """import json, sys
+from markdown_it import MarkdownIt
+tokens = MarkdownIt("commonmark").enable("table").parse(sys.stdin.read())
+section, inside, head, tables, row = False, False, False, [], None
+for i, t in enumerate(tokens):
+    if t.type == "heading_open" and t.tag in ("h1", "h2"):
+        inside = t.tag == "h2" and tokens[i + 1].content.strip().lower() == "replay"
+        section = section or inside
+    elif inside and t.type == "table_open":
+        tables.append({"head": [], "rows": []})
+    elif inside and t.type == "tr_open":
+        row = []
+    elif inside and t.type == "inline" and row is not None:
+        row.append("".join(c.content for c in t.children or []).strip())
+    elif inside and t.type in ("thead_open", "thead_close"):
+        head = t.type == "thead_open"
+    elif inside and t.type == "tr_close":
+        if head:
+            tables[-1]["head"] = row
+        else:
+            tables[-1]["rows"].append(row)
+        row = None
+print(json.dumps({"section": section, "tables": tables}))
+"""
+
+
+class _Table(TypedDict):
+    head: list[str]
+    rows: list[list[str]]
+
+
+class _Section(TypedDict):
+    section: bool
+    tables: list[_Table]
+
+
+def _replay_table(body: str) -> tuple[list[Row], list[str]] | None:
+    """(the `## Replay` section's rows in BODY, why a table or row of it is no row); None when
+    BODY has no such section. A table's columns must be REPLAY_HEAD; a row's four fields must
+    each be filled, a refusal naming those empty."""
+    out = _kit(REPLAY_TABLE, stdin=body or "", what="the PR body's Markdown (markdown-it-py)")
+    got = cast("_Section", json.loads(out))  # REPLAY_TABLE's own answer, its shape above
+    if not got["section"]:
+        return None
+    form = f"`| {' | '.join(REPLAY_HEAD)} |`"
+    rows: list[Row] = []
+    bad: list[str] = []
+    for t in got["tables"]:
+        if tuple(c.lower() for c in t["head"]) != REPLAY_HEAD:
+            bad.append(f"table `| {' | '.join(t['head'])} |` is not {form}")
+            continue
+        for n, cells in enumerate(t["rows"], 1):
+            row = Row(*cells)
+            empty = [f for f, v in zip(REPLAY_HEAD, cells, strict=True) if not v]
+            if empty:
+                who = row.finding or f"#{n} of the table"
+                bad.append(f"row `{who}`: {', '.join(empty)} empty; a row is {form}")
+                continue
+            rows.append(row)
+    return rows, bad
 
 
 def _runs(head: str, rows: list[Row], issues: tuple[int, ...]) -> dict[Row, Replayed]:
@@ -3189,11 +3301,10 @@ def _run(qc: _Qc, command: str, snap: dict[str, object], session: str) -> Replay
 def _sample(s: Snapshot, cls: str, repo: str | None, lanes: Path) -> tuple[str, ...]:
     """The clean sample's lanes for the issue's class CLS (the rule: octo-feather-lane --help,
     merge-ask), REPO the PR's (None: this directory's gh repo), LANES the state dir's lanes/."""
-    name = repo or str(
-        json.loads(
-            gh(["repo", "view", "--json", "nameWithOwner"], "check gh auth status", err=_Unread)
-        )["nameWithOwner"]
-    )
+    if repo is None:
+        out = gh(["repo", "view", "--json", "nameWithOwner"], "check gh auth status", err=_Unread)
+        repo = cast("_NamedRepo", _validated(out, NAMED_REPO, "gh repo view"))["nameWithOwner"]
+    name = repo
     shas = [oid for oid, _ in s.commits] or [s.head]
     times = git("show", "-s", "--format=%ct", *shas, err=_Unread)[1].split()
     first = dt.datetime.fromtimestamp(min(int(t) for t in times), dt.timezone.utc)

@@ -199,7 +199,9 @@ would stale or conflict with`.
 A correction lane (spec issue-lifecycle #lanes-correction, #1226): the parent issue (key-from-branch, read with
 the tracker skill's issue-view) carries `reflect`'s title marker `[correction-lane <class>]`, and the verdict
 comment lists a Check line. Its PR body then carries a `## Replay` section, a table `| finding | case | command |
-result |`, one row per finding (id `<lane> <at>`, from the finding lines of the issue's body and comments as
+result |` read as GitHub renders it (markdown-it-py, merge_ask.REPLAY_TABLE: a table in a fence or an HTML
+comment is none, `\\|` is a pipe in its cell, each of the four cells filled), one row per finding (id
+`<lane> <at>`, from the finding lines of the issue's body and comments as
 `reflect` quotes them: `- <lane> <at> <source>: ...`), or one row `trigger` when it quotes none, and one row
 `clean <lane>` per lane of the clean sample: lanes archived in the state dir (lanes/archive) whose record's
 `repository` is the PR's, whose hand-off log's last line is dated before the PR's first commit (its earliest
