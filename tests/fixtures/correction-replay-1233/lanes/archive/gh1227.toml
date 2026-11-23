@@ -1,0 +1,6 @@
+supervisor = "w97:p2"
+repository = "0xTomDaniel/octo-feather"
+issue = "gh1227"
+goal = "Eval pins stale only when read"
+started_at = "2026-11-22T20:00:51Z"
+waiting_on = ""

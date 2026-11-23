@@ -7,7 +7,7 @@ import sys
 from collections.abc import Callable
 
 import pytest
-from lane_correction_replay import contained, missing, shown, untrue
+from lane_correction_replay import contained, masked, missing, recorded_1233, shown, untrue
 
 Case = Callable[..., None]
 SOURCE = "tests/gate/kit/lane_correction_replay.py"
@@ -36,3 +36,15 @@ def test_correction_replay_untrue(case: Case) -> None:
 @pytest.mark.criterion("issue-lifecycle#acceptance-correction-replay-shown", source=SOURCE)
 def test_correction_replay_contained(case: Case) -> None:
     case(contained)
+
+
+@pytest.mark.e2e
+@pytest.mark.criterion("issue-lifecycle#acceptance-correction-replay-shown", source=SOURCE)
+def test_correction_replay_masked(case: Case) -> None:
+    case(masked)
+
+
+@pytest.mark.criterion("issue-lifecycle#acceptance-correction-replay-missing", source=SOURCE)
+@pytest.mark.criterion("issue-lifecycle#acceptance-correction-replay-shown", source=SOURCE)
+def test_correction_replay_recorded_1233(case: Case) -> None:
+    case(recorded_1233)
