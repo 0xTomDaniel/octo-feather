@@ -353,12 +353,22 @@
       ]
     },
     "acceptance-setup-not-factory": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1245,
+      "record": "20261123T224607Z-68d1b742",
+      "commit": "a48afae1d19e3ea3ed5220733f8597e8b9c70578",
+      "tests": [
+        "tests/gate/kit/test_hook_guards.py"
+      ]
     },
     "acceptance-hook-machine-commit": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1245,
+      "record": "20261123T224607Z-79519dc5",
+      "commit": "a48afae1d19e3ea3ed5220733f8597e8b9c70578",
+      "tests": [
+        "tests/gate/kit/test_hook_guards.py"
+      ]
     }
   }
 }
