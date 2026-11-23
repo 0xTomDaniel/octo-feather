@@ -492,7 +492,9 @@ GROWN when the run is more than that share over the trend's median), trend_runs 
 full runs before the latest make the trend; 5 shown with no file); optional test_cpu_seconds (a number > 0: the
 per-test CPU budget the gate's runner reads, tests/gate/conftest.py; not read here); optional heavy_items,
 heavy_slots, eval_slots, slot_grace_seconds, slot_bound_seconds (the box's run slots: octo-feather-slot --help;
-not read here). Anything else is `unread: gate-budget.toml (<repo>)`.
+not read here); optional fast_workers and fast_runs (the fast tier's worker count and how many fast-tier
+runs run at once on the box: tests/gate/heavy_slot.py; not read here).
+Anything else is `unread: gate-budget.toml (<repo>)`.
 
 Every time prints as its UTC instant and `(<age> ago)` at the report's instant. A source it cannot
 read prints as `unread: <source>: <reason>` where its facts would be; a log's unparsable lines are

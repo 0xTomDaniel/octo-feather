@@ -267,15 +267,23 @@ check-tests *args:
     python3 "$root/scripts/octo-feather-gate" untouched check "$box" || { [[ "$rc" != 0 ]] || rc=1; }
     exit "$rc"
 
+# The git hook on just fast (.githooks/pre-commit; quality #recipe-fast, templates #tpl-hooks), as the templates'
+# setup's last line; git config writes the clone's config, so the hook runs in every worktree of the clone. The tools:
+# just install-check names what is missing; check-tests syncs the venv and node_modules itself.
+setup:
+    git config core.hooksPath .githooks
+
 # The fast tier (quality #recipe-fast; when it suffices: issue-lifecycle #lanes-checkpoints): the gate items
-# scripts/octo-feather-gate select chooses, each named with why, through check-tests.
+# scripts/octo-feather-gate select chooses, each named with why, through check-tests on fast_workers workers
+# (gate-budget.toml; its heavy slot: quality #recipes-static-first, tests/gate/heavy_slot.py).
 fast:
     #!/usr/bin/env bash
     set -euo pipefail
     cd "$root"
     ids="$(python3 "$root/scripts/octo-feather-gate" select)"
     mapfile -t ids <<<"$ids"
-    just check-tests "${ids[@]}"
+    cap="$(python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["fast_workers"])' "$root/gate-budget.toml")"
+    GATE_WORKERS="$cap" just check-tests "${ids[@]}"
 
 # The dry run of just fast: the items it would select, each with why, and the count; runs none.
 fast-list:
