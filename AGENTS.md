@@ -30,7 +30,7 @@ Repo skills: verify-octo-feather, typescript, python
 - `.agents/skills/verify-octo-feather/` the kit's own verify skill (quality spec `#verify-skill-what`); its feature map in `features/`. `qc.toml` the kit's driver contract (quality spec `#qc-contract`).
 - `templates/python`, `templates/typescript` starter target repos; each template's `AGENTS.md` describes its layout. Dependency owners: Python's `pyproject.toml` and `uv.lock`, TypeScript's `package.json` and `pnpm-lock.yaml`.
 - `scripts/` published commands on every agent's `PATH`; each script owns its command details: read its source, and its `--help` where supported.
-- `justfile` owns kit recipes, listed by `just --list`; `just fast` and `just check` are the gate's tiers (quality spec `#recipes-table`). Gate runner: `tests/gate/`; dependencies and pins: `pyproject.toml`, `uv.lock`.
+- `justfile` owns kit recipes, listed by `just --list`; `just fast` and `just check` are the gate's tiers (quality spec `#recipes-table`). Gate runner: `tests/gate/`; dependencies and pins: `pyproject.toml`, `uv.lock`. `.githooks/` the git hook `just setup` installs (templates spec `#tpl-hooks`).
 - `tests/` the kit's tests: `tests/*.sh`, and pytest kit tests in `tests/gate/kit/` (how each is a gate item: `scripts/octo-feather-gate --help`, select; their shared stand-ins, scratch dirs, fixture loading and scenario runner: `tests/gate/kit/testkit/`, its docstring). `tests/parity/` the parity lever a rewritten test is proved by (`tests/parity/lever.py --help`).
 - `NOTICE`, `LICENSE` Apache-2.0 attribution for the octo-lite-derived files.
 - `docs/kickoff-brief.md` the brief the owner sends the director with `build <spec>` (docs/adr/0021).
