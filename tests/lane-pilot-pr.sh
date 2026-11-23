@@ -51,7 +51,7 @@ PR="${url##*/}"
 set +e; out="$(timeout -k 5 300 just --justfile "$kit/justfile" qc docs/specs/demo.status.json "$PR" acceptance-a acceptance-b 2>&1)"; rc=$?; set -e
 [[ "$rc" == 1 ]] || fail "qc: want exit 1 (acceptance-b fails), got $rc: $out"
 git push -q
-printf 'Findings: none blocking.\nChecks: none\nVerdict: clear\n' > "$t/report"
+printf 'Findings: none blocking.\nChecks: none\nVerdict: clear\nRange: %s..%s\n' "$(git rev-parse origin/main)" "$J" > "$t/report"
 out="$(octo-feather-lane verdict "$PR" "$J" "$t/report" 2>&1)" || fail "verdict: $out"
 
 # The PR head H follows J by one commit changing only the status file: a built in this PR, b planned.

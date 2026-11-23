@@ -151,12 +151,9 @@ class Lane:
 
     def verdict(self) -> str:
         """The code review's verdict comment, posted by `verdict`; the merge ask in the PR body."""
-        url = self.lane(
-            "verdict",
-            str(PR),
-            self.j[:7],
-            str(self.file("report", "Checks: none\nVerdict: clear\n")),
-        ).out
+        b = self.s.git(self.repo, "rev-parse", "origin/main")
+        report = f"Checks: none\nVerdict: clear\nRange: {b}..{self.j}\n"
+        url = self.lane("verdict", str(PR), self.j[:7], str(self.file("report", report))).out
         body = fixture("lane-judge/merge-ask-body.md")
         self.edit(
             lambda d: d.update(

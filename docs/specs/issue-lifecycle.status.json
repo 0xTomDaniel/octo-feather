@@ -209,6 +209,32 @@
       "status": "built",
       "pr": 180
     },
+    "acceptance-verdict-covers-lane": {
+      "status": "built",
+      "pr": 1223,
+      "record": "20261122T184815Z-432135e7",
+      "commit": "32a6211e3bafcce7bc66c6d8b9ebfa1cb5709116",
+      "tests": [
+        "tests/gate/kit/lane_verdict_rounds.py"
+      ]
+    },
+    "acceptance-declaration-check-shown": {
+      "status": "built",
+      "pr": 1223,
+      "record": "20261122T184815Z-2e410cfa",
+      "commit": "32a6211e3bafcce7bc66c6d8b9ebfa1cb5709116",
+      "tests": [
+        "tests/gate/kit/lane_verdict_rounds.py"
+      ]
+    },
+    "acceptance-correction-replay-missing": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-correction-replay-shown": {
+      "status": "planned",
+      "pr": null
+    },
     "acceptance-merge-approved-head": {
       "status": "built",
       "pr": 103
