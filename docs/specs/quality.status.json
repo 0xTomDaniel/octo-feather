@@ -351,6 +351,14 @@
       "tests": [
         "tests/gate/kit/test_fast_hook.py"
       ]
+    },
+    "acceptance-setup-not-factory": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-hook-machine-commit": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
