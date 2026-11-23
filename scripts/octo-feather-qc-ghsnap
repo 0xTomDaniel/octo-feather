@@ -98,38 +98,38 @@ def beyond(named: "tuple[str, ...]", detail: "list[tuple[str, Any]]") -> "list[i
     return [n for n in dict.fromkeys(map(int, named)) if n not in have]
 
 
-def in_full(out: Path, named: "tuple[str, ...]", detail: "list[tuple[str, Any]]") -> "list[str]":
-    """Each named issue beyond the window that the snapshot now holds in full, as "#N"."""
-    return [f"#{n}" for n in beyond(named, detail) if (out / "issue" / f"{n}.json").is_file()]
-
-
-def named_meta(out: Path, named: "tuple[str, ...]", detail: "list[tuple[str, Any]]", capped: "list[tuple[str, Any]]") -> "dict[str, list[str]]":
-    """meta.json's keys the named issues change: named (in_full), and capped without them; none named, none."""
+def named_report(out: Path, named: "tuple[str, ...]", detail: "list[tuple[str, Any]]", capped: "list[tuple[str, Any]]",
+                 absent: "list[str]") -> "tuple[dict[str, list[str]], str]":
+    """What the named issues add to meta.json (named: those beyond the window now in full; capped without them) and
+    to the summary line (those in full, and each GitHub does not have); none named, nothing."""
     if not named:
-        return {}
-    return {"named": in_full(out, named, detail), "capped": [f"#{r['number']}" for _, r in capped if f"{r['number']}" not in named]}
+        return {}, ""
+    full = [f"#{n}" for n in beyond(named, detail) if (out / "issue" / f"{n}.json").is_file()]
+    meta = {"named": full, "capped": [f"#{r['number']}" for _, r in capped if f"{r['number']}" not in named]}
+    return meta, f"; named issues in full: {' '.join(full) or 'none beyond the window'}" + "".join(
+        f"; named, not on GitHub: {a.removeprefix('issue ')}" for a in sorted(absent) if a.startswith("issue #"))
 
 
-def named_line(out: Path, named: "tuple[str, ...]", detail: "list[tuple[str, Any]]", absent: "list[str]") -> str:
-    """The summary line's part on the issues NAMED: those beyond the window in full, and each GitHub does not have."""
-    full = (f"; named issues in full: {' '.join(in_full(out, named, detail)) or 'none beyond the window'}" if named else "")
-    return full + "".join(f"; named, not on GitHub: {a.removeprefix('issue ')}" for a in sorted(absent) if a.startswith("issue #"))
+def issue_full(out: Path, n: str, repo: str, api: "Callable[[str], object]") -> None:
+    """Issue N's full view, the same for a window issue and a named one: issue/N.json (gh issue view --json IF), its
+    sub-issues, blocked-by links and timeline; its notes are issue_notes'."""
+    (out / "issue" / f"{n}.json").write_text(gh("issue", "view", n, "-R", repo, "--json", IF))
+    for s in ("sub_issues", "dependencies/blocked_by", "timeline"):
+        api(f"repos/{repo}/issues/{n}/{s}")
 
 
 def named_issues(out: Path, repo: str, numbers: "list[int]", absent: "list[str]", api: "Callable[[str], object]") -> None:
-    """Each issue in NUMBERS in full, as main's fetch details a window issue, its notes too, in parallel; one GitHub
-    cannot resolve (gh's own answer) is named in ABSENT as "issue #N", its issue/N.json never written."""
+    """Each issue in NUMBERS in full (issue_full, issue_notes), in parallel; one GitHub cannot resolve (gh's own
+    answer to its view) is named in ABSENT as "issue #N", nothing of it written."""
     def one(n: int) -> None:
         try:
-            (out / "issue" / f"{n}.json").write_text(gh("issue", "view", str(n), "-R", repo, "--json", IF))
+            issue_full(out, str(n), repo, api)
         except Fatal as e:
-            if "Could not resolve to an issue or pull request" not in str(e):
+            if "Could not resolve to an issue or pull request" not in str(e) or (out / "issue" / f"{n}.json").exists():
                 raise
             absent.append(f"issue #{n}")
             return
         issue_notes(out, str(n), repo, absent)
-        for s in ("sub_issues", "dependencies/blocked_by", "timeline"):
-            api(f"repos/{repo}/issues/{n}/{s}")
 
     with ThreadPoolExecutor(max_workers=16) as ex:
         list(ex.map(one, numbers))   # re-raises the first Fatal
@@ -181,31 +181,30 @@ def main(repo, out, *named: str):
     def fetch(kind, row):
         n = str(row["number"])
         if kind == "issue":
-            save(f"issue/{n}.json", gh("issue", "view", n, "-R", repo, "--json", IF))
-            for s in ("sub_issues", "dependencies/blocked_by"):
-                api(f"{R}/issues/{n}/{s}")
+            issue_full(out, n, cast("str", repo), cast("Callable[[str], object]", api))
         else:
             save(f"pr/{n}.json", gh("pr", "view", n, "-R", repo, "--json", PF))
             pr_diff(out, n, f"{repo}")
             if row.get("headRefOid"):
                 api(f"{R}/commits/{row['headRefOid']}/check-runs")
-        api(f"{R}/issues/{n}/timeline")
+            api(f"{R}/issues/{n}/timeline")
 
     with ThreadPoolExecutor(max_workers=16) as ex:
         for f in [ex.submit(fetch, k, r) for k, r in detail] + [ex.submit(named_issues, out, repo if isinstance(repo, str) else "", beyond(named, detail), cast("list[str]", absent), cast("Callable[[str], object]", api))] + [ex.submit(issue_notes, out, str(cast("dict[str, object]", r)["number"]), repo if isinstance(repo, str) else "", cast("list[str]", absent))
                                                                 for k, r in detail if k == "issue"]:
             f.result()   # re-raises the first Fatal
+    named_meta, named_line = named_report(out, named, detail, capped, cast("list[str]", absent))
     at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     meta = {"repo": repo, "fetched_at": at, "seconds": round(time.time() - t0, 1),
             "counts": {"issues": len(issues), "prs": len(prs), "runs": len(runs), "branches": len(branches), "detail": len(detail)},
             "limits": {**LIMITS, "detail": DETAIL_CAP},
-            "capped": [f"{'#'}{r['number']}" for _, r in capped], "absent": sorted(absent)} | named_meta(out, named, detail, capped)
+            "capped": [f"{'#'}{r['number']}" for _, r in capped], "absent": sorted(absent)} | named_meta
     (out / "meta.json").write_text(json.dumps(meta, indent=2))
     (out / "fetched_at").write_text(at + "\n")
     cap = f"; detail capped at {DETAIL_CAP}, list-only: {' '.join(meta['capped'])}" if meta["capped"] else ""
     print(f"snapshot of {repo} at {at} ({meta['seconds']} s): issues {len(issues)}, prs {len(prs)}, runs {len(runs)}, "
           f"branches {len(branches)}, full views {len(detail)}{cap}"
-          + named_line(out, named, detail, cast("list[str]", absent))
+          + named_line
           + "".join(f"; diff too large on GitHub (HTTP 406), not fetched: #{p.stem}" for p in sorted((out / "diff").glob("*.too-large"))))
 
 
