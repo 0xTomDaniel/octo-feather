@@ -3,6 +3,7 @@
 # extensionless shell script is named here once; scripts/check-languages fails, naming the file, when scc finds
 # shell this list misses.
 *.sh shell
+.githooks/pre-commit shell
 .agents/skills/github-issues/scripts/issue-comment shell
 .agents/skills/github-issues/scripts/issue-create shell
 .agents/skills/github-issues/scripts/issue-done shell
