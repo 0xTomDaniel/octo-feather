@@ -196,6 +196,29 @@ with this head (a git commit-tree, no ref moved) and not at BASE, each run in a 
 one `- not read: ...` line; nothing named prints `- none: <n> other open pull requests on <base>, none this merge
 would stale or conflict with`.
 
+A correction lane (spec issue-lifecycle #lanes-correction, #1226): the parent issue (key-from-branch, read with
+the tracker skill's issue-view) carries `reflect`'s title marker `[correction-lane <class>]`, and the verdict
+comment lists a Check line. Its PR body then carries a `## Replay` section, a table `| finding | case | command |
+result |`, one row per finding (id `<lane> <at>`, from the finding lines of the issue's body and comments as
+`reflect` quotes them: `- <lane> <at> <source>: ...`), or one row `trigger` when it quotes none, and one row
+`clean <lane>` per lane of the clean sample: lanes archived in the state dir (lanes/archive) whose record's
+`repository` is the PR's, whose hand-off log's last line is dated before the PR's first commit (its earliest
+committer time) and holds no finding of the class, newest last line first, 5 (fewer if fewer exist). Result:
+`caught`, `missed`, `pass` or `not replayable: <why>`. merge-ask runs each other row's command itself, only
+ever inside the qc sandbox, each row in its own (octo-feather-qc sandboxed(), the shape its demos run in: `sh -c`
+at this worktree's top, which must be at the PR head; writes discarded, no network, no Pi, 120 s at most) with
+the offline read-only gh over one GitHub snapshot per merge ask (octo-feather-qc github_snapshot(), naming the
+parent issue and each `#N` of the rows' case cells, so older tickets are in full): its program must be a path on
+a verdict Check line; `caught` holds on a non-zero exit whose output names the class, `missed` and `pass` on exit
+0. A row the sandbox cannot serve (the worktree not at the PR head, no snapshot, the sandbox unavailable or its
+proof failed, an attempt it refused: an offline gh refusal, a write to GitHub included, a masked path or a host,
+or 120 s passed) is shown `not replayable: <reason>`, never judged and never run outside it. It fails naming each
+finding and clean lane with no row (all of them with no section), each row whose program is on no Check line,
+and each whose claim differs from its run, with the run's exit and the end of its output. Pass prints
+`Replay: caught k of n (m not replayable); false refusals f of c clean` (c: clean rows run, f: those caught)
+after `Review rounds`, then one line per row: what its run showed and the worktree writes the sandbox
+discarded; a low k is never refused: the owner judges it. Not detected: a parent with no marker.
+
 A lane that builds no criterion (spec #lanes-one-head) says `Built: none` and `Failed: none` with no
 criterion row (no table, or its header alone), and its PR holds no `qc: built` commit and no --status
 entry built with it; --status is then optional. Its judged head H is the review verdict comment's Head:
@@ -1511,7 +1534,7 @@ def cmd_merge_ask(args: list[str]) -> int:
             return d, str(e)
 
     s = merge_ask.snapshot(pr, repo, cast("list[str]", files), read, Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state_dir() / "qc"),
-                           trend=state_dir() / ReportSources.TREND, err=Refuse, base=base_arg)
+                           trend=state_dir() / ReportSources.TREND, err=Refuse, lanes=lanes_dir(), base=base_arg)
     head = d["headRefOid"]
     a = merge_ask.check(s)
     if a.refusal:
@@ -1548,6 +1571,8 @@ def cmd_merge_ask(args: list[str]) -> int:
     if a.rounds:
         print("\nReview rounds (from the verdict comment, issue-lifecycle #lanes-one-head):")
         print("\n".join(a.rounds))
+    if a.replay:   # a correction lane's (--help, merge-ask)
+        print("\n" + a.replay)
     print("\n" + "\n".join(gate_time))
     print("\n" + "\n".join(a.order))   # shown only, after the pass was decided above (spec #gates-merge-order)
     return 0
