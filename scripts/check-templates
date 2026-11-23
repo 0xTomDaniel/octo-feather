@@ -77,8 +77,11 @@ def run_hook(template: Path, tmp: Path, just_exit: int) -> tuple[int, list[list[
     recorder.chmod(0o755)
     log = tmp / f"calls{just_exit}"
     log.touch()
+    # A writer's environment, as the hook runs the fast tier only for a writer's commit: no role
+    # (the gate itself runs in agent panes, a supervisor's among them).
+    writer = {k: v for k, v in os.environ.items() if k != "OCTO_FEATHER_ROLE"}
     env = dict(
-        os.environ,
+        writer,
         PATH=f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
         RECORD_LOG=str(log),
         RECORD_EXIT=str(just_exit),
