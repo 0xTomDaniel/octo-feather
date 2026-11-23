@@ -203,9 +203,13 @@ class Correction(Lane):
         issue |= {"state": "OPEN", "url": url, "updatedAt": "2026-11-21T00:00:00Z"}
         self.s.gh.store("issue/1121.json", issue)
         self.s.gh.store(f"repos/{REPO}/issue/1121.json", issue)
-        notes = {"url": url, "createdAt": "2026-11-19T21:26:32Z", "lastEditedAt": None}
-        notes |= {"body": issue["body"], "comments": {"pageInfo": {"hasNextPage": False}}}
-        notes["comments"] |= {"nodes": []}
+        notes: dict[str, object] = {
+            "url": url,
+            "createdAt": "2026-11-19T21:26:32Z",
+            "lastEditedAt": None,
+            "body": issue["body"],
+            "comments": {"pageInfo": {"hasNextPage": False}, "nodes": []},
+        }
         owner, name = REPO.split("/")
         query = NOTES.read_text().rstrip("\n")
         ask = f"api graphql -F n=1121 -f owner={owner} -f name={name} -f query={query}"
