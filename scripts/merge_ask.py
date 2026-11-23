@@ -109,7 +109,7 @@ import tempfile
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Literal, NamedTuple, TypedDict, cast
+from typing import Literal, NamedTuple, ParamSpec, Protocol, TypedDict, TypeVar, cast
 
 import tomllib
 from correction_lanes import MARK, Refused, lane_logs, lane_record, quoted
@@ -3064,7 +3064,7 @@ def _runs(head: str, rows: list[Row], issues: tuple[int, ...]) -> dict[Row, Repl
         why = f"this worktree is at {at[:12]}, not the PR head {head[:12]}: rerun there"
         return dict.fromkeys(rows, Replayed(None, "", why))
     runid = os.urandom(3).hex()
-    snap, said = _quiet(qc.github_snapshot, False, runid, issues)  # noqa: FBT003
+    snap, said = _quiet(qc.github_snapshot, False, runid, issues)  # noqa: FBT003  qc's own
     if snap is None:  # its fetch failed (67)
         return dict.fromkeys(rows, Replayed(None, "", f"no GitHub snapshot: {said}"))
     try:
@@ -3074,10 +3074,44 @@ def _runs(head: str, rows: list[Row], issues: tuple[int, ...]) -> dict[Row, Repl
         }
     finally:
         if "dir" in snap:
-            qc.drop(snap["dir"])
+            qc.drop(str(snap["dir"]))
 
 
-def _quiet(call: Callable[..., Any], *args: object, **kw: object) -> tuple[Any, str]:
+class _Record(TypedDict, total=False):
+    """The fields of a qc sandbox record (octo-feather-qc sandboxed();
+    scripts/octo-feather-qc-sandbox, steps 7 and 10) a replay reads: the proof lines, the attempt
+    record or why it is missing, the overlay upper dir's entries ([kind, path])."""
+
+    proof: list[str]
+    attempts: list[dict[str, object]]
+    attempts_error: str
+    upper: list[list[str]]
+
+
+class _Qc(Protocol):
+    """What a replay uses of scripts/octo-feather-qc (_qc): its one sandbox and snapshot."""
+
+    def github_snapshot(
+        self,
+        skip: bool,  # noqa: FBT001  qc's own signature
+        runid: str,
+        issues: tuple[int, ...],
+    ) -> dict[str, object]: ...
+
+    def sandboxed(
+        self, judge: list[str], session: str, gh: dict[str, object], *, pi: bool
+    ) -> tuple[subprocess.CompletedProcess[str] | None, _Record]: ...
+
+    def drop(self, path: str) -> None: ...
+
+    def worktree_writes(self, upper: list[list[str]]) -> list[str]: ...
+
+
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
+
+
+def _quiet(call: Callable[_P, _T], *args: _P.args, **kw: _P.kwargs) -> tuple[_T | None, str]:
     """(CALL(*ARGS, **KW), '') with what it streams to stderr dropped (the sandbox's proof and
     cleanup lines, each row's: its record keeps what a reason needs); (None, its last stderr line
     and exit) when it exits, as octo-feather-qc's die() does on a sandbox or snapshot it cannot
@@ -3091,7 +3125,7 @@ def _quiet(call: Callable[..., Any], *args: object, **kw: object) -> tuple[Any, 
         return None, f"{(said.splitlines() or [''])[-1][:TAIL]} (exit {e.code})"
 
 
-def _qc() -> Any:  # noqa: ANN401  a module loaded from a path: its names are not typed here
+def _qc() -> _Qc:
     """scripts/octo-feather-qc as a module: its sandbox and snapshot, not a second (as
     octo-feather-qa loads it)."""
     loader = importlib.machinery.SourceFileLoader(
@@ -3101,7 +3135,7 @@ def _qc() -> Any:  # noqa: ANN401  a module loaded from a path: its names are no
     assert spec is not None, "a SourceFileLoader always yields a spec"
     mod = importlib.util.module_from_spec(spec)
     loader.exec_module(mod)
-    return mod
+    return cast("_Qc", mod)  # a module from a path: typed by what a replay uses of it
 
 
 def _program(command: str) -> str | None:
@@ -3113,7 +3147,7 @@ def _program(command: str) -> str | None:
     return argv[0] if argv else None
 
 
-def _run(qc: Any, command: str, snap: dict[str, object], session: str) -> Replayed:  # noqa: ANN401  _qc's
+def _run(qc: _Qc, command: str, snap: dict[str, object], session: str) -> Replayed:
     """COMMAND run in its own qc sandbox (the demo command shape of octo-feather-qc capture(), at
     this worktree's top, under REPLAY_TIMEOUT) with the offline gh over SNAP; unserved: the proof
     failed or the sandbox is unavailable, or the run made an attempt the sandbox refused (an
@@ -3136,21 +3170,19 @@ def _run(qc: Any, command: str, snap: dict[str, object], session: str) -> Replay
     got, said = _quiet(qc.sandboxed, cmd, session, snap, pi=False)
     if got is None:  # unshare missing (66) or macOS (69)
         return Replayed(None, "", f"{UNAVAILABLE}: {said}")
-    run = cast("subprocess.CompletedProcess[str] | None", got[0])
-    rec = cast("dict[str, Any]", got[1])
+    run, rec = got
     if run is None:
         failed = [
             ln.split("FAIL", 1)[1].strip()[:TAIL] for ln in rec.get("proof", []) if "FAIL" in ln
         ]
         return Replayed(None, "", f"{UNAVAILABLE}: {'; '.join(failed) or 'its proof failed'}")
-    attempts = cast("list[dict[str, object]]", rec.get("attempts") or [])
-    refused = [a for a in attempts if a.get("refused")]
+    refused = [a for a in rec.get("attempts", []) if a.get("refused")]
     why = "; ".join(f"{a.get('what')}: {a.get('result')}"[:TAIL] for a in refused[:2])
     if "attempts_error" in rec:
         why = f"no attempt record ({rec['attempts_error']})"
     if run.returncode in (124, 137):
         why = why or f"timed out after {REPLAY_TIMEOUT}s"
-    wrote = tuple(qc.worktree_writes(rec.get("upper") or []))  # git's own and ignored ones aside
+    wrote = tuple(qc.worktree_writes(rec.get("upper", [])))  # git's own and ignored ones aside
     return Replayed(run.returncode, run.stdout + run.stderr, why, wrote)
 
 
