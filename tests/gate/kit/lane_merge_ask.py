@@ -65,6 +65,11 @@ ONLY = f"change only {STATUS}"
 ERR502 = "gh: Server Error (HTTP 502)"
 
 
+def ranged(text: str, start: str, end: str) -> str:
+    """TEXT, a review report, with its Range line: its review of START..END (#1220)."""
+    return f"{text}Range: {start}..{end}\n"
+
+
 # --- edits of a PR as the fake gh holds it ---
 
 
@@ -174,10 +179,10 @@ class Lane:
         self.ci(h, workflows=True)
         s.gh.store(f"{API}/branches/main.json", UNPROTECTED)
         s.gh.store(f"{API}/rules/branches/main.json", [])
-        report = self.file("report", REPORT)
+        report = self.file("report", ranged(REPORT, b, j))
         heads = {"b": b, "j": j, "h": h, "url": ""}
         if pr8:
-            heads |= Pr8.build(self, b, report)
+            heads |= Pr8.build(self, b)
         else:
             heads["url"] = self.lane("verdict", "7", j, report).out
         (self.t / "lane.json").write_text(json.dumps(heads))
@@ -369,7 +374,7 @@ def verdict_posts(s: Scratch) -> None:
     post = "api -X POST repos/{owner}/{repo}/issues/7/comments "
     assert any(x.startswith(post) for x in s.gh.log()), s.gh.log()
     assert len(ln.comments()) == 1
-    r = ln.lane("verdict", "7", j, ln.file("report2", REPORT2))
+    r = ln.lane("verdict", "7", j, ln.file("report2", ranged(REPORT2, ln.b, j)))
     assert r.out == url, r.out
     assert len(ln.comments()) == 1, "rerun did not update in place"
     patch = "api -X PATCH repos/{owner}/{repo}/issues/comments/1001 "
@@ -379,7 +384,7 @@ def verdict_posts(s: Scratch) -> None:
     assert f"Head: {j}\nPR head: {h}\n" in b, b
     assert "Verdict: blocking\n" in b, b
     assert "a nit" in b, b
-    ln.lane("verdict", "7", j, "-", stdin=REPORT)  # stdin, back to clear
+    ln.lane("verdict", "7", j, "-", stdin=ranged(REPORT, ln.b, j))  # stdin, back to clear
     assert ln.writes() == 3, s.gh.log()
     assert len(ln.comments()) == 1
     r = ln.lane("verdict", "7", j, ln.report)
@@ -396,7 +401,7 @@ def verdict_reader_scope(s: Scratch) -> None:
     def said(text: str, verdict: str) -> str:
         """The report TEXT posted (a write) with VERDICT: the comment's body."""
         log = len(s.gh.log())
-        r = ln.lane("verdict", "7", ln.j, ln.file("r", text))
+        r = ln.lane("verdict", "7", ln.j, ln.file("r", ranged(text, ln.b, ln.j)))
         assert f"({verdict}, head" in r.err, f"{text}: {r.err}"
         assert any(x.startswith("api -X PATCH") for x in s.gh.log()[log:]), f"{text}: not posted"
         return ln.comments()[0]["body"]
@@ -406,7 +411,7 @@ def verdict_reader_scope(s: Scratch) -> None:
         "The quoted run predates the fix commit.\nChecks: none\nVerdict: blocking\n"
     )
     b = said(fenced, "blocking")
-    assert "\nVerdict: blocking\nChecks: none\n\n### Findings" in b, b
+    assert "\nVerdict: blocking\nChecks: none\n\n### Rounds" in b, b
     said("> the implementer wrote:\n\nVerdict: blocking\nChecks: none\n", "blocking")
     said("> > nested:\n~~~\nVerdict: clear\n~~~\nChecks: none\nVerdict: blocking\n", "blocking")
     said("    ```\n\nVerdict: clear\nChecks: none\n", "clear")  # 4-space indented backticks
@@ -417,7 +422,7 @@ def verdict_reader_scope(s: Scratch) -> None:
         f"Check: `scripts/check-x`: {rule} | {reads} | class: Proxy\nVerdict: blocking\n",
         "blocking",
     )
-    want = f"Check: scripts/check-x: {rule} | {reads} | class: proxy\n\n### Findings"
+    want = f"Check: scripts/check-x: {rule} | {reads} | class: proxy\n\n### Rounds"
     want = f"\nVerdict: blocking\n{want}"
     assert want in b, f"proxy check not in the verdict header: {b}"
 
@@ -452,7 +457,9 @@ def verdict_refusals(s: Scratch) -> None:
     )
     report(f"{proxy} | class: proxy\nVerdict: clear\n", blocks, regex=True)
     meaning = "Check: scripts/check-x: r (ADR 1) | reads: y | class: meaning\nVerdict: blocking\n"
-    report(meaning, "has class 'meaning'; write `class: exact` or `class: proxy`")
+    report(
+        meaning, "has class 'meaning'; write `class: exact`, `class: proxy` or `class: declaration`"
+    )
     shape = "check line `Check: scripts/check-x is a fact` is not `Check: <path>"
     report("Check: scripts/check-x is a fact\nVerdict: clear\n", shape)
     owner = "check line for scripts/x names no owner: write its rule as stated where it is owned"
@@ -484,7 +491,7 @@ def verdict_write_fails(s: Scratch) -> None:
     assert ln.comments() == [], "failed create left a comment"
     s.gh.put(7, ln.keep)
     ln.fail("issues/comments/1001")
-    r = ln.lane("verdict", "7", j, ln.file("report2", REPORT2), want=1)
+    r = ln.lane("verdict", "7", j, ln.file("report2", ranged(REPORT2, ln.b, j)), want=1)
     assert "was not updated" in r.err, r.err
     assert "Verdict: clear" in ln.comments()[0]["body"], "failed update changed the comment"
     (s.gh.dir / "down").touch()
@@ -497,7 +504,7 @@ def verdict_write_fails(s: Scratch) -> None:
     two["comments"].append(c)
     s.gh.put(7, two)
     n = ln.writes()
-    r = ln.lane("verdict", "7", h, ln.report, want=1)
+    r = ln.lane("verdict", "7", h, ln.file("reporth", ranged(REPORT, ln.b, h)), want=1)
     assert re.search(r"has 2 verdict comments.*delete all but one", r.err), r.err
     assert ln.writes() == n
 
@@ -517,7 +524,8 @@ def offline_gh(s: Scratch) -> None:
         "PATH": f"{ROOT / '.agents/skills/github-pr/scripts'}:{s.env['PATH']}",
     }
     assert first(ln.ask(env=env)) == "## Merge ask"
-    r = ln.lane("verdict", "7", ln.h, ln.file("report2", REPORT2), want=1, env=env)
+    report2 = ln.file("report2", ranged(REPORT2, ln.b, ln.h))
+    r = ln.lane("verdict", "7", ln.h, report2, want=1, env=env)
     assert "was not updated" in r.err, r.err
     assert "offline read-only snapshot" in r.err, r.err
 
@@ -556,7 +564,9 @@ def merge_ask_passes(s: Scratch) -> None:
     assert lines[0] == "## Merge ask", out
     assert "Failed: none" in lines, out
     classes = "Review check classes (from the verdict comment, docs/adr/0008):"
-    assert lines[-2:] == [classes, "- Checks: none"], out
+    rounds = "Review rounds (from the verdict comment, issue-lifecycle #lanes-one-head):"
+    full = f"- Round 1: {ln.b[:12]}..{ln.j[:12]} full, verdict clear"
+    assert lines[-6:] == [classes, "- Checks: none", "", rounds, full, "  - Checks: none"], out
     assert f"Review verdict: {ln.url}" in lines, out
     assert "Notes" not in out, out
     assert "Summary" not in out, out
@@ -921,7 +931,7 @@ class Pr8:
         self.keep: dict[str, Any] = ln.pr(8)
 
     @staticmethod
-    def build(ln: Lane, b: str, report: str) -> dict[str, str]:
+    def build(ln: Lane, b: str) -> dict[str, str]:
         """PR #8 in the lane LN being built: N off B, its pass recorded, its verdict posted."""
 
         def fix() -> None:
@@ -932,6 +942,7 @@ class Pr8:
         p = Pr8.__new__(Pr8)
         p.ln, p.n, p.url, p.keep = ln, ln.on(b, fix), "", {"comments": []}
         p.put(p.n, p.body())
+        report = ln.file("report8", ranged(REPORT, b, p.n))
         return {"n": p.n, "url8": ln.lane("verdict", "8", p.n, report).out}
 
     def body(self, **o: str) -> str:
@@ -995,7 +1006,7 @@ def many_commits(s: Scratch) -> None:
     oids = [c["oid"] for c in ln.pr(8)["commits"]]
     assert len(oids) == 100, "the 101-commit PR does not list 100"
     assert nl not in oids, "the 101-commit PR lists its head"
-    r = ln.lane("verdict", "8", nl, ln.report)
+    r = ln.lane("verdict", "8", nl, ln.file("report-nl", ranged(REPORT, ln.b, nl)))
     assert f"(clear, head {nl[:12]})" in r.err, r.err
     assert first(p.ask()) == "## Merge ask"
 

@@ -30,7 +30,9 @@ if TYPE_CHECKING:
 # gh 2.102.0 on 0xTomDaniel/octo-feather, 2026-11-17 (each recording's source): one real run of
 # this scenario on scratch PR 946 (PR; lane_ci_start's, after its moments), head branch
 # gh930-recording (its parent key 930), each head pushed and body edited as setpr names; then
-# closed, both branches deleted.
+# closed, both branches deleted. Rewritten for #1220 (no live PR write): the two review verdict
+# writes' request bodies (the reports now carry Range, the comment its rounds) and those comment
+# bodies where later views echo them; every answer as recorded.
 TAPE = Path(__file__).parent / "testkit" / "recordings" / "lane-review-resolution.json"
 PR = 946
 STATUS = "docs/specs/demo.status.json"
@@ -177,7 +179,9 @@ def resolution(s: Scratch) -> None:
     h, clear = lane.h, str(s.root / "clear")
     j12, m12 = h["j"][:12], h["m"][:12]
     lane.setpr(h["h2"], "")
-    h["url"] = lane.lane(0, "verdict", str(PR), h["j"], clear).out  # the earlier review, of J
+    j_report = lane.s.root / "clear-j"  # the earlier review, of J, from main (its Range: #1220)
+    j_report.write_text(f"{CLEAR}Range: {h['b']}..{h['j']}\n")
+    h["url"] = lane.lane(0, "verdict", str(PR), h["j"], str(j_report)).out
     lane.setpr(h["h2"], lane.body(h["h2"], h["m"]))
     r = lane.lane(1, "merge-ask", str(PR), *ST)
     want = (
@@ -284,7 +288,9 @@ def no_criterion(lane: Lane) -> None:
         )
 
     nask("")
-    lane.lane(0, "verdict", str(PR), n, clear)
+    n_report = lane.s.root / "clear-n"  # the review of N, from main (its Range: #1220)
+    n_report.write_text(f"{CLEAR}Range: {h['b']}..{n}\n")
+    lane.lane(0, "verdict", str(PR), n, str(n_report))
     r = lane.lane(1, "merge-ask", str(PR))
     assert f"Judged: merge {nm[:12]} '{RESOLVED}' resolved a conflict" in r.err, (
         f"no-criterion lane without a resolution verdict: {r.err}"
