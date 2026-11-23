@@ -7,7 +7,8 @@ in the copy's main checkout, as a maintainer's (no OCTO_FEATHER_ROLE), before th
 worktree (#acceptance-setup-not-factory refuses it after); the commits run in a worktree added then:
 git hands a hook there the absolute GIT_DIR and GIT_INDEX_FILE of the worktree.
 
-red: after `just setup`, a `git commit` in the worktree adding one em dash is refused, its output
+red [ROLE]: after `just setup`, a `git commit` in the worktree (as ROLE: none, a maintainer;
+implementer, a writer, #acceptance-hook-machine-commit) adding one em dash is refused, its output
 the fast tier's (`heavy slot: not needed: fast tier`) naming check-dashes and the file and line it
 found, HEAD unchanged.
 green: after `just setup`, that dash added and then gone (the fix), `git commit` goes
@@ -20,6 +21,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+from functools import cache
 from typing import TYPE_CHECKING
 
 from gate_recipes_first import DASH, gate_env, kit_copy
@@ -45,17 +47,23 @@ def copy_run(s: Scratch, w: Path, *cmd: str, role: str | None = None) -> tuple[R
     PROBE's lines."""
     probe = s.root / "probe"
     probe.write_text("")
-    env = {k: v for k, v in gate_env(s, probe).items() if k != "OCTO_FEATHER_ROLE"}
     p = subprocess.run(
         list(cmd),
         cwd=w,
-        env=env | ({"OCTO_FEATHER_ROLE": role} if role else {}),
+        env=copy_env(s) | ({"OCTO_FEATHER_ROLE": role} if role else {}),
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
         check=False,
     )
     return Ran(p.returncode, p.stdout, ""), probe.read_text().splitlines()
+
+
+@cache
+def copy_env(s: Scratch) -> dict[str, str]:
+    """gate_env for S, PROBE its probe, OCTO_FEATHER_ROLE unset: asked once per scratch, as
+    gate_env asks uv for its dirs each time."""
+    return {k: v for k, v in gate_env(s, s.root / "probe").items() if k != "OCTO_FEATHER_ROLE"}
 
 
 def head(s: Scratch, k: Path) -> str:
@@ -84,10 +92,10 @@ def worktree(s: Scratch) -> Path:
     return w
 
 
-def red(s: Scratch) -> None:
+def red(s: Scratch, role: str = "") -> None:
     w = worktree(s)
     before = head(s, w)
-    ran, probe = copy_run(s, w, *GIT, "commit", "-m", "red")
+    ran, probe = copy_run(s, w, *GIT, "commit", "-m", "red", role=role or None)
     said = f"git commit (red): exit {ran.rc}\nprobe: {probe}\n{ran.out}"
     assert ran.rc != 0, said
     assert "heavy slot: not needed: fast tier" in ran.out, f"want the fast tier: {said}"

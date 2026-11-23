@@ -11,7 +11,9 @@ t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 (cd "$kit" && git ls-files -z | xargs -0 tar -cf - 2>/dev/null) | tar -xf - -C "$t"
 (cd "$t" && git init -q && git add -A)
 (cd "$t" && just check-templates >/dev/null 2>&1) || { echo "check-templates test: clean copy is not green" >&2; (cd "$t" && just check-templates) >&2; exit 1; }
-hook=templates/python/.githooks/pre-commit
+# The hook's entry line calls scripts/pre-commit, whose last line runs the fast tier for a writer's commit.
+hook=templates/python/scripts/pre-commit
+x='os.execvp("just", ["just", "fast"])  # noqa: S606, S607'
 # run FILE OLD NEW: the line OLD in FILE replaced by NEW, then `just check-templates`; sets rc, out; FILE is restored.
 run() {
   cp "$t/$1" "$t/.run-old"
@@ -32,13 +34,12 @@ allow() {
   [[ "$rc" == 0 ]] || { echo "check-templates test: $1 with '$3' failed just check-templates" >&2; echo "$out" >&2; exit 1; }
 }
 # The hook runs the fast tier, judged by running it: text naming `just fast` is not enough (review 5's repro).
-expect "$hook" 'exec just fast' 'echo "just fast"'
-expect "$hook" 'exec just fast' '# exec just fast'
-expect "$hook" 'exec just fast' 'exec just check'
-expect "$hook" 'exec just fast' 'just fast; just fast'
-expect "$hook" 'exec just fast' 'just fast; exit 0' 'with just exiting 1 it exited 0'
-allow "$hook" 'exec just fast' '  exec just fast  # the fast tier'
-allow "$hook" 'exec just fast' 'just fast'
+expect "$hook" "$x" 'print("just fast")'
+expect "$hook" "$x" '# os.execvp("just", ["just", "fast"])'
+expect "$hook" "$x" 'os.execvp("just", ["just", "check"])'
+expect "$hook" "$x" 'subprocess.run(["just", "fast"], check=False); os.execvp("just", ["just", "fast"])'
+expect "$hook" "$x" 'subprocess.run(["just", "fast"], check=False); sys.exit(0)' 'with just exiting 1 it exited 0'
+allow "$hook" "$x" 'sys.exit(subprocess.run(["just", "fast"], check=False).returncode)'
 pj=templates/python/justfile; tj=templates/typescript/justfile
 # Each template's fast tier is a recipe beside check, integrate and qc.
 expect "$pj" 'fast *args:' 'fast-tier *args:' 'needs check, fast, integrate and product-judge recipes'
