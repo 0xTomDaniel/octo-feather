@@ -1,5 +1,11 @@
 #!/usr/bin/env bash
 # The fast tier on every commit, as templates/python/.githooks/pre-commit; `just setup` installs it.
+# Only a writer's commit runs it (quality #acceptance-hook-machine-commit): a maintainer's (no OCTO_FEATHER_ROLE), an
+# implementer's or a corrector's, with no merge, cherry-pick or revert in progress; any other commit is a machine's
+# and skips, saying why. It cannot stop an agent whose environment lost OCTO_FEATHER_ROLE (taken for a maintainer),
+# nor --no-verify.
+case "${OCTO_FEATHER_ROLE:-}" in ""|implementer|corrector) ;; *) echo "pre-commit: fast tier skipped: OCTO_FEATHER_ROLE=$OCTO_FEATHER_ROLE: a machine commit, not a writer's"; exit 0 ;; esac
+for h in MERGE_HEAD CHERRY_PICK_HEAD REVERT_HEAD; do [[ ! -e "$(git rev-parse --git-path "$h" 2>/dev/null)" ]] || { echo "pre-commit: fast tier skipped: $h: a merge, cherry-pick or revert in progress is a machine commit"; exit 0; }; done
 # git hands a hook its repo's location (GIT_DIR, GIT_INDEX_FILE); the gate's items run git in repos
 # of their own, so those go first, by git's own list of them.
 mapfile -t vars < <(git rev-parse --local-env-vars)
