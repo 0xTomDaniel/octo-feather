@@ -228,12 +228,22 @@
       ]
     },
     "acceptance-correction-replay-missing": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1242,
+      "record": "20261123T230233Z-4b7af1da",
+      "commit": "a1b19c5c82336f37ce873c642f27b3a1a6583a4a",
+      "tests": [
+        "tests/gate/kit/lane_correction_replay.py"
+      ]
     },
     "acceptance-correction-replay-shown": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1242,
+      "record": "20261123T230233Z-8550d4fc",
+      "commit": "a1b19c5c82336f37ce873c642f27b3a1a6583a4a",
+      "tests": [
+        "tests/gate/kit/lane_correction_replay.py"
+      ]
     },
     "acceptance-merge-approved-head": {
       "status": "built",
