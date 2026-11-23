@@ -289,17 +289,21 @@ fast:
 fast-list:
     @python3 "$root/scripts/octo-feather-gate" select 2>&1 >/dev/null
 
-# The coverage map just fast selects from: every gate item run under coverage.py (COVERAGE_PROCESS_START and the
-# .pth coverage installs in the kit venv; one data dir per item, GATE_ITEM: tests/gate/coverage.toml), on a clean tree,
-# written for HEAD into the git common dir (scripts/octo-feather-gate map), from the items that passed; exits as the run did.
-# Slower than just check; never in it or CI.
+# The coverage map just fast selects from: every test item just fast can choose (no e2e item, no static check: select
+# never reads their coverage) run under coverage.py (COVERAGE_PROCESS_START and the .pth coverage installs in the kit
+# venv; one data dir per item, GATE_ITEM: tests/gate/coverage.toml), on a clean tree, written for HEAD into the git
+# common dir (scripts/octo-feather-gate map), from the items that passed; exits as the run did. On fast_workers
+# workers, as just fast: a fast-tier run, no heavy slot, the lowest priority, one fast-run turn (quality
+# #recipes-static-first, tests/gate/heavy_slot.py). Extra arguments go to pytest. Never in just check or CI.
 fast-map *args:
     #!/usr/bin/env bash
     set -euo pipefail
     cd "$root"
     [[ -z "$(git status --porcelain)" ]] || { echo "fast-map: the tree has changes; commit them first, the map is written for HEAD" >&2; exit 1; }
     d="$(mktemp -d)"; trap 'rm -rf "$d"' EXIT
-    rc=0; env -u GATE_ITEM COV_MAP_DIR="$d" COVERAGE_PROCESS_START="$root/tests/gate/coverage.toml" just check-tests --junitxml="$d/junit.xml" "$@" || rc=$?
+    cap="$(python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["fast_workers"])' "$root/gate-budget.toml")"
+    rc=0; env -u GATE_ITEM COV_MAP_DIR="$d" COVERAGE_PROCESS_START="$root/tests/gate/coverage.toml" GATE_WORKERS="$cap" \
+      just check-tests --junitxml="$d/junit.xml" -m 'not e2e' --deselect tests/gate/test_gate.py::test_recipe "$@" || rc=$?
     uv run --locked --offline --no-sync python3 "$root/scripts/octo-feather-gate" map "$d" --junit "$d/junit.xml"
     exit "$rc"
 

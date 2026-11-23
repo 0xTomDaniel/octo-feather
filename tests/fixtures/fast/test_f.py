@@ -1,6 +1,6 @@
-"""tests/fast.sh's pytest kit test file, copied to tests/gate/kit/ of its throwaway kit: each
-function is its own gate item; each appends its name to $FAST_RAN, and test_one runs fixture-a,
-test_two fixture-g, test_e2e (pytest's e2e marker) nothing."""
+"""tests/gate/kit/fast_map.py's pytest kit test file, copied to tests/gate/kit/ of its throwaway
+kit: each function is its own gate item; each appends its name to $FAST_RAN, and test_one runs
+fixture-a, test_two fixture-g, test_e2e (pytest's e2e marker) nothing."""
 
 import os
 import subprocess
