@@ -580,6 +580,7 @@ def build_map(data: Path, junit: Path) -> None:
     ran = outcomes(junit)
     tracked = Tracked()
     items: dict[str, list[str]] = {}
+    unread: list[str] = []
     # The pytest items: each data dir named by a node id (GATE_ITEM holds its `/` and `::`).
     native = {f.parent.relative_to(data).as_posix() for f in data.rglob("cov*") if f.is_file()}
     native = {i for i in native if "::" in i}
@@ -597,11 +598,15 @@ def build_map(data: Path, junit: Path) -> None:
         if not runs:  # not run, or no Python measured: no recorded coverage, so always selected
             continue
         files: set[str] = set()
-        for f in runs:
-            cd = coverage.CoverageData(basename=str(f))
-            cd.read()
-            for m in cd.measured_files():
-                files |= tracked.source(m)
+        try:
+            for f in runs:
+                cd = coverage.CoverageData(basename=str(f))
+                cd.read()
+                for m in cd.measured_files():
+                    files |= tracked.source(m)
+        except coverage.CoverageException as e:  # a data file left unwritten: coverage unknown
+            unread.append(f"{i} ({e})")
+            continue
         items[i] = sorted(files)
     head = git("rev-parse", "HEAD").strip()
     out = map_dir() / f"{head}.json"
@@ -612,6 +617,10 @@ def build_map(data: Path, junit: Path) -> None:
     sys.stdout.write(f"fast-map: {len(items)} test items mapped at {head[:12]}: {out}\n")
     for i in not_passed:
         sys.stdout.write(f"fast-map: {i} did not pass: left out of the map, always selected\n")
+    for i in unread:
+        sys.stdout.write(
+            f"fast-map: {i}: coverage unreadable: left out of the map, always selected\n"
+        )
 
 
 MISE_DIRS = ("tracked-configs", "trusted-configs")
