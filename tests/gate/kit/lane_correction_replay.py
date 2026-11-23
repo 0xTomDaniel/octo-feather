@@ -391,6 +391,16 @@ def missing(s: Scratch) -> None:
         *(f"  - Replay: no row for finding `{f}`" for f in FINDINGS),
         *(f"  - Replay: no row for clean lane `clean {lane}`" for lane in CLEAN),
     ], r.err
+
+
+def read(s: Scratch) -> None:
+    """issue-lifecycle#acceptance-correction-replay-missing, the PR body and the parent read as
+    their sources give them: the Replay section as GitHub renders it (EXAMPLES), so the refusal
+    names every finding and clean lane but FINDINGS[2], whose row holds an escaped pipe, and
+    clean gh1197's row by its empty fields; #1121's notes with a null body refused, the field
+    named."""
+    ln = Correction(s)
+    ln.recorded()
     ln.section(EXAMPLES)  # the section read as GitHub renders it
     err = ln.ask(want=1).err.splitlines()
     named = [x for x in err if x.startswith("  - Replay: no row for ")]
@@ -690,4 +700,4 @@ def recorded_1233(s: Scratch) -> None:
 
 
 if __name__ == "__main__":
-    main(missing, shown, untrue, contained, masked, recorded_1233)
+    main(missing, read, shown, untrue, contained, masked, recorded_1233)

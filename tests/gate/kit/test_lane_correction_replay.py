@@ -7,7 +7,7 @@ import sys
 from collections.abc import Callable
 
 import pytest
-from lane_correction_replay import contained, masked, missing, recorded_1233, shown, untrue
+from lane_correction_replay import contained, masked, missing, read, recorded_1233, shown, untrue
 
 Case = Callable[..., None]
 SOURCE = "tests/gate/kit/lane_correction_replay.py"
@@ -17,6 +17,11 @@ pytestmark = pytest.mark.skipif(sys.platform == "darwin", reason="the qc sandbox
 @pytest.mark.criterion("issue-lifecycle#acceptance-correction-replay-missing", source=SOURCE)
 def test_correction_replay_missing(case: Case) -> None:
     case(missing)
+
+
+@pytest.mark.criterion("issue-lifecycle#acceptance-correction-replay-missing", source=SOURCE)
+def test_correction_replay_read(case: Case) -> None:
+    case(read)
 
 
 @pytest.mark.e2e
