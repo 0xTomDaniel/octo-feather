@@ -11,7 +11,7 @@ Drive criterion: `issue-lifecycle#acceptance-pilot-pr`
 - `integrate` `octo-feather-integrate 12 gh12-pilot` lands the pilot's worker branch on lane gh12, its gate green: the judged head J.
 - `pr-create` `gh pr create --draft` on the pushed lane: the draft PR's URL.
 - `qc` `just qc docs/specs/demo.status.json <PR> acceptance-a acceptance-b` at J: one status-only commit after J, acceptance-a built in that PR, acceptance-b (its demo fails) planned.
-- `verdict` `octo-feather-lane verdict <PR> <J> <report>` after qc's commit is pushed: the review verdict posted for J.
+- `verdict` `octo-feather-lane verdict <PR> <J> <report>` after qc's commit is pushed, the report's `Range: <main>..<J>` (a full round): the review verdict posted for J.
 - `pr-view` `gh pr view <PR> --json isDraft,headRefOid,comments`: still a draft, its head qc's commit, its one verdict comment naming J under that PR head.
 
 ## How to get to it (user POV)
