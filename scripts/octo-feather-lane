@@ -302,7 +302,7 @@ integration test seam; correction lanes #987, #1121). It reads TICKET through th
 `ticket` reads them, `Seam: <spec>#<anchor>: `<seam>`` (the colon after the id optional), then any note; the seam
 is its first code span, compared exactly (`herdr-spawn` is not `scripts/herdr-spawn`). Anything else naming a
 seam (a table, prose) is no record: whether it agreed a seam stays with review. <spec>#<anchor> must be an item of
-the body's `## Acceptance criteria`, else class seam-off-criteria, exit 1. A ticket serving a rule (an item `rule:
+the body's `## Acceptance criteria`, else class seam-off-criteria, exit 1 (with --before, a note: below). A ticket serving a rule (an item `rule:
 <rule> (<owner>)`, as `ticket` reads it) records `Seam: rule: `<seam>``, checked with the id `rule`: one record for
 the ticket's rules, else exactly as a criterion's; `rule` on a ticket with no `rule:` item is seam-off-criteria. Without --before: exit 0 when a note
 holds the record, printing `<ticket>: seam <id> `<seam>` recorded at <time> (<url>)`. With --before REV (the
@@ -310,9 +310,12 @@ commit adding the test, in the git repo here; its author time, git %aI, kept thr
 note holding the record: before when it was written and last changed (null: never) strictly before REV; formed
 after REV when it was written at or after REV; unknown when it was written before REV and its text changed at or
 after: the record may or may not have been there at REV. Exit 0 when one note is before (printed as above, `,
-before commit <sha>`); else 2, printing `<ticket>: unchecked: ...`, when one is unknown; else 1, class
-unlisted-test-seam, printed as `ticket` prints its failures: no record, or every record formed after REV. A
-writer runs it before the first test at a seam, and with --before on the commit adding one. Exit 2, unchecked,
+before commit <sha>`); else 2, printing `<ticket>: unchecked: ...`, when one is unknown; else exit 0 with one line
+`<ticket>: note, class unlisted-test-seam: <what>`, <what> the record's time and url and the commit's, or no record
+on the ticket, or the criterion the ticket does not list: --before reports and never refuses on timing (owner
+ruling on #1230); review judges the seam by its kind (quality#acceptance-public-surfaces). Without --before, no
+record exits 1, class unlisted-test-seam, printed as `ticket` prints its failures. A writer runs it before the
+first test at a seam, and with --before on the commit adding one. Exit 2, unchecked,
 also when nothing could be read: usage, git, or issue-view's error (a tracker that cannot give a time exits
 non-zero naming it); never reported as late. Whether SEAM is the seam the test drives stays with review
 (docs/adr/0008 rung 3).
@@ -2284,8 +2287,9 @@ def ticket_notes(key: str) -> "tuple[str, list[tuple[str, str | None, str, str]]
 
 
 def cmd_seam(args: list[str]) -> int:
-    """Is SEAM written down for CRITERION (or `rule`, a ticket serving a rule) on TICKET, before REV's test when --before
-    names one (AGENTS.md Rules, integration test seam; correction lanes #987, #1121)."""
+    """Is SEAM written down for CRITERION (or `rule`, a ticket serving a rule) on TICKET; with --before, when it was
+    written relative to REV's test, reported, never refused (AGENTS.md Rules, integration test seam; correction lanes
+    #987, #1121; #1236)."""
     rev = None
     if len(args) == 5 and args[3] == "--before":
         rev, args = args[4], args[:3]
@@ -2306,7 +2310,16 @@ def cmd_seam(args: list[str]) -> int:
         before = (sha[:8], iso_time(at, f"{rev}'s author time"))
     name, notes = ticket_notes(key)
 
+    def note(problem: str) -> int:
+        """With --before: an off-criteria, missing or late record is one note, never a refusal (owner ruling on #1230,
+        quality#acceptance-public-surfaces): review judges the seam by its kind."""
+        print(f"{name}: note, class unlisted-test-seam: {problem}; review judges the seam by its kind "
+              "(quality#acceptance-public-surfaces)")
+        return 0
+
     def fail(cls: str, problem: str, fix: str) -> int:
+        if before is not None:
+            return note(problem)
         print(f"{name}: class: {cls}: {problem}; fix: {fix}")
         return 1
 
@@ -2331,7 +2344,7 @@ def cmd_seam(args: list[str]) -> int:
     if not held:
         return fail("unlisted-test-seam", f"no `Seam:` record for {crit} `{seam}` on {name} (form {SEAM_FORM})",
                     f"post `Seam: {crit}: `{seam}`` on {name} with the tracker skill's issue-comment, then rerun this "
-                    "before writing the test" + ("; a test already written: tell your supervisor" if before else ""))
+                    "before writing the test")
     if before is None:
         w, c, u = min(held, key=lambda h: h[1] or h[0])
         print(f"{name}: seam {crit} `{seam}` recorded at {utc(c or w)} ({u})")
@@ -2350,9 +2363,8 @@ def cmd_seam(args: list[str]) -> int:
               "the record was there at the commit; review judges it")
         return 2
     w, _, u = min(held)
-    return fail("unlisted-test-seam", f"`Seam:` record for {crit} `{seam}` on {name} written at {utc(w)} ({u}), after "
-                f"commit {sha} at {utc(rev_at)}", "record each seam before its first test; this one is late: tell your "
-                "supervisor, who asks the owner")
+    return note(f"`Seam:` record for {crit} `{seam}` on {name} written at {utc(w)} ({u}), after commit {sha} at "
+                f"{utc(rev_at)}")
 
 
 # --- spend (spec spend, issue #185) ---
