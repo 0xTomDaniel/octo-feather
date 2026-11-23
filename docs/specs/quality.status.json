@@ -333,6 +333,24 @@
     "acceptance-review-unvalidated-edge": {
       "status": "planned",
       "pr": null
+    },
+    "acceptance-fast-slot-free": {
+      "status": "built",
+      "pr": 1212,
+      "record": "20261121T100259Z-31cddd48",
+      "commit": "9ce2f80e7b5b24d7eb35bffe7857b4a8698c1b25",
+      "tests": [
+        "tests/gate/kit/test_fast_slot_free.py"
+      ]
+    },
+    "acceptance-fast-hook": {
+      "status": "built",
+      "pr": 1212,
+      "record": "20261121T100259Z-2d19c7cb",
+      "commit": "9ce2f80e7b5b24d7eb35bffe7857b4a8698c1b25",
+      "tests": [
+        "tests/gate/kit/test_fast_hook.py"
+      ]
     }
   }
 }

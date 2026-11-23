@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# The fast tier on every commit, as templates/python/.githooks/pre-commit; `just setup` installs it.
+# git hands a hook its repo's location (GIT_DIR, GIT_INDEX_FILE); the gate's items run git in repos
+# of their own, so those go first, by git's own list of them.
+mapfile -t vars < <(git rev-parse --local-env-vars)
+unset "${vars[@]}"
+exec just fast

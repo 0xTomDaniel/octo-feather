@@ -202,7 +202,7 @@ def test_merge_ask_parent_line() -> None:
 CHECK_FORM = (
     "`Checks: none` when the diff adds or changes nothing to classify (docs/adr/0008, Who builds "
     "what), else one line each `Check: <path>: <rule> (<owner>) | reads: <what it reads> | "
-    "class: exact|proxy` (docs/adr/0008)"
+    "class: exact|proxy|declaration` (docs/adr/0008)"
 )
 QC = f"qc: built acceptance-a acceptance-b (judged {J[:12]})"
 
