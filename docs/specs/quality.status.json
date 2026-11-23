@@ -351,6 +351,14 @@
       "tests": [
         "tests/gate/kit/test_fast_hook.py"
       ]
+    },
+    "acceptance-fast-map-slot-free": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-fast-map-behind": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
