@@ -355,8 +355,8 @@
     "acceptance-fast-map-slot-free": {
       "status": "built",
       "pr": 1246,
-      "record": "20261124T001557Z-cb0ea466",
-      "commit": "d524894ea65a49c8c3c4a857156dfbed9dc2119e",
+      "record": "20261124T012053Z-9e44ecb2",
+      "commit": "1a3c59485be3095f8007d7ea5f1f4006010c1c8b",
       "tests": [
         "tests/gate/kit/test_fast_map.py"
       ]
@@ -364,15 +364,20 @@
     "acceptance-fast-map-behind": {
       "status": "built",
       "pr": 1246,
-      "record": "20261124T001557Z-64f15dde",
-      "commit": "d524894ea65a49c8c3c4a857156dfbed9dc2119e",
+      "record": "20261124T012053Z-f3502927",
+      "commit": "1a3c59485be3095f8007d7ea5f1f4006010c1c8b",
       "tests": [
         "tests/gate/kit/test_fast_map.py"
       ]
     },
     "acceptance-fast-diff-base": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1246,
+      "record": "20261124T012053Z-87e89a2d",
+      "commit": "1a3c59485be3095f8007d7ea5f1f4006010c1c8b",
+      "tests": [
+        "tests/gate/kit/test_fast_map.py"
+      ]
     }
   }
 }
