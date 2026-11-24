@@ -1,6 +1,6 @@
 {
   "spec": "issue-lifecycle.spec.html",
-  "accepted_commit": "387211490351e1f775853b4e990f97b6dd205639",
+  "accepted_commit": "3e23fd46c7f0d39d18788e6b12000840fd64bc76",
   "criteria": {
     "acceptance-kickoff-refuses": {
       "status": "planned",
@@ -430,6 +430,22 @@
       "pr": null
     },
     "acceptance-tier-three-waits": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-merge-guard-owner": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-merge-guard-order": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-merge-guard-head": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-merge-relay-director-only": {
       "status": "planned",
       "pr": null
     },
