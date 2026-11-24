@@ -212,7 +212,15 @@ highest any reason gives (no reason: 1), printed on a pass right after the secti
 
 Reasons (tier): each criterion the section's `Failed:` lists, with its triage (3); each line of the section that
 starts at column 0 with `Owner decision` and holds a colon (`Owner decision: <text>`, `Owner decision 1 (<what>):
-<text>`), shown as written (3): any agent raises the tier by adding one. A tier 3 ask waits for the owner;
+<text>`), shown as written (3): any agent raises the tier by adding one; each path the lane changes (git diff from
+the merge base of the head and BASE to the head, a rename as its two paths) whose owners in the code owners file at the
+head (the first of .github/CODEOWNERS, CODEOWNERS, docs/CODEOWNERS, GitHub's order; none: no path) include `@<owner>`,
+the owner login of --repo O/R (else of `gh repo view`; an `@org/team` never counts): `code owner: <path> is @<owner>'s
+(<file> line N: `<line>`)` (3). The line is the last one matching the path, as GitHub takes it, each line matched
+by git's own matcher (`git check-ignore --no-index`, one line at a time: scripts/merge_ask.py, _owned). A line
+whose pattern git reads otherwise than GitHub (each such syntax and why: merge_ask.CODE_OWNERS_DIFFER) fails the
+ask, `code owners: <file> line N `<line>`: <why>; ...`, each named, and no path is sorted. A tier 3 ask waits for
+the owner;
 a tier 1 or 2 ask whose merge order (below) names an open PR this merge sets back (its head conflicts with this head,
 or this merge stales its pinned run), or one of whose reads failed (a `- not read:` line: it cannot prove none is set
 back), waits for the director's order, naming each (`PR #N: <why>`, `PR #N: its pinned run <run> not read`,
