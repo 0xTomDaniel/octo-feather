@@ -442,8 +442,13 @@
       "pr": null
     },
     "acceptance-merge-starts-routine": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1265,
+      "record": "20261124T212737Z-155d181f",
+      "commit": "e895008cc391dd49ee1ba2af1f2ff907a494d4e6",
+      "tests": [
+        "tests/gate/kit/lane_merge.py"
+      ]
     },
     "acceptance-red-main-stops": {
       "status": "built",
@@ -455,8 +460,13 @@
       ]
     },
     "acceptance-archive-tears-down": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1265,
+      "record": "20261124T212737Z-66b32968",
+      "commit": "e895008cc391dd49ee1ba2af1f2ff907a494d4e6",
+      "tests": [
+        "tests/gate/kit/lane_archive_teardown.py"
+      ]
     },
     "acceptance-refresh-waits-run": {
       "status": "built",
