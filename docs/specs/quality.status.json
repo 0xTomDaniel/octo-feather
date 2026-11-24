@@ -353,12 +353,22 @@
       ]
     },
     "acceptance-fast-map-slot-free": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1246,
+      "record": "20261124T001557Z-cb0ea466",
+      "commit": "d524894ea65a49c8c3c4a857156dfbed9dc2119e",
+      "tests": [
+        "tests/gate/kit/test_fast_map.py"
+      ]
     },
     "acceptance-fast-map-behind": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1246,
+      "record": "20261124T001557Z-64f15dde",
+      "commit": "d524894ea65a49c8c3c4a857156dfbed9dc2119e",
+      "tests": [
+        "tests/gate/kit/test_fast_map.py"
+      ]
     }
   }
 }
