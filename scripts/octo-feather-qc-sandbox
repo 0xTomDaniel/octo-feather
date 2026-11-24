@@ -40,7 +40,8 @@ Setup (this process, outside the judge's namespaces):
         >= 5.11 and tmpfs user xattrs >= 6.6, else exit 66); uv's cache (as `uv --color never cache dir` names it) the same
         overlay, so an offline `uv sync` finds the box's packages and nothing reaches the real cache; Pi's
         auth.json and models.json per-run copies there, bound over the real files (never written back; none with
-        QC_PI=none, a run with no Pi such as a declared demo); the caller's archived lanes and director log bound
+        QC_PI=none, a run with no Pi such as a declared demo); Pi's sessions/ an empty tmpfs mask of the kit's
+        (srt makes none inside its Pi mask; carved back in S, watched in R); the caller's archived lanes and director log bound
         at a scratch state dir (none with QC_HISTORY=none: a factory eval sees no lane history), the qa runs dir QC_QA
      at its qa/ (why and when: docs/adr/0022, sandbox paragraph; none without QC_QA), and the box
         onboarding file (the commit identity a role launch applies) at its top
@@ -49,7 +50,7 @@ Setup (this process, outside the judge's namespaces):
      other repo (#182: each git repo up to 3 levels below HOME, dot-dirs aside, but the kit under test QC_KIT and
      the worktree; what is bound back on each mask: docs/adr/0022), the cache dir and Pi's agent dir; allowRead
      carve-outs under them, read-only (kept /tmp paths, the shims, the attempt record view, history, what a repo
-     mask binds back, the vendored-skill cache, Pi's entries but sessions); allowWrite only the overlays and the Pi
+     mask binds back, the vendored-skill cache, Pi's entries but sessions, Pi's empty sessions mask); allowWrite only the overlays and the Pi
      copies (their writes discarded by step D); srt's own convenience write dirs (~/.npm/_logs, ~/.claude/debug)
      read-denied, so they are masks, never the real dirs; allowAllUnixSockets (Herdr talks over a Unix socket; srt's
      default seccomp filter refuses socket(AF_UNIX)); allowNestedUserNamespaces (a qc run inside the sandbox); the
@@ -67,7 +68,7 @@ Setup (this process, outside the judge's namespaces):
      record) on $SCR/rec, which the judge sees read-only; the socket there, mode 0200: each sender returns only once
      its entry is written. Senders: the herdr shim, the run shims, the git helper, the offline gh's refusals, and
      its own inotify watch on the tmpfs masks, reached through the inner's /proc/PID/root (gh config and ~/.ssh as
-     credential, live lanes/ and sessions/ as lane_state, other repos as repo; file masks are not watchable exactly
+     credential, live lanes/ and sessions/ and Pi's sessions/ as lane_state, other repos as repo; file masks are not watchable exactly
      and are not recorded). Only what arrives after the inner's go counts. The inner's first message gets the
      proof, post and judge-stderr pipes (SCM_RIGHTS: srt passes only stdin, stdout and stderr); no later one does.
 Inner (`inner` mode, srt's command, the caller's uid, no capabilities; the judge runs as its child):
@@ -1026,6 +1027,15 @@ def setup(judge: list[str]) -> NoReturn:
                 mount(f"{OV}/pi/{n}", f"{PI}/{n}", None, MS_BIND)
             except OSError as e:
                 die(f"copy Pi {n} ({e})")
+    # Pi's sessions (every agent's transcript): a kit-made empty tmpfs mask, as a repo mask below. srt cannot: a
+    # denyRead inside the denied Pi agent dir is no mount of its own, so a read found no dir and left no attempt;
+    # this mask, carved back under srt's Pi mask, is watched (R), so a judge reading them is a refused attempt (#1241).
+    pmask = f"{PI}/sessions" if os.path.isdir(f"{PI}/sessions") else ""
+    if pmask:
+        try:
+            mount("tmpfs", pmask, "tmpfs", 0, "mode=755")
+        except OSError as e:
+            die(f"mask over Pi's sessions {pmask} ({e})")
     os.chdir(cwd)
     # history at the scratch state dir (step 2, read-only through srt's allowRead below).
     os.makedirs(f"{SB}/lanes")
@@ -1143,6 +1153,11 @@ def setup(judge: list[str]) -> NoReturn:
             if n == "sessions" or (n in ("auth.json", "models.json")):
                 continue
             allow_r.append(f"{PI}/{n}")
+        # Pi's sessions: the empty mask made above, carved back read-only and watched as a live record (#1241)
+        if pmask:
+            allow_r.append(pmask)
+            masked.append(pmask)
+            watch.append(("lane_state", pmask, []))
         if not nopi:
             allow_w += [f"{PI}/{n}" for n in pis]
     # srt's convenience write dirs: masks, never the real dirs
