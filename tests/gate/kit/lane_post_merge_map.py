@@ -18,7 +18,8 @@ record naming B's full map built an hour before (or more than a day: full_daily)
 
 after_merge: both fast-run turns held (two fast runs live, so the next would wait), PR 7's
 routine starts the clone's map job and goes on (exit 3, step 8 pending), its map not yet built;
-PR 8's is queued behind it, PR 9's replaces PR 8's. Once a turn is free the job builds M1, then
+PR 8's is queued behind it, PR 9's replaces PR 8's; the job's lines say it waits for a free
+turn, and no build has run. Once a turn is free the job builds M1, then
 M3, each `just fast-map --since-newest` at its merge commit in a scratch worktree (removed
 after), at nice 19; M2 is never mapped, and every unit ended.
 full_daily: the last full map built more than a day before: PR 7's build is a full `just
@@ -171,6 +172,15 @@ class World:
             f"# the job's lines\n{build_log.read_text() if build_log.exists() else ''}"
         )
 
+    def waiting(self) -> None:
+        """Waits until the job's lines (build.log) say it waits for a free fast-run turn; the
+        bound is for safety only."""
+        log, said = self.maps / "build.log", "map job: waiting for a free fast-run turn (held: "
+        end = time.monotonic() + 60
+        while said not in (log.read_text() if log.exists() else ""):
+            assert time.monotonic() < end, f"the job never said it waits: {lines(log)}"
+            time.sleep(0.1)
+
     def calls(self) -> list[dict[str, object]]:
         """The stand-in fast-map's calls, in order."""
         return [json.loads(x) for x in lines(self.log)]
@@ -225,7 +235,7 @@ def after_merge(s: Scratch) -> None:
         want = f"step 5 coverage map: ok: coverage map: queued: {m3[:12]}, after unit {w.unit}'s"
         gone = f", replacing queued {m2[:12]}, never mapped"
         assert w.step5(r) == f"{want} build of {m1[:12]}{gone}", r.out
-        time.sleep(1.5)  # the job polls the turns each second: still none free
+        w.waiting()  # the job says it waits for a turn: every turn is still held
         assert w.calls() == [], f"a build ran while every fast-run turn was held: {w.calls()}"
     finally:
         turns.release()
