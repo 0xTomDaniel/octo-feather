@@ -122,7 +122,10 @@ a `class: proxy` line with `Verdict: clear` (a proxy check blocks; the declarati
 the lines; merge-ask prints them under the section for the owner. It also carries the report's owner decision
 lines and `Opt-out cleared: <commit sha>` lines (form: Report fields, above; refused: an owner decision line with
 nothing after its colon, a cleared value that is no sha), with those of the comment it replaces kept: only
-merge-ask's tier reads them (merge-ask, Reasons). HEAD is the head the review judged, H, a commit
+merge-ask's tier reads them (merge-ask, Reasons). The header carries the report's `Ruling covers:
+<url>` lines too, each the URL a spec call links as its ruling (scripts/octo-feather-spec-status, call log; refused
+in another form): the reviewer's word that the owner's ruling covers that call's change (merge-ask's tier, below);
+each post carries the report's own, never an earlier round's. HEAD is the head the review judged, H, a commit
 of the PR (7+ hex prefix); the comment names it (`Head:`) and the PR's head when posted (`PR head:`).
 Review rounds (rule: issue-lifecycle #lanes-one-head, #acceptance-verdict-covers-lane): the report's one `Range:`
 line (its form: Report fields, above). Refused: no Range, `to` not HEAD, `from` not an ancestor of `to`, and a
@@ -221,7 +224,17 @@ verdict comment `Review verdict:` links (verdict, above), shown as written (3); 
 the kit's check-behavior-smoke prints for the lane (`--base` the merge base of the head and BASE, `--head` the
 head: its `opt-out <sha>` lines), `opt-out <sha> cleared by the review verdict: Behaviour-neutral: <reason>`
 when that comment is clear and an `Opt-out cleared:` line in its header names the commit (2), else `opt-out <sha>
-not cleared by the review verdict: ...` (3); opt-outs that could not be read, naming why (3). A tier 3 ask waits for the owner;
+not cleared by the review verdict: ...` (3); opt-outs that could not be read, naming why (3); each spec call the lane diff adds (a
+line of a `*.calls.jsonl` the diff from the merge base to the PR head changes, read at both ends with git show,
+not at the merge base: the same call with or without `denied`, as `octo-feather-spec-status calls` counts it),
+named `spec call <slug> <at> <kind> <anchors>`: denied by the owner, `: denied <at>` (2); clarifies (2); any
+other kind (3, `: no ruling linked`), unless its `ruling` URL's issue or issue comment was created before its
+`at` (GitHub's created_at, `gh api ... --jq .created_at`) and the header of the review verdict comment the
+section links carries `Ruling covers: <that URL>` (verdict, above): then `: ruled by <url> (<created_at>), the
+review verdict covers it` (2); else the reason it is not, `ruling <url> is no GitHub issue or issue comment
+URL`, `not read (...)`, `made <created_at>, not before the call` or `not confirmed: the review verdict carries no
+...` (3); a log not read, `spec calls not
+read: <why>` (3). A tier 3 ask waits for the owner;
 a tier 1 or 2 ask whose merge order (below) names an open PR this merge sets back (its head conflicts with this head,
 or this merge stales its pinned run), or one of whose reads failed (a `- not read:` line: it cannot prove none is set
 back), waits for the director's order, naming each (`PR #N: <why>`, `PR #N: its pinned run <run> not read`,
@@ -1272,6 +1285,10 @@ def cmd_verdict(args: list[str]) -> int:
     if proxy and verdict == "clear":
         raise Refuse(f"report says `Verdict: clear` with a proxy check ({proxy[0]}): a proxy check blocks "
                      "(docs/adr/0008); make it a blocking finding and `Verdict: blocking`, then rerun")
+    covers = merge_ask.ruling_covers(report)
+    if bad := [u for u in covers if not merge_ask.ruling_form(u)]:
+        raise Refuse(f"`Ruling covers: {bad[0]}` is not `Ruling covers: <the URL of the GitHub issue or issue comment "
+                     "where the owner's ruling is written>`, as the call links it; fix the report, then rerun")
     d = pr_view(pr, "headRefOid,baseRefName,comments", repo)
     head = cast("str", d["headRefOid"])
     at = [oid for oid, _ in pr_commits(pr, head, pr_base(cast("str | None", d["baseRefName"]) or "", None)) if head_matches(want, oid)]
@@ -1296,7 +1313,8 @@ def cmd_verdict(args: list[str]) -> int:
     was = merge_ask.decision_lines(posted.split(f"\n{merge_ask.ROUNDS}", 1)[0])   # kept: only the check lowers a tier
     carried = [*dict.fromkeys([*was[0], *decided])] + [f"Opt-out cleared: {c}" for c in dict.fromkeys([*was[1], *cleared])]
     body = (f"{MARKER}\n## Code review verdict\n\nHead: {judged}\nPR head: {head}\nVerdict: {verdict}\n"
-            + "".join(f"{c}\n" for c in [*merge_ask.check_set(rounds), *carried]) + f"\n{merge_ask.ROUNDS}\n\n" + "".join(f"{x}\n" for x in lines)
+            + "".join(f"{c}\n" for c in [*merge_ask.check_set(rounds), *carried]) + "".join(f"Ruling covers: {u}\n" for u in covers)
+            + f"\n{merge_ask.ROUNDS}\n\n" + "".join(f"{x}\n" for x in lines)
             + f"\n### Findings\n\n{report.strip()}\n")
     out, said = post_comment(pr, repo, d["comments"], MARKER, body, "verdict")
     print(f"verdict: {said} ({verdict}, head {judged[:12]})", file=sys.stderr)
