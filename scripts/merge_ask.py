@@ -43,14 +43,9 @@ Interface:
         Pure, no I/O. Each refusal line the merge ask prints for S, in order, by rule, in the
         parts the command's own item goes between; none when S passes; with what a passing ask
         prints; Ask.order, the merge-order lines (spec #gates-merge-order), and Ask.gate_time,
-        never a gap. Ask.tier (Tier, spec #gates-tiers), on any Ask: the tier N, the highest its
-        reasons give (none: 1), and the block merge-ask prints, `Tier: N`, one `- <reason>` line
-        per reason, `Waits for: nobody | the director's order (PR #N: <why>) | the owner` (tier 3
-        always the owner; a tier 1 or 2 ask whose merge order names an open PR this merge sets
-        back, or holds a read that failed (`not read: <what>`), the director's order). Its
-        reasons (tier): each criterion the section's `Failed:` lists, with its triage (3), each
-        column-0 line starting `Owner decision` up to its first colon in the section (3), shown
-        as written.
+        never a gap. Ask.tier (Tier, spec #gates-tiers), on any Ask: the tier, its reasons and
+        whom the merge waits for (the block's form and the reasons: octo-feather-lane --help,
+        merge-ask).
 
 Shared with octo-feather-lane's other commands: bad_checks (lane status), check_runs, git,
 resolution_files (verdict, resolution), full_pass (ci-start: its reads, then its rule), and the
@@ -2734,8 +2729,8 @@ class Reason(NamedTuple):
 
 @dataclass(frozen=True)
 class Tier:
-    """The ask's tier N (the highest its REASONS give, 1 with none) and whom its merge WAITS for:
-    `nobody`, `the director's order (PR #N: <why>)` or `the owner` (always at tier 3)."""
+    """The ask's tier N, its REASONS and whom its merge WAITS for (octo-feather-lane --help,
+    merge-ask)."""
 
     n: int
     reasons: list[Reason]
@@ -2775,10 +2770,8 @@ def sets_back(o: Order) -> list[str]:
 
 
 def tier(s: Snapshot) -> Tier:
-    """S's tier from the records the ask already holds: each criterion its section's `Failed:`
-    lists (3), each column-0 `Owner decision...:` line in the section (3); a merge order naming
-    an open PR this merge sets back, or a merge-order read that failed, makes a tier 1 or 2 ask
-    wait for the director's order, tier unchanged."""
+    """S's tier from the records the ask already holds (the rule: octo-feather-lane --help,
+    merge-ask)."""
     lines = section(s.body) or []
     fails = failed(s, lines)[1]
     reasons = [Reason(3, f"failed criterion {c}{': ' + w if w else ''}") for c, w in fails.items()]
