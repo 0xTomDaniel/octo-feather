@@ -7,6 +7,7 @@ import pytest
 from fast_map import (
     absent,
     behind,
+    chooses,
     diff_base,
     full_pass,
     incremental,
@@ -22,6 +23,11 @@ Case = Callable[..., None]
 @pytest.mark.criterion("quality#acceptance-fast-map-slot-free")
 def test_fast_map_takes_no_slot(case: Case) -> None:
     case(slot_free)
+
+
+@pytest.mark.criterion("quality#acceptance-fast-map-slot-free")
+def test_fast_chooses_from_its_map(case: Case) -> None:
+    case(chooses)
 
 
 @pytest.mark.criterion("quality#acceptance-fast-map-behind")

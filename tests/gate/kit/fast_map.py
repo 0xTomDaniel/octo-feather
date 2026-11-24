@@ -10,8 +10,9 @@ tests/a.sh and tests/b.sh each run their own Python script, tests/c.sh (`# gate:
 tests/d.sh a bash script coverage cannot see, tests/e.sh runs b's and fails while RAN.fail exists;
 and tests/fixtures/fast/test_f.py as a pytest kit test file, each of its three functions its own
 gate item (test_one runs fixture-a, test_two fixture-g, test_e2e carries pytest's e2e marker).
-That copy is prepared once per gate run (testkit Scratch.prepare), and once more with a coverage
-map: `just fast-map` run with RAN.fail present, its exit and output kept beside it.
+That copy is prepared once per gate run (testkit Scratch.prepare), and twice more with a coverage
+map: `just fast-map` run with RAN.fail present, its exit and output kept beside it; and slot_free's
+mapping run (below), what it said kept beside it, shared by slot_free and chooses.
 
 slot_free (quality #acceptance-fast-map-slot-free): while gh8's run holds the heavy slot, gh7's
 `just fast-map` (no grant: a run asking the slot would be refused, exit 75) passes, says it runs
@@ -20,9 +21,10 @@ that priority, never the e2e ones or the static check (check-probe logs nothing)
 five whose Python it measured, naming d.sh, which left no coverage data; the slot still names
 gh8's run. The run's exit is the tests' and the map's alone: on a lane branch whose
 gate-budget.toml puts every item over the per-test CPU budget and whose tests/b.sh changed since
-main, the budget, which would fail a gate run on b.sh, does not judge the mapping run. Then,
-fixture-a changed, `just fast-list` chooses a.sh and test_one (their coverage reaches it) and
-d.sh (unmapped), each named with why, the e2e items named skipped, and runs none.
+main, the budget, which would fail a gate run on b.sh, does not judge the mapping run.
+chooses (the same criterion): on the copy that run mapped, fixture-a changed, `just fast-list`
+chooses a.sh and test_one (their coverage reaches it) and d.sh (unmapped), each named with why, the
+e2e items named skipped, and runs none.
 behind (quality #acceptance-fast-map-behind): main at M0, then M1 and M2; branch lane cut at M0
 with a commit of its own; coverage maps at M0, M1 and M2 (the map file `just fast-map` writes,
 scripts/octo-feather-gate --help, here holding no item, so every item is unmapped). On lane,
@@ -100,10 +102,12 @@ def build(p: Scratch) -> None:
     items(p, box(p))
 
 
-def kit(s: Scratch, *, mapped: bool = False) -> Path:
-    """The prepared copy in S, with its map when MAPPED (build_mapped), S's env as box sets it,
-    the copy's venv the kit's own."""
-    if mapped:
+def kit(s: Scratch, *, mapped: bool = False, slot: bool = False) -> Path:
+    """The prepared copy in S, with its map when MAPPED (build_mapped) or SLOT (build_slot), S's
+    env as box sets it, the copy's venv the kit's own."""
+    if slot:
+        s.prepare("fast-slot-mapped", build_slot)
+    elif mapped:
         s.prepare("fast-mapped", build_mapped)
     else:
         s.prepare("fast-map", build)
@@ -152,31 +156,43 @@ def fast(s: Scratch, k: Path, want: str) -> str:
     return out
 
 
-def slot_free(s: Scratch) -> None:
-    k = kit(s)
-    (s.root / "probe").write_text("")
-    s.git(k, "checkout", "-q", "-b", "lane")
+def build_slot(p: Scratch) -> None:
+    """slot_free's mapping run (this file's docstring), what it said kept in slot.json."""
+    k = kit(p)
+    (p.root / "probe").write_text("")
+    p.git(k, "checkout", "-q", "-b", "lane")
     budget = k / "gate-budget.toml"
     tiny = "test_cpu_seconds = 0.001"
     text = re.sub(r"^test_cpu_seconds = .*$", tiny, budget.read_text(), flags=re.MULTILINE)
     budget.write_text(text)
     with (k / "tests" / "b.sh").open("a") as f:
         f.write("# changed in the lane\n")
-    s.git(k, "commit", "-qam", "every item over the CPU budget; b.sh changed since main")
-    with held(s, k):
-        rc, out, ran = just(s, k, "fast-map", GATE_WORKERS="8")
-        said = f"just fast-map: exit {rc}\nran: {ran}\n{out}"
-        assert rc == 0, said
-        assert f"heavy slot: not needed: fast tier, {TIER}" in out, said
-        assert sorted(ln.split()[0] for ln in ran) == ["a", "b", "d", "e", "one", "two"], said
-        assert all(ln.endswith(LOWEST) for ln in ran if " " in ln), f"want {LOWEST}: {said}"
-        assert re.search(r"fast-map: 5 test items mapped at [0-9a-f]{12}: ", out), said
-        no_data = "fast-map: tests/d.sh: no coverage data: left out of the map, always selected"
-        assert no_data in out, said
-        static = (s.root / "probe").read_text()
-        assert static == "", f"a static check ran: {static}\n{said}"
-        st = status(s, k)
-        assert re.search(r"run holding it now: pid \d+ of lane gh8 since ", st), st
+    p.git(k, "commit", "-qam", "every item over the CPU budget; b.sh changed since main")
+    with held(p, k):
+        rc, out, ran = just(p, k, "fast-map", GATE_WORKERS="8")
+        st = status(p, k)
+    said = {"rc": rc, "out": out, "ran": ran, "probe": (p.root / "probe").read_text(), "status": st}
+    (p.root / "slot.json").write_text(json.dumps(said))
+
+
+def slot_free(s: Scratch) -> None:
+    kit(s, slot=True)
+    run = json.loads((s.root / "slot.json").read_text())
+    rc, out, ran, st = run["rc"], run["out"], run["ran"], run["status"]
+    said = f"just fast-map: exit {rc}\nran: {ran}\n{out}"
+    assert rc == 0, said
+    assert f"heavy slot: not needed: fast tier, {TIER}" in out, said
+    assert sorted(ln.split()[0] for ln in ran) == ["a", "b", "d", "e", "one", "two"], said
+    assert all(ln.endswith(LOWEST) for ln in ran if " " in ln), f"want {LOWEST}: {said}"
+    assert re.search(r"fast-map: 5 test items mapped at [0-9a-f]{12}: ", out), said
+    no_data = "fast-map: tests/d.sh: no coverage data: left out of the map, always selected"
+    assert no_data in out, said
+    assert run["probe"] == "", f"a static check ran: {run['probe']}\n{said}"
+    assert re.search(r"run holding it now: pid \d+ of lane gh8 since ", st), st
+
+
+def chooses(s: Scratch) -> None:
+    k = kit(s, slot=True)
     with (k / "scripts" / "fixture-a").open("a") as f:
         f.write("# one-script change\n")
     rc, out, ran = just(s, k, "fast-list")
@@ -403,5 +419,14 @@ def incremental(s: Scratch) -> None:
 
 if __name__ == "__main__":
     main(
-        slot_free, behind, unchanged, one_script, listed, absent, full_pass, diff_base, incremental
+        slot_free,
+        chooses,
+        behind,
+        unchanged,
+        one_script,
+        listed,
+        absent,
+        full_pass,
+        diff_base,
+        incremental,
     )
