@@ -163,6 +163,14 @@ covers = ["scripts/octo-feather-lane", "scripts/merge_ask.py", ".skillfile/patch
 [demo."issue-lifecycle#acceptance-declaration-check-shown"]
 covers = ["scripts/octo-feather-lane", "scripts/merge_ask.py", ".skillfile/patches/skills/code-review/SKILL.md.patch", ".agents/skills/code-review/SKILL.md"]
 
+# Proven by tests/gate/kit/test_lane_correction_replay.py's tagged items (the rule: issue-lifecycle #lanes-correction; rows run in the qc sandbox).
+[demo."issue-lifecycle#acceptance-correction-replay-missing"]
+covers = ["scripts/octo-feather-lane", "scripts/merge_ask.py", "scripts/correction_lanes.py", "scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-qc-ghsnap"]
+
+# Proven by tests/gate/kit/test_lane_correction_replay.py's tagged items (the rule: issue-lifecycle #lanes-correction; rows run in the qc sandbox).
+[demo."issue-lifecycle#acceptance-correction-replay-shown"]
+covers = ["scripts/octo-feather-lane", "scripts/merge_ask.py", "scripts/correction_lanes.py", "scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-qc-ghsnap"]
+
 # Proven by tests/gate/kit/test_lane_ci_start.py's tagged items (the rule: issue-lifecycle #lanes-one-head); the role naming the
 # command: owed eval docs/owed-evals/589.md.
 [demo."issue-lifecycle#acceptance-ci-alongside"]

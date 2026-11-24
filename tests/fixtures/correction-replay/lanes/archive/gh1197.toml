@@ -1,0 +1,8 @@
+supervisor = "w92:p2"
+repository = "0xTomDaniel/octo-feather"
+issue = "gh1197"
+goal = "Full gate under 300 seconds"
+started_at = "2026-11-20T21:52:35Z"
+waiting_on = ""
+last_handoff_at = "2026-11-21T02:59:32Z"
+pr = 1209

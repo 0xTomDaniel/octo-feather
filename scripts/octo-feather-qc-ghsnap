@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""octo-feather-qc-ghsnap REPO DIR   read-only GitHub snapshot for the qc judge (docs/adr/0022)
+"""octo-feather-qc-ghsnap REPO DIR [ISSUE...]   read-only GitHub snapshot for the qc judge (docs/adr/0022)
 
 Not run by hand: octo-feather-qc runs it before every judge, outside the sandbox,
 with the caller's gh auth, into a new per-run DIR that the sandbox binds
@@ -9,7 +9,10 @@ the DETAIL_CAP most recently updated issues and PRs, fetched in parallel:
 `gh issue view`/`gh pr view --json` (comments, reviews, commits, files, closing
 issues, sub-issues, blocked-by), the diff, the timeline, sub-issues and
 blocked-by links, and the head's check runs; older items are list-only and
-named in meta.json. For each detailed issue, also the github-issues skill's `issue-view --notes` answer: its
+named in meta.json. Each ISSUE number named (a correction lane's parent and replay tickets, older than
+the window: issue-lifecycle spec #lanes-correction) gets the same full issue view beside the window, wherever it
+falls; one GitHub cannot resolve is named in the summary line and meta.json's absent ("issue #N"), never
+dropped. With none named, the snapshot is the window's alone. For each detailed issue, also the github-issues skill's `issue-view --notes` answer: its
 one graphql query (scripts/notes.graphql there), asked as issue-view asks it, its stdout kept unmodified, so the
 offline gh answers that query, and only it, with GitHub's own edit times; an issue GitHub cannot resolve there
 is recorded absent, as an api 404. Repo, branches, labels, origin refs (refs.txt from branches).
@@ -23,7 +26,10 @@ import json, os, re, subprocess, sys, time
 import functools
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from typing import cast
+from typing import TYPE_CHECKING, Any, cast
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 LIMITS = {"issue": 500, "pr": 500, "run": 200}
 DETAIL_CAP = 200
@@ -86,11 +92,54 @@ def issue_notes(out: Path, n: str, repo: str, absent: "list[str]") -> None:
     (out / "issue" / f"{n}.notes.json").write_text(text)
 
 
+def beyond(named: "tuple[str, ...]", detail: "list[tuple[str, Any]]") -> "list[int]":
+    """The issue numbers NAMED (once each, as given) that the window's DETAIL does not already hold in full."""
+    have = {r["number"] for _, r in detail}
+    return [n for n in dict.fromkeys(map(int, named)) if n not in have]
+
+
+def named_report(out: Path, named: "tuple[str, ...]", detail: "list[tuple[str, Any]]", capped: "list[tuple[str, Any]]",
+                 absent: "list[str]") -> "tuple[dict[str, list[str]], str]":
+    """What the named issues add to meta.json (named: those beyond the window now in full; capped without them) and
+    to the summary line (those in full, and each GitHub does not have); none named, nothing."""
+    if not named:
+        return {}, ""
+    full = [f"#{n}" for n in beyond(named, detail) if (out / "issue" / f"{n}.json").is_file()]
+    meta = {"named": full, "capped": [f"#{r['number']}" for _, r in capped if f"{r['number']}" not in named]}
+    return meta, f"; named issues in full: {' '.join(full) or 'none beyond the window'}" + "".join(
+        f"; named, not on GitHub: {a.removeprefix('issue ')}" for a in sorted(absent) if a.startswith("issue #"))
+
+
+def issue_full(out: Path, n: str, repo: str, api: "Callable[[str], object]") -> None:
+    """Issue N's full view, the same for a window issue and a named one: issue/N.json (gh issue view --json IF), its
+    sub-issues, blocked-by links and timeline; its notes are issue_notes'."""
+    (out / "issue" / f"{n}.json").write_text(gh("issue", "view", n, "-R", repo, "--json", IF))
+    for s in ("sub_issues", "dependencies/blocked_by", "timeline"):
+        api(f"repos/{repo}/issues/{n}/{s}")
+
+
+def named_issues(out: Path, repo: str, numbers: "list[int]", absent: "list[str]", api: "Callable[[str], object]") -> None:
+    """Each issue in NUMBERS in full (issue_full, issue_notes), in parallel; one GitHub cannot resolve (gh's own
+    answer to its view) is named in ABSENT as "issue #N", nothing of it written."""
+    def one(n: int) -> None:
+        try:
+            issue_full(out, str(n), repo, api)
+        except Fatal as e:
+            if "Could not resolve to an issue or pull request" not in str(e) or (out / "issue" / f"{n}.json").exists():
+                raise
+            absent.append(f"issue #{n}")
+            return
+        issue_notes(out, str(n), repo, absent)
+
+    with ThreadPoolExecutor(max_workers=16) as ex:
+        list(ex.map(one, numbers))   # re-raises the first Fatal
+
+
 def api_name(path):
     return re.sub(r"[?&=]", "_", path.lstrip("/").replace("/", "__"))
 
 
-def main(repo, out):
+def main(repo, out, *named: str):
     out = Path(out)
     for d in ("issue", "pr", "diff", "api"):
         (out / d).mkdir(parents=True)
@@ -132,35 +181,35 @@ def main(repo, out):
     def fetch(kind, row):
         n = str(row["number"])
         if kind == "issue":
-            save(f"issue/{n}.json", gh("issue", "view", n, "-R", repo, "--json", IF))
-            for s in ("sub_issues", "dependencies/blocked_by"):
-                api(f"{R}/issues/{n}/{s}")
+            issue_full(out, n, cast("str", repo), cast("Callable[[str], object]", api))
         else:
             save(f"pr/{n}.json", gh("pr", "view", n, "-R", repo, "--json", PF))
             pr_diff(out, n, f"{repo}")
             if row.get("headRefOid"):
                 api(f"{R}/commits/{row['headRefOid']}/check-runs")
-        api(f"{R}/issues/{n}/timeline")
+            api(f"{R}/issues/{n}/timeline")
 
     with ThreadPoolExecutor(max_workers=16) as ex:
-        for f in [ex.submit(fetch, k, r) for k, r in detail] + [ex.submit(issue_notes, out, str(cast("dict[str, object]", r)["number"]), repo if isinstance(repo, str) else "", cast("list[str]", absent))
+        for f in [ex.submit(fetch, k, r) for k, r in detail] + [ex.submit(named_issues, out, repo if isinstance(repo, str) else "", beyond(named, detail), cast("list[str]", absent), cast("Callable[[str], object]", api))] + [ex.submit(issue_notes, out, str(cast("dict[str, object]", r)["number"]), repo if isinstance(repo, str) else "", cast("list[str]", absent))
                                                                 for k, r in detail if k == "issue"]:
             f.result()   # re-raises the first Fatal
+    named_meta, named_line = named_report(out, named, detail, capped, cast("list[str]", absent))
     at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     meta = {"repo": repo, "fetched_at": at, "seconds": round(time.time() - t0, 1),
             "counts": {"issues": len(issues), "prs": len(prs), "runs": len(runs), "branches": len(branches), "detail": len(detail)},
             "limits": {**LIMITS, "detail": DETAIL_CAP},
-            "capped": [f"{'#'}{r['number']}" for _, r in capped], "absent": sorted(absent)}
+            "capped": [f"{'#'}{r['number']}" for _, r in capped], "absent": sorted(absent)} | named_meta
     (out / "meta.json").write_text(json.dumps(meta, indent=2))
     (out / "fetched_at").write_text(at + "\n")
-    cap = f"; detail capped at {DETAIL_CAP}, list-only: {' '.join(meta['capped'])}" if capped else ""
+    cap = f"; detail capped at {DETAIL_CAP}, list-only: {' '.join(meta['capped'])}" if meta["capped"] else ""
     print(f"snapshot of {repo} at {at} ({meta['seconds']} s): issues {len(issues)}, prs {len(prs)}, runs {len(runs)}, "
           f"branches {len(branches)}, full views {len(detail)}{cap}"
+          + named_line
           + "".join(f"; diff too large on GitHub (HTTP 406), not fetched: #{p.stem}" for p in sorted((out / "diff").glob("*.too-large"))))
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 3:
+    if len(sys.argv) < 3 or not all(re.fullmatch(r"[1-9]\d*", a) for a in sys.argv[3:]):
         print(__doc__.strip(), file=sys.stderr); sys.exit(64)
     try:
         main(*sys.argv[1:])
