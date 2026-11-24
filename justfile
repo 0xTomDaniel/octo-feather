@@ -270,8 +270,22 @@ check-tests *args:
 # The git hook on just fast (.githooks/pre-commit; quality #recipe-fast, templates #tpl-hooks), as the templates'
 # setup's last line; git config writes the clone's config, so the hook runs in every worktree of the clone. The tools:
 # just install-check names what is missing; check-tests syncs the venv and node_modules itself.
+# Only in a maintainer's own clone (quality #acceptance-setup-not-factory, #1243): refused, config unchanged, under a
+# factory agent (OCTO_FEATHER_ROLE, which herdr-spawn exports to every agent pane) or in a clone holding any worktree
+# besides its main one (a factory clone: lanes and workers are linked worktrees). Kit-only: a template's setup also
+# installs tools and octo-feather-new-repo runs it, often from an agent. It cannot stop `git config core.hooksPath
+# .githooks` by hand nor an agent whose environment lost OCTO_FEATHER_ROLE; the hook still skips machine commits.
 setup:
-    git config core.hooksPath .githooks
+    #!/usr/bin/env python3
+    import os, subprocess, sys
+    role = os.environ.get("OCTO_FEATHER_ROLE", "")
+    out = subprocess.run(["git", "worktree", "list", "--porcelain"], capture_output=True, text=True, check=True).stdout
+    linked = sum(ln.startswith("worktree ") for ln in out.splitlines()) - 1
+    why = [f"OCTO_FEATHER_ROLE={role} is set (a factory agent)"] * bool(role)
+    why += [f"this clone holds worktrees besides its main one ({linked}: a factory clone; the setting would reach each)"] * (linked > 0)
+    if why:
+        sys.exit(f"setup: refused: {'; '.join(why)}. The git hook is for a maintainer's own clone, not factory worktrees; git config unchanged")
+    subprocess.run(["git", "config", "core.hooksPath", ".githooks"], check=True)
 
 # The fast tier (quality #recipe-fast; when it suffices: issue-lifecycle #lanes-checkpoints): the gate items
 # scripts/octo-feather-gate select chooses, each named with why, through check-tests on fast_workers workers
