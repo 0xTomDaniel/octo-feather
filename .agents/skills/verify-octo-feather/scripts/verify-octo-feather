@@ -22,6 +22,7 @@ import shutil
 import statistics
 import subprocess
 import sys
+import traceback
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
@@ -31,8 +32,8 @@ from typing import Any, NoReturn, cast
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-eval-verdict", "qc-stale", "gate-tiers", "merge-ask-proof", "pilot-pr", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "template-edge", "qa-runs", "qa-baseline", "qa-analyst", "qa-evidence", "qa-review", "qa-history", "run-slots", "queued-completion",
-            "parent-resumed", "result-file", "result-missing")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-eval-verdict", "qc-stale", "spec-revision-init", "gate-tiers", "kit-hook", "merge-ask-proof", "pilot-pr", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "template-edge", "qa-runs", "qa-baseline", "qa-analyst", "qa-evidence", "qa-review", "qa-history", "run-slots", "queued-completion",
+            "parent-resumed", "result-file", "result-missing", "lane-start")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -57,6 +58,19 @@ RUN_DIR = Path(os.environ.get("VERIFY_OCTO_FEATHER_RUN_DIR") or BASE / "run")
 EVIDENCE_DIR = Path(os.environ.get("VERIFY_OCTO_FEATHER_EVIDENCE_DIR") or BASE / "evidence")
 STATE = RUN_DIR / "state"
 CREATED = RUN_DIR / "created"
+# The driving agent's own Herdr, session and state variables, never a drive's: with them a case would resolve the
+# driver's real parent, spawn line or result file and write there (#1193).
+DRIVER_LEAKS = ("HERDR_", "OCTO_FEATHER_", "XDG_STATE_HOME", "XDG_CACHE_HOME")
+
+
+def case_env(env: dict[str, str] | None = None) -> dict[str, str]:
+    """The environment of every command a drive runs: the helper's own without DRIVER_LEAKS, octo-feather state in
+    the run's scratch (XDG_STATE_HOME) unless ENV names one or a scratch HOME, then ENV. A drive never writes under
+    the caller's state."""
+    env = env or {}
+    own = {k: v for k, v in os.environ.items() if not k.startswith(DRIVER_LEAKS)}
+    state = {} if "HOME" in env else {"XDG_STATE_HOME": str(RUN_DIR / "scratch" / "state")}
+    return own | state | env
 
 
 def say(msg: str) -> None:
@@ -313,7 +327,7 @@ class Feature:
         before = self.kit_status()
         with (d / f"{name}.stdout").open("wb") as out, (d / f"{name}.stderr").open("wb") as err:
             r0 = resource.getrusage(resource.RUSAGE_CHILDREN)
-            rc = subprocess.run([*self.pre, self.s.kit, *args], cwd=cwd, env={**os.environ, **self.env},
+            rc = subprocess.run([*self.pre, self.s.kit, *args], cwd=cwd, env=case_env(self.env),
                                 stdout=out, stderr=err, check=False).returncode
             r1 = resource.getrusage(resource.RUSAGE_CHILDREN)
             self.cpu = r1.ru_utime - r0.ru_utime + r1.ru_stime - r0.ru_stime
@@ -389,7 +403,7 @@ def qc_report(f: Feature, name: str) -> dict[str, Any]:
 def scratch_state(f: Feature) -> Path:
     """The state dir the drive's commands use: `octo-feather-state` asked under the drive's env (f.env), never a guessed
     root (inside a qc sandbox HERDR_SESSION names the run's session, so it is that session's dir)."""
-    r = subprocess.run([f.s.kit, "octo-feather-state"], capture_output=True, text=True, env={**os.environ, **f.env}, check=False)
+    r = subprocess.run([f.s.kit, "octo-feather-state"], capture_output=True, text=True, env=case_env(f.env), check=False)
     if r.returncode or not r.stdout.strip():
         die(f"octo-feather-state failed under the drive's env: {r.stderr.strip()}")
     return Path(r.stdout.strip())
@@ -407,7 +421,7 @@ def fake_tracker(kit: str, sc: Path) -> dict[str, str]:
     (binary / "herdr").chmod(0o755)
     env["REFLECT_DIRECTOR_FILE"] = str(sc / "director-source.jsonl")
     subprocess.run([sys.executable, str(fixture), "seed", str(sc / "state/octo-feather")],
-                   env=os.environ | env, check=True, capture_output=True, text=True)
+                   env=case_env(env), check=True, capture_output=True, text=True)
     env["PATH"] = f"{binary}:{env['PATH']}"
     return env
 
@@ -1202,7 +1216,7 @@ def drive_skill_loading(f: Feature) -> None:
     f.env = {**route, "HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "XDG_CACHE_HOME": str(sc / "cache"),
              "XDG_STATE_HOME": str(sc / "state")}
     subprocess.run([f"{f.s.repo}/scripts/pi-role", "--set-identity", "Verify Identity", "verify@octo-feather.invalid"],
-                   env={**os.environ, "XDG_STATE_HOME": str(sc / "state")}, capture_output=True, check=True)
+                   env=case_env({"XDG_STATE_HOME": str(sc / "state")}), capture_output=True, check=True)
     refused = "Pi did not load skill"
     role_line = next(ln for ln in (Path(f.s.repo) / "agents" / "implementer.md").read_text().splitlines() if ln.startswith("skills:"))
     launch("offered", target("offered", "python, local", good), f.s.repo, '{"type":"get_commands"}\n')
@@ -1354,6 +1368,9 @@ def drive_shape(f: Feature) -> None:
         for n in (*kit_skills, *ext_skills, "home-decoy"):
             (d / n).mkdir(parents=True)
             (d / n / "SKILL.md").write_text(f"---\nname: {n}\ndescription: A home decoy; never offered.\n---\nBody.\n")
+    # The shaper commits: its factory commit identity, set once in the scratch state as an owner sets it on a box (#665).
+    subprocess.run([f.s.kit, "pi-role", "--set-identity", "verify-octo-feather", "verify@octo-feather.invalid"],
+                   env=case_env({"XDG_STATE_HOME": str(sc / "state")}), capture_output=True, check=True)
     port = "8765"  # the namespace is private: no other listener can hold it
     (agent / "models.json").write_text(json.dumps({"providers": {"fake": {
         "baseUrl": f"http://127.0.0.1:{port}/v1", "api": "openai-completions", "apiKey": "x", "models": [{"id": "fake"}]}}}) + "\n")
@@ -1470,7 +1487,7 @@ def drive_qc_capture(f: Feature) -> None:
         f.run(n, *qc)
         f.pre = []
         f.obs(n, "store", output([f.s.kit, "octo-feather-evidence", "read", "--repo", str(r), "--commit", head, "--json"],
-                                 env={**os.environ, **f.env})[1])
+                                 env=case_env(f.env))[1])
         st = json.loads(git("show", "HEAD:docs/specs/demo.status.json"))["criteria"]
         f.obs(n, "built", f"{st['acceptance-a']['status']} {st['acceptance-b']['status']}\n")
         if n == "qc-1":
@@ -1547,12 +1564,18 @@ def drive_qc_insufficient(f: Feature) -> None:
     say(f"qc-insufficient evidence: {f.d}")
 
 
-# A scratch target's launcher: answers `pi-role --json agents/<role>.md` with one launched skill (s) and extension
-# (e.ts) in the repo, as octo-feather-qa --verdict asks it (--help, Verdict).
-STAND_IN_PI_ROLE = """#!/bin/sh
-top=$(cd "$(dirname "$0")/.." && pwd -P)
-printf '{"args": ["--extension", "%s/extensions/e.ts", "--skill", "%s/.agents/skills/s"]}\\n' "$top" "$top"
-"""
+# A scratch target's role, launching one skill (s) and extension (e.ts) in the repo, with the tracker skill pi-role
+# needs. Its scripts/pi-role is a link to the kit's real one (launcher), so whatever octo-feather-qa --verdict asks
+# of it (--help, Verdict) the real tool answers.
+ROLE_FILES = (("agents/worker.md", "---\nname: worker\ndescription: the worker\nskills: s\nextensions: e.ts\n---\nthe worker role\n"),
+              ("extensions/e.ts", "export default () => {};\n"), (".agents/skills/s/SKILL.md", "the skill\n"),
+              (".agents/skills/github-issues/SKILL.md", "the tracker\n"))
+
+
+def launcher(f: Feature, r: Path) -> None:
+    """The scratch target R's scripts/pi-role: the kit's real launcher, linked."""
+    (r / "scripts").mkdir(parents=True, exist_ok=True)
+    (r / "scripts" / "pi-role").symlink_to(f"{f.s.repo}/scripts/pi-role")
 
 
 def drive_qc_eval_verdict(f: Feature) -> None:
@@ -1573,14 +1596,14 @@ def drive_qc_eval_verdict(f: Feature) -> None:
     case = {"id": "c1", "role": "worker", "fixture": "fx", "task": "Do it."}
     facts = [{"fact": "skill_read", "skill": "s"}]
     run, pin = "20260101T000000Z-abc123", "20260101T000000Z-abc123/s1/c1"
-    for rel, text in (("agents/worker.md", "the worker role\n"), ("scripts/pi-role", STAND_IN_PI_ROLE), (".agents/skills/s/SKILL.md", "the skill\n"),
+    for rel, text in (*ROLE_FILES,
                       ("evals/s1/cases.json", json.dumps([case])), ("evals/s1/reference/expectations.json", json.dumps({"c1": {"facts": facts}})),
                       ("evals/fixtures/fx/a.txt", "fixture\n"), ("README.md", "target\n"),
                       ("qc.toml", ('format = 2\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n[demo."demo#acceptance-a"]\n'
                                    f'command = "{f.s.repo}/scripts/octo-feather-qa --verdict {pin}"\ncovers = ["agents"]\n'))):
         (r / rel).parent.mkdir(parents=True, exist_ok=True)
         (r / rel).write_text(text)
-    (r / "scripts" / "pi-role").chmod(0o755)
+    launcher(f, r)
     shutil.copy(f"{f.s.repo}/tests/fixtures/spec-status/good/demo.spec.html", r / "docs" / "specs")
     git("add", "-A")
     git("commit", "-q", "-m", "accepted")
@@ -1613,13 +1636,13 @@ def drive_qc_eval_verdict(f: Feature) -> None:
             (r / "README.md").write_text("target, changed\n")
             git("commit", "-q", "-am", "readme")
         elif at == "role":
-            (r / "agents" / "worker.md").write_text("the worker role, changed\n")
+            (r / "agents" / "worker.md").write_text(ROLE_FILES[0][1] + "changed\n")
             git("commit", "-q", "-am", "role")
         judged = git("rev-parse", "HEAD")
         f.run(name, *qc)
         # the demo's output, as the qc report keeps it (octo-feather-qc --help, Report)
         rep = sorted((sc / "state" / "octo-feather" / "qc").glob(f"{judged}-*.json"))
-        res = [x for x in json.loads(rep[-1].read_text())["results"] if x["id"] == "acceptance-a"] if rep else []
+        res = [x for x in json.loads(rep[-1].read_text()).get("results", []) if x["id"] == "acceptance-a"] if rep else []
         f.obs(name, "demo", f"{res[0].get('output', '') if res else 'no qc report'}\n")
     f.check("fresh", lambda c: c.code == 0 and re.search(r"(?m)^PASS acceptance-a", c.out) and re.search(fresh, c.o["demo"])
             and re.search(bound, c.err))
@@ -1647,11 +1670,11 @@ def drive_qa_evidence(f: Feature) -> None:
         git("config", k, val)
     case = {"id": "c1", "role": "worker", "fixture": "fx", "task": "Report."}
     say_ = {"fact": "ran", "program": "herdr-say", "args": ["--parent"]}
-    for rel, text in (("agents/worker.md", "the worker role\n"), ("scripts/pi-role", STAND_IN_PI_ROLE), ("evals/s1/cases.json", json.dumps([case])),
+    for rel, text in (*ROLE_FILES, ("evals/s1/cases.json", json.dumps([case])),
                       ("evals/s1/reference/expectations.json", json.dumps({"c1": {"facts": [say_]}})), ("evals/fixtures/fx/a.txt", "fixture\n")):
         (r / rel).parent.mkdir(parents=True, exist_ok=True)
         (r / rel).write_text(text)
-    (r / "scripts" / "pi-role").chmod(0o755)
+    launcher(f, r)
     git("add", "-A")
     git("commit", "-q", "-m", "accepted")
     kit, base = git("rev-parse", "HEAD"), "b" * 40
@@ -1738,7 +1761,7 @@ def drive_qc_browser(f: Feature) -> None:
     f.run("qc", "just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a")
     f.pre = []
     f.obs("qc", "store", output([f.s.kit, "octo-feather-evidence", "read", "--repo", str(r), "--commit", head, "--json"],
-                                env={**os.environ, **f.env})[1])
+                                env=case_env(f.env))[1])
     rid = r"([0-9]{8}T[0-9]{6}Z-[0-9a-f]{8})"
 
     def holds(c: Case) -> bool:
@@ -2007,7 +2030,7 @@ def drive_qa_runs(f: Feature) -> None:
              "OCTO_FEATHER_QA_DIR": str(sc / "out"), "XDG_STATE_HOME": str(sc / "state")}
     # The scratch state dir holds the commit identity the eval's role launch needs (pi-role --help, Commit identity).
     subprocess.run([f"{f.s.repo}/scripts/pi-role", "--set-identity", "Verify Identity", "verify@octo-feather.invalid"],
-                   env={**os.environ, "XDG_STATE_HOME": str(sc / "state")}, capture_output=True, check=True)
+                   env=case_env({"XDG_STATE_HOME": str(sc / "state")}), capture_output=True, check=True)
     qa = ("octo-feather-qa", "--evals", str(ev))
 
     def last_run(name: str, case: str) -> None:
@@ -2095,7 +2118,7 @@ def drive_qa_baseline(f: Feature) -> None:
              "OCTO_FEATHER_QA_DIR": str(sc / "out"), "XDG_STATE_HOME": str(sc / "state")}
     # The scratch state dir holds the commit identity the eval's role launch needs (pi-role --help, Commit identity).
     subprocess.run([f"{f.s.repo}/scripts/pi-role", "--set-identity", "Verify Identity", "verify@octo-feather.invalid"],
-                   env={**os.environ, "XDG_STATE_HOME": str(sc / "state")}, capture_output=True, check=True)
+                   env=case_env({"XDG_STATE_HOME": str(sc / "state")}), capture_output=True, check=True)
     qa = (str(kit / "scripts" / "octo-feather-qa"), "--evals", str(ev), "--case", "build", "--runs", "2")
 
     def result(name: str) -> None:
@@ -2157,7 +2180,7 @@ def drive_qa_analyst(f: Feature) -> None:
              "OCTO_FEATHER_QA_DIR": str(sc / "out"), "XDG_STATE_HOME": str(sc / "state")}
     # The scratch state dir holds the commit identity the eval's role launch needs (pi-role --help, Commit identity).
     subprocess.run([f"{f.s.repo}/scripts/pi-role", "--set-identity", "Verify Identity", "verify@octo-feather.invalid"],
-                   env={**os.environ, "XDG_STATE_HOME": str(sc / "state")}, capture_output=True, check=True)
+                   env=case_env({"XDG_STATE_HOME": str(sc / "state")}), capture_output=True, check=True)
     qa = str(kit / "scripts" / "octo-feather-qa")
     want = ("qa: analysis (deterministic, no model; rules: octo-feather-qa --help, --analyze):\n"
             "  non-discriminating case va/same: every run on both kits passed\n"
@@ -2212,7 +2235,7 @@ def drive_qa_review(f: Feature) -> None:
              "OCTO_FEATHER_QA_DIR": str(sc / "out"), "XDG_STATE_HOME": str(sc / "state")}
     # The scratch state dir holds the commit identity the eval's role launch needs (pi-role --help, Commit identity).
     subprocess.run([f"{f.s.repo}/scripts/pi-role", "--set-identity", "Verify Identity", "verify@octo-feather.invalid"],
-                   env={**os.environ, "XDG_STATE_HOME": str(sc / "state")}, capture_output=True, check=True)
+                   env=case_env({"XDG_STATE_HOME": str(sc / "state")}), capture_output=True, check=True)
     f.run("run", "octo-feather-qa", "--evals", str(ev))
     runs = sorted(p for p in (sc / "out").iterdir() if p.name != "reviews") if (sc / "out").is_dir() else []
     first = runs[-1] if runs else sc / "none"
@@ -2259,7 +2282,7 @@ def drive_qa_history(f: Feature) -> None:
              "OCTO_FEATHER_QA_DIR": str(sc / "out"), "XDG_STATE_HOME": str(sc / "state")}
     # The scratch state dir holds the commit identity the eval's role launch needs (pi-role --help, Commit identity).
     subprocess.run([f"{f.s.repo}/scripts/pi-role", "--set-identity", "Verify Identity", "verify@octo-feather.invalid"],
-                   env={**os.environ, "XDG_STATE_HOME": str(sc / "state")}, capture_output=True, check=True)
+                   env=case_env({"XDG_STATE_HOME": str(sc / "state")}), capture_output=True, check=True)
     f.run("whole-tree", "octo-feather-qa", "--evals", str(ev))
     runs = sorted((sc / "out").iterdir()) if (sc / "out").is_dir() else []
     tr = runs[-1] / "vh" / "tree" / "transcript.jsonl" if runs else sc / "none"
@@ -2315,7 +2338,7 @@ def drive_qc_fallback(f: Feature) -> None:
     f.pre = []
     f.obs("qc", "report", json.dumps(qc_report(f, "qc")))
     f.obs("qc", "store", output([f.s.kit, "octo-feather-evidence", "read", "--repo", str(r), "--criterion", "demo#acceptance-b", "--commit", head, "--json"],
-                                env={**os.environ, **f.env})[1])
+                                env=case_env(f.env))[1])
     st = json.loads(git("show", "HEAD:docs/specs/demo.status.json"))["criteria"]
     f.obs("qc", "built", f"{st['acceptance-a']['status']} {st['acceptance-b']['status']}\n")
     rid = r"([0-9]{8}T[0-9]{6}Z-[0-9a-f]{8})"
@@ -2405,7 +2428,7 @@ def drive_tagged(f: Feature, feature: str, anchor: str, *, two: bool = False) ->
 
     def store(name: str) -> None:
         f.obs(name, "store", output([f.s.kit, "octo-feather-evidence", "read", "--repo", str(r), "--commit", head, "--json"],
-                                    env={**os.environ, **f.env})[1])
+                                    env=case_env(f.env))[1])
 
     def captured(c: Case) -> list[dict[str, Any]]:
         return [x for x in json.loads(c.o["store"]) if "test.capture.json" in x["record"]["outputs"]]
@@ -2543,6 +2566,22 @@ def drive_qc_stale(f: Feature) -> None:
     say(f"qc-stale evidence: {f.d}")
 
 
+RUNNER = "tests/gate/test_gate.py::test_script"   # the gate runner's tests/*.sh items, the gate-tiers kit copy's map
+
+
+def kit_copy(f: Feature, k: Path) -> None:
+    """K a copy of the kit's tracked files without its tests/*.sh and without every pytest test module but the gate's
+    runner (RUNNER's file): its gate items are the static checks and the tests/*.sh a drive writes."""
+    k.mkdir()
+    files = subprocess.run(["git", "-C", f.s.repo, "ls-files", "-z"], check=True, capture_output=True).stdout
+    for rel in filter(None, files.decode().split("\0")):
+        src = Path(f.s.repo) / rel
+        test_module = re.fullmatch(r"tests/(.*/)?(test_[^/]*|[^/]*_test)\.py", rel) is not None   # pytest's python_files
+        if src.is_file() and not re.fullmatch(r"tests/[^/]*\.sh", rel) and (not test_module or rel == RUNNER.partition("::")[0]):
+            (k / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, k / rel)
+
+
 def drive_gate_tiers(f: Feature) -> None:
     """The gate's two tiers. octo-feather-integrate on a scratch lane: the pilot runs the full gate and records the pass,
     a listed rename runs the full gate and a red one rolls back naming the file, an unlisted change runs only the fast
@@ -2558,7 +2597,7 @@ def drive_gate_tiers(f: Feature) -> None:
 
     def git(at: Path, *args: str) -> str:
         return subprocess.run(["git", "-C", str(at), "-c", "core.hooksPath=/dev/null", *args], check=True, capture_output=True,
-                              text=True, env={**os.environ, **ident}).stdout.strip()
+                              text=True, env=case_env(ident)).stdout.strip()
 
     # The scratch target: its full gate reds on machinery/b, its fast tier never reds; its list names machinery/.
     git(r, "init", "-q", "-b", "main")
@@ -2606,20 +2645,16 @@ def drive_gate_tiers(f: Feature) -> None:
             and "gate=fast" in c.out and "gate=full" not in c.out and "provisional: head" in c.out
             and c.o["passed"].startswith("exit 1\n"))
 
-    # just fast in a scratch copy of the kit's tracked files without its tests/*.sh, holding four items: a and b each
-    # run their own Python script, c (`# gate: e2e`) runs a's, d runs a bash script coverage cannot see. The static
-    # checks cut to one with just's own override (--set GATE_RECIPES), the map built from the test items (-k
-    # test_script). The kit's synced venv serves the copy (the uv cache may be masked, as in the qc sandbox); each
-    # item appends its name to FAST_RAN, the record of what ran.
+    # just fast in a scratch copy of the kit's tracked files without its tests/*.sh and without every pytest test
+    # module but the gate's runner (tests/gate/test_gate.py), holding four items: a and b each run their own Python
+    # script, c (`# gate: e2e`) runs a's, d runs a bash script coverage cannot see. So the copy's gate items are the
+    # static checks and these, however many kit tests the kit grows. The static checks cut to one with just's own
+    # override (--set GATE_RECIPES), the map built from the runner's test items (its node id, RUNNER). The kit's synced
+    # venv serves the copy by its real path (UV_PROJECT_ENVIRONMENT; the uv cache may be masked, as in the qc sandbox):
+    # through a link, the copy's uv sync would write the scratch path into the venv's scripts, broken once cleanup
+    # removes it (#1193). Each item appends its name to FAST_RAN, the record of what ran.
     k = sc / "kit"
-    k.mkdir()
-    files = subprocess.run(["git", "-C", f.s.repo, "ls-files", "-z"], check=True, capture_output=True).stdout
-    for rel in filter(None, files.decode().split("\0")):
-        src = Path(f.s.repo) / rel
-        if src.is_file() and not re.fullmatch(r"tests/[^/]*\.sh", rel):
-            (k / rel).parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(src, k / rel)
-    (k / ".venv").symlink_to(Path(f.s.repo) / ".venv")
+    kit_copy(f, k)
     for n in ("a", "b"):
         (k / "scripts" / f"fixture-{n}").write_text(f'#!/usr/bin/env python3\nprint("{n} ran")\n')
     (k / "scripts" / "fixture-d").write_text("#!/usr/bin/env bash\necho d ran\n")
@@ -2629,12 +2664,12 @@ def drive_gate_tiers(f: Feature) -> None:
     for x in [*(k / "scripts").glob("fixture-*"), *(k / "tests").glob("*.sh")]:
         x.chmod(0o755)
     git(k, "init", "-q", "-b", "main")
-    (k / ".git" / "info" / "exclude").write_text("/.venv\n")   # the link to the kit's venv stays untracked
     git(k, "add", "-A")
     git(k, "commit", "-q", "-m", "kit copy")
     ran = sc / "ran"
-    f.env = {"XDG_STATE_HOME": str(sc / "state"), "FAST_RAN": str(ran)}
-    f.run("fast-map", "env", "-C", str(k), "just", "fast-map", "-k", "test_script")
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "FAST_RAN": str(ran),
+             "UV_PROJECT_ENVIRONMENT": os.path.realpath(Path(f.s.repo) / ".venv")}
+    f.run("fast-map", "env", "-C", str(k), "just", "fast-map", RUNNER)
     f.check("fast-map", lambda c: c.code == 0 and "fast-map: 3 test items mapped at " in c.out)
     with (k / "scripts" / "fixture-a").open("a") as fh:
         fh.write("# one-script change\n")
@@ -2663,7 +2698,7 @@ def drive_gate_tiers(f: Feature) -> None:
     (k / "tests" / "e.sh").chmod(0o755)
     git(k, "add", "-A")
     git(k, "commit", "-q", "-m", "a red item")
-    f.run("fast-map-red", "env", "-C", str(k), "just", "fast-map", "-k", "test_script")
+    f.run("fast-map-red", "env", "-C", str(k), "just", "fast-map", RUNNER)
     f.check("fast-map-red", lambda c: c.code != 0 and "fast-map: 3 test items mapped at " in c.out
             and "fast-map: tests/e.sh did not pass: left out of the map, always selected" in c.out)
     f.run("fast-list-red", "env", "-C", str(k), "just", "--set", "GATE_RECIPES", "check-dashes", "fast-list")
@@ -2673,6 +2708,62 @@ def drive_gate_tiers(f: Feature) -> None:
             and "fast: selected 3 of 6 gate items (1 static, 2 of 5 test items)" in c.out)
     f.env = {}
     say(f"gate-tiers evidence: {f.d}")
+
+
+def drive_kit_hook(f: Feature) -> None:
+    """The kit's git hook: just setup in a worktree of a scratch kit copy, then a commit with a red static check
+    refused by the hook's just fast, naming the check, and the fixed commit through, its one test item run."""
+    sc = RUN_DIR / "scratch" / "kit-hook"
+    shutil.rmtree(sc, ignore_errors=True)
+    sc.mkdir(parents=True)
+    (sc / "state").mkdir()
+    ident = {"GIT_AUTHOR_NAME": "verify-octo-feather", "GIT_AUTHOR_EMAIL": "verify@octo-feather.invalid",
+             "GIT_COMMITTER_NAME": "verify-octo-feather", "GIT_COMMITTER_EMAIL": "verify@octo-feather.invalid"}
+
+    def git(at: Path, *args: str) -> str:
+        return subprocess.run(["git", "-C", str(at), "-c", "core.hooksPath=/dev/null", *args], check=True, capture_output=True,
+                              text=True, env=case_env(ident)).stdout.strip()
+
+    # The copy (kit_copy) with one test item, a.sh: it runs git in a repo of its own and records whether git found
+    # that repo, as the kit's own gate items do. Its static checks cut to check-dashes in the copy's justfile: the
+    # hook runs a plain just fast, so just's --set cannot reach it. The kit's venv serves it as in drive_gate_tiers.
+    k, w, ran = sc / "kit", sc / "wt", sc / "ran"
+    kit_copy(f, k)
+    jf = k / "justfile"
+    jf.write_text(re.sub(r"^export GATE_RECIPES := .*$", 'export GATE_RECIPES := "check-dashes"', jf.read_text(),
+                         count=1, flags=re.MULTILINE))
+    (k / "tests" / "a.sh").write_text('#!/usr/bin/env bash\nset -euo pipefail\nd="$(mktemp -d)"\ngit -C "$d" init -q\n'
+                                      '[[ "$(git -C "$d" rev-parse --absolute-git-dir)" == "$d/.git" ]] && w=own || w=other\n'
+                                      'echo "a $w" >> "$FAST_RAN"\n')
+    (k / "tests" / "a.sh").chmod(0o755)
+    git(k, "init", "-q", "-b", "main")
+    git(k, "add", "-A")
+    git(k, "commit", "-q", "-m", "kit copy")
+    git(k, "worktree", "add", "-q", "-b", "gh1", str(w))
+    ran.write_text("")
+    f.env = {**ident, "XDG_STATE_HOME": str(sc / "state"), "FAST_RAN": str(ran),
+             "UV_PROJECT_ENVIRONMENT": os.path.realpath(Path(f.s.repo) / ".venv")}
+    f.run("setup", "env", "-C", str(w), "just", "setup")
+    f.obs("setup", "hooks-path", output(["git", "-C", str(w), "config", "--get", "core.hooksPath"])[1])
+    f.check("setup", lambda c: c.code == 0 and c.o["hooks-path"].strip() == ".githooks")
+    before = git(w, "rev-parse", "HEAD")
+    (w / "hook-red.txt").write_text("one \u2014 dash\n")
+    git(w, "add", "hook-red.txt")
+    f.run("commit-red", "env", "-C", str(w), "git", "commit", "-m", "red")
+    f.obs("commit-red", "head", git(w, "rev-parse", "HEAD") + "\n")
+    f.obs("commit-red", "ran", ran.read_text())
+    f.check("commit-red", lambda c: c.code != 0 and c.o["head"].strip() == before and c.o["ran"] == ""
+            and "heavy slot: not needed: fast tier" in c.out + c.err
+            and "static checks red: check-dashes" in c.out + c.err and "hook-red.txt:1:one \u2014 dash" in c.out + c.err)
+    (w / "hook-red.txt").write_text("one dash, gone\n")
+    git(w, "add", "hook-red.txt")
+    f.run("commit-green", "env", "-C", str(w), "git", "commit", "-m", "green")
+    f.obs("commit-green", "head", git(w, "log", "-1", "--format=%P %s") + "\n")
+    f.obs("commit-green", "ran", ran.read_text())
+    f.check("commit-green", lambda c: c.code == 0 and c.o["head"] == f"{before} green\n" and c.o["ran"] == "a own\n"
+            and "heavy slot: not needed: fast tier" in c.out + c.err)
+    f.env = {}
+    say(f"kit-hook evidence: {f.d}")
 
 
 def drive_merge_ask_proof(f: Feature) -> None:
@@ -2691,7 +2782,7 @@ def drive_merge_ask_proof(f: Feature) -> None:
 
     def git(at: Path, *args: str) -> str:
         return subprocess.run(["git", "-C", str(at), "-c", "core.hooksPath=/dev/null", *args], check=True, capture_output=True,
-                              text=True, env={**os.environ, **ident}).stdout.strip()
+                              text=True, env=case_env(ident)).stdout.strip()
 
     git(r, "init", "-q", "-b", "main")
     (r / "justfile").write_text("check:\n    @echo own-gate ran\n")   # its own single gate: no fast recipe
@@ -2800,7 +2891,7 @@ def drive_pilot_pr(f: Feature) -> None:
 
     def git(at: Path, *args: str) -> str:
         return subprocess.run(["git", "-C", str(at), "-c", "core.hooksPath=/dev/null", *args], check=True, capture_output=True,
-                              text=True, env={**os.environ, **ident}).stdout.strip()
+                              text=True, env=case_env(ident)).stdout.strip()
 
     git(sc, "init", "-q", "--bare", str(origin))
     git(r, "init", "-q", "-b", "main")
@@ -2855,6 +2946,8 @@ def drive_pilot_pr(f: Feature) -> None:
                 and (st["acceptance-a"]["status"], st["acceptance-a"]["pr"], st["acceptance-b"]["status"]) == ("built", int(pr), "planned"))
     f.check("qc", recorded)
     git(lane, "push", "-q")
+    with (sc / "report").open("a") as rep:   # the review's Range, main to J (code-review skill, Report fields)
+        rep.write(f"Range: {git(r, 'rev-parse', 'main')}..{j}\n")
     f.run("verdict", "octo-feather-lane", "verdict", pr, j, str(sc / "report"))
     f.check("verdict", lambda c: c.code == 0 and f"(clear, head {j[:12]})" in c.err)
     f.run("pr-view", "gh", "pr", "view", pr, "--json", "isDraft,headRefOid,comments")
@@ -2894,7 +2987,7 @@ def drive_template_tiers(f: Feature) -> None:
              "GIT_COMMITTER_NAME": "verify-octo-feather", "GIT_COMMITTER_EMAIL": "verify@octo-feather.invalid"}
     # Trend lines and mise's trust of each created mise.toml in the scratch, never the box's.
     f.env = {**ident, "XDG_STATE_HOME": str(sc / "state"), "MISE_STATE_DIR": str(sc / "mise-state"), "GATE_WORKERS": "2"}
-    env = {**os.environ, **f.env}
+    env = case_env(f.env)
     second = {
         "python": ("src/app/other.py", "def double(n: int) -> int:\n    return n * 2\n",
                    "tests/integration/test_other.py",
@@ -3096,7 +3189,7 @@ def drive_starter_acceptance(f: Feature) -> None:
              "GIT_COMMITTER_NAME": "verify-octo-feather", "GIT_COMMITTER_EMAIL": "verify@octo-feather.invalid"}
     f.env = {**ident, "XDG_STATE_HOME": str(sc / "state"), "MISE_STATE_DIR": str(sc / "mise-state"), "GATE_WORKERS": "2",
              "OCTO_FEATHER_QC_PATH": classify_stub(f, sc)}
-    env = {**os.environ, **f.env}
+    env = case_env(f.env)
     cid = "app#acceptance-hello-json"
     tests = {"python": "tests/e2e/test_cli_e2e.py", "typescript": "tests/cli.e2e.test.ts"}
     rid = r"([0-9]{8}T[0-9]{6}Z-[0-9a-f]{8})"
@@ -3172,7 +3265,7 @@ def drive_template_edge(f: Feature) -> None:
     ident = {"GIT_AUTHOR_NAME": "verify-octo-feather", "GIT_AUTHOR_EMAIL": "verify@octo-feather.invalid",
              "GIT_COMMITTER_NAME": "verify-octo-feather", "GIT_COMMITTER_EMAIL": "verify@octo-feather.invalid"}
     f.env = {**ident, "MISE_STATE_DIR": str(sc / "mise-state")}
-    env = {**os.environ, **f.env}
+    env = case_env(f.env)
     valid = {"name": "Ada"}
     unknown = {**valid, "mood": "glad"}
     # Each template's install, offline from the box's caches, and its app command (package.json's bin under node).
@@ -3261,7 +3354,7 @@ def drive_run_slots(f: Feature) -> None:
     f.run("released", "octo-feather-slot", "status")
     f.check("released", lambda c: c.code == 0 and c.out.count("run holding it now: none") == 2)
     end = datetime.now(UTC).timestamp() + 30  # the detached check, a grace after gh7's run ended
-    while "holder: gh8 " not in output([f.s.kit, "octo-feather-slot", "status"], env={**os.environ, **box})[1]:
+    while "holder: gh8 " not in output([f.s.kit, "octo-feather-slot", "status"], env=case_env(box))[1]:
         if datetime.now(UTC).timestamp() > end:
             break
         subprocess.run(["sleep", "0.5"], check=False)
@@ -3291,7 +3384,7 @@ def drive_run_slots(f: Feature) -> None:
 
     def until_holds(lane: str) -> None:  # status polled up to 30 s, each settling first
         end = datetime.now(UTC).timestamp() + 30
-        while f"holder: {lane} " not in heavy(output([f.s.kit, "octo-feather-slot", "status"], env={**os.environ, **box})[1]):
+        while f"holder: {lane} " not in heavy(output([f.s.kit, "octo-feather-slot", "status"], env=case_env(box))[1]):
             if datetime.now(UTC).timestamp() > end:
                 break
             subprocess.run(["sleep", "0.5"], check=False)
@@ -3381,7 +3474,6 @@ def drive_queued_completion(f: Feature) -> None:
 
 
 COMMS_REPORT = "DONE commit abc123: implementer-gh7's report\nevidence: just fast green\nnext: review"
-COMMS_LEAKS = ("HERDR_", "OCTO_FEATHER_", "XDG_STATE_HOME", "XDG_CACHE_HOME")  # the driving agent's own, never a case's
 
 
 @dataclass
@@ -3456,9 +3548,8 @@ def comms_world(f: Feature, feature: str) -> CommsWorld:
 
 
 def comms_env(f: Feature, env: dict[str, str]) -> None:
-    """The next cases run with ENV only of the driving agent's own Herdr, kit and state variables."""
+    """The next cases run with ENV (none of the driving agent's own variables: case_env)."""
     f.env = env
-    f.pre = ["env", *[a for k in os.environ if k.startswith(COMMS_LEAKS) and k not in env for a in ("-u", k)]]
 
 
 def herdr_say(f: Feature) -> str:
@@ -3478,7 +3569,7 @@ def drive_parent_resumed(f: Feature) -> None:
     target = w.sc / "target"
     for argv in (["git", "init", "-q", "-b", "main", str(target)],
                  [str(Path(f.s.repo) / "scripts" / "pi-role"), "--set-identity", "t", "t@t"]):
-        subprocess.run(argv, env={k: v for k, v in os.environ.items() if not k.startswith(COMMS_LEAKS)} | w.base,
+        subprocess.run(argv, env=case_env(w.base),
                        check=True, capture_output=True)
     comms_env(f, w.base)
     f.run("resume", "octo-feather-start", "--cwd", str(target), "--name", "gh7", "--resume", "S-sup-gh7")
@@ -3556,6 +3647,348 @@ def drive_result_missing(f: Feature) -> None:
     say(f"result-missing evidence: {f.d}")
 
 
+def drive_spec_revision_init(f: Feature) -> None:
+    """`octo-feather-spec-status init` over an existing status file (issue-lifecycle #spec-status-file): a scratch spec
+    accepted with criteria a, b, c and initialized; a built with an evidence link, b built without; a logged call names
+    c. The owner accepts a revision dropping c and adding d: init keeps a's and b's rows byte for byte, adds d planned,
+    drops c and moves accepted_commit; check passes. A lane builds d; the same init changes no byte. A row with a
+    partial evidence link makes init refuse, naming it, the file unchanged. Each case shows the file before and after."""
+    sc = RUN_DIR / "scratch" / "spec-revision-init"
+    r = sc / "repo"
+    d = r / "docs" / "specs"
+    st = d / "demo.status.json"
+    fx = Path(f.s.repo) / "tests" / "fixtures" / "spec-status" / "revision"
+    shutil.rmtree(sc, ignore_errors=True)
+    d.mkdir(parents=True)
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(r), *args], check=True, capture_output=True, text=True).stdout.strip()
+
+    def status(*args: str) -> None:   # the lane's own writes between cases: octo-feather-spec-status built
+        p = subprocess.run([f.s.kit, "octo-feather-spec-status", *args], capture_output=True, text=True, check=False)
+        if p.returncode:
+            die(f"spec-revision-init: octo-feather-spec-status {' '.join(args)}: {p.stderr.strip()}")
+
+    def row(text: str, cid: str) -> str:
+        m = re.search(rf'(?ms)^    "{cid}": \{{.*?^    \}}', text)
+        return m.group(0) if m else ""
+
+    def case(name: str, *args: str) -> None:
+        """One case run where the director stands (the scratch repo), the status file kept before and after."""
+        before = st.read_text() if st.exists() else ""
+        f.obs(name, "before", before)
+        f.run(name, *args)
+        after = st.read_text() if st.exists() else ""
+        f.obs(name, "after", after)
+        rel = st.relative_to(r)
+        say(f"{name}: {rel} before:")
+        print("".join(f"    {ln}" for ln in before.splitlines(keepends=True)) or "    (no file)", flush=True)
+        say(f"{name}: {rel} after:" + (" byte-identical to before" if after == before else ""))
+        if after != before:
+            print("".join(f"    {ln}" for ln in after.splitlines(keepends=True)) or "    (no file)", flush=True)
+            say(f"{name}: {rel} diff:")
+            print("".join(difflib.unified_diff(before.splitlines(keepends=True), after.splitlines(keepends=True),
+                                               "before", "after")), end="", flush=True)
+
+    git("init", "-q", "-b", "main")
+    for k, val in (("user.name", "verify-octo-feather"), ("user.email", "verify@octo-feather.invalid"), ("core.hooksPath", "/dev/null")):
+        git("config", k, val)
+    shutil.copy(fx / "accepted.spec.html", d / "demo.spec.html")
+    git("add", "-A")
+    git("commit", "-q", "-m", "spec accepted")
+    c1 = git("rev-parse", "HEAD")
+    f.pre = ["env", "-C", str(r)]
+    case("fresh", "octo-feather-spec-status", "init", "docs/specs/demo.spec.html", c1)
+    f.check("fresh", lambda c: c.code == 0 and list(json.loads(c.o["after"])["criteria"]) == ["acceptance-a", "acceptance-b", "acceptance-c"]
+            and all(v == {"status": "planned", "pr": None} for v in json.loads(c.o["after"])["criteria"].values()))
+    status("built", str(st), "7", "acceptance-a", "--record", "20261029T100000Z-0a0a0a0a", "--commit", c1, "--test", "tests/a.sh")
+    status("built", str(st), "8", "acceptance-b")
+    (d / "demo.calls.jsonl").write_text(json.dumps({
+        "at": "2026-10-21T10:00:00Z", "lane": "gh62", "role": "supervisor", "kind": "clarifies", "anchors": ["acceptance-c"],
+        "criteria": ["acceptance-c"], "what": "w", "why": "y", "passes_as_written": False, "evidence": "e"}) + "\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "a and b built; a call names c")
+    shutil.copy(fx / "revised.spec.html", d / "demo.spec.html")
+    git("add", "-A")
+    git("commit", "-q", "-m", "revision accepted: c dropped, d added")
+    c2 = git("rev-parse", "HEAD")
+    case("revision", "octo-feather-spec-status", "init", "docs/specs/demo.spec.html", c2)
+
+    def revised(c: Case) -> bool:
+        a = json.loads(c.o["after"])
+        return (c.code == 0 and all(row(c.o["after"], k) == row(c.o["before"], k) != "" for k in ("acceptance-a", "acceptance-b"))
+                and list(a["criteria"]) == ["acceptance-a", "acceptance-b", "acceptance-d"] and a["accepted_commit"] == c2
+                and a["criteria"]["acceptance-d"] == {"status": "planned", "pr": None})
+    f.check("revision", revised)
+    git("commit", "-q", "-am", "status of the revision")
+    case("check", "octo-feather-spec-status", "check", "docs/specs")
+    f.check("check", lambda c: c.code == 0 and "spec-status: ok (1 status files)" in c.out)
+    status("built", str(st), "9", "acceptance-d", "--record", "20261030T100000Z-0d0d0d0d", "--commit", c2, "--test", "tests/d.sh")
+    case("repeat", "octo-feather-spec-status", "init", "docs/specs/demo.spec.html", c2)
+    f.check("repeat", lambda c: c.code == 0 and c.o["after"] == c.o["before"] and '"record": "20261030T100000Z-0d0d0d0d"' in c.o["after"])
+    st.write_text(re.sub(r'(?s)("acceptance-a": \{[^}]*?"record": "[^"]*"),\s*"commit": "[^"]*",\s*"tests": \[[^]]*\]', r"\1", st.read_text()))
+    case("invalid", "octo-feather-spec-status", "init", "docs/specs/demo.spec.html", c2)
+    f.check("invalid", lambda c: c.code != 0 and c.o["after"] == c.o["before"] and '"commit"' not in row(c.o["before"], "acceptance-a")
+            and "acceptance-a: names record without commit, tests" in c.err)
+    f.pre = []
+    say(f"spec-revision-init evidence: {f.d}")
+
+
+LANE_TITLE = "Lane start as one command"
+LANE_GOAL = ("/goal a scratch proof for gh905, delivered through implement-spec; done when an owner gate is pending "
+             "(review link or merge ask sent) or PR merged and lane torn down")
+LANE_BRIEF = "Build the lane start.\nSpec: docs/specs/issue-lifecycle.spec.html\n"
+
+
+def drive_lane_start(f: Feature) -> None:
+    """issue-lifecycle#acceptance-lane-start: the director (w0:p1) runs `octo-feather-lane start 905 --goal TITLE
+    --outcome TEXT --brief-file brief.md` in its scratch target clone, whose origin's main moved past the clone; Herdr
+    is the kit's testkit Herdr and GitHub the testkit's fake gh (tests/gate/kit/testkit/gh.py: repo o/r, open issue
+    905), first on PATH, the real octo-feather-start and herdr-spawn behind the command. Then reads, as the director
+    would: the supervisor in Herdr, the worktree's branch and head, the lane record, what the supervisor received, the
+    director log. First, issue-lifecycle#acceptance-lane-start-current-kit: the kit install (OCTO_FEATHER_KIT_INSTALL, a
+    scratch kit clone) one commit behind its origin's main is refused with nothing made; the install fast-forwarded as
+    the refusal says, the start runs. Cases: features/lane-start.md."""
+    w = comms_world(f, "lane-start")
+    w.put({"w0:p1": comms_agent("w0:p1", "director")})
+    (w.state / "lanes" / "gh7.toml").unlink()
+    (w.state / "lanes" / "gh7.handoffs.jsonl").unlink()
+    (w.sc / "bin" / "gh").symlink_to(Path(f.s.repo) / "tests" / "gate" / "kit" / "testkit" / "gh.py")
+    store = w.sc / "gh"
+    (store / "issue").mkdir(parents=True)
+    (store / "log").write_text("")
+    (store / "repo.json").write_text(json.dumps({"nameWithOwner": "o/r"}))
+    none: list[object] = []
+    issue: dict[str, object] = {"number": 905, "title": LANE_TITLE, "body": "b", "state": "OPEN",
+                                "url": "https://github.com/o/r/issues/905", "parent": None,
+                                "blockedBy": {"nodes": none}, "subIssues": {"totalCount": 0, "nodes": none}}
+    (store / "issue" / "905.json").write_text(json.dumps(issue))
+    base = w.base | {"FAKE_GH": str(store), "GH_TOKEN": "verify-token"}
+    clean = {k: v for k, v in case_env(base).items() if k != "GH_REPO"}
+    origin, seed, checkout = w.sc / "origin.git", w.sc / "seed", w.sc / "src" / "target"
+    ident = ["-c", "user.name=t", "-c", "user.email=t@t", "-c", "commit.gpgsign=false"]
+    for argv in (["git", "init", "-q", "--bare", "-b", "main", str(origin)], ["git", "clone", "-q", str(origin), str(seed)],
+                 ["git", "-C", str(seed), *ident, "commit", "-q", "--allow-empty", "-m", "first"],
+                 ["git", "-C", str(seed), "push", "-q", "origin", "main"],
+                 ["git", "clone", "-q", str(origin), str(checkout)],
+                 ["git", "-C", str(seed), *ident, "commit", "-q", "--allow-empty", "-m", "main moved"],
+                 ["git", "-C", str(seed), "push", "-q", "origin", "main"],
+                 [str(Path(f.s.repo) / "scripts" / "pi-role"), "--set-identity", "t", "t@t"]):
+        subprocess.run(argv, env=clean, check=True, capture_output=True)
+    main = output(["git", "-C", str(seed), "rev-parse", "HEAD"])[1].strip()
+    kit_origin, kit_seed, kit = w.sc / "kit-origin.git", w.sc / "kit-seed", w.sc / "kit-install"
+    for argv in (["git", "init", "-q", "--bare", "-b", "main", str(kit_origin)], ["git", "clone", "-q", str(kit_origin), str(kit_seed)],
+                 ["git", "-C", str(kit_seed), *ident, "commit", "-q", "--allow-empty", "-m", "kit"],
+                 ["git", "-C", str(kit_seed), "push", "-q", "origin", "main"],
+                 ["git", "clone", "-q", str(kit_origin), str(kit)],
+                 ["git", "-C", str(kit_seed), *ident, "commit", "-q", "--allow-empty", "-m", "kit main moved"],
+                 ["git", "-C", str(kit_seed), "push", "-q", "origin", "main"]):
+        subprocess.run(argv, env=clean, check=True, capture_output=True)
+    kit_head = output(["git", "-C", str(kit), "rev-parse", "HEAD"])[1].strip()
+    kit_main = output(["git", "-C", str(kit_seed), "rev-parse", "HEAD"])[1].strip()
+    say(f"kit install {kit} at {kit_head[:12]}, its origin's main {kit_main[:12]} one commit ahead")
+    brief = w.sc / "brief.md"
+    brief.write_text(LANE_BRIEF)
+    say(f"target {checkout}: origin's main {main[:12]}, the clone's main one commit behind")
+    director = base | {"OCTO_FEATHER_ROLE": "director", "HERDR_PANE_ID": "w0:p1", "HERDR_WORKSPACE_ID": "w0",
+                        "OCTO_FEATHER_KIT_INSTALL": str(kit)}
+    comms_env(f, director)
+    f.run("current-kit", "sh", "-c", 'cd "$1" && exec octo-feather-lane start 905 --goal "$2" --outcome "$3" --brief-file "$4"',
+          "sh", str(checkout), LANE_TITLE, "a scratch proof", str(brief))
+    wt = checkout.with_name("target-gh905")
+    log, prompts, record = w.world / "log", w.world / "prompts", w.state / "lanes" / "gh905.toml"
+    made = {f"worktree {wt}": wt.exists(), "branch gh905": bool(output(["git", "-C", str(checkout), "branch", "--list", "gh905"])[1]),
+            "a herdr call": log.exists() and bool(log.read_text()), "a prompt": prompts.exists(), f"record {record}": record.exists(),
+            "a gh call": bool((store / "log").read_text())}
+    f.obs("current-kit", "made", ", ".join(k for k, v in made.items() if v))
+    f.check("current-kit", lambda c: c.code == 1 and f"kit install {kit} at {kit_head} is behind main on its origin ({kit_main}" in c.err
+            and f"git -C {kit} merge --ff-only origin/main" in c.err and c.o["made"] == "")
+    subprocess.run(["git", "-C", str(kit), "merge", "-q", "--ff-only", "origin/main"], env=clean, check=True, capture_output=True)
+    say(f"kit install fast-forwarded as the refusal says: {kit} at {kit_main[:12]}")
+    f.run("start", "sh", "-c", 'cd "$1" && exec octo-feather-lane start 905 --goal "$2" --outcome "$3" --brief-file "$4"',
+          "sh", str(checkout), LANE_TITLE, "a scratch proof", str(brief))
+    out = (f.d / "start.stdout").read_text()
+    pane = next((x.removeprefix("pane=") for x in out.split() if x.startswith("pane=")), "")
+    f.check("start", lambda c: c.code == 0 and c.out == f"key=gh905 pane={pane} issue=905\n" and pane.startswith("w"))
+    f.run("supervisor", "herdr", "agent", "get", "gh905")
+    calls = (w.world / "log").read_text().splitlines()
+    f.obs("supervisor", "workspace-create", "\n".join(x for x in calls if x.startswith("workspace create ")))
+    f.check("supervisor", lambda c: c.code == 0 and c.j["result"]["agent"]["pane_id"] == pane
+            and c.j["result"]["agent"]["cwd"] == str(wt)
+            and c.j["result"]["agent"]["workspace_id"] == pane.split(":", maxsplit=1)[0]
+            and c.o["workspace-create"].startswith("workspace create --label gh905 ")
+            and len(c.o["workspace-create"].splitlines()) == 1)
+    f.run("worktree", "git", "-C", str(wt), "log", "-1", "--format=%H %D")
+    f.check("worktree", lambda c: c.code == 0 and c.out == f"{main} HEAD -> gh905, origin/main, origin/HEAD\n")
+    record = w.state / "lanes" / "gh905.toml"
+    f.run("record", "cat", str(record))
+    f.check("record", lambda c: c.code == 0 and re.fullmatch(
+        f'supervisor = "{re.escape(pane)}"\nrepository = "o/r"\nissue = "gh905"\ngoal = "{LANE_TITLE}"\n'
+        'started_at = "\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\dZ"\nwaiting_on = ""\n', c.out) is not None)
+    head = (f"Lane facts (octo-feather-lane start):\nLane key: gh905\nParent issue: 905 {LANE_TITLE} "
+            f"(https://github.com/o/r/issues/905)\nDirector pane: w0:p1\nWorktree: {wt}\nBranch: gh905\n"
+            f"Main commit: {main}\n\n")
+    f.run("messages", "cat", str(w.world / "prompts"))
+    f.check("messages", lambda c: c.code == 0 and c.out == f"{pane}\t{LANE_GOAL}\n{pane}\t{head}{LANE_BRIEF}\n")
+    f.run("director-log", "cat", str(w.state / "director.handoffs.jsonl"))
+
+    def log_ok(c: Case) -> bool:
+        lines = [json.loads(x) for x in c.out.splitlines()]
+        prods = [x for x in lines if x.get("kind") == "prod"]
+        spawns = [x for x in lines if x.get("kind") == "spawn"]
+        return (c.code == 0 and len(prods) == 1 and prods[0]["issue"] == "gh905" and set(prods[0]) == {"at", "kind", "issue", "note"}
+                and [(x["name"], x["pane"]) for x in spawns] == [("gh905", pane)])
+    f.check("director-log", log_ok)
+    lane_start_exists(f, w, str(checkout), str(brief))
+    lane_start_rerun(f, w, store, str(checkout), str(brief))
+    lane_start_files(f, w.sc, store, checkout, clean)
+    lane_start_sub_issue(f, w, store, checkout)
+    lane_start_unknown(f, w, store, str(checkout), str(brief))
+    f.env, f.pre = {}, []
+    say(f"lane-start evidence: {f.d}")
+
+
+LANE_START = 'cd "$1" && exec octo-feather-lane start "$2" --goal "$3" --outcome "$4" --brief-file "$5"'
+
+
+def lane_start_exists(f: Feature, w: CommsWorld, checkout: str, brief: str) -> None:
+    """issue-lifecycle#acceptance-lane-start-exists: the same start again on the finished lane gh905 is refused,
+    naming its record, worktree, branch and workspace; each as it was, no supervisor started."""
+    world, record, wt = w.world, w.state / "lanes" / "gh905.toml", Path(checkout).with_name("target-gh905")
+    was = {"record": record.read_text(), "prompts": (world / "prompts").read_text(),
+           "head": output(["git", "-C", str(wt), "rev-parse", "HEAD"])[1], "agents": (world / "agents.json").read_text()}
+    calls = len((world / "log").read_text().splitlines())
+    f.run("exists", "sh", "-c", LANE_START, "sh", checkout, "905", LANE_TITLE, "a scratch proof", brief)
+    now = {"record": record.read_text(), "prompts": (world / "prompts").read_text(),
+           "head": output(["git", "-C", str(wt), "rev-parse", "HEAD"])[1], "agents": (world / "agents.json").read_text()}
+    f.obs("exists", "unchanged", " ".join(k for k in was if was[k] == now[k]))
+    made = [x for x in (world / "log").read_text().splitlines()[calls:] if x.startswith(("workspace create", "tab create", "agent start"))]
+    f.obs("exists", "made", "\n".join(made))
+    f.check("exists", lambda c: c.code == 1 and c.out == "" and (
+        f"lane gh905 exists: lane record {record}, worktree {wt}, branch gh905, Herdr workspace gh905 (") in c.err
+        and c.o["unchanged"] == "record prompts head agents" and c.o["made"] == "")
+
+
+def lane_start_rerun(f: Feature, w: CommsWorld, store: Path, checkout: str, brief: str) -> None:
+    """issue-lifecycle#acceptance-lane-start-rerun: lane gh906, the testkit Herdr refusing the goal's delivery once
+    (its file prompt-down, agent_blocked: nothing typed): the first start stops naming step goal, the same start again finishes on the same pane,
+    one worktree, supervisor, record, goal then brief once each, one spawn and one prod line; a third is refused."""
+    issue = json.loads((store / "issue" / "905.json").read_text()) | {"number": 906, "url": "https://github.com/o/r/issues/906"}
+    (store / "issue" / "906.json").write_text(json.dumps(issue))
+    (w.world / "prompt-down").write_text("")
+    argv = ("sh", "-c", LANE_START, "sh", checkout, "906", LANE_TITLE, "a scratch proof", brief)
+    f.run("rerun-stopped", *argv)
+    f.check("rerun-stopped", lambda c: c.code == 1 and "step goal (made so far: " in c.err
+            and " exit 75 (" in c.err and "not delivered; rerun once the cause is fixed" in c.err)
+    f.run("rerun", *argv)
+    out = (f.d / "rerun.stdout").read_text()
+    pane = next((x.removeprefix("pane=") for x in out.split() if x.startswith("pane=")), "")
+    wt = Path(checkout).with_name("target-gh906")
+    trees = output(["git", "-C", checkout, "worktree", "list", "--porcelain"])[1].splitlines()
+    f.obs("rerun", "worktrees", "\n".join(x for x in trees if x.startswith("worktree ") and "gh906" in x))
+    agents = json.loads((w.world / "agents.json").read_text())
+    f.obs("rerun", "supervisors", " ".join(p for p, g in agents.items() if g["name"] == "gh906"))
+    f.obs("rerun", "lanes", " ".join(sorted(p.name for p in (w.state / "lanes").iterdir() if "gh906" in p.name)))
+    f.obs("rerun", "prompts", (w.world / "prompts").read_text())
+    log = [json.loads(x) for x in (w.state / "director.handoffs.jsonl").read_text().splitlines()]
+    f.obs("rerun", "log", " ".join(x["kind"] for x in log if "gh906" in (x.get("name"), x.get("issue"))))
+    main = output(["git", "-C", str(wt), "rev-parse", "HEAD"])[1].strip()
+    head = (f"Lane facts (octo-feather-lane start):\nLane key: gh906\nParent issue: 906 {LANE_TITLE} "
+            f"(https://github.com/o/r/issues/906)\nDirector pane: w0:p1\nWorktree: {wt}\nBranch: gh906\n"
+            f"Main commit: {main}\n\n")
+    goal = LANE_GOAL.replace("gh905", "gh906")
+    f.check("rerun", lambda c: c.code == 0 and c.out == f"key=gh906 pane={pane} issue=906\n" and pane.startswith("w")
+            and c.o["worktrees"] == f"worktree {wt}" and c.o["supervisors"] == pane and c.o["lanes"] == "gh906.toml"
+            and c.o["prompts"].endswith(f"{pane}\t{goal}\n{pane}\t{head}{LANE_BRIEF}\n")
+            and c.o["prompts"].count(f"{pane}\t") == 2 and c.o["log"] == "spawn prod")
+    f.run("rerun-refused", *argv)
+    f.check("rerun-refused", lambda c: c.code == 1
+            and f"lane gh906 exists: lane record {w.state / 'lanes' / 'gh906.toml'}, " in c.err)
+
+
+def lane_start_unknown(f: Feature, w: CommsWorld, store: Path, checkout: str, brief: str) -> None:
+    """issue-lifecycle#acceptance-lane-start-rerun, an unknown send: lane gh909, the testkit Herdr timing out the goal's
+    send once (its file prompt-timeout: submitted, no turn seen; herdr-say exit 124). The first start stops, delivery
+    unknown; the same start again refuses naming the unknown send and the pane to look at, sending nothing; with
+    --shown goal (the pane shows it) it finishes, the goal and the brief once each."""
+    issue = json.loads((store / "issue" / "905.json").read_text()) | {"number": 909, "url": "https://github.com/o/r/issues/909"}
+    (store / "issue" / "909.json").write_text(json.dumps(issue))
+    (w.world / "prompt-timeout").write_text("")
+    args = ("sh", checkout, "909", LANE_TITLE, "a scratch proof", brief)
+    goal = LANE_GOAL.replace("gh905", "gh909")
+
+    def pane() -> str:
+        return next((p for p, g in json.loads((w.world / "agents.json").read_text()).items() if g["name"] == "gh909"), "")
+
+    def goals() -> str:
+        return str(sum(x == f"{pane()}\t{goal}" for x in (w.world / "prompts").read_text().splitlines()))
+
+    f.run("unknown-stopped", "sh", "-c", LANE_START, *args)
+    f.obs("unknown-stopped", "goals", goals())
+    f.check("unknown-stopped", lambda c: c.code == 1 and f"herdr-say {pane()} exit 124 (" in c.err
+            and "delivery unknown, not sent again blind" in c.err and c.o["goals"] == "1")
+    f.run("unknown-refused", "sh", "-c", LANE_START, *args)
+    f.obs("unknown-refused", "goals", goals())
+    f.check("unknown-refused", lambda c: c.code == 1
+            and f"step goal: the goal send to {pane()} is unknown (herdr-say {pane()} exit 124" in c.err
+            and f"look at supervisor pane {pane()} (herdr pane read {pane()})" in c.err
+            and "--shown goal" in c.err and "--absent goal" in c.err and c.o["goals"] == "1")
+    f.run("unknown-shown", "sh", "-c", LANE_START + " --shown goal", *args)
+    f.obs("unknown-shown", "goals", goals())
+    f.obs("unknown-shown", "briefs", str((w.world / "prompts").read_text().count(f"{pane()}\tLane facts")))
+    f.check("unknown-shown", lambda c: c.code == 0 and c.out == f"key=gh909 pane={pane()} issue=909\n"
+            and c.o["goals"] == "1" and c.o["briefs"] == "1")
+
+
+LANE_NEW = "Scratch lane"
+LANE_BODY = "The scratch lane's parent.\nIt has two lines.\n"
+
+
+def lane_start_files(f: Feature, sc: Path, store: Path, checkout: Path, clean: dict[str, str]) -> None:
+    """issue-lifecycle#acceptance-lane-start-files: the director starts a lane naming a title and a body file instead of a
+    ticket; the gh stand-in files issue 907 (one `issue create`, no --parent), the start prints it, then starts gh907."""
+    body, brief = sc / "body.md", sc / "brief.md"
+    body.write_text(LANE_BODY)
+    f.run("files", "sh", "-c", 'cd "$1" && exec octo-feather-lane start --new "$2" --body-file "$3" --goal "$2" --outcome "$4"'
+          ' --brief-file "$5"', "sh", str(checkout), LANE_NEW, str(body), "a scratch proof", str(brief))
+    f.obs("files", "gh-creates", "\n".join(x for x in (store / "log").read_text().splitlines() if x.startswith("issue create")))
+    view = Path(f.s.repo) / ".agents" / "skills" / "github-issues" / "scripts" / "issue-view"
+    f.obs("files", "issue-view-907", subprocess.run([str(view), "907"], env=clean, capture_output=True, text=True, check=False).stdout)
+    f.obs("files", "worktree", output(["git", "-C", str(checkout.with_name("target-gh907")), "rev-parse", "--abbrev-ref", "HEAD"])[1])
+
+    def ok(c: Case) -> bool:
+        lines = c.out.splitlines()
+        v = json.loads(c.o["issue-view-907"] or "{}")
+        return (c.code == 0 and len(lines) == 2 and lines[0] == "filed=907"
+                and re.fullmatch(r"key=gh907 pane=w\S+ issue=907", lines[1]) is not None
+                and c.o["gh-creates"] == f"issue create --title {LANE_NEW} --body-file {body}"
+                and (v.get("title"), v.get("body"), v.get("parent")) == (LANE_NEW, LANE_BODY, None)
+                and c.o["worktree"].strip() == "gh907")
+    f.check("files", ok)
+
+
+def lane_start_sub_issue(f: Feature, w: CommsWorld, store: Path, checkout: Path) -> None:
+    """issue-lifecycle#acceptance-lane-start-sub-issue: ticket 908, a sub-issue of 905, is refused naming 905, and no
+    worktree, branch, workspace, record or prompt exists for gh908."""
+    none: list[object] = []
+    child: dict[str, object] = {"number": 908, "title": "A child", "body": "b", "state": "OPEN",
+                                "url": "https://github.com/o/r/issues/908", "parent": {"number": 905},
+                                "blockedBy": {"nodes": none}, "subIssues": {"totalCount": 0, "nodes": none}}
+    (store / "issue" / "908.json").write_text(json.dumps(child))
+    calls = len((w.world / "log").read_text().splitlines())
+    prompts = (w.world / "prompts").read_text()
+    f.run("sub-issue", "sh", "-c", 'cd "$1" && exec octo-feather-lane start 908 --goal "A child" --outcome "$2" --brief-file "$3"',
+          "sh", str(checkout), "a scratch proof", str(w.sc / "brief.md"))
+    made = [str(p) for p in (checkout.with_name("target-gh908"), w.state / "lanes" / "gh908.toml") if p.exists()]
+    made += output(["git", "-C", str(checkout), "branch", "--list", "gh908"])[1].split()
+    new_calls = (w.world / "log").read_text().splitlines()[calls:]
+    made += [x for x in new_calls if x.startswith(("workspace create", "tab create"))]
+    made += ["prompt"] if (w.world / "prompts").read_text() != prompts else []
+    f.obs("sub-issue", "made", "\n".join(made))
+    f.check("sub-issue", lambda c: c.code == 1 and c.out == "" and "ticket 908 is a sub-issue of 905" in c.err
+            and c.o["made"] == "")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
@@ -3577,8 +4010,10 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "qc-fallback": drive_qc_fallback,
     "qc-eval-verdict": drive_qc_eval_verdict,
     "qc-stale": drive_qc_stale,
+    "spec-revision-init": drive_spec_revision_init,
     "qc-insufficient": drive_qc_insufficient,
     "gate-tiers": drive_gate_tiers,
+    "kit-hook": drive_kit_hook,
     "merge-ask-proof": drive_merge_ask_proof,
     "pilot-pr": drive_pilot_pr,
     "template-tiers": drive_template_tiers,
@@ -3597,6 +4032,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "parent-resumed": drive_parent_resumed,
     "result-file": drive_result_file,
     "result-missing": drive_result_missing,
+    "lane-start": drive_lane_start,
 }
 
 
@@ -3617,7 +4053,13 @@ def cmd_drive(feature: str | None) -> int:
     d.mkdir(parents=True)
     (d / "summary.txt").write_text(f"{feature} @ rev {s.rev}, {now()}\n")
     f = Feature(s=s, d=d)
-    DRIVES[feature](f)
+    try:
+        DRIVES[feature](f)
+    except Exception as e:  # noqa: BLE001  a drive that cannot go on (a qc sandbox failed before its report) fails, recorded
+        at = [t for t in traceback.extract_tb(e.__traceback__) if t.filename == __file__][-1]
+        why = f"{type(e).__name__}: {e}" + (f" {e.stderr.strip()}" if isinstance(e, subprocess.CalledProcessError) and e.stderr else "")
+        f.summary(f"FAIL {feature}: drive stopped at {ME} line {at.lineno} ({at.name}): {why}; the cases run so far: {d}")
+        f.fails += 1
     result = f.verdict()
     unreached = f" (unreachable: {', '.join(f.unreachable)})" if f.unreachable else ""
     with (d / "summary.txt").open("a") as fh:

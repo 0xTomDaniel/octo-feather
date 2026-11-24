@@ -12,12 +12,18 @@ octo-feather-agent-PANE-<hex>.scope, waited until active. Exit 0 scoped, or unsc
 Herdr's own exit when it fails. Closing the tab is the caller's.
 
 close TAB|SPACE (herdr-close's plain close): prints `tab=|space=ID ..._close_rc=RC killed=N
-[unowned=PANE,...]` and exits RC, Herdr's close status. A Herdr answer that fails or breaks the
-shape below stops it before anything is closed: Herdr's exit, or 76 for a malformed one.
+[unowned=PANE,...]` and exits RC, Herdr's close status; closed, each herdr-spawn agent's Herdr
+extension dir goes (herdr-pi/SESSION in the state dir). A Herdr answer that fails or breaks the
+shape below stops it before anything is closed: Herdr's exit, or 76 for a malformed one. Before
+the close it reads each closed pane's agent (its name from `herdr agent get`, its role and
+session from its Pi process, as park reads them); once Herdr's close succeeded, it hands them to
+`octo-feather-handoff close --caller HERDR_PANE_ID`, and names on stderr a caller owning no log
+(the rule: herdr-comms SKILL.md, Close an agent or a lane space).
 
-park PANE (herdr-close --park): prints the parked line on stdout and close's report on stderr,
-and exits close's status; what it reads and its refusals: herdr-comms SKILL.md, Park an idle
-agent.
+park PANE (herdr-close --park): close's report on stderr, nothing on stdout, and exits close's
+status; it hands the parked line to `octo-feather-handoff park --caller HERDR_PANE_ID` (when:
+comms spec #roles-park; which log takes it: its --help), and names on stderr, with the line, a
+park no log takes; what it reads and its refusals: herdr-comms SKILL.md, Park an idle agent.
 
 Herdr's answers are checked here by hand against the shape Herdr 0.9.5 states for them
 (`herdr api schema --json`, protocol 22: PaneInfo, PaneProcessInfo): every field named,
@@ -34,6 +40,7 @@ import os
 import platform
 import re
 import secrets
+import shutil
 import subprocess
 import sys
 import time
@@ -79,6 +86,9 @@ AGENT_REQUIRED = {
 TAB_FIELDS = {
     "agent_status", "focused", "label", "number", "pane_count", "tab_id", "workspace_id",
 }  # fmt: skip
+KIT = Path(__file__).resolve().parents[4]
+# A Pi session id as herdr-spawn and pi-role --record take it: one path component.
+SESSION = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 NOT_NOW = 75  # EX_TEMPFAIL
 NOT_SPAWNED = 65  # EX_DATAERR
 
@@ -310,16 +320,26 @@ def adopt(pane: str) -> int:
     return REFUSED
 
 
+def members(target: str) -> list[Pane]:
+    """The panes TARGET, a tab (with a colon) or a space, holds."""
+    shown = panes(target.split(":", 1)[0])
+    return [p for p in shown if ":" not in target or p.tab_id == target]
+
+
 def close(target: str, out: TextIO = sys.stdout) -> int:
     """Close TARGET through Herdr, then stop its panes' agent scopes (module docstring); the
     report on OUT."""
     kind = "tab" if ":" in target else "space"
-    workspace = target.split(":", 1)[0]
-    shown = [p for p in panes(workspace) if kind == "space" or p.tab_id == target]
+    shown = members(target)
     scopes: list[str] = []
     unowned: list[str] = []
+    sessions: list[str] = []
     for p in shown:
-        pid = shell_pid(p.pane_id)
+        info = process_info(p.pane_id)
+        pid = info.shell_pid
+        got = pi_session(info)  # a herdr-spawn session, as park reads it
+        if got and environ(got[0].pid).get("OCTO_FEATHER_SESSION_ID") == got[1]:
+            sessions += [got[1]] if SESSION.fullmatch(got[1]) else []
         cg = scope_of(pid, p.pane_id) if pid is not None else None
         if cg is None:
             unowned.append(p.pane_id)
@@ -336,6 +356,11 @@ def close(target: str, out: TextIO = sys.stdout) -> int:
         stop = ["systemctl", "--user", "stop", cg.rsplit("/", 1)[-1]]
         if subprocess.run(stop, capture_output=True, check=False).returncode == 0:
             killed += n
+    if rc == 0 and sessions:  # each closed agent's own Herdr extension (herdr-spawn)
+        state = [str(KIT / "scripts" / "octo-feather-state")]
+        top = subprocess.run(state, capture_output=True, text=True, check=False).stdout.strip()
+        for session in sessions if top else []:
+            shutil.rmtree(Path(top, "herdr-pi", session), ignore_errors=True)
     report = f"{kind}={target} {kind}_close_rc={rc} killed={killed}"
     out.write(report + (f" unowned={','.join(unowned)}" if unowned else "") + "\n")
     return rc
@@ -440,7 +465,73 @@ def park(pane: str) -> int:
     encode += ["encode", *(x for k, v in fields.items() for x in ("--field", k, v))]
     line = subprocess.run(encode, capture_output=True, text=True, check=True).stdout
     rc = close(workspace if only else me.tab_id, sys.stderr)
-    sys.stdout.write(line)
+    if rc != 0:
+        return rc
+    caller = os.environ.get("HERDR_PANE_ID", "")
+    log = [encode[0], "park", "--caller", caller]
+    rc_log = subprocess.run(log, input=line, text=True, check=False).returncode
+    if rc_log == 65:  # noqa: PLR2004 (octo-feather-handoff park: no log owns the line)
+        who = f"pane {caller}" if caller else "the caller (no HERDR_PANE_ID)"
+        sys.stderr.write(
+            f"herdr-close: no hand-off log recorded this park: neither {pane} nor {who} owns one"
+            " (no lane record's supervisor, not director.toml's pane); its parked line:\n" + line
+        )
+    elif rc_log != 0:
+        sys.stderr.write(
+            "herdr-close: park not recorded in its hand-off log (error above); parked, its"
+            " parked line:\n" + line
+        )
+    return rc
+
+
+def agent_name(pane: str) -> str:
+    """The name Herdr gives PANE's agent, '' when it has none or finds no agent there."""
+    try:
+        answer = herdr("agent", "get", pane)
+    except HerdrFailedError as e:
+        if "agent_not_found" in str(e):
+            return ""
+        raise
+    where = f"herdr agent get {pane}"
+    got = result(answer, where, "agent_info", "agent", typed=False)
+    got = record(got, f"{where}: result.agent", AGENT_FIELDS, set())
+    name = got.get("name")
+    if name is not None and not isinstance(name, str):
+        msg = f"{where}: result.agent.name: not a string or null"
+        raise BadAnswerError(msg)
+    return name or ""
+
+
+def close_recorded(target: str) -> int:
+    """herdr-close's plain close, recorded in the caller's own hand-off log (module docstring)."""
+    me = os.environ.get("HERDR_PANE_ID", "")
+    agents: list[dict[str, str]] = []
+    for p in members(target) if me else []:
+        got = pi_session(process_info(p.pane_id))
+        role = environ(got[0].pid).get("OCTO_FEATHER_ROLE", "") if got else ""
+        fields = {"pane": p.pane_id, "name": agent_name(p.pane_id), "role": role}
+        agents.append(fields | {"session": got[1] if got else ""})
+    rc = close(target)
+    if rc != 0:
+        return rc
+    rc_log = 65
+    if me:
+        handoff = [str(Path(__file__).resolve().parents[4] / "scripts" / "octo-feather-handoff")]
+        lines = "".join(json.dumps(x) + "\n" for x in agents)
+        log = subprocess.run(
+            [*handoff, "close", "--caller", me], input=lines, text=True, check=False
+        )
+        rc_log = log.returncode
+    if rc_log == 65:  # noqa: PLR2004 (octo-feather-handoff close: the caller owns no log)
+        who = f"pane {me}" if me else "the caller (no HERDR_PANE_ID)"
+        sys.stderr.write(
+            f"herdr-close: no hand-off log recorded this close: {who} owns none (no lane record's"
+            " supervisor, not director.toml's pane)\n"
+        )
+    elif rc_log != 0:
+        sys.stderr.write(
+            "herdr-close: close not recorded in the caller's hand-off log (error above); closed\n"
+        )
     return rc
 
 
@@ -453,7 +544,7 @@ def main() -> int:
         ("herdr-spawn", "not started") if verb == "adopt" else ("herdr-close", "nothing closed")
     )
     try:
-        return {"adopt": adopt, "close": close, "park": park}[verb](arg)
+        return {"adopt": adopt, "close": close_recorded, "park": park}[verb](arg)
     except HerdrFailedError as e:
         sys.stderr.write(f"{who}: {e}; {after}\n")
         return e.rc

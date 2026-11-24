@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Integration test for scripts/octo-feather-qa (factory evals) and scripts/check-evals (eval case shape),
-# driven as commands with a stub `pi` and a fake `herdr` first on PATH: no model, no live Herdr (tests/gate/kit/testkit/qa_box.py).
+# gate: e2e
+# End-to-end test for scripts/octo-feather-qa (factory evals), driven as a command with a stub `pi` and a fake `herdr`
+# first on PATH: no model, no live Herdr (tests/gate/kit/testkit/qa_box.py); each run in the real qc sandbox.
 # One section of the factory-evals test per gate item (#506): tests/qa.sh and each tests/qa-*.sh.
-# Proves spec quality#acceptance-qa-repeats through --runs (what it does: octo-feather-qa --help): an alternating stub
-# case, an every-run-passes case, run-<k> artifacts, result.json and summary.json fields, the default one run, a bad
-# value, --help.
+# Proves the command's wiring of --runs (what it does: octo-feather-qa --help): the run header naming the runs, each
+# run sandboxed (run-<k>/sandbox.json), the exit, a bad value 64, --help. The case over its runs (spec
+# quality#acceptance-qa-repeats): tests/gate/kit/test_qa_stored.py, test_qa_runs, in-process (#1090).
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`), as tests/qc.sh does.
 # Its scenario `runs` in tests/gate/kit/qa_sections.py.
 exec python3 "$(dirname "$0")/gate/kit/qa_sections.py" runs

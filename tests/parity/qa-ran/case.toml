@@ -1,12 +1,15 @@
-# The parity lever's case for tests/qa-ran.sh, its setup moved from tests/lib/qa.sh's bash, its assertions into typed Python
-# on the testkit's stand-ins (#998; tests/parity/lever.py --help).
+# The parity lever's case for tests/qa-ran.sh: its 17 sandboxed cases merged into one case holding
+# every fact but rclater's, and rclater's own (#1199; tests/parity/lever.py --help).
 old = "tests/qa-ran.sh"
-old_at = "0ba3d1db"
+old_at = "a00d2e09"
 # Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
-needs = ["tests/lib/qa.sh", "tests/gate/kit/testkit/pi_agent.py"]
+needs = ["tests/gate/kit/qa_sections.py", "tests/gate/kit/testkit"]
 # The same script, as its gate item: its id kept.
 new = "tests/gate/test_gate.py::test_script[tests/qa-ran.sh]"
 
-# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit script run by the kit venv's python: coverage.py measures it.
+# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage:
+# scripts/eval_grading.py, the module the Python kit script octo-feather-qa imports, and
+# octo-feather-qa itself, each run by the kit venv's python: coverage.py measures it.
 [ran]
+"scripts/eval_grading.py" = "coverage"
 "scripts/octo-feather-qa" = "coverage"

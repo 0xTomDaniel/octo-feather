@@ -4,7 +4,8 @@
 no network, no model. Lane gh6's worktree and its PR #7 of o/r in the fake gh, with the code
 review's verdict posted (`base`), and the same with one test-quality judgment posted (`judged`),
 are each prepared once per gate run (testkit Scratch.prepare) and copied into each item; an item
-runs a classify only when its behaviour is the classify's answer. Only the kit's own commands
+runs a classify only when its behaviour is the classify's answer, and one classify per answer it
+needs (each scenario's docstring says why its runs stay apart; #1208). Only the kit's own commands
 run (octo-feather-lane, octo-feather-gate); the judge's classify runs for real in the qa sandbox
 (unprivileged user namespaces, Linux) against the stub pi, which lists the kit's one judgment
 model (evals/judgment-model.json) beside three others and fails the run when any other is asked;
@@ -150,12 +151,9 @@ class Lane:
 
     def verdict(self) -> str:
         """The code review's verdict comment, posted by `verdict`; the merge ask in the PR body."""
-        url = self.lane(
-            "verdict",
-            str(PR),
-            self.j[:7],
-            str(self.file("report", "Checks: none\nVerdict: clear\n")),
-        ).out
+        b = self.s.git(self.repo, "rev-parse", "origin/main")
+        report = f"Checks: none\nVerdict: clear\nRange: {b}..{self.j}\n"
+        url = self.lane("verdict", str(PR), self.j[:7], str(self.file("report", report))).out
         body = fixture("lane-judge/merge-ask-body.md")
         self.edit(
             lambda d: d.update(
@@ -374,9 +372,14 @@ def rerun_in_place(s: Scratch) -> None:
     """A state the model was not shown gives no answer and writes nothing. A rerun updates the one
     judgment comment in place, and merge-ask shows the new answer; with a directory in the spend
     ledger's place (spec spend#rule-write-fails) its output, line and exit are as a writable
-    ledger's (test_judge_posts), and it says the spend went unrecorded."""
+    ledger's (test_judge_posts), and it says the spend went unrecorded. The reruns run on a copy
+    of the kit whose test-quality threshold is accepted (threshold_kit), its held-out score below
+    it, then meeting it: each answer still shown, labelled a model judgment, with the status;
+    merge-ask ready with and without it (spec judgment#acceptance-judge-advisory). Three
+    classifies, each its own: no answer, and one answer per calibration status."""
+    k = threshold_kit(s)
     s.prepare("judged", build_judged)
-    lane = Lane(s)
+    lane = Lane(s, k)
     n = s.gh.writes()
     state2 = lane.file("state2", "Test:\ndef test_add():\n    assert add(1, 2) == 3\n")
     err = lane.lane(
@@ -395,16 +398,25 @@ def rerun_in_place(s: Scratch) -> None:
     ledger = s.home / ".local" / "state" / "octo-feather" / "spend.jsonl"
     ledger.unlink()
     ledger.mkdir()
-    r = lane.judge("test-quality", state2, "ok")
-    assert r.out == URL, r.out
-    assert any(re.fullmatch(said("updated", "ok", CAL), ln) for ln in r.err.splitlines()), r.err
     unrecorded = "octo-feather-lane spend record: spend unrecorded (1 call(s), $0.000100): cannot "
-    assert unrecorded + "write " in r.err, r.err
-    assert lane.judgments() == 1, lane.pr()["comments"]
     patch = "api -X PATCH repos/{owner}/{repo}/issues/comments/1002 "
-    assert any(ln.startswith(patch) for ln in s.gh.log()), s.gh.log()
-    w = lane.merge_ask().out
-    assert re.search(r"^- test-quality: ok, confidence 0\.910 \(model judgment", w, re.MULTILINE), w
+    for which, answer in (("below", "ok"), ("meets", "tautological")):
+        calibrate(k, which)
+        patched = sum(ln.startswith(patch) for ln in s.gh.log())
+        r = lane.judge("test-quality", state2, answer)
+        assert r.out == URL, r.out
+        line = said("updated", answer, re.escape(STATUS[which]))
+        assert any(re.fullmatch(line, ln) for ln in r.err.splitlines()), r.err
+        assert unrecorded + "write " in r.err, r.err
+        assert lane.judgments() == 1, lane.pr()["comments"]
+        assert sum(ln.startswith(patch) for ln in s.gh.log()) == patched + 1, s.gh.log()
+        lines = lane.comment("test-quality").splitlines()
+        assert any(ln.startswith("Judgment: model judgment") for ln in lines), lines
+        assert f"Answer: {answer}" in lines, lines
+        assert f"Calibration: {STATUS[which]}" in lines, lines
+        w = lane.ready()
+        judged = judged_line("test-quality", answer, re.escape(STATUS[which]), lane)
+        assert re.search("^" + judged + re.escape(URL) + "$", w, re.MULTILINE), w
 
 
 def no_gate_reads_it(s: Scratch) -> None:
@@ -431,20 +443,23 @@ def no_gate_reads_it(s: Scratch) -> None:
     assert re.search(r"^- test-quality: unreadable judgment comment", w, re.MULTILINE), w
 
 
-def real_suite(s: Scratch, q: str) -> None:
-    """Each of the kit's real suites but test-quality (test_judge_posts): no accepted threshold
-    (owner ruling 2026-10-23, #151), said in the comment and beside the answer in merge-ask,
-    ready the same."""
+def real_suite(s: Scratch) -> None:
+    """Each of the kit's real suites but test-quality (test_judge_posts), asked in turn on one
+    lane: no accepted threshold (owner ruling 2026-10-23, #151), said in each comment and beside
+    each answer in merge-ask, ready the same. A classify per question: each asks its own."""
     s.prepare("base", build_base)
     lane = Lane(s)
-    st = lane.file(f"state-{q}", f"state for {q}\n")
-    lane.judge(q, st, PICK[q])
-    b = lane.comment(q)
-    for want in ("\nJudgment: model judgment", f"\nModel: {MODEL}\n", f"\nAnswer: {PICK[q]}\n"):
-        assert want in b, (want, b)
-    assert re.search(f"^Calibration: {CAL}$", b, re.MULTILINE), b
+    qs = sorted(set(PICK) - {"test-quality"})
+    for q in qs:
+        st = lane.file(f"state-{q}", f"state for {q}\n")
+        lane.judge(q, st, PICK[q])
+        b = lane.comment(q)
+        for want in ("\nJudgment: model judgment", f"\nModel: {MODEL}\n", f"\nAnswer: {PICK[q]}\n"):
+            assert want in b, (want, b)
+        assert re.search(f"^Calibration: {CAL}$", b, re.MULTILINE), b
     w = lane.ready()
-    assert re.search("^" + judged_line(q, PICK[q], CAL, lane), w, re.MULTILINE), w
+    for q in qs:
+        assert re.search("^" + judged_line(q, PICK[q], CAL, lane), w, re.MULTILINE), (q, w)
 
 
 THRESHOLD = {"accuracy_min": 0.699, "brier_max": 0.39, "accepted": True}
@@ -457,18 +472,17 @@ STATUS = {
 }
 
 
-def threshold(s: Scratch, which: str) -> None:
-    """test-quality's threshold accepted, its held-out score below it or meeting it (a copy of the
-    kit, the suite edited): the answer still shown,
-    labelled a model judgment, with the status; merge-ask ready with and without it (spec
-    judgment#acceptance-judge-advisory)."""
+def threshold_kit(s: Scratch) -> Path:
+    """A copy of the kit in this scratch, its test-quality suite its own (calibrate edits it)."""
     k = s.root / "kit"
     # The kit is where its scripts are; the qc sandbox binds the kit's own dirs, so those it
     # reads are copies (a link out of a kit under /tmp would dangle there); evidence is read
-    # outside it.
-    for d in ("scripts", "agents", ".agents"):
+    # outside it. merge-ask validates gh's answer with the kit's schemas and locked jsonschema
+    # (its project, linked as kit_deps links the JavaScript one).
+    for d in ("scripts", "agents", ".agents", "schemas"):
         shutil.copytree(ROOT / d, k / d, symlinks=True)
-    (k / "evidence").symlink_to(ROOT / "evidence")
+    for n in ("evidence", "pyproject.toml", "uv.lock", ".venv"):
+        (k / n).symlink_to(ROOT / n)
     kit_deps(k)
     for f in {src.relative_to(ROOT).parent for src in FAKES.values()}:
         shutil.copytree(ROOT / f, k / f, symlinks=True)
@@ -478,26 +492,15 @@ def threshold(s: Scratch, which: str) -> None:
         (k / "evals" / e.name).symlink_to(e)
     (k / "evals" / "judgment-test-quality").unlink()
     shutil.copytree(ROOT / "evals" / "judgment-test-quality", k / "evals" / "judgment-test-quality")
+    return k
+
+
+def calibrate(k: Path, which: str) -> None:
+    """Kit copy K's test-quality threshold accepted, its held-out score WHICH (below, meets) it."""
     p = k / "evals" / "judgment-test-quality" / "suite.json"
     suite = json.loads(p.read_text())
     suite["calibration"].update(held_out=HELD_OUT[which], threshold=THRESHOLD)
     p.write_text(json.dumps(suite))
-    s.prepare("base", build_base)
-    lane = Lane(s, k)
-    err = lane.judge("test-quality", lane.state, "tautological").err
-    line = said("created", "tautological", re.escape(STATUS[which]))
-    assert any(re.fullmatch(line, ln) for ln in err.splitlines()), err
-    b = lane.comment("test-quality")
-    lines = b.splitlines()
-    assert any(ln.startswith("Judgment: model judgment") for ln in lines), b
-    assert "Answer: tautological" in lines, b
-    assert f"Calibration: {STATUS[which]}" in lines, b
-    w = lane.ready()
-    assert re.search(
-        "^" + judged_line("test-quality", "tautological", re.escape(STATUS[which]), lane),
-        w,
-        re.MULTILINE,
-    ), w
 
 
 if __name__ == "__main__":
@@ -508,5 +511,4 @@ if __name__ == "__main__":
         rerun_in_place,
         no_gate_reads_it,
         real_suite,
-        threshold,
     )

@@ -1,0 +1,14 @@
+Seeded defect: the criterion table's header alone claims a criterion (spec #acceptance-merge-ask-no-criterion).
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index eebfe2b6..507aeb99 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -821,7 +821,7 @@ def no_criterion(
+         ),
+         None,
+     )
+-    for ln in lines[t + 1 :] if t is not None else []:
++    for ln in lines[t:] if t is not None else []:
+         if not ln.strip().startswith("|"):
+             break
+         if not all(re.fullmatch(r":?-+:?", c.strip()) for c in ln.strip().strip("|").split("|")):

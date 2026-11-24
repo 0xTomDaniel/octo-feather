@@ -1,0 +1,14 @@
+Seeded defect: the qc sandbox pi shim refuses a pi leading back to it with exit 1, not 127 (#493 AC1; scripts/octo-feather-qc-sandbox, its pi shim).
+diff --git a/scripts/octo-feather-qc-sandbox b/scripts/octo-feather-qc-sandbox
+index d6e12b0e..e3d25343 100755
+--- a/scripts/octo-feather-qc-sandbox
++++ b/scripts/octo-feather-qc-sandbox
+@@ -654,7 +654,7 @@ def pishim(realpi: str, scr: str) -> str:
+             'echo "qc sandbox: pi not on PATH (the pi shim runs only a real pi)" >&2; exit 127'
+         )
+     lines += [
+-        f'[[ "${{QC_PI_SHIM:-}}" != "$$ "{q(scr)} ]] || {{ echo "qc sandbox: pi leads back to the qc sandbox pi shim ({realpi} ran it again); refused" >&2; exit 127; }}',
++        f'[[ "${{QC_PI_SHIM:-}}" != "$$ "{q(scr)} ]] || {{ echo "qc sandbox: pi leads back to the qc sandbox pi shim ({realpi} ran it again); refused" >&2; exit 1; }}',
+         f'export QC_PI_SHIM="$$ "{q(scr)}',
+         f'echo "$$" >> {q(scr + "/agents.log")}',
+         f'exec {q(realpi)} "$@"',

@@ -138,6 +138,10 @@ _Avoid_: QA, testing (alone)
 Quality assurance of the factory itself: eval cases of the kit's agents and loop, run by `just qa`. Owner: docs/specs/quality.spec.html#split.
 _Avoid_: QC, product testing
 
+**Eval grading**:
+The grading logic of QA's eval runs, `scripts/eval_grading.py`, the one module `octo-feather-qa` imports: a case run's plan, the in-sandbox watcher and its stop rule, each fact and the run's verdict, a stored run's artifacts and every reader of one (`--analyze`, `--evidence`, `--review`, `--verdict`). Its interface: the module's docstring.
+_Avoid_: grader script, the eval runner (that is the command)
+
 ## Workspace
 
 **Workspace**:

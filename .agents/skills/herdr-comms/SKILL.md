@@ -99,8 +99,9 @@ those leave to the caller:
   prompt sent then is typed but never submitted (`agent_prompt_stalled`, #585).
   Nor is `idle` alone: Herdr reads Pi's screen only, and reads a booting Pi
   `idle` (its fallback) before Pi takes input (#871). So the spawn loads
-  Herdr's own Pi integration (`herdr integration install pi`, written to
-  `~/.cache/octo-feather/herdr-pi/`, never the user's Pi profile), which
+  Herdr's own Pi integration (`herdr integration install pi`, installed per
+  launch to `$(octo-feather-state)/herdr-pi/SESSION/`, never the user's Pi
+  profile nor a shared file; `herdr-close` removes it), which
   reports from inside Pi once its TUI runs. The spawn returns only once
   `herdr agent get` shows that report (`agent_session`, source `herdr:pi`),
   `herdr agent wait PANE --until idle` matches, and `herdr agent get` finds the
@@ -148,7 +149,9 @@ handles only (`herdr pane list --workspace`, each pane's `shell_pid` from
 `herdr pane process-info`, that pid's `/proc/PID/cgroup`); after the close it
 stops each one (`systemctl --user stop`: TERM, KILL 10 s on), which ends the
 detached children close alone leaves running, also when the agent's Pi already
-exited. It reads no other process: one elsewhere tagged with the closed tab's
+exited, and, the close succeeded, removes each closed pane's Herdr extension dir
+`$(octo-feather-state)/herdr-pi/SESSION/` (SESSION its Pi's, as park reads it;
+none without one). It reads no other process: one elsewhere tagged with the closed tab's
 `HERDR_TAB_ID` is untouched. A pane outside any agent scope (an agent spawned
 before scopes, a hand-started director, macOS) is unowned: closed, nothing
 swept, named in the report. Only the unit spawn named for that pane
@@ -163,14 +166,16 @@ Prints `tab= tab_close_rc= killed=` or `space= space_close_rc= killed=`
 (`killed=` the scopes' members when stopped), plus `unowned=PANE[,PANE...]`
 when any, and exits with the close status.
 
+Its close line: comms spec `#roles-park`, `#handoff-fields` (close),
+`#acceptance-close-no-log`; `octo-feather-handoff --help`, close.
+
 ## Park an idle agent
 
 ```
-herdr-close --park PANE >>"$lanes/<lane>.handoffs.jsonl"
-herdr-close --park PANE >>"$(octo-feather-state)/director.handoffs.jsonl"   # the director's own general worker
+herdr-close --park PANE
 ```
 
-`$lanes` is `$(octo-feather-state)/lanes`. Reads the parked line's fields only
+Reads the parked line's fields only
 from PANE's own Pi process, the foreground process `herdr pane process-info`
 names with a `--session-id` (#1001): the session from that argv, role and parent
 from that process's own environ (`OCTO_FEATHER_ROLE`, `OCTO_FEATHER_PARENT`),
@@ -185,10 +190,9 @@ end it, then park. With none, and for an unowned pane (no scope: spawned before
 scopes, the hand-started director), park closes PANE's tab, or its whole space
 when that tab is the space's only one (a supervisor in its own space), as
 `herdr-close` does (owned: its scope stopped; unowned: nothing swept, named
-`unowned=PANE`), and prints one parked line (`at kind pane name role cwd session
-label parent`) on stdout, even when the close fails; the close report goes to
-stderr. The parker appends the line to the log comms spec `#roles-park` names
-(the two commands above). Refused, nothing closed: not idle or done, 75; no Pi
+`unowned=PANE`). Its output: `assets/herdr_scope.py`, park. Its parked line: comms spec
+`#roles-park`, `#handoff-fields` (parked); `octo-feather-handoff --help`, park.
+Refused, nothing closed: not idle or done, 75; no Pi
 process with a `herdr-spawn` session (a `--session-id` and the matching
 `OCTO_FEATHER_SESSION_ID`), 65; macOS (no `/proc`), 69; a Herdr answer that
 fails or is malformed, as `herdr-close` (`assets/herdr_scope.py`, park).
@@ -205,7 +209,8 @@ octo-feather-handoff attempt --ended-unreported "$lanes/<lane>.handoffs.jsonl" P
 herdr-spawn ...                        # the replacement, a fresh session
 ```
 
-The attempt reads the old session from the spawn line `herdr-spawn` recorded
+`$lanes` is `$(octo-feather-state)/lanes`. The attempt reads the old session from the spawn
+line `herdr-spawn` recorded
 (`herdr-spawn --help`); its refusals: `octo-feather-handoff --help`. The
 line's fields: comms spec `#handoff-fields`.
 

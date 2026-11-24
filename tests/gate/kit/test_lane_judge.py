@@ -6,14 +6,12 @@ from collections.abc import Callable
 
 import pytest
 from lane_judge import (
-    PICK,
     judge_posts,
     model_unavailable,
     no_gate_reads_it,
     real_suite,
     refusals,
     rerun_in_place,
-    threshold,
 )
 
 Case = Callable[..., None]
@@ -44,13 +42,6 @@ def test_no_gate_reads_it(case: Case) -> None:
     case(no_gate_reads_it)
 
 
-@pytest.mark.parametrize("q", sorted(set(PICK) - {"test-quality"}))
 @pytest.mark.e2e  # the judge's classify in the real qa sandbox (quality spec #test-kinds)
-def test_real_suite(case: Case, q: str) -> None:
-    case(real_suite, q)
-
-
-@pytest.mark.parametrize("which", ["below", "meets"])
-@pytest.mark.e2e  # the judge's classify in the real qa sandbox (quality spec #test-kinds)
-def test_threshold(case: Case, which: str) -> None:
-    case(threshold, which)
+def test_real_suite(case: Case) -> None:
+    case(real_suite)

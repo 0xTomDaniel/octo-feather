@@ -1,7 +1,8 @@
 """`just integrate` tells a heavy-slot refusal from a red gate (#668; owner #660, no silent
 failures; director finding refusal-reported-as-red), through octo-feather-integrate in a scratch
-target whose lane gh7's gate (`just check`) runs the kit's gate plugin over its 31-item suite, as
-an implementer of gh7 with a scratch box state dir.
+target whose lane gh7's gate (`just check`) runs the kit's gate plugin over its 31-item suite
+(end-to-end by pytest's e2e marker, so it asks the slot: quality #recipes-static-first), as an
+implementer of gh7 with a scratch box state dir.
 
 refused: without gh7's heavy grant the gate is refused before any item runs: integrate prints
 `refused: no heavy slot, nothing ran` with the slot's refusal, never a `red:` line, resets the lane
@@ -30,7 +31,10 @@ REFUSED = 75
 JUSTFILE = f"""check:
     PYTHONPATH={ROOT} {sys.executable} -m pytest -q -p tests.gate.heavy_slot suite
 """
-MANY = "import pytest\n@pytest.mark.parametrize('n', range(31))\ndef test_n(n): pass\n"
+MANY = (
+    "import pytest\n@pytest.mark.e2e\n"
+    "@pytest.mark.parametrize('n', range(31))\ndef test_n(n): pass\n"
+)
 SLOT_REFUSAL = (
     "octo-feather-slot: refused, nothing ran: this heavy run selects 31 items, over heavy_items 30"
     " (gate-budget.toml), and lane gh7 holds no heavy grant; current holder: none; ask the "

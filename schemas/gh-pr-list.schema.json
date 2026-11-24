@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gh-pr-list.schema.json",
+  "title": "gh pr list --json number,headRefName,headRefOid: the open pull requests merge-ask's merge order reads (issue-lifecycle spec #gates-merge-order)",
+  "description": "Validated by scripts/merge_ask.py (_open_prs) before it trusts the answer; gh prints exactly the fields asked, so no other key is allowed.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["number", "headRefName", "headRefOid"],
+    "properties": {
+      "number": {"description": "The pull request's number", "type": "integer", "minimum": 1},
+      "headRefName": {"description": "Its head branch", "type": "string", "minLength": 1},
+      "headRefOid": {"description": "Its head commit, full", "type": "string", "pattern": "^[0-9a-f]{40,64}$"}
+    },
+    "additionalProperties": false
+  }
+}

@@ -45,11 +45,13 @@ export PATH := root + "/scripts:" + root + "/.agents/skills/herdr-comms/assets:"
 # every run before one starts. Anything but the script's exact ok line fails closed; the one other value is the
 # backtick's own text, which `just --dry-run` substitutes without running it (or any recipe).
 # Backticks run in --working-directory when given: there the guard is the published command on PATH.
-gate_free_out := `f=scripts/check-gate-free; [[ -x "$f" ]] || f=check-gate-free; exec "$f"`
+# One backtick answers the scan and the marker below: check-gate-free --guard-and-run.
+gate_free_both := `f=scripts/check-gate-free; [[ -x "$f" ]] || f=check-gate-free; exec "$f" --guard-and-run`
+gate_free_out := replace_regex(gate_free_both, '\n[^\n]*$', '')
 # The scan cannot see into the repo scripts a recipe runs: a check run also exports a marker (the outermost check
 # run's just pid) that nested just runs and tools inherit; qa and octo-feather-qc refuse under it (check-gate-free --refuse).
-export OCTO_FEATHER_CHECK_RUN := `f=scripts/check-gate-free; [[ -x "$f" ]] || f=check-gate-free; exec "$f" --run`
-gate_free := if gate_free_out == "gate-free: ok" { "ok" } else if gate_free_out == "`f=scripts/check-gate-free; [[ -x \"$f\" ]] || f=check-gate-free; exec \"$f\"`" { "dry run" } else { error("check-gate-free did not pass (message above); just check stays deterministic and free") }
+export OCTO_FEATHER_CHECK_RUN := replace_regex(gate_free_both, '^[^\n]*\n?', '')
+gate_free := if gate_free_out == "gate-free: ok" { "ok" } else if gate_free_both == "`f=scripts/check-gate-free; [[ -x \"$f\" ]] || f=check-gate-free; exec \"$f\" --guard-and-run`" { "dry run" } else { error("check-gate-free did not pass (message above); just check stays deterministic and free") }
 
 default:
     @just --list
@@ -265,15 +267,23 @@ check-tests *args:
     python3 "$root/scripts/octo-feather-gate" untouched check "$box" || { [[ "$rc" != 0 ]] || rc=1; }
     exit "$rc"
 
+# The git hook on just fast (.githooks/pre-commit; quality #recipe-fast, templates #tpl-hooks), as the templates'
+# setup's last line; git config writes the clone's config, so the hook runs in every worktree of the clone. The tools:
+# just install-check names what is missing; check-tests syncs the venv and node_modules itself.
+setup:
+    git config core.hooksPath .githooks
+
 # The fast tier (quality #recipe-fast; when it suffices: issue-lifecycle #lanes-checkpoints): the gate items
-# scripts/octo-feather-gate select chooses, each named with why, through check-tests.
+# scripts/octo-feather-gate select chooses, each named with why, through check-tests on fast_workers workers
+# (gate-budget.toml; its heavy slot: quality #recipes-static-first, tests/gate/heavy_slot.py).
 fast:
     #!/usr/bin/env bash
     set -euo pipefail
     cd "$root"
     ids="$(python3 "$root/scripts/octo-feather-gate" select)"
     mapfile -t ids <<<"$ids"
-    just check-tests "${ids[@]}"
+    cap="$(python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["fast_workers"])' "$root/gate-budget.toml")"
+    GATE_WORKERS="$cap" just check-tests "${ids[@]}"
 
 # The dry run of just fast: the items it would select, each with why, and the count; runs none.
 fast-list:
@@ -442,7 +452,7 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH') $CALLER
     try: got = json.load(open(os.path.join(root, "node_modules", srt, "package.json"))).get("version")
     except (OSError, ValueError): got = None
     if pin and got == pin: print(f"srt ok {srt} {got} (package.json pin, the qc sandbox)")
-    else: print(f"srt MISSING {srt} {pin} (package.json pin, the qc sandbox), found {got or 'none'} in {root}/node_modules; pnpm install --frozen-lockfile --dir {root}"); bad = 1
+    else: print(f"srt MISSING {srt} {pin} (package.json pin, the qc sandbox), found {got or '"'"'none'"'"'} in {root}/node_modules; pnpm install --frozen-lockfile --dir {root}"); bad = 1
     rc, st, _ = run(os.path.join(root, "scripts", "octo-feather-state"))
     lanes = os.path.join(st, "lanes")
     if rc or not st: print(f"state  UNREADABLE octo-feather-state failed (exit {rc}); set HOME, or XDG_STATE_HOME, to a writable folder"); bad = 1

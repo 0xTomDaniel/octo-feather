@@ -1,0 +1,14 @@
+Seeded defect: a role's {tracker} skill asks no coverage.
+diff --git a/scripts/check-evals b/scripts/check-evals
+index 714686c6..d002301c 100755
+--- a/scripts/check-evals
++++ b/scripts/check-evals
+@@ -952,7 +952,7 @@ def role_skills(evals, errs):
+         m = re.match(r"---\n(.*?)\n---", f.read_text(encoding="utf-8"), re.S)
+         line = re.search(r"^skills:(.*)$", m.group(1), re.M) if m else None
+         for s in (x.strip() for x in (line.group(1).split(",") if line else [])):
+-            pairs += [(f.stem, t) for t in trackers] if s == slot else [(f.stem, s)] if s else []
++            pairs += [] if s == slot else [(f.stem, s)] if s else []
+     return pairs
+ 
+ 

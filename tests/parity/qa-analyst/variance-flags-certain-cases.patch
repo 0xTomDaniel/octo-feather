@@ -1,14 +1,14 @@
 Seeded defect: analysis flags a case passing every run as high variance (pass rate 1 counted as between 0 and 1).
-diff --git a/scripts/octo-feather-qa b/scripts/octo-feather-qa
-index f213917..5619874 100755
---- a/scripts/octo-feather-qa
-+++ b/scripts/octo-feather-qa
-@@ -1833,7 +1833,7 @@ def analyze(cases: list[Result]) -> Result:
+diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
+index af457dc7..502a4f09 100755
+--- a/scripts/eval_grading.py
++++ b/scripts/eval_grading.py
+@@ -1891,7 +1891,7 @@ def analyze(cases: list[Result]) -> Result:
          b = r.get("baseline")
          base = cast("Result", b) if isinstance(b, dict) else None
-         for kit, x in ([("baseline", base), ("current", r)] if base else [("", r)]):
--            if 0 < cast("float", x["pass_rate"]) < 1:
-+            if 0 < cast("float", x["pass_rate"]) <= 1:
-                 hv.append({"case": name, "kit": kit or None, "pass_rate": x["pass_rate"], "stddev": x["stddev"]})
-         if base is None:
-             continue
+         for kit, x in [("baseline", base), ("current", r)] if base else [("", r)]:
+-            if 0 < x["pass_rate"] < 1:
++            if 0 < x["pass_rate"] <= 1:
+                 flags["high_variance"].append(
+                     {
+                         "case": f"{r['suite']}/{r['id']}",

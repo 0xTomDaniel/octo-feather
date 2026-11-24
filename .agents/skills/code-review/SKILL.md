@@ -56,23 +56,26 @@ Report the findings, each marked **block** or **note**, then the verdict: the on
 - **Block**: a breach of a documented hard standard of the repo (cite file and rule), or a named simplification that lists the lines it deletes.
 - **Never a block**: every baseline smell, preferences, and any finding that cannot name a consequence.
 
-**Report fields.** This step owns the form of every report field it names (`Verdict:`, `Check:` or `Checks: none`, `Owner:` or `Owners: none`, `Prior art:`), for every role that reports one, the implementer's check field included (docs/adr/0008 rung 3 names them). Each is a plain line: its label at column 0, then its value, outside code blocks. A report with one check and no owned rule ends:
+**Report fields.** This step owns the form of every report field it names (`Verdict:`, `Range:`, `Check:` or `Checks: none`, `Owner:` or `Owners: none`, `Prior art:`), for every role that reports one, the implementer's check field included (docs/adr/0008 rung 3 names them). Each is a plain line: its label at column 0, then its value, outside code blocks. A report with one check and no owned rule ends:
 
 ```
 Verdict: blocking
+Range: 6eaf8c7b..ffba6ee7
 Check: scripts/check-test-surface: tests drive the CLI, never an internal function (AGENTS.md Rules) | reads: tests/*.py import lines | class: proxy
 Owners: none
 ```
 
 `Checks:` takes only `none`: a report with `Check:` lines has no `Checks:` line. Failure examples, each read as a missing or refused field: `## Verdict: blocking`, a heading (gh122 and gh124 reviewers); a bare `Checks:` line heading the `Check:` lines (gh157 implementers, 3 of 3 runs); a bullet or bold label (`- Verdict: clear`, `**Verdict:** clear`).
 
+`Range: <from>..<to>` names the diff the review read, each end a commit sha: `<from>` the fixed point step 1 pinned, `<to>` the head reviewed. A review of the whole lane gives the commit of main it diffed from; a review of only what changed since an earlier posted round gives that round's head. `octo-feather-lane verdict` refuses a report without it (its `--help`, verdict). Failure example: PR #1216's round 3 read only `git diff ffba6ee7 2dc6f718`, said so in prose, and was posted as the whole lane's verdict, `Checks: none` (#1219).
+
 Then classify every check, and every other decision docs/adr/0008 "Who builds what" classifies, that the diff adds or changes (Check: GLOSSARY.md), one line each, or the one line `Checks: none`:
 
-`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`
+`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy|declaration`
 
 `<path>` is one path with no spaces: the check's own file (a product command's: the file holding its decision), or `justfile:<recipe>` for a recipe.
 
-`<rule>` (the owned rule), `<owner>`, `exact` and `proxy` are as docs/adr/0008 rung 2 defines them. A proxy check blocks, class `proxy-check`.
+`<rule>` (the owned rule), `<owner>`, `exact`, `proxy` and `declaration` are as docs/adr/0008 rung 2 defines them. A proxy check blocks, class `proxy-check`.
 
 **Prior art.** Infrastructure is a parser, test runner, protocol, file format or scheduler. A writer (implementer) reports one line per piece of infrastructure its diff adds or uses, or the one line `Prior art: none` when it touches none:
 
@@ -86,7 +89,7 @@ The reviewer checks each line against the diff and the package index, and blocks
 
 **Duties.** Block, class `prose-duty`, each line of a role file or skill (its patch included) the diff adds or changes that holds a mechanical duty below the tier docs/adr/0008, Duties, gives it (that ADR in the kit, two levels above the folder holding this skill), naming the command, trigger or skill to use instead. This holds in any target, whether or not its AGENTS.md states the rule. Failure example (#269): teardown order, review-row registration, lane-log writes and main-moved broadcasts stayed role prose, and each failed quietly until the owner caught it.
 
-**Seams.** For each test seam the diff adds, run `octo-feather-lane seam <ticket> <spec>#<anchor> <seam> --before <the commit adding the test>` (`octo-feather-lane --help`, seam), the ticket the diff serves, the criterion the test serves. Exit 1 blocks, class `unlisted-test-seam`, quoting its line; exit 2 (unchecked) and a seam written down in another form (a table, prose) are yours to judge against the ticket and its comments. Failure example: lane gh840's `fresh_worker_session` tested the `herdr-spawn` CLI, a seam #876 got only after review round 9 (#987).
+**Seams.** Judge each seam a diff's tests enter at by its kind (quality spec `#acceptance-public-surfaces`, docs/specs/quality.spec.html in the kit, two levels above the folder holding this skill). A test at a private helper or a shallow wrapper (its interface mirrors its implementation) blocks, class `unlisted-test-seam`, naming the seam, whatever its record on the ticket. For any other seam, run `octo-feather-lane seam <ticket> <spec>#<anchor> <seam> --before <the commit adding the test>` (`octo-feather-lane --help`, seam), the ticket the diff serves, the criterion the test serves: its note line (a record late, missing or off the ticket's criteria) is a non-blocking note of that class, quoting the line; exit 2 (unchecked) and a seam written down in another form (a table, prose) are yours to judge against the ticket and its comments. Failure example: lane gh1186's `test_heavy_run_asks` drove `just check`, a public command recorded on #1210 after its test commit 646363b8; review blocked it and the owner had to dispose of the block, where a note was due (#1230).
 
 **Edges.** Block, class `unvalidated-edge`, each place the diff, in product code or a test, reads structured data from outside the code without meeting the edge rule, quality spec `#acceptance-edge-validated` (docs/specs/quality.spec.html in the kit, two levels above the folder holding this skill), naming the edge (file, and the data it reads or writes) and the schema library to use. This holds in any target, whether or not its AGENTS.md states the rule. A hand-written parser at the edge is also `reinvented-library`: report both classes. Failure example: exosurface PR #257 (0xTomDaniel/exosurface) cleared its first review with a test reading pnpm's `node_modules/.modules.yaml` `storeDir` by regex; review round 452a12e fixed it with `yaml.parse` and a zod schema.
 

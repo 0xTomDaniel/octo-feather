@@ -20,7 +20,8 @@ warning on stderr, never a failure: the trend line never changes the run's exit 
 Also copyable unchanged: longest items first (#618; gate-time discipline: quality spec #test-kinds). The run reads
 this repo's trend lines (repo the same git top level) once, on the controller, before any item runs: each item's
 wall seconds on the last line that has its node id (a step's node; on a line before node ids, its name, the junit
-testcase name, pytest's item name). Items with a
+testcase name, pytest's item name). With no line of its own (a fresh worktree), the lines of the same repository's
+other worktrees (`git worktree list`) stand in, read the same way (#1202). Items with a
 record are reordered among their own places, longest first (ties keep collection order); an item with none keeps
 its place; no history at all leaves collection order. xdist workers get the controller's read (pytest_configure_node),
 so every worker collects the same order. Under xdist's --dist load (the default with -n) the run deals the order out
@@ -38,10 +39,19 @@ Also copyable unchanged: each item's CPU seconds (what the run must show: qualit
 user and system CPU of the process running the item (an xdist worker, or pytest itself) and of every process it started
 and waited for (RUSAGE_CHILDREN: a grandchild counts once each process between waited for it; a process left running,
 or whose parent exited without waiting, does not), from its setup to its teardown, carried to the controller and the
-junit xml as the item's cpu_s property. After the run the controller shows each item's CPU and wall seconds and names
-each item over test_cpu_seconds in the root's gate-budget.toml (its form: octo-feather-lane --help, report) but one
-carrying pytest's `e2e` marker; report-only. Stdlib getrusage, not a plugin: pytest-monitor (last release 2023) measures the pytest
-process only, into its own sqlite, without xdist; pytest-timing (new in 2026) records CPU into its own report, with no
+junit xml as the item's cpu_s property. Shared set-up is billed to its own line, never to the item that builds it first
+(#687): while an item runs, GATE_SHARED_CPU names a file; a process that builds state the run's items share appends
+one JSON line there, {"line": NAME, "cpu_s": its CPU building it}; the item's cpu_s leaves that out, and the item's
+cpu_shared property ({NAME: seconds}, JSON; the trend step's cpu_shared) carries it. After the run the controller
+shows each item's CPU and wall seconds, each shared line, and names each item over test_cpu_seconds in the root's
+gate-budget.toml (its form: octo-feather-lane --help, report) but one carrying pytest's `e2e` marker (quality spec
+#acceptance-test-cpu-budget). Such an item the change adds or changes (since the merge base with the default
+branch), as `octo-feather-gate changed` (when on PATH) names one, is measured again once, alone: after the run, in a
+pytest of its own (-n 0 under xdist) from the same root and environment, GATE_CPU_AGAIN set there so it judges
+nothing. Over again (or no CPU measured), it fails the run, named with both CPU times and the budget; under, the run
+passes and names it over once, with both. One unchanged is reported only, as is a shared line; no item over the
+budget, no second run. Stdlib getrusage, not a plugin: pytest-monitor (last release
+2023) measures the pytest process only, into its own sqlite, without xdist; pytest-timing (new in 2026) records CPU into its own report, with no
 per-test budget.
 
 Also copyable unchanged: the qc capture's side of the gate (what it must capture: quality spec #qc-capture). A test
@@ -84,6 +94,8 @@ ITEMS = "OCTO_FEATHER_GATE_ITEMS"
 CPU = "cpu_s"
 NODE = "node"   # a step's pytest node id, unique where its junit name is not
 BUDGET, BUDGET_KEY = "gate-budget.toml", "test_cpu_seconds"
+AGAIN = "GATE_CPU_AGAIN"   # set in the run that measures a changed over-budget item again alone
+SHARED, SHARED_PROP = "GATE_SHARED_CPU", "cpu_shared"   # shared set-up's own CPU lines (this file's docstring)
 CLAIM = re.compile(r"^([a-z0-9][a-z0-9._-]*)#([A-Za-z0-9][A-Za-z0-9._-]*)$")
 LAST = "octo_feather_last_seconds"   # the controller's read, in each xdist worker's workerinput
 _LAST = pytest.StashKey[dict[str, float]]()
@@ -142,7 +154,7 @@ def _entry(xml_path, status, tier: str):
     start = datetime.datetime.fromisoformat(suite.get("timestamp")).astimezone(datetime.timezone.utc)
     return {"start": start.strftime("%Y-%m-%dT%H:%M:%SZ"), "repo": _git("rev-parse", "--show-toplevel") or os.getcwd(),
             "head": _git("rev-parse", "HEAD"), "total_s": round(float(suite.get("time")), 3), "exit": int(status),
-            "tier": tier, "steps": [{"name": c.get("name"), **_node(c), "seconds": round(float(c.get("time") or 0), 3), "result": _result(c), **_cpu_s(c)}
+            "tier": tier, "steps": [{"name": c.get("name"), **_node(c), "seconds": round(float(c.get("time") or 0), 3), "result": _result(c), **_cpu_s(c), **_cpu_shared(c)}
                       for c in suite.iter("testcase")]}
 
 
@@ -153,26 +165,35 @@ def _load1() -> float | None:
         return None
 
 
+_REPO = re.compile(r'"repo":("(?:[^"\\]|\\.)*")')   # a trend line's repo, as _entry writes it
+
+
 def _last_seconds() -> dict[str, float]:
-    """Each item's wall seconds on the last trend line of this repo that names it ({} without history)."""
+    """Each item's wall seconds on the last trend line of this repo that names it; with no line of this repo, on the
+    last line naming it of another worktree of the same repository ({} without either)."""
     repo = _git("rev-parse", "--show-toplevel") or os.getcwd()
-    mark = '"repo":' + json.dumps(repo)   # as _entry writes it: lines of other repos skip the parse
+    listed = (_git("worktree", "list", "--porcelain", "-z") or "").split("\0")
+    others = {w.removeprefix("worktree ") for w in listed if w.startswith("worktree ")} - {repo}
     last: dict[str, float] = {}
+    theirs: dict[str, float] = {}
     try:
         with open(os.path.join(_state_dir(), TREND)) as f:
             for line in f:
-                if mark not in line:
-                    continue
+                m = _REPO.search(line)   # lines of other repos skip the parse
                 try:   # a line not of the runner's form: skipped from its first bad field
+                    named = json.loads(m.group(1)) if m else None
+                    into = last if named == repo else theirs if named in others else None
+                    if into is None:
+                        continue
                     d: Any = json.loads(line)
-                    if d["repo"] == repo:
+                    if d["repo"] == named:
                         for s in d["steps"]:
-                            last[str(s.get(NODE) or s["name"])] = float(s["seconds"])
+                            into[str(s.get(NODE) or s["name"])] = float(s["seconds"])
                 except (ValueError, KeyError, TypeError):
                     continue
     except OSError:
         return {}
-    return last
+    return last or theirs
 
 
 def _longest_first(items: list[pytest.Item], last: dict[str, float]) -> None:
@@ -234,6 +255,11 @@ def _node(case: ET.Element) -> dict[str, str]:
 def _cpu_s(case: ET.Element) -> dict[str, float]:
     p = case.find(f"properties/property[@name='{CPU}']")
     return {} if p is None else {CPU: float(p.get("value") or 0)}
+
+
+def _cpu_shared(case: ET.Element) -> dict[str, object]:
+    p = case.find(f"properties/property[@name='{SHARED_PROP}']")
+    return {} if p is None else {SHARED_PROP: json.loads(p.get("value") or "{}")}
 
 
 def _claims() -> list[str]:
@@ -379,12 +405,44 @@ def _cpu() -> float:
 
 
 _CPU_START = pytest.StashKey[float]()
+_SHARED_FILE = pytest.StashKey[str]()
 
 
 @pytest.hookimpl(wrapper=True)
 def pytest_runtest_protocol(item: pytest.Item) -> Generator[None, object, object]:
     item.stash[_CPU_START] = _cpu()   # in the process running the item: an xdist worker runs one item at a time
-    return (yield)
+    fd, path = tempfile.mkstemp(prefix="shared-cpu-")
+    os.close(fd)
+    item.stash[_SHARED_FILE], was = path, os.environ.get(SHARED)
+    os.environ[SHARED] = path
+    try:
+        return (yield)
+    finally:
+        Path(path).unlink()
+        if was is None:
+            del os.environ[SHARED]
+        else:
+            os.environ[SHARED] = was
+
+
+def _shared(path: str) -> dict[str, float]:
+    """The shared lines an item's processes billed (this file's docstring); a line not of that form is skipped."""
+    out: dict[str, float] = {}
+    try:
+        rows = Path(path).read_text().splitlines()
+    except OSError:
+        return out
+    for line, cpu in filter(None, map(_shared_row, rows)):
+        out[line] = out.get(line, 0.0) + cpu
+    return out
+
+
+def _shared_row(row: str) -> tuple[str, float] | None:
+    try:
+        d: Any = json.loads(row)
+        return str(d["line"]), float(d["cpu_s"])
+    except (ValueError, KeyError, TypeError):
+        return None
 
 
 @pytest.hookimpl(wrapper=True)
@@ -392,7 +450,11 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[None]) ->
     if call.when == "teardown":   # before its report copies them
         item.user_properties.append((NODE, item.nodeid))
         if resource is not None and _CPU_START in item.stash:
-            item.user_properties.append((CPU, round(_cpu() - item.stash[_CPU_START], 3)))
+            shared = _shared(item.stash[_SHARED_FILE]) if _SHARED_FILE in item.stash else {}
+            own = _cpu() - item.stash[_CPU_START] - sum(shared.values())
+            item.user_properties.append((CPU, round(max(own, 0.0), 3)))
+            if shared:
+                item.user_properties.append((SHARED_PROP, json.dumps({k: round(v, 3) for k, v in shared.items()})))
     return (yield)
 
 
@@ -406,6 +468,10 @@ class _CpuShown:
     def __init__(self, root: Path) -> None:
         self.root = root
         self.items: dict[str, dict[str, Any]] = {}
+        self.shared: list[tuple[str, float, str]] = []   # (line, CPU seconds, the item that built it)
+        self.again_cpu: dict[str, float | None] = {}   # each changed item over the budget: its CPU run again alone
+        self.failing: list[str] = []   # changed items over the budget twice: the run fails
+        self.changed_why = ""
 
     def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
         r = self.items.setdefault(report.nodeid, {"wall": 0.0, "cpu": None, "e2e": bool(report.keywords.get("e2e"))})
@@ -413,6 +479,54 @@ class _CpuShown:
         for k, v in report.user_properties:
             if k == CPU and report.when == "teardown" and isinstance(v, (int, float)):
                 r["cpu"] = float(v)
+            if k == SHARED_PROP and report.when == "teardown" and isinstance(v, str):
+                self.shared += [(line, float(s), report.nodeid) for line, s in json.loads(v).items()]
+
+    def over(self) -> list[tuple[str, dict[str, Any]]]:
+        b = self.budget()[0]
+        return [] if b is None else [(n, r) for n, r in self.items.items()
+                                     if r["cpu"] is not None and not r["e2e"] and r["cpu"] > b]
+
+    def changed(self) -> set[str] | None:
+        """The changed test items as `octo-feather-gate changed` names them (pytest arguments), or None and why."""
+        if not shutil.which("octo-feather-gate"):
+            self.changed_why = "octo-feather-gate is not on PATH"
+            return None
+        p = subprocess.run(["octo-feather-gate", "changed"], cwd=self.root, capture_output=True, text=True)
+        self.changed_why = " ".join(p.stderr.split())
+        if p.returncode:
+            self.changed_why = f"octo-feather-gate changed exited {p.returncode}: {self.changed_why}"
+            return None
+        return set(p.stdout.split())
+
+    def again(self, config: pytest.Config, node: str) -> float | None:
+        """NODE run again alone, serially, in a pytest of its own from the same root and environment: its CPU
+        seconds from that run's junit xml, or None when it gave none."""
+        with tempfile.TemporaryDirectory() as t:
+            xml = Path(t) / "junit.xml"
+            cmd = [sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", f"--junitxml={xml}", node]
+            if config.pluginmanager.hasplugin("xdist"):
+                cmd[3:3] = ["-n", "0"]
+            env = {k: v for k, v in os.environ.items() if not k.startswith("OCTO_FEATHER_QC_")} | {AGAIN: "1"}
+            subprocess.run(cmd, cwd=self.root, env=env, capture_output=True, check=False)
+            try:
+                cases = list(ET.parse(xml).getroot().iter("testcase"))
+            except (OSError, ET.ParseError):
+                return None
+        return next((_cpu_s(c).get(CPU) for c in cases if _node(c).get(NODE) == node), None)
+
+    def pytest_sessionfinish(self, session: pytest.Session) -> None:
+        over, b = self.over(), self.budget()[0]
+        if not over or b is None or os.environ.get(AGAIN):   # a run measuring one item again judges nothing
+            return
+        args = self.changed() or set[str]()
+        for n, _ in over:
+            if n in args or n.split("::")[0] in args:
+                self.again_cpu[n] = cpu = self.again(session.config, n)
+                if cpu is None or cpu > b:
+                    self.failing.append(n)
+        if self.failing and session.exitstatus == 0:
+            session.exitstatus = pytest.ExitCode.TESTS_FAILED
 
     def budget(self) -> tuple[float | None, str]:
         """test_cpu_seconds from the root's gate-budget.toml, or None and why."""
@@ -438,18 +552,36 @@ class _CpuShown:
         tr.write_sep("=", "CPU seconds per item (its processes and their waited-for children)")
         for n, r in shown:
             tr.write_line(f"{_secs(r['cpu']):>9} cpu {_secs(r['wall']):>9} wall  {n}" + ("  (e2e)" if r["e2e"] else ""))
+        for line, s, n in sorted(self.shared, key=lambda x: -x[1]):
+            tr.write_line(f"{_secs(s):>9} cpu {'':>9}       shared set-up {line} (built in {n}; its own line, report-only)")
         b, why = self.budget()
         if b is None:
             tr.write_line(f"cpu budget: none ({why})")
             return
         over = [(n, r) for n, r in shown if not r["e2e"] and r["cpu"] > b]
         for n, r in over:
-            tr.write_line(f"OVER CPU BUDGET: {n} {_secs(r['cpu'])} CPU, budget {_secs(b)} (report-only)")
-        tr.write_line(f"cpu budget: {_secs(b)} per non-e2e test ({BUDGET} {BUDGET_KEY}): {len(over)} over, report-only")
+            cpu = self.again_cpu.get(n)
+            alone = "no CPU measured" if cpu is None else f"{_secs(cpu)} CPU"
+            if n in self.failing:
+                tr.write_line(f"OVER CPU BUDGET: {n} {_secs(r['cpu'])} CPU, alone again {alone}, budget {_secs(b)} "
+                              "(changed, over twice: the gate fails)")
+            elif n in self.again_cpu:
+                tr.write_line(f"OVER CPU BUDGET: {n} {_secs(r['cpu'])} CPU, alone again {alone}, budget {_secs(b)} "
+                              "(changed, over once: passes)")
+            else:
+                tr.write_line(f"OVER CPU BUDGET: {n} {_secs(r['cpu'])} CPU, budget {_secs(b)} (report-only)")
+        if self.changed_why:
+            tr.write_line(f"cpu budget: changed test items judged by octo-feather-gate: {self.changed_why}")
+        once = len(self.again_cpu) - len(self.failing)
+        tail = ([f"{len(self.failing)} changed over twice"] if self.failing else []) + (
+            [f"{once} changed over once"] if once else [])
+        verdict = "FAIL" if self.failing else "report-only" if not once else "passes"
+        tr.write_line(f"cpu budget: {_secs(b)} per non-e2e test ({BUDGET} {BUDGET_KEY}): {len(over)} over, "
+                      + "".join(f"{t}, " for t in tail) + verdict)
 
 
 @pytest.hookimpl(trylast=True)   # after the junitxml plugin has written its file
-def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
+def pytest_sessionfinish(session: pytest.Session):   # its exit: session.exitstatus, a budget's failure in it
     config = session.config
     if hasattr(config, "workerinput") or _COLLECT_ONLY:   # a worker, or no run: no line
         return
@@ -458,7 +590,7 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
         if not xml_path:
             raise OSError("no --junitxml for this run")
         stopped = session.shouldfail or session.shouldstop   # it ran part of its items: no full run
-        entry = _entry(xml_path, exitstatus, "subset" if stopped else _tier(session.config))
+        entry = _entry(xml_path, session.exitstatus, "subset" if stopped else _tier(session.config))
         entry |= {"load1_start": config.stash.get(_LOAD_START, None), "load1_end": _load1()}
         line = json.dumps(entry, separators=(",", ":"))
         d = _state_dir()
