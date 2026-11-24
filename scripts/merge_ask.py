@@ -2794,6 +2794,26 @@ def tier(s: Snapshot) -> Tier:
     return Tier(n, reasons, waits)
 
 
+def relay_proof(s: Snapshot, relayed: str, head: str) -> tuple[str | None, list[str]]:
+    """(proof line, []) when the director's relay recorded for the full head RELAYED carries to
+    the full HEAD over S's git facts: the same head, or only merges of main between them that the
+    one-head check proves clean (spec #gates-merge-guard, #lanes-one-head); else (None, why)."""
+    r, h = relayed.lower(), head.lower()
+    rerun = f"send a new merge ask for {h[:12]}"
+    p = _why(_proved(s, r, h, at="relayed head", kept="the director's relay", rerun=rerun))
+    if p[0] is None or r == h:
+        return p
+    g = s.git or Git("")
+    gone = set(g.walks[r])
+    fixes = [c for c in g.walks[h] if c not in gone and len(g.commits[c].parents) == 1]
+    why = [
+        f"commit {c[:12]} {g.commits[c].subject[:60]!r} after the relayed head {r[:12]} is no "
+        f"merge of main: the director's relay does not carry over; {rerun}"
+        for c in fixes
+    ]
+    return (None, why) if why else p
+
+
 # The merge-order reads (spec #gates-merge-order)
 
 

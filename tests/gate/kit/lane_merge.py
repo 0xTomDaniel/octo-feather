@@ -83,6 +83,7 @@ class World:
         self.s.gh.put(
             7,
             {
+                "number": 7,
                 "state": state,
                 "headRefOid": head,
                 "mergeCommit": None,
@@ -91,6 +92,8 @@ class World:
                 "headRefName": "gh7",
                 "title": "Add foo",
                 "url": "https://github.com/o/r/pull/7",
+                # a merge ask building no criterion, tier 1: the merge's guard lets it go (#1266)
+                "body": f"## Merge ask\n\nHead: {head[:12]}\nBuilt: none\nFailed: none\n",
             },
         )
         (self.s.gh.dir / "log").write_text("")
