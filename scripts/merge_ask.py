@@ -14,7 +14,7 @@ checks, the full pass and the gate time (#lanes-checkpoints) are judged here too
 
 Interface:
 
-    snapshot(pr, repo, files, read, qc_dir, trend, err=..., base=None) -> Snapshot
+    snapshot(pr, repo, files, read, qc_dir, trend, err=..., lanes, base=None) -> Snapshot
         The one reader: the status FILES (--status), then PR in REPO (None: this directory's)
         through READ, the command's reader ((gh pr view's JSON: body, headRefName, headRefOid,
         statusCheckRollup, baseRefName, comments; the PR's commits or why they are unread)),
@@ -34,7 +34,11 @@ Interface:
         full pass's (Gate: octo-feather-gate config and passed, read along the lane until one
         carries over), the gate time's (Trend: TREND, the state dir's check-runs.jsonl, the
         head's history, gate-budget.toml at the head) and the judged head's check runs, read
-        only when a check skipped on the head and a Judged proof carries it.
+        only when a check skipped on the head and a Judged proof carries it. A correction lane's
+        replay (Replay, #1226; read only when the verdict comment lists a Check line): its parent
+        issue through the tracker skill's issue-view, the clean sample from LANES (the state
+        dir's lanes/) and each `## Replay` row's command run at the head, each in its own qc
+        sandbox over one GitHub snapshot (_runs; never outside it).
     check(s) -> Ask
         Pure, no I/O. Each refusal line the merge ask prints for S, in order, by rule, in the
         parts the command's own item goes between; none when S passes; with what a passing ask
@@ -87,9 +91,13 @@ __all__ = [  # check's interface, then the helpers octo-feather-lane's other com
     "stamp",
 ]
 
+import contextlib
 import dataclasses
 import datetime as dt
 import hashlib
+import importlib.machinery
+import importlib.util
+import io
 import json
 import os
 import re
@@ -98,12 +106,13 @@ import statistics
 import subprocess
 import sys
 import tempfile
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, NamedTuple, TypedDict, cast
+from typing import Literal, NamedTuple, ParamSpec, Protocol, TypedDict, TypeVar, cast
 
 import tomllib
+from correction_lanes import MARK, Refused, lane_logs, lane_record, quoted
 from tracker_calls import KIT, ci_workflows, gh, head_matches, tracker, utc
 
 # GitHub's closing keywords: a PR body line with one closes that GitHub issue at merge, named
@@ -312,6 +321,36 @@ class Order:
 
 
 @dataclass(frozen=True)
+class Replayed:
+    """A replay row's command as merge-ask ran it at the PR head in its own qc sandbox: its EXIT
+    (None: it did not run) and its OUT, stdout then stderr; UNSERVED why the sandbox could not
+    serve it ('' when it could), WROTE the writes the sandbox discarded (`<kind> <path>`)."""
+
+    exit: int | None
+    out: str
+    unserved: str = ""
+    wrote: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class Replay:
+    """A correction lane's replay facts (spec issue-lifecycle #lanes-correction, #1222): KEY its
+    parent issue, CLS the class its title's marker (correction_lanes.MARK) names, PATHS the
+    verdict's Check paths, FINDINGS the ids (`<lane> <at>`) of the finding lines its body and
+    comments quote (correction_lanes.quoted), SAMPLE the clean lanes the fixed rule picks
+    (_sample), RUNS each replayed row's sandboxed run, by its row, TABLE the PR body's `## Replay`
+    rows and why a row is unreadable (_replay_table)."""
+
+    key: str
+    cls: str
+    paths: tuple[str, ...]
+    findings: tuple[str, ...]
+    sample: tuple[str, ...]
+    runs: "dict[Row, Replayed]"
+    table: "tuple[list[Row], list[str]] | None" = None  # _replay_table's: None, no section
+
+
+@dataclass(frozen=True)
 class Snapshot:
     """A PR's facts, read once."""
 
@@ -349,6 +388,9 @@ class Snapshot:
     # the review rounds' chain (#1220, spec #lanes-one-head): FORK, git merge-base of the head
     # and the base, '' when not read
     fork: str = ""
+    # the correction lane's replay (#1222): None when the lane is none or its verdict lists no
+    # check
+    replay: Replay | Unread | None = None
 
 
 @dataclass(frozen=True)
@@ -389,6 +431,7 @@ class Ask:
     carried_ok: list[str] = dataclasses.field(default_factory=list)
     gate_time: list[str] = dataclasses.field(default_factory=list)
     rounds: list[str] = dataclasses.field(default_factory=list)
+    replay: str = ""  # the correction lane's `Replay:` line (#1222), '' for none
 
     @property
     def gaps(self) -> list[str]:
@@ -416,6 +459,7 @@ def snapshot(  # noqa: PLR0913  each read's input, the command's reader among th
     *,
     trend: Path,
     err: type[Exception],
+    lanes: Path,
     base: str | None = None,
 ) -> Snapshot:
     specs = statuses(files, err) if files else {}
@@ -467,6 +511,7 @@ def snapshot(  # noqa: PLR0913  each read's input, the command's reader among th
     # the judged head's check runs: read only when a check skipped on the head and a Judged proof
     # carries it (the rules' own judged head and proof, over the facts read above)
     a = _check(s)
+    s = dataclasses.replace(s, replay=_replay(s, a.classes, repo, lanes))
     if a.refusal or a.abort or not _skipped(a.current) or not a.proof:
         return s
     if not a.judged_head or a.judged_head == head.lower():
@@ -939,6 +984,8 @@ def _check(s: Snapshot) -> Ask:
     rest += gaps
     if t is not None:
         rest += rows_against(rows, built, fails)
+    gaps, replayed = replay(s)
+    rest += gaps
     return Ask(
         first,
         checks,
@@ -957,6 +1004,7 @@ def _check(s: Snapshot) -> Ask:
         carried_ok=carried_ok,
         gate_time=gate_time(s.git, s.trend, head) if s.trend else [],
         rounds=rounds,
+        replay=replayed,
     )
 
 
@@ -2511,6 +2559,109 @@ def chain_gaps(s: Snapshot, rounds: list[Round]) -> list[str]:
     ]
 
 
+# The correction lane's replay, pure (#1222; spec issue-lifecycle #lanes-correction; the rule:
+# octo-feather-lane --help, merge-ask). Its reads: _replay, at the end.
+
+REPLAY_HEAD = ("finding", "case", "command", "result")  # its table's columns, in order
+CLAIMS = {"caught": "caught", "missed": "pass", "pass": "pass"}  # a result, the run it claims
+NOT_REPLAYABLE = "not replayable:"
+TAIL = 300  # characters of a run's output a refusal quotes
+
+
+class Row(NamedTuple):
+    """A `## Replay` row: FINDING (an id `<lane> <at>`, `trigger` or `clean <lane>`), CASE, the
+    COMMAND cell's text (backticks cut) and its RESULT."""
+
+    finding: str
+    case: str
+    command: str
+    result: str
+
+
+def _ran(run: Replayed, cls: str) -> str | None:
+    """What RUN shows for the issue's class CLS, `caught` or `pass` (the rule: octo-feather-lane
+    --help, merge-ask), else None."""
+    if run.exit == 0:
+        return "pass"
+    return "caught" if run.exit is not None and cls in run.out else None
+
+
+def replay(s: Snapshot) -> tuple[list[str], str]:
+    """(the gaps of S's `## Replay` table, its `Replay:` line) for a correction lane; ([], '')
+    for any other lane."""
+    r = s.replay
+    if r is None:
+        return [], ""
+    if isinstance(r, Unread):
+        return [f"Replay: {r.why}"], ""
+    table = r.table
+    rows, bad = table or ([], [])
+    gaps = [f"Replay: {w}" for w in bad]
+    if table is None:
+        gaps.append(
+            f"Replay: no `## Replay` section; #{r.key} is a correction lane ({r.cls}) and the "
+            "verdict lists a check: add `| finding | case | command | result |`, a row per "
+            "finding and per clean lane below (octo-feather-lane --help, merge-ask)"
+        )
+    findings = r.findings or ("trigger",)
+    named = {row.finding for row in rows}
+    gaps += [
+        f"Replay: no row for finding `{f}`" + (" (the issue lists no finding)" * (f == "trigger"))
+        for f in findings
+        if f not in named
+    ]
+    gaps += [
+        f"Replay: no row for clean lane `clean {x}`" for x in r.sample if f"clean {x}" not in named
+    ]
+    shown: dict[str, list[str]] = {}  # each row's finding, the results its runs showed
+    said_rows: list[str] = []  # each row as its sandboxed run showed it
+    for row in rows:
+        if row.result.startswith(NOT_REPLAYABLE) and row.result[len(NOT_REPLAYABLE) :].strip():
+            shown.setdefault(row.finding, [])
+            said_rows.append(f"- `{row.finding}`: {row.result} (as the row says; not run)")
+            continue
+        claim = CLAIMS.get(row.result)
+        if claim is None:
+            gaps.append(
+                f"Replay: row `{row.finding}` result `{row.result}` is none of caught, missed, "
+                "pass, `not replayable: <why>`"
+            )
+            continue
+        if _program(row.command) not in r.paths:
+            gaps.append(
+                f"Replay: row `{row.finding}` runs `{row.command}`, whose program is no path on a "
+                f"verdict Check line ({', '.join(r.paths)}): replay the lane's own check"
+            )
+            continue
+        run = r.runs.get(row, Replayed(None, "not run"))
+        if run.unserved:  # never run outside the sandbox: shown, not judged
+            shown.setdefault(row.finding, [])
+            said_rows.append(f"- `{row.finding}`: {NOT_REPLAYABLE} {run.unserved}")
+            continue
+        got = _ran(run, r.cls)
+        if got != claim:
+            said = " ".join(run.out.split())[-TAIL:]
+            how = f"exited {run.exit}" if run.exit is not None else "did not run"
+            needs = f"a non-zero exit naming {r.cls}" if claim == "caught" else "exit 0"
+            gaps.append(
+                f"Replay: row `{row.finding}` claims {row.result} ({needs}); its run at "
+                f"{s.head[:12]} {how}: ...{said}"
+            )
+            continue
+        shown.setdefault(row.finding, []).append(claim)
+        wrote = f"; {len(run.wrote)} writes discarded: {', '.join(run.wrote[:3])}" * bool(run.wrote)
+        said_rows.append(f"- `{row.finding}`: {row.result}, sandboxed run exited {run.exit}{wrote}")
+    k = sum("caught" in shown.get(f, []) for f in findings)
+    m = sum(f in shown and not shown[f] for f in findings)
+    clean = [shown[f"clean {x}"] for x in r.sample if shown.get(f"clean {x}")]
+    refused = sum("caught" in c for c in clean)
+    line = (
+        f"Replay: caught {k} of {len(findings)} ({m} not replayable); false refusals {refused} of "
+        f"{len(clean)} clean"
+    )
+    return gaps, "\n".join([line, *said_rows])
+
+
 # The merge-order rule, pure (spec #gates-merge-order)
 
 # The freshness tail of an octo-feather-qa --verdict line (its --help, Verdict): fresh, stale with
@@ -2575,7 +2726,8 @@ GH_PRS = KIT / "schemas" / "gh-pr-list.schema.json"
 # standard library only, so the validation runs in the kit's project environment, never the network.
 KIT_PYTHON = ["uv", "run", "--project", str(KIT), "--locked", "--offline", "--no-dev", "--quiet"]
 VALIDATE = """import json, sys, jsonschema
-schema = json.loads(open(sys.argv[1], encoding="utf-8").read())
+a = sys.argv[1]  # a schema file, or a schema's JSON text
+schema = json.loads(a if a.startswith("{") else open(a, encoding="utf-8").read())
 v = jsonschema.validators.validator_for(schema)
 v.check_schema(schema)
 try:
@@ -2785,3 +2937,350 @@ def _order(pr: int, head: str, base_branch: str, base: str, repo: str | None) ->
             unread.append(f"pinned runs {' '.join(pins)}: {e}")
     prs = [Sibling(n, b, c, [Pin(p, *said[p]) for p in ps if p in said]) for n, b, c, ps in found]
     return Order(base_branch, prs, unread)
+
+
+# The correction lane's replay reads (#1222; the rule: replay, above)
+
+MARKED = re.compile(
+    re.escape(MARK.split("{}")[0]) + r"([^\]\s]+)[^\]]*" + re.escape(MARK.split("{}")[1])
+)
+REPLAY_TIMEOUT = 120  # seconds a row's sandboxed run may take, then it is not replayable
+UNAVAILABLE = "sandbox unavailable"
+SAMPLE = 5  # the clean lanes the fixed rule names (#1218 design, term 4)
+
+
+def _replay(
+    s: Snapshot, classes: list[str], repo: str | None, lanes: Path
+) -> Replay | Unread | None:
+    """S's Replay when its parent issue's title carries the correction-lane marker and CLASSES,
+    the verdict's check lines, name a Check path; None when not; Unread naming the read that
+    failed. REPO gh's (None: this directory's), LANES the state dir's lanes/."""
+    shapes = (CHECK_SHAPE.fullmatch(c.removeprefix("Check: ")) for c in classes)
+    paths = tuple(dict.fromkeys(m.group(1) for m in shapes if m))
+    if not paths or not isinstance(s.parent, ParentLine):
+        return None
+    key = s.parent.key
+    try:
+        cls = _marked(key)
+        if cls is None:
+            return None
+        out = tracker("issue-view", key, "--notes", err=_Unread)
+        got = cast("_Noted", _validated(out, NOTED, f"issue-view {key} --notes"))
+        texts = [n["body"] for n in got["notes"]]
+        findings = tuple(dict.fromkeys(f"{run} {at}" for t in texts for _, (run, at) in quoted(t)))
+        sample = _sample(s, cls, repo, lanes)
+        table = _replay_table(s.body)
+        rows = [
+            row
+            for row in dict.fromkeys((table or ([], []))[0])
+            if row.result in CLAIMS and _program(row.command) in paths
+        ]
+        named = [key, *(t for row in rows for t in re.findall(r"#(\d+)", row.case))]
+        issues = tuple(dict.fromkeys(int(t) for t in named if t.isdigit()))
+        runs = _runs(s.head, rows, issues) if rows else {}
+    except _Unread as e:
+        return Unread(f"cannot read correction lane facts for #{key} ({e}); fix it, then rerun")
+    return Replay(key, cls, paths, findings, sample, runs, table)
+
+
+def _marked(key: str) -> str | None:
+    """The class issue KEY's title marker (correction_lanes.MARK) names; None for no marker."""
+    out = tracker("issue-view", key, err=_Unread)
+    view = cast("_Titled", _validated(out, TITLED, f"issue-view {key}"))
+    m = MARKED.search(view["title"])
+    return m.group(1) if m else None
+
+
+# Each tracker and gh answer the replay reads, validated once at its edge (quality spec
+# #acceptance-edge-validated) by the kit's locked jsonschema (VALIDATE), then typed: only the
+# fields read, each required with its type; the tools' other fields pass.
+TITLED = {"type": "object", "required": ["title"], "properties": {"title": {"type": "string"}}}
+NOTED = {  # issue-view --notes (github-issues SKILL.md; skills spec #tracker-script-issue-view)
+    "type": "object",
+    "required": ["notes"],
+    "properties": {
+        "notes": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "required": ["body"],
+                "properties": {"body": {"type": "string"}},
+            },
+        }
+    },
+}
+NAMED_REPO = {  # gh repo view --json nameWithOwner
+    "type": "object",
+    "required": ["nameWithOwner"],
+    "properties": {"nameWithOwner": {"type": "string", "pattern": "^[^/\\s]+/[^/\\s]+$"}},
+}
+
+
+class _Titled(TypedDict):
+    title: str
+
+
+class _Note(TypedDict):
+    body: str
+
+
+class _Noted(TypedDict):
+    notes: list[_Note]
+
+
+class _NamedRepo(TypedDict):
+    nameWithOwner: str  # gh's field
+
+
+def _kit(script: str, *args: str, stdin: str, what: str) -> str:
+    """SCRIPT's stdout, run by the kit's locked Python (KIT_PYTHON, offline) with ARGS and STDIN;
+    _Unread naming WHAT and its stderr when it fails or cannot run."""
+    env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
+    try:
+        p = subprocess.run(
+            [*KIT_PYTHON, "python", "-c", script, *args],
+            input=stdin,
+            capture_output=True,
+            text=True,
+            env=env,
+            check=False,
+        )
+    except OSError as e:
+        msg = f"cannot run uv for the kit's locked environment ({e})"
+        raise _Unread(msg) from e
+    if p.returncode:
+        msg = f"{what}: {_said(p)}"
+        raise _Unread(msg)
+    return p.stdout
+
+
+def _validated(out: str, schema: Mapping[str, object], what: str) -> object:
+    """OUT, WHAT's JSON answer, once SCHEMA holds for it (VALIDATE: the failing field named)."""
+    _kit(VALIDATE, json.dumps(schema), stdin=out, what=f"{what} answered no valid JSON")
+    return json.loads(out)
+
+
+# The `## Replay` section read by markdown-it-py (pinned in pyproject.toml and uv.lock) in the
+# kit's locked environment, as VALIDATE is; what it reads as a row: octo-feather-lane --help,
+# merge-ask. Prints {"section": bool, "tables": [{"head": [cell...], "rows": [[cell...]...]}...]}.
+REPLAY_TABLE = """import json, sys
+from markdown_it import MarkdownIt
+tokens = MarkdownIt("commonmark").enable("table").parse(sys.stdin.read())
+section, inside, head, tables, row = False, False, False, [], None
+for i, t in enumerate(tokens):
+    if t.type == "heading_open" and t.tag in ("h1", "h2"):
+        inside = t.tag == "h2" and tokens[i + 1].content.strip().lower() == "replay"
+        section = section or inside
+    elif inside and t.type == "table_open":
+        tables.append({"head": [], "rows": []})
+    elif inside and t.type == "tr_open":
+        row = []
+    elif inside and t.type == "inline" and row is not None:
+        row.append("".join(c.content for c in t.children or []).strip())
+    elif inside and t.type in ("thead_open", "thead_close"):
+        head = t.type == "thead_open"
+    elif inside and t.type == "tr_close":
+        if head:
+            tables[-1]["head"] = row
+        else:
+            tables[-1]["rows"].append(row)
+        row = None
+print(json.dumps({"section": section, "tables": tables}))
+"""
+
+
+class _Table(TypedDict):
+    head: list[str]
+    rows: list[list[str]]
+
+
+class _Section(TypedDict):
+    section: bool
+    tables: list[_Table]
+
+
+def _replay_table(body: str) -> tuple[list[Row], list[str]] | None:
+    """(the `## Replay` section's rows in BODY, why a table or row of it is no row, empty fields
+    named); None when BODY has no such section. The rule: octo-feather-lane --help, merge-ask."""
+    out = _kit(REPLAY_TABLE, stdin=body or "", what="the PR body's Markdown (markdown-it-py)")
+    got = cast("_Section", json.loads(out))  # REPLAY_TABLE's own answer, its shape above
+    if not got["section"]:
+        return None
+    form = f"`| {' | '.join(REPLAY_HEAD)} |`"
+    rows: list[Row] = []
+    bad: list[str] = []
+    for t in got["tables"]:
+        if tuple(c.lower() for c in t["head"]) != REPLAY_HEAD:
+            bad.append(f"table `| {' | '.join(t['head'])} |` is not {form}")
+            continue
+        for n, cells in enumerate(t["rows"], 1):
+            row = Row(*cells)
+            empty = [f for f, v in zip(REPLAY_HEAD, cells, strict=True) if not v]
+            if empty:
+                who = row.finding or f"#{n} of the table"
+                bad.append(f"row `{who}`: {', '.join(empty)} empty; a row is {form}")
+                continue
+            rows.append(row)
+    return rows, bad
+
+
+def _runs(head: str, rows: list[Row], issues: tuple[int, ...]) -> dict[Row, Replayed]:
+    """Each of ROWS run in its own qc sandbox (octo-feather-qc sandboxed(), as its capture() runs a
+    demo: writes discarded, no Pi, no network) over this worktree, which must be at HEAD, and one
+    offline read-only GitHub snapshot (octo-feather-qc github_snapshot(), ISSUES in full) for all
+    of them. A row the sandbox cannot serve gets Replayed.unserved, never a run outside it."""
+    qc = _qc()
+    at = git("rev-parse", "HEAD", err=_Unread)[1].strip()
+    if at != head:
+        why = f"this worktree is at {at[:12]}, not the PR head {head[:12]}: rerun there"
+        return dict.fromkeys(rows, Replayed(None, "", why))
+    runid = os.urandom(3).hex()
+    snap, said = _quiet(qc.github_snapshot, False, runid, issues)  # noqa: FBT003  qc's own
+    if snap is None:  # its fetch failed (67)
+        return dict.fromkeys(rows, Replayed(None, "", f"no GitHub snapshot: {said}"))
+    try:
+        return {
+            row: _run(qc, row.command, snap, f"merge-ask-{head[:12]}-{runid}-r{n}")
+            for n, row in enumerate(rows)
+        }
+    finally:
+        if "dir" in snap:
+            qc.drop(str(snap["dir"]))
+
+
+class _Record(TypedDict, total=False):
+    """The fields of a qc sandbox record (octo-feather-qc sandboxed();
+    scripts/octo-feather-qc-sandbox, steps 7 and 10) a replay reads: the proof lines, the attempt
+    record or why it is missing, the overlay upper dir's entries ([kind, path])."""
+
+    proof: list[str]
+    attempts: list[dict[str, object]]
+    attempts_error: str
+    upper: list[list[str]]
+
+
+class _Qc(Protocol):
+    """What a replay uses of scripts/octo-feather-qc (_qc): its one sandbox and snapshot."""
+
+    def github_snapshot(
+        self,
+        skip: bool,  # noqa: FBT001  qc's own signature
+        runid: str,
+        issues: tuple[int, ...],
+    ) -> dict[str, object]: ...
+
+    def sandboxed(
+        self, judge: list[str], session: str, gh: dict[str, object], *, pi: bool
+    ) -> tuple[subprocess.CompletedProcess[str] | None, _Record]: ...
+
+    def drop(self, path: str) -> None: ...
+
+    def worktree_writes(self, upper: list[list[str]]) -> list[str]: ...
+
+
+_P = ParamSpec("_P")
+_T = TypeVar("_T")
+
+
+def _quiet(call: Callable[_P, _T], *args: _P.args, **kw: _P.kwargs) -> tuple[_T | None, str]:
+    """(CALL(*ARGS, **KW), '') with what it streams to stderr dropped (the sandbox's proof and
+    cleanup lines, each row's: its record keeps what a reason needs); (None, its last stderr line
+    and exit) when it exits, as octo-feather-qc's die() does on a sandbox or snapshot it cannot
+    have. Stated limit: one thread, as merge-ask is."""
+    sink = io.TextIOWrapper(io.BytesIO(), encoding="utf-8", errors="replace", write_through=True)
+    try:
+        with contextlib.redirect_stderr(sink):
+            return call(*args, **kw), ""
+    except SystemExit as e:
+        said = sink.buffer.getvalue().decode(errors="replace").strip()
+        return None, f"{(said.splitlines() or [''])[-1][:TAIL]} (exit {e.code})"
+
+
+def _qc() -> _Qc:
+    """scripts/octo-feather-qc as a module: its sandbox and snapshot, not a second (as
+    octo-feather-qa loads it)."""
+    loader = importlib.machinery.SourceFileLoader(
+        "octo_feather_qc", str(KIT / "scripts" / "octo-feather-qc")
+    )
+    spec = importlib.util.spec_from_loader("octo_feather_qc", loader)
+    assert spec is not None, "a SourceFileLoader always yields a spec"
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return cast("_Qc", mod)  # a module from a path: typed by what a replay uses of it
+
+
+def _program(command: str) -> str | None:
+    """COMMAND's program, split as a shell would without one; None when it cannot be split."""
+    try:
+        argv = shlex.split(command)
+    except ValueError:
+        return None
+    return argv[0] if argv else None
+
+
+def _run(qc: _Qc, command: str, snap: dict[str, object], session: str) -> Replayed:
+    """COMMAND run in its own qc sandbox (the demo command shape of octo-feather-qc capture(), at
+    this worktree's top, under REPLAY_TIMEOUT) with the offline gh over SNAP; unserved: the proof
+    failed or the sandbox is unavailable, or the run made an attempt the sandbox refused (an
+    offline gh refusal, a masked path, a host), named."""
+    root = git("rev-parse", "--show-toplevel", err=_Unread)[1].strip()
+    cmd = [
+        "timeout",
+        "--foreground",
+        "-k",
+        "10",
+        str(REPLAY_TIMEOUT),
+        "env",
+        f"QC_REPO={root}",
+        "sh",
+        "-c",
+        'cd "$QC_REPO" || exit 127; exec sh -c "$1"',
+        "qc-demo",
+        command,
+    ]
+    got, said = _quiet(qc.sandboxed, cmd, session, snap, pi=False)
+    if got is None:  # unshare missing (66) or macOS (69)
+        return Replayed(None, "", f"{UNAVAILABLE}: {said}")
+    run, rec = got
+    if run is None:
+        failed = [
+            ln.split("FAIL", 1)[1].strip()[:TAIL] for ln in rec.get("proof", []) if "FAIL" in ln
+        ]
+        return Replayed(None, "", f"{UNAVAILABLE}: {'; '.join(failed) or 'its proof failed'}")
+    refused = [a for a in rec.get("attempts", []) if a.get("refused")]
+    why = "; ".join(f"{a.get('what')}: {a.get('result')}"[:TAIL] for a in refused[:2])
+    if "attempts_error" in rec:
+        why = f"no attempt record ({rec['attempts_error']})"
+    if run.returncode in (124, 137):
+        why = why or f"timed out after {REPLAY_TIMEOUT}s"
+    wrote = tuple(qc.worktree_writes(rec.get("upper", [])))  # git's own and ignored ones aside
+    return Replayed(run.returncode, run.stdout + run.stderr, why, wrote)
+
+
+def _sample(s: Snapshot, cls: str, repo: str | None, lanes: Path) -> tuple[str, ...]:
+    """The clean sample's lanes for the issue's class CLS (the rule: octo-feather-lane --help,
+    merge-ask), REPO the PR's (None: this directory's gh repo), LANES the state dir's lanes/."""
+    if repo is None:
+        out = gh(["repo", "view", "--json", "nameWithOwner"], "check gh auth status", err=_Unread)
+        repo = cast("_NamedRepo", _validated(out, NAMED_REPO, "gh repo view"))["nameWithOwner"]
+    name = repo
+    shas = [oid for oid, _ in s.commits] or [s.head]
+    times = git("show", "-s", "--format=%ct", *shas, err=_Unread)[1].split()
+    first = dt.datetime.fromtimestamp(min(int(t) for t in times), dt.timezone.utc)
+    found: list[tuple[dt.datetime, str]] = []
+    for lane, path, lines in lane_logs(lanes):
+        if path.parent.name != "archive" or not lines:
+            continue
+        try:
+            rec = lane_record(lanes, lane)
+        except Refused as e:
+            raise _Unread(str(e)) from e
+        if not rec or str(rec[1].get("repository") or "").lower() != name.lower():
+            continue
+        last = utc(lines[-1].get("at"))
+        if last is None or last >= first:
+            continue
+        if any(d.get("kind") == "finding" and d.get("class") == cls for d in lines):
+            continue
+        found.append((last, lane))
+    return tuple(lane for _, lane in sorted(found, reverse=True)[:SAMPLE])
