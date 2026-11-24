@@ -38,7 +38,8 @@ Interface:
         replay (Replay, #1226; read only when the verdict comment lists a Check line): its parent
         issue through the tracker skill's issue-view, the clean sample from LANES (the state
         dir's lanes/) and each `## Replay` row's command run at the head, each in its own qc
-        sandbox over one GitHub snapshot (_runs; never outside it).
+        sandbox over one GitHub snapshot (_runs; never outside it). The lane's behaviour-neutral
+        opt-outs (Snapshot.optouts, #1259): the kit's check-behavior-smoke run here, its lines.
     check(s) -> Ask
         Pure, no I/O. Each refusal line the merge ask prints for S, in order, by rule, in the
         parts the command's own item goes between; none when S passes; with what a passing ask
@@ -50,7 +51,8 @@ Interface:
         back, or holds a read that failed (`not read: <what>`), the director's order). Its
         reasons (tier): each criterion the section's `Failed:` lists, with its triage (3), each
         column-0 line starting `Owner decision` up to its first colon in the section (3), shown
-        as written.
+        as written; the rest (the verdict comment's decision lines, the lane's opt-outs, OPTOUTS):
+        octo-feather-lane --help, merge-ask, Reasons.
 
 Shared with octo-feather-lane's other commands: bad_checks (lane status), check_runs, git,
 resolution_files (verdict, resolution), full_pass (ci-start: its reads, then its rule), and the
@@ -399,6 +401,9 @@ class Snapshot:
     # the correction lane's replay (#1222): None when the lane is none or its verdict lists no
     # check
     replay: Replay | Unread | None = None
+    # the lane's behaviour-neutral opt-outs (#1259): (commit, `Behaviour-neutral: <reason>`) each
+    # as check-behavior-smoke prints them from FORK to the head, or why unread; None when not read
+    optouts: list[tuple[str, str]] | Unread | None = None
 
 
 @dataclass(frozen=True)
@@ -517,6 +522,7 @@ def snapshot(  # noqa: PLR0913  each read's input, the command's reader among th
         gate=_gate_facts(g, head),
         trend=_trend(trend, head),
         fork=fork,
+        optouts=_optouts(head, fork) if fork else Unread("no merge base of the head and the base"),
     )
     # the judged head's check runs: read only when a check skipped on the head and a Judged proof
     # carries it (the rules' own judged head and proof, over the facts read above)
@@ -2464,6 +2470,34 @@ def check_lines(text: str) -> tuple[list[str], list[str]]:
     return lines, why
 
 
+CLEARED_LINE = re.compile(r"^Opt-out cleared:[ \t]*(.*?)\s*$")
+
+
+def decision_lines(text: str) -> tuple[list[str], list[str], list[str]]:
+    """(TEXT's owner decision lines as written, the commits its `Opt-out cleared:` lines name, why
+    a line is unusable), in the verdict reader's scope (form: .agents/skills/code-review/SKILL.md,
+    Verdict step, Report fields; #1259)."""
+    owner: list[str] = []
+    cleared: list[str] = []
+    why: list[str] = []
+    for ln in outside(text):
+        if m := CLEARED_LINE.match(ln):
+            sha = m.group(1).strip("`")
+            if SHA_NAMED.fullmatch(sha):
+                cleared.append(sha.lower())
+            else:
+                why.append(
+                    f"`{ln.strip()}` is not `Opt-out cleared: <commit sha>`, the opt-out's commit "
+                    "as `check-behavior-smoke` names it (7 to 40 hex)"
+                )
+        elif OWNER_DECISION.match(ln):
+            if ln.split(":", 1)[1].strip():
+                owner.append(ln.rstrip())
+            else:
+                why.append(f"`{ln.strip()}` names no decision: write the decision after the colon")
+    return list(dict.fromkeys(owner)), list(dict.fromkeys(cleared)), why
+
+
 # The review rounds of the verdict comment (#1220, spec #lanes-one-head): octo-feather-lane
 # verdict writes them under ROUNDS, one ROUND_LINE each, its check lines under it; merge-ask reads
 # them. A comment with no ROUNDS section (posted before rounds) is one legacy round: the whole
@@ -2732,6 +2766,11 @@ class Reason(NamedTuple):
     text: str
 
 
+# The opt-outs check-behavior-smoke prints (that script owns what an opt-out is)
+OPT_OUT = re.compile(r"^behavior smoke: opt-out ([0-9a-f]{7,40}) Behaviour-neutral: (.*)$")
+SHA_NAMED = re.compile(r"[0-9a-fA-F]{7,40}")
+
+
 @dataclass(frozen=True)
 class Tier:
     """The ask's tier N (the highest its REASONS give, 1 with none) and whom its merge WAITS for:
@@ -2782,7 +2821,11 @@ def tier(s: Snapshot) -> Tier:
     lines = section(s.body) or []
     fails = failed(s, lines)[1]
     reasons = [Reason(3, f"failed criterion {c}{': ' + w if w else ''}") for c, w in fails.items()]
-    reasons += [Reason(3, ln.strip()) for ln in lines if OWNER_DECISION.match(ln)]
+    hdr, clear = _verdict_header(s, lines)
+    owner, cleared, _ = decision_lines(hdr)
+    said = [ln.strip() for ln in lines if OWNER_DECISION.match(ln)]
+    reasons += [Reason(3, ln) for ln in dict.fromkeys([*said, *(x.strip() for x in owner)])]
+    reasons += _opt_out_reasons(s.optouts, cleared if clear else [])
     n = max((r.tier for r in reasons), default=1)
     back = sets_back(s.order) if s.order else []
     if n >= OWNER_TIER:
@@ -2792,6 +2835,60 @@ def tier(s: Snapshot) -> Tier:
     else:
         waits = "nobody"
     return Tier(n, reasons, waits)
+
+
+def _verdict_header(s: Snapshot, lines: list[str]) -> tuple[str, bool]:
+    """(the header of the verdict comment the section's `Review verdict:` links, '' for none;
+    whether it is clear)."""
+    rv = field(lines, "Review verdict")
+    m = COMMENT_URL.fullmatch(rv[1].strip("<>` ")) if rv else None
+    if not m or int(m.group(2)) != s.pr:
+        return "", False
+    c = next((c for c in s.comments if c.url.endswith(f"#issuecomment-{m.group(3)}")), None)
+    if c is None or not c.body.lstrip().startswith(MARKER):
+        return "", False
+    hdr = c.body.split("\n### Findings", 1)[0]
+    vs = verdicts(hdr)
+    return hdr, bool(vs) and set(vs) == {"clear"}
+
+
+def _opt_out_reasons(
+    optouts: list[tuple[str, str]] | Unread | None, cleared: list[str]
+) -> list[Reason]:
+    """A reason per behaviour-neutral opt-out: 2 when a CLEARED commit names it, else 3; 3 when
+    they could not be read."""
+    if isinstance(optouts, Unread):
+        return [Reason(3, f"behaviour-neutral opt-outs not read: {optouts.why}")]
+    out: list[Reason] = []
+    for sha, why in optouts or []:
+        if any(c.startswith(sha) or sha.startswith(c) for c in cleared):
+            out.append(Reason(2, f"opt-out {sha} cleared by the review verdict: {why}"))
+        else:
+            out.append(Reason(3, f"opt-out {sha} not cleared by the review verdict: {why}"))
+    return out
+
+
+def _optouts(head: str, base: str) -> list[tuple[str, str]] | Unread:
+    """The lane's behaviour-neutral opt-outs, (commit, `Behaviour-neutral: <reason>`) each, as
+    the kit's check-behavior-smoke prints them for BASE..HEAD in this repo (#1259)."""
+    try:
+        top = git("rev-parse", "--show-toplevel", err=_Unread)[1].strip()
+    except _Unread as e:
+        return Unread(str(e))
+    cmd = [sys.executable, str(KIT / "scripts" / "check-behavior-smoke")]
+    p = subprocess.run(
+        [*cmd, "--base", base, "--head", head, "--repo", top],
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
+    out = p.stdout.splitlines()
+    if p.returncode not in (0, 1) or any(ln.startswith("behavior smoke: skipped") for ln in out):
+        said = (p.stdout + p.stderr).strip().splitlines()
+        return Unread(f"check-behavior-smoke exit {p.returncode}: {said[-1] if said else ''}")
+    found = [m for ln in out if (m := OPT_OUT.match(ln))]
+    return [(m.group(1).lower(), f"Behaviour-neutral: {m.group(2)}") for m in found]
 
 
 # The merge-order reads (spec #gates-merge-order)

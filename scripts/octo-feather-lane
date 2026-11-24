@@ -119,7 +119,10 @@ in scope is the verdict, and lines that disagree are refused. What the check fie
 docs/adr/0008, Who builds what. Refused: no
 verdict, neither check form, both, a malformed Check line, a class other than exact, proxy or declaration, and
 a `class: proxy` line with `Verdict: clear` (a proxy check blocks; the declaration class: docs/adr/0008 rung 2). The comment's header carries
-the lines; merge-ask prints them under the section for the owner. HEAD is the head the review judged, H, a commit
+the lines; merge-ask prints them under the section for the owner. It also carries the report's owner decision
+lines and `Opt-out cleared: <commit sha>` lines (form: Report fields, above; refused: an owner decision line with
+nothing after its colon, a cleared value that is no sha), with those of the comment it replaces kept: only
+merge-ask's tier reads them (merge-ask, Reasons). HEAD is the head the review judged, H, a commit
 of the PR (7+ hex prefix); the comment names it (`Head:`) and the PR's head when posted (`PR head:`).
 Review rounds (rule: issue-lifecycle #lanes-one-head, #acceptance-verdict-covers-lane): the report's one `Range:`
 line (its form: Report fields, above). Refused: no Range, `to` not HEAD, `from` not an ancestor of `to`, and a
@@ -139,7 +142,8 @@ merge or a merge with nothing beyond git's automatic merge.
 `fields` reads the lines in `verdict`'s reader scope (Report fields, above) and prints one JSON object:
 "Check" {lines: [{path, rule, owner, reads, class}], none, errors} from the check field (errors:
 `verdict`'s refusals, an absent field included); "Owner" {lines: [{path, rule, restated: [path...]}], none,
-errors} from the Owner field (`:<line>` stripped from every path); "fields" {Name: [value...]} for every
+errors} from the Owner field (`:<line>` stripped from every path); "Decision" {owner: [line as written],
+cleared: [sha], errors} from the owner decision and `Opt-out cleared:` lines (errors: `verdict`'s refusals); "fields" {Name: [value...]} for every
 other `Name: value` line in scope (Name: a capital, then letters or -, in words one space apart: `Prior art`). Exit 0; 1 on an unreadable report.
 The factory evals' field_lines fact runs it (scripts/octo-feather-qa).
 
@@ -212,7 +216,12 @@ highest any reason gives (no reason: 1), printed on a pass right after the secti
 
 Reasons (tier): each criterion the section's `Failed:` lists, with its triage (3); each line of the section that
 starts at column 0 with `Owner decision` and holds a colon (`Owner decision: <text>`, `Owner decision 1 (<what>):
-<text>`), shown as written (3): any agent raises the tier by adding one. A tier 3 ask waits for the owner;
+<text>`), shown as written (3): any agent raises the tier by adding one; each such line in the header of the
+verdict comment `Review verdict:` links (verdict, above), shown as written (3); each behaviour-neutral opt-out
+the kit's check-behavior-smoke prints for the lane (`--base` the merge base of the head and BASE, `--head` the
+head: its `opt-out <sha>` lines), `opt-out <sha> cleared by the review verdict: Behaviour-neutral: <reason>`
+when that comment is clear and an `Opt-out cleared:` line in its header names the commit (2), else `opt-out <sha>
+not cleared by the review verdict: ...` (3); opt-outs that could not be read, naming why (3). A tier 3 ask waits for the owner;
 a tier 1 or 2 ask whose merge order (below) names an open PR this merge sets back (its head conflicts with this head,
 or this merge stales its pinned run), or one of whose reads failed (a `- not read:` line: it cannot prove none is set
 back), waits for the director's order, naming each (`PR #N: <why>`, `PR #N: its pinned run <run> not read`,
@@ -1179,13 +1188,15 @@ def cmd_fields(args: list[str]) -> int:
         o = OWNED.fullmatch(rule)
         checks.append({"path": path, "rule": o.group(1), "owner": o.group(2).strip(), "reads": reads, "class": kind})
     owners, onone, owhy = owner_lines(report)
+    decided, cleared, dwhy = merge_ask.decision_lines(report)
     other = {}
     for l in outside(report):
         m = FIELD_LINE.match(l)
         if m and m.group(1) not in ("Check", "Checks", "Owner", "Owners"):
             other.setdefault(m.group(1), []).append(m.group(2))
     print(json.dumps({"Check": {"lines": checks, "none": cls == ["Checks: none"] and not cwhy, "errors": cwhy},
-                      "Owner": {"lines": owners, "none": onone and not owhy, "errors": owhy}, "fields": other}))
+                      "Owner": {"lines": owners, "none": onone and not owhy, "errors": owhy},
+                      "Decision": {"owner": decided, "cleared": cleared, "errors": dwhy}, "fields": other}))
     return 0
 
 
@@ -1253,6 +1264,8 @@ def cmd_verdict(args: list[str]) -> int:
         raise Refuse(f"report gives verdicts that disagree ({', '.join(vs)}): keep one `Verdict:` line in the verdict reader's scope (scope: .agents/skills/code-review/SKILL.md (Verdict step)), the reviewer's final verdict, then rerun")
     verdict = vs[-1]
     cls, why = check_lines(report)
+    decided, cleared, dwhy = merge_ask.decision_lines(report)
+    why += dwhy
     if why:
         raise Refuse("; ".join(why) + "; fix the report, then rerun")
     proxy = [c for c in cls if c.endswith("| class: proxy")]
@@ -1277,10 +1290,13 @@ def cmd_verdict(args: list[str]) -> int:
         return 0
     mine = [c for c in cast("list[dict[str, str]]", d["comments"] or []) if (c.get("body") or "").lstrip().startswith(MARKER)]
     base = pr_base(cast("str | None", d["baseRefName"]) or "", None)
-    rounds = review_rounds(report, judged, base, mine[0]["body"] if len(mine) == 1 else "", verdict, tuple(cls))
+    posted = mine[0]["body"] if len(mine) == 1 else ""
+    rounds = review_rounds(report, judged, base, posted, verdict, tuple(cls))
     lines = [ln for n, r in enumerate(rounds, 1) for ln in r.line(n)]
+    was = merge_ask.decision_lines(posted.split(f"\n{merge_ask.ROUNDS}", 1)[0])   # kept: only the check lowers a tier
+    carried = [*dict.fromkeys([*was[0], *decided])] + [f"Opt-out cleared: {c}" for c in dict.fromkeys([*was[1], *cleared])]
     body = (f"{MARKER}\n## Code review verdict\n\nHead: {judged}\nPR head: {head}\nVerdict: {verdict}\n"
-            + "".join(f"{c}\n" for c in merge_ask.check_set(rounds)) + f"\n{merge_ask.ROUNDS}\n\n" + "".join(f"{x}\n" for x in lines)
+            + "".join(f"{c}\n" for c in [*merge_ask.check_set(rounds), *carried]) + f"\n{merge_ask.ROUNDS}\n\n" + "".join(f"{x}\n" for x in lines)
             + f"\n### Findings\n\n{report.strip()}\n")
     out, said = post_comment(pr, repo, d["comments"], MARKER, body, "verdict")
     print(f"verdict: {said} ({verdict}, head {judged[:12]})", file=sys.stderr)
