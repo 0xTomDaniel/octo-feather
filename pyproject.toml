@@ -50,6 +50,7 @@ extend-include = [
   "scripts/check-refs",
   "scripts/check-decision-log",
   "scripts/check-evals",
+  "scripts/check-fake-gh",
   "scripts/check-gate-free",
   "scripts/check-languages",
   "scripts/check-owner-field",

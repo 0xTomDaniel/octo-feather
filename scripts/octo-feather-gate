@@ -71,6 +71,11 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
       naming what it found unchanged. Content, never mtimes. DIR empty (no mise): the config
       alone; outside a git repo, the mise state alone. just check-tests runs both around every
       outermost gate run, which it gives its own TMP.
+  octo-feather-gate base
+      HEAD's merge base with the default branch, as changed finds it (the same code): `<sha> <ref>`
+      on stdout, exit 0; none found (no HEAD, no default branch, no merge base), says so on stderr
+      and exits 1. For a check that judges a change against the default branch
+      (scripts/check-fake-gh).
 
 The list is the repo root's shared-machinery.txt: one git pathspec per line, glob magic, `#`
 comment lines; git itself matches it. Maps live in the repo's git common dir,
@@ -408,10 +413,16 @@ def imported(root: Path, test: str, dirs: list[str]) -> set[str]:
     return out
 
 
+def main_base() -> tuple[str | None, str]:
+    """The default branch's ref (default_branch) and HEAD's merge base with it, empty when there
+    is no HEAD, no default branch or no merge base."""
+    ref = default_branch() if ok("rev-parse", "--verify", "-q", "HEAD") else None
+    return ref, git("merge-base", "HEAD", ref, check=False).strip() if ref else ""
+
+
 def changed_items() -> None:
     """The test items the change adds or changes (--help, changed), as pytest arguments."""
-    ref = default_branch() if ok("rev-parse", "--verify", "-q", "HEAD") else None
-    base = git("merge-base", "HEAD", ref, check=False).strip() if ref else ""
+    ref, base = main_base()
     if not base:
         sys.stderr.write("changed: none judged: no default branch or no merge base with it\n")
         return
@@ -761,6 +772,7 @@ def main() -> int:
     g.add_argument("rev", nargs="?", default="HEAD")
     sub.add_parser("select")
     sub.add_parser("changed")
+    sub.add_parser("base")
     m = sub.add_parser("map")
     m.add_argument("data", type=Path)
     m.add_argument("--junit", type=Path, required=True)
@@ -786,6 +798,12 @@ def main() -> int:
         select()
     elif a.cmd == "changed":
         changed_items()
+    elif a.cmd == "base":
+        ref, base = main_base()
+        if not base:
+            sys.stderr.write("base: none found: no default branch or no merge base with it\n")
+            return 1
+        sys.stdout.write(f"{base} {ref}\n")
     else:
         build_map(a.data, a.junit)
     return 0
