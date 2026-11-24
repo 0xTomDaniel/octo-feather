@@ -30,7 +30,9 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
       base, the newer of the map head and the latest commit of HEAD's history with a recorded full
       pass on a clean tree (record); a test item changed since the map head always runs. A changed
       file no recorded coverage reaches that the list names, or that is absent at the map head (the
-      map cannot know it), runs every non-e2e item.
+      map cannot know it), runs every non-e2e item. When main's newest map (the map nearest main's
+      tip, main the default branch as `changed` finds it) holds main commits the map used lacks, one
+      line names the map used and how many; selection goes on from it, never waiting or failing.
   octo-feather-gate changed
       The test items the change adds or changes, one pytest argument per line: a tests/*.sh as its
       test_gate.py node id, any other changed file as its path (a pytest item's file); test_gate.py
@@ -443,6 +445,23 @@ def beyond_map(at: str, base: str, unreached: list[str]) -> str:
     return "; ".join(why)
 
 
+def behind_main(at: str) -> None:
+    """Names the map at AT when main's newest map holds main commits AT lacks: how many."""
+    ref = default_branch()
+    newest = newest_map(git("rev-parse", ref).strip()) if ref else None
+    if ref is None or newest is None:
+        return
+    tip = str(newest["head"])
+    n = int(git("rev-list", "--count", f"{at}..{tip}"))
+    if n:
+        name = ref.removeprefix("refs/heads/").removeprefix("refs/remotes/")
+        say(
+            f"map at {at[:12]}",
+            f"{n} main commit{'s' * (n != 1)} behind main's newest map at {tip[:12]} ({name}):"
+            " more items may be selected; merge main for a newer map",
+        )
+
+
 def choose(root: Path, items: list[str], native_e2e: set[str]) -> set[str]:
     e2e = [i for i in items if i in native_e2e or ("::" not in i and is_e2e(root, i))]
     for i in e2e:
@@ -456,6 +475,7 @@ def choose(root: Path, items: list[str], native_e2e: set[str]) -> set[str]:
         )
         return set(items)
     at = str(m["head"])
+    behind_main(at)
     cover: dict[str, list[str]] = m["items"]  # pyright: ignore[reportAssignmentType]
     failed: list[str] = m.get("not_passed", [])  # pyright: ignore[reportAssignmentType]
     base = diff_base(at)
@@ -560,6 +580,7 @@ def build_map(data: Path, junit: Path) -> None:
     ran = outcomes(junit)
     tracked = Tracked()
     items: dict[str, list[str]] = {}
+    unread: list[str] = []
     # The pytest items: each data dir named by a node id (GATE_ITEM holds its `/` and `::`).
     native = {f.parent.relative_to(data).as_posix() for f in data.rglob("cov*") if f.is_file()}
     native = {i for i in native if "::" in i}
@@ -577,11 +598,15 @@ def build_map(data: Path, junit: Path) -> None:
         if not runs:  # not run, or no Python measured: no recorded coverage, so always selected
             continue
         files: set[str] = set()
-        for f in runs:
-            cd = coverage.CoverageData(basename=str(f))
-            cd.read()
-            for m in cd.measured_files():
-                files |= tracked.source(m)
+        try:
+            for f in runs:
+                cd = coverage.CoverageData(basename=str(f))
+                cd.read()
+                for m in cd.measured_files():
+                    files |= tracked.source(m)
+        except coverage.CoverageException as e:  # a data file left unwritten: coverage unknown
+            unread.append(f"{i} ({e})")
+            continue
         items[i] = sorted(files)
     head = git("rev-parse", "HEAD").strip()
     out = map_dir() / f"{head}.json"
@@ -592,6 +617,10 @@ def build_map(data: Path, junit: Path) -> None:
     sys.stdout.write(f"fast-map: {len(items)} test items mapped at {head[:12]}: {out}\n")
     for i in not_passed:
         sys.stdout.write(f"fast-map: {i} did not pass: left out of the map, always selected\n")
+    for i in unread:
+        sys.stdout.write(
+            f"fast-map: {i}: coverage unreadable: left out of the map, always selected\n"
+        )
 
 
 MISE_DIRS = ("tracked-configs", "trusted-configs")
