@@ -379,5 +379,54 @@ def diff_base(s: Scratch) -> None:
         assert main_only not in out, f"want no {main_only!r}: {said}"
 
 
+def incremental(s: Scratch) -> None:
+    k = kit(s, mapped=True)
+    maps = k / ".git" / "octo-feather" / "fast-map"
+    m0 = s.git(k, "rev-parse", "HEAD")
+    was = json.loads((maps / f"{m0}.json").read_text())
+    b = (k / "tests" / "b.sh").read_text().replace("fixture-b", "fixture-a")
+    (k / "tests" / "b.sh").write_text(b)
+    with (k / "scripts" / "fixture-g").open("a") as f:
+        f.write("# changed, no test item\n")
+    s.git(k, "commit", "-qam", "b.sh now runs fixture-a")
+    h1 = s.git(k, "rev-parse", "HEAD")
+    rc, out, ran = just(s, k, "fast-map", "--since-newest")
+    said = f"just fast-map --since-newest: exit {rc}, ran {ran}\n{out}"
+    assert rc == 0, said
+    assert [ln.split()[0] for ln in ran] == ["b"], said
+    line = f"fast-map: 1 test items re-mapped at {h1[:12]} onto the map at {m0[:12]} (4 in the map)"
+    assert line in out, said
+    new = json.loads((maps / f"{h1}.json").read_text())
+    assert new["head"] == h1, new
+    assert sorted(new["items"]) == sorted(was["items"]), f"was {was}\nnow {new}"
+    assert "scripts/fixture-a" in new["items"]["tests/b.sh"], new
+    assert "scripts/fixture-b" not in new["items"]["tests/b.sh"], new
+    for i in was["items"]:
+        assert i == "tests/b.sh" or new["items"][i] == was["items"][i], f"{i} changed: {new}"
+    assert new["not_passed"] == ["tests/e.sh"], new
+    with (k / "scripts" / "fixture-g").open("a") as f:
+        f.write("# changed again\n")
+    s.git(k, "commit", "-qam", "no test item changed")
+    h2 = s.git(k, "rev-parse", "HEAD")
+    rc, out, ran = just(s, k, "fast-map", "--since-newest")
+    said = f"just fast-map --since-newest, nothing to re-map: exit {rc}, ran {ran}\n{out}"
+    assert (rc, ran) == (0, []), said
+    line = f"fast-map: 0 test items re-mapped at {h2[:12]} onto the map at {h1[:12]} (4 in the map)"
+    assert line in out, said
+    last = json.loads((maps / f"{h2}.json").read_text())
+    assert (last["items"], last["not_passed"]) == (new["items"], new["not_passed"]), last
+
+
 if __name__ == "__main__":
-    main(slot_free, chooses, behind, unchanged, one_script, listed, absent, full_pass, diff_base)
+    main(
+        slot_free,
+        chooses,
+        behind,
+        unchanged,
+        one_script,
+        listed,
+        absent,
+        full_pass,
+        diff_base,
+        incremental,
+    )

@@ -10,6 +10,7 @@ from fast_map import (
     chooses,
     diff_base,
     full_pass,
+    incremental,
     listed,
     one_script,
     slot_free,
@@ -37,6 +38,11 @@ def test_fast_names_map_behind_main(case: Case) -> None:
 @pytest.mark.criterion("quality#acceptance-fast-diff-base")
 def test_fast_counts_since_main(case: Case) -> None:
     case(diff_base)
+
+
+@pytest.mark.criterion("quality#acceptance-map-after-merge")
+def test_fast_map_since_newest(case: Case) -> None:
+    case(incremental)
 
 
 @pytest.mark.parametrize("scenario", [unchanged, one_script, listed, absent, full_pass])

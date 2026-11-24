@@ -311,7 +311,9 @@ fast-list:
 # #recipes-static-first, tests/gate/heavy_slot.py). Its CPU is coverage's, not the tests': the run blocks the gate's
 # CPU show and per-test budget (tests/gate/conftest.py's cpu-shown plugin; -p no:, an argument, so a gate an item
 # runs still applies it), so its exit is its tests' and the map's alone. Extra arguments go to pytest. Never in just
-# check or CI.
+# check or CI. `just fast-map --since-newest` (the post-merge routine's job, octo-feather-lane --help, post-merge):
+# only the test items changed since the newest map's head (octo-feather-gate changed --since-map), the map written
+# that map with their entries replaced (map --onto-newest); none changed, no run, that map for HEAD.
 fast-map *args:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -319,9 +321,15 @@ fast-map *args:
     [[ -z "$(git status --porcelain)" ]] || { echo "fast-map: the tree has changes; commit them first, the map is written for HEAD" >&2; exit 1; }
     d="$(mktemp -d)"; trap 'rm -rf "$d"' EXIT
     cap="$(python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["fast_workers"])' "$root/gate-budget.toml")"
-    rc=0; env -u GATE_ITEM COV_MAP_DIR="$d" COVERAGE_PROCESS_START="$root/tests/gate/coverage.toml" GATE_WORKERS="$cap" \
+    onto=(); junit=(--junit "$d/junit.xml")
+    if [[ "${1:-}" == --since-newest ]]; then
+      shift; onto=(--onto-newest); ids="$(python3 "$root/scripts/octo-feather-gate" changed --since-map)"
+      [[ -z "$ids" ]] || { mapfile -t ids <<<"$ids"; set -- "${ids[@]}" "$@"; }
+      [[ $# -gt 0 ]] || junit=()
+    fi
+    rc=0; [[ ${#junit[@]} -eq 0 ]] || env -u GATE_ITEM COV_MAP_DIR="$d" COVERAGE_PROCESS_START="$root/tests/gate/coverage.toml" GATE_WORKERS="$cap" \
       just check-tests --junitxml="$d/junit.xml" -p no:cpu-shown -m 'not e2e' --deselect tests/gate/test_gate.py::test_recipe "$@" || rc=$?
-    uv run --locked --offline --no-sync python3 "$root/scripts/octo-feather-gate" map "$d" --junit "$d/junit.xml"
+    uv run --locked --offline --no-sync python3 "$root/scripts/octo-feather-gate" map "$d" "${junit[@]}" "${onto[@]}"
     exit "$rc"
 
 # The gate's pytest items, all or a subset by pytest arguments (`just test -k check-dashes`, `just test --lf`): check-tests.

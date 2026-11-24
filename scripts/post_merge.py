@@ -10,7 +10,7 @@ Interface:
 
     post_merge(pm, show) -> Ran(record, code)
         The routine for PM (PostMerge: pr, head, lane, wait, repo, and LANES the state dir's
-        lanes/) through run: steps 1-7 (STEPS) under the lane's lock in records(LANES), each
+        lanes/) through run: steps 1-8 (STEPS) under the lane's lock in records(LANES), each
         step's line to SHOW as it finishes; a step's Refused is its stop, Pending its pending,
         gh's unexpected data a stop. Then the director told once (tell_director): every step ok
         on a record the archive recorded its part in, the end's message; a stop, the stop's. Then
@@ -20,9 +20,14 @@ Interface:
         The archive's part of the director's message recorded; the teardown unit's end recorded,
         then the end or the stop told, its rerun keeping --repo REPO (octo-feather-lane --help,
         archive).
-    stale_report(state) -> (lines, read): step 5's report, `stale`'s output; STATE the state dir.
+    stale_report(state) -> (lines, read): step 6's report, `stale`'s output; STATE the state dir.
     kit_install(), top(), git_here(*args), records(lanes), now(): the install step 3 moves, the
         director's checkout, git in the current directory, the records' dir, a record's time.
+    manager(), transient(unit, run, hook=, fallback=, cwd=, limit=, log=, managed=) -> why,
+    bounded(run, limit) -> (result, status)
+        Whether a systemd user manager answers; RUN started in one finite transient unit, its stop
+        hook HOOK, or FALLBACK in its own session where no manager answers, "" when started; the
+        fallback's bounded run of RUN and its end as systemd names it.
     run(lane, pm, steps, show, records) -> Record
         STEPS the routine's (name, function) pairs in order; each function takes PM (its pr, head,
         merge and base) and returns its outcome (ok, stopped or pending) and its line. Under the
@@ -56,19 +61,22 @@ a stop). Written whole each time (a temp file renamed over it), so a reader neve
 
 __all__ = [
     "STEPS", "Body", "Close", "Merge", "Outcome", "PostMerge", "Ran", "Record", "Refused", "Step",
-    "Unit", "Unreadable", "archived", "git_here", "kit_install", "now", "post_merge", "read",
-    "records", "run", "stale_report", "tell", "tell_director", "top", "unit_end", "update",
+    "Unit", "Unreadable", "archived", "bounded", "git_here", "kit_install", "manager", "now",
+    "post_merge", "read", "records", "run", "stale_report", "tell", "tell_director", "top",
+    "transient", "unit_end", "update",
 ]  # fmt: skip
 
 import contextlib
 import datetime as dt
 import fcntl
 import functools
+import hashlib
 import importlib.machinery
 import importlib.util
 import json
 import os
 import re
+import resource
 import shlex
 import signal
 import subprocess
@@ -388,7 +396,8 @@ class PostMerge:
     lanes: Path
     merge: str = ""
     base: str = ""
-    not_told: list[str] = field(default_factory=list[str])  # step 6: "<lane> <pane>" not told
+    not_told: list[str] = field(default_factory=list[str])  # step 7: "<lane> <pane>" not told
+    map_failed: str = ""  # step 5: why the map build did not start, told after the routine
 
     def r(self) -> list[str]:
         return ["-R", self.repo] if self.repo else []
@@ -905,6 +914,316 @@ def _checkout(pm: PostMerge) -> str:
     return _follow(pm, at, "checkout", branch=pm.base, always_fetch=False)
 
 
+# Step 5 (issue 1250; quality #acceptance-map-after-merge, #acceptance-map-full-daily,
+# #acceptance-map-build-failed): --help, step 5. The clone's coverage map rebuilt for the merge by
+# one job per clone, in a transient unit (transient), never waited for. Its record, build.json in
+# the map dir, under build.lock beside it: running (the unit's build: merge, lane, pr, unit, how,
+# started, tree, full), queued (the one merge waiting: merge, lane, pr, at), last (the last build's
+# end: merge, lane, pr, full, result, why, items, mapped, not_passed, wall, cpu, ended) and full
+# (the last full map's merge and when it was built), each null until known.
+MAP_LIMIT = 3600  # s: the map job's runtime limit (systemd RuntimeMaxSec; the fallback's own kill)
+MAP_FULL_AGE = 86400  # s: a last full map older than this makes the next build a full one
+MAP_POLL = 1  # s between tries of the fast-run turns while the job waits for one free
+MAP_RECORD = "build.json"
+
+
+def map_dir(at: Path) -> Path:
+    """The coverage maps' dir of the clone AT is in: <git common dir>/octo-feather/fast-map
+    (scripts/octo-feather-gate --help, map)."""
+    common = _git(at, "rev-parse", "--path-format=absolute", "--git-common-dir", what="clone")[1]
+    return Path(common) / "octo-feather" / "fast-map"
+
+
+def _map_unit(maps: Path) -> str:
+    """The clone's one map job unit: octo-feather-fast-map-<clone id>, the id from its git dir."""
+    clone = hashlib.sha256(os.path.realpath(maps.parent.parent).encode()).hexdigest()[:12]
+    return f"octo-feather-fast-map-{clone}"
+
+
+@contextlib.contextmanager
+def _build_locked(maps: Path) -> Generator[dict[str, Any]]:
+    """The clone's build record, read under its lock and written whole when the block ends."""
+    maps.mkdir(parents=True, exist_ok=True)
+    path = maps / MAP_RECORD
+    with (maps / "build.lock").open("a") as f:
+        fcntl.flock(f, fcntl.LOCK_EX)
+        try:
+            raw: object = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
+        except (OSError, UnicodeDecodeError, ValueError) as e:
+            msg = f"build record {path} unreadable ({e}): remove it, then rerun"
+            raise Refused(msg) from e
+        if not isinstance(raw, dict):
+            msg = f"build record {path} is no JSON object: remove it, then rerun"
+            raise Refused(msg)
+        b = {k: cast("dict[str, Any]", raw).get(k) for k in ("running", "queued", "last", "full")}
+        yield b
+        fd, tmp = tempfile.mkstemp(dir=maps, prefix=".build.", suffix=".tmp")
+        with os.fdopen(fd, "w", encoding="utf-8") as out:
+            json.dump(b, out, indent=1)
+            out.write("\n")
+        Path(tmp).replace(path)
+
+
+def _since(at: str) -> float:
+    """Seconds since AT, a record's time (now()); a time not read counts as long ago."""
+    try:
+        then = dt.datetime.fromisoformat(at)
+    except (TypeError, ValueError):
+        return float("inf")
+    return (dt.datetime.now(dt.timezone.utc) - then).total_seconds()
+
+
+def _recipe(at: Path) -> str:
+    """Why the repo at AT builds no coverage map (`just --summary` names no fast-map), else ""."""
+    try:
+        p = subprocess.run(
+            ["just", "--summary"],  # noqa: S607 (just from PATH)
+            cwd=at,
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            timeout=60,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return f"just --summary in {at} failed ({type(e).__name__}: {e})"
+    if p.returncode:  # no justfile, or one just cannot read: no recipe it can run
+        err = _last(p)
+        said = err[-1][:200] if err else p.returncode
+        return f"{at} has no fast-map recipe (just --summary: {said})"
+    if "fast-map" not in p.stdout.split():
+        return f"{at} has no fast-map recipe (just --summary)"
+    return ""
+
+
+def _map(pm: PostMerge) -> str:  # noqa: PLR0911 (one line per outcome)
+    """Step 5 (--help, step 5): the merge's map build started, queued, already done or skipped;
+    its line. Never a stop: a build not started is told once after the routine (pm.map_failed)."""
+    at = top()
+    if why := _recipe(at):
+        return f"coverage map: skipped: {why}"
+    maps, m, why, how = map_dir(at), pm.merge, "", ""
+    unit, log, m12 = _map_unit(maps), maps / "build.log", m[:12]
+    if (maps / f"{m}.json").is_file():
+        return f"coverage map: already done: {maps / (m + '.json')}"
+    try:
+        with _build_locked(maps) as b:
+            r, q = b["running"], b["queued"]
+            if r and _since(r.get("started")) < MAP_LIMIT + 60:  # past that its unit is gone
+                r12 = str(r.get("merge"))[:12]
+                if r.get("merge") == m:
+                    return f"coverage map: already started: unit {unit} builds {m12}"
+                if q and q.get("merge") == m:
+                    return (
+                        f"coverage map: already queued: {m12}, after unit {unit}'s build of {r12}"
+                    )
+                b["queued"] = {"merge": m, "lane": pm.lane, "pr": pm.pr, "at": now()}
+                gone = f", replacing queued {str(q.get('merge'))[:12]}, never mapped" if q else ""
+                return f"coverage map: queued: {m12}, after unit {unit}'s build of {r12}{gone}"
+            managed = manager()
+            how = "systemd-run --user" if managed else "start_new_session"
+            b["running"] = {"merge": m, "lane": pm.lane, "pr": pm.pr, "unit": unit, "how": how}
+            b["running"] |= {"started": now(), "tree": "", "full": None}
+            b["queued"] = None
+            me = str(Path(__file__).resolve().parent / "octo-feather-lane")
+            job, end = [me, "post-merge", "--map-job"], [me, "post-merge", "--map-end"]
+            why = transient(
+                unit,
+                job,
+                hook=end,
+                fallback=[*job, "--unit-run"],
+                cwd=at,
+                limit=MAP_LIMIT,
+                log=log,
+                managed=managed,
+            )
+            if why:
+                b["running"] = None
+                b["last"] = {"merge": m, "lane": pm.lane, "pr": pm.pr, "result": "not started"}
+                b["last"] |= {"why": why, "ended": now()}
+    except Refused as e:
+        why = str(e)
+    if why:
+        pm.map_failed = f"unit {unit} not started ({why})"
+        return f"coverage map: not started: {pm.map_failed}; the maps in {maps} stay as they are"
+    return (
+        f"coverage map: started: unit {unit} ({how}, limit {MAP_LIMIT}s, its lines in {log}) "
+        f"builds the map for {m12}; the routine goes on without it"
+    )
+
+
+def _map_told(lanes: Path, r: dict[str, Any], why: str, show: Callable[[str], None]) -> int:
+    """The build of R's merge failed for WHY, told R's lane's director once (tell_director)."""
+    m = str(r.get("merge"))
+    msg = (
+        f"coverage map build for {m[:12]} (lane {r.get('lane')}, PR #{r.get('pr')}) failed: {why}; "
+        f"the previous map stays the one just fast selects from, no map written for {m[:12]}"
+    )
+    return tell_director(lanes, str(r.get("lane")), f"coverage map {m}", msg, show)
+
+
+def _turn_free() -> str:
+    """ "" when a fast-run turn is free, so no fast run waits for one (a waiting run means every
+    turn is held: tests/gate/heavy_slot.py, fast_runs), else who holds them. Each turn tried as
+    its holder's flock(2), LOCK_NB, released at once."""
+    try:
+        budget = tomllib.loads((KIT / "gate-budget.toml").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        return ""
+    n = budget.get("fast_runs")
+    state = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
+    slots = state / "octo-feather" / "slots"
+    if not isinstance(n, int) or isinstance(n, bool) or n < 1 or not slots.is_dir():
+        return ""
+    held: list[str] = []
+    for i in range(n):
+        with (slots / f"fast-{i}.lock").open("a") as f:
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                held.append(f"fast-{i}.lock")
+                continue
+        return ""
+    return ", ".join(held)
+
+
+def _lowest() -> None:
+    """This process, and all it starts, at the lowest processor and disk priority (nice 19,
+    ionice's idle class where ionice is), as a fast-tier run (quality #recipes-static-first)."""
+    with contextlib.suppress(OSError):
+        os.setpriority(os.PRIO_PROCESS, 0, 19)
+    with contextlib.suppress(OSError, subprocess.SubprocessError):
+        subprocess.run(
+            ["ionice", "-c", "3", "-p", str(os.getpid())],  # noqa: S607 (ionice from PATH)
+            capture_output=True,
+            stdin=subprocess.DEVNULL,
+            check=False,
+        )
+
+
+def _full_due(b: dict[str, Any], maps: Path, at: Path, m: str) -> str:
+    """Why the build of M is a full one, else "" (incremental)."""
+    f = b["full"]
+    if not f:
+        return "no full map recorded"
+    fm, age = str(f.get("merge")), _since(f.get("at"))
+    if age > MAP_FULL_AGE:
+        return f"the last full map, {fm[:12]}, was built {age / 3600:.0f} h ago"
+    known = _git(at, "merge-base", "--is-ancestor", fm, m, ok=(0, 1, 128), what="clone")[0] == 0
+    if not (maps / f"{fm}.json").is_file() or not known:
+        return f"the last full map, {fm[:12]}, is gone or no ancestor of {m[:12]}"
+    return ""
+
+
+def map_job(lanes: Path, show: Callable[[str], None]) -> int:  # noqa: PLR0915 (one build at a time, in order)
+    """The clone's map job (--help, step 5), in its unit, cwd the clone's checkout: the running
+    merge's map built, then the queued one's, if any, then it ends. 0 when every build wrote its
+    map, else 1, each failure told its lane's director once."""
+    _lowest()
+    at = top()
+    maps, rc = map_dir(at), 0
+    while True:
+        with _build_locked(maps) as b:
+            r = b["running"]
+        if not r:
+            return rc
+        m = str(r["merge"])
+        waited = False
+        while held := _turn_free():
+            if not waited:
+                show(f"map job: waiting for a free fast-run turn (held: {held})")
+                waited = True
+            time.sleep(MAP_POLL)
+        tree = maps / f"build-{m[:12]}"
+        with _build_locked(maps) as b:
+            full = _full_due(b, maps, at, m)
+            b["running"] = r = {**r, "tree": str(tree), "full": bool(full)}
+        kind = f"full ({full})" if full else "incremental"
+        cmd = ["just", "fast-map", *([] if full else ["--since-newest"])]
+        show(f"map job: {kind} build of {m[:12]}: {' '.join(cmd)} in {tree}")
+        t0, c0 = time.monotonic(), _children_cpu()
+        out, code = "", 0
+        try:
+            _git(at, "worktree", "add", "--detach", "--force", str(tree), m, what="clone")
+            p = subprocess.run(
+                cmd,
+                cwd=tree,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                check=False,
+            )
+            out, code = p.stdout, p.returncode
+            sys.stdout.write(out)
+        except (Refused, OSError) as e:
+            out, code = str(e), -1
+        finally:
+            _git(at, "worktree", "remove", "--force", str(tree), ok=(0, 128), what="clone")
+            _git(at, "worktree", "prune", ok=(0, 128), what="clone")
+        wall, cpu = time.monotonic() - t0, _children_cpu() - c0
+        made = maps / f"{m}.json"
+        mapped = not_passed = 0
+        if made.is_file():
+            with contextlib.suppress(OSError, ValueError, AttributeError):
+                d = json.loads(made.read_text(encoding="utf-8"))
+                mapped, not_passed = len(d.get("items", {})), len(d.get("not_passed", []))
+        said = re.findall(r"^fast-map: (\d+) test items (?:re-)?mapped", out, re.MULTILINE)
+        why = "" if made.is_file() else f"{' '.join(cmd)} exit {code}, no map written"
+        with _build_locked(maps) as b:
+            b["last"] = {"merge": m, "lane": r.get("lane"), "pr": r.get("pr"), "full": bool(full)}
+            b["last"] |= {"result": "failed" if why else "ok", "why": why}
+            b["last"] |= {"items": int(said[-1]) if said else None, "mapped": mapped}
+            b["last"] |= {"not_passed": not_passed, "wall": round(wall, 1), "cpu": round(cpu, 1)}
+            b["last"] |= {"ended": now()}
+            if full and not why:
+                b["full"] = {"merge": m, "at": now()}
+            q = b["queued"]
+            b["running"] = {**r, **q, "tree": "", "full": None} if q else None
+            b["queued"] = None
+            if b["running"]:
+                b["running"].pop("at", None)
+        show(
+            f"map job: {kind} build of {m[:12]} "
+            + (f"FAILED: {why}" if why else f"ok: {made}")
+            + f" ({said[-1] if said else '?'} items run, {mapped} mapped, {not_passed} not passed,"
+            f" {wall:.0f} s wall, {cpu:.0f} s CPU)"
+        )
+        if why:
+            _map_told(lanes, r, why, show)
+            rc = 1
+
+
+def _children_cpu() -> float:
+    """The CPU seconds of this process's children waited for so far."""
+    u = resource.getrusage(resource.RUSAGE_CHILDREN)
+    return u.ru_utime + u.ru_stime
+
+
+def map_end(lanes: Path, result: str, status: str, show: Callable[[str], None]) -> int:
+    """The map job unit's stop hook (--help, step 5): a job that ended with a build still running
+    (killed, timed out, crashed) has that build recorded failed, its scratch worktree removed, the
+    queued merge dropped, and its lane's director told once; else nothing."""
+    at = top()
+    maps = map_dir(at)
+    why = f"unit {_map_unit(maps)} ended {result} ({status}) while building"
+    with _build_locked(maps) as b:
+        r, q = b["running"], b["queued"]
+        if r:
+            b["last"] = {"merge": r.get("merge"), "lane": r.get("lane"), "pr": r.get("pr")}
+            b["last"] |= {"full": r.get("full"), "result": "failed", "why": why, "ended": now()}
+            b["running"] = b["queued"] = None
+    show(f"map job unit {_map_unit(maps)} ended: {result} ({status})")
+    if not r:
+        return 0
+    if tree := r.get("tree"):
+        _git(at, "worktree", "remove", "--force", str(tree), ok=(0, 128), what="clone")
+        _git(at, "worktree", "prune", ok=(0, 128), what="clone")
+    if q:
+        why += f"; queued {str(q.get('merge'))[:12]} not built (the next merge's routine builds)"
+    return _map_told(lanes, r, why, show)
+
+
 # The live-run rule (issue 1136; issue-lifecycle #gates-main-moved; --help, steps 3 and 7).
 RUN_POLL = 1  # seconds between reads of the slot runs while a step waits
 
@@ -1278,11 +1597,11 @@ def stale_report(state: Path) -> tuple[list[str], bool]:  # noqa: C901 (one pass
 
 
 def _stale(pm: PostMerge) -> str:
-    """Step 5: the stale report's lines, never a stop (--help, step 5)."""
+    """Step 6: the stale report's lines, never a stop (--help, step 6)."""
     return "; ".join(stale_report(pm.lanes.parent)[0])
 
 
-# --- step 6: tell running supervisors main moved (issue 398) ---
+# --- step 7: tell running supervisors main moved (issue 398) ---
 
 # The rule files a supervisor re-reads when main moves: role files, skills, skill patches,
 # AGENTS.md, ADRs, specs.
@@ -1334,7 +1653,7 @@ def _kit_repo() -> str | None:
 
 
 def _tell(pm: PostMerge) -> str:  # noqa: C901, PLR0912, PLR0915 (the step's one pass, each lane in turn)
-    """Step 6: tell each live supervisor of the PR's repo (every lane on a kit PR), but --lane's,
+    """Step 7: tell each live supervisor of the PR's repo (every lane on a kit PR), but --lane's,
     that main moved and which rule files changed; one prod line per lane told in the director
     log, which a rerun reads to skip it. A pane Herdr does not find is listed, never sent to (why:
     herdr-comms SKILL.md, herdr-say); nor is the merging lane's own supervisor pane, which runs
@@ -1431,7 +1750,7 @@ def _tell(pm: PostMerge) -> str:  # noqa: C901, PLR0912, PLR0915 (the step's one
         if not live:
             # Parked when the lane's latest parked line (its hand-off log, read as
             # octo-feather-handoff parked does) names this pane; else gone, for the director to
-            # resume or archive (owner ruling #206, step 6).
+            # resume or archive (owner ruling #206, step 7).
             log = lanes / f"{name}.handoffs.jsonl"
             try:
                 marks = [
@@ -1493,7 +1812,7 @@ def _tell(pm: PostMerge) -> str:  # noqa: C901, PLR0912, PLR0915 (the step's one
     return who
 
 
-# --- step 7: tear down the closed lane (issue 399) ---
+# --- step 8: tear down the closed lane (issue 399) ---
 
 
 def _review_roots() -> list[tuple[str, str, str]]:
@@ -1618,7 +1937,7 @@ def _users(path: str, seen: list[Seen] | str, gone: tuple[str, str] | None) -> s
 
 
 def _teardown(pm: PostMerge) -> str:  # noqa: C901, PLR0912, PLR0915 (the step's one pass, in order)
-    """Step 7: once the lane's record is archived for this PR (its archive starts this step),
+    """Step 8: once the lane's record is archived for this PR (its archive starts this step),
     close its own space (or only its supervisor tab in a shared one; neither while another open
     lane or the director names that pane), remove its worktree (kept, its local branch with it,
     while a live agent outside what was closed works in it: _users), retarget PRs based on its
@@ -1666,7 +1985,7 @@ def _teardown(pm: PostMerge) -> str:  # noqa: C901, PLR0912, PLR0915 (the step's
             holders.append(p.stem)
     shared = any(isinstance(x, str) and x.split(":", 1)[0] == space for x in others)
     branch = tracker("lane-key", str(rec.get("issue")), err=Refused).strip()
-    if at := _worktree_of(branch):  # the live-run rule (--help, step 7)
+    if at := _worktree_of(branch):  # the live-run rule (--help, step 8)
         _wait_runs(pm, Path(at[1]), "teardown", "nothing closed or removed", program=False)
     seen = _agents()  # read before the close changes it
     tab = next((a.tab for a in seen if a.pane == sup), None) if isinstance(seen, list) else None
@@ -1742,13 +2061,14 @@ def _teardown(pm: PostMerge) -> str:  # noqa: C901, PLR0912, PLR0915 (the step's
     return "; ".join(done)
 
 
-# The routine's steps in order (#396 merged and main CI, #397 kit refresh, #1078 checkout, #1079
-# stale agents, #398 tell supervisors, #399 teardown).
+# The routine's steps in order (#396 merged and main CI, #397 kit refresh, #1078 checkout, #1250
+# coverage map, #1079 stale agents, #398 tell supervisors, #399 teardown).
 _STEPS: tuple[tuple[str, Callable[[PostMerge], str]], ...] = (
     ("merged", _merged),
     ("main CI", _ci),
     ("kit refresh", _kit),
     ("checkout", _checkout),
+    ("coverage map", _map),
     ("stale agents", _stale),
     ("tell supervisors", _tell),
     ("teardown", _teardown),
@@ -1787,7 +2107,7 @@ def post_merge(pm: PostMerge, show: Callable[[str], None]) -> Ran:
     outcomes = [f"step {s.number} {s.name} {s.outcome}" for s in ran]
     outcomes += [f"step {n} {name} not run" for n, name in enumerate(STEPS, 1) if n > len(ran)]
     told = (
-        f"; NOT told: {', '.join(pm.not_told)} (step 6 names each re-send)" if pm.not_told else ""
+        f"; NOT told: {', '.join(pm.not_told)} (step 7 names each re-send)" if pm.not_told else ""
     )
     # The director's one message (issue 1134): the end's, or a stop's, each once (tell_director),
     # before the summary.
@@ -1796,6 +2116,9 @@ def post_merge(pm: PostMerge, show: Callable[[str], None]) -> Ran:
         unsent = _tell_end(pm.lanes, rec, show)
     else:
         unsent = _tell_stop(pm.lanes, rec, stop, show, repo=pm.repo, wait=pm.wait) if stop else 0
+    if pm.map_failed:  # step 5's build not started: a failed build, told once (--help, step 5)
+        r = {"merge": pm.merge, "lane": pm.lane, "pr": pm.pr}
+        unsent |= _map_told(pm.lanes, r, pm.map_failed, show)
     show(f"post-merge {pm.lane} PR #{pm.pr}: {'; '.join(outcomes)}{told}")
     if unsent:
         return Ran(rec, 1)
@@ -1914,6 +2237,100 @@ def unit_end(  # noqa: PLR0913 (the unit's end and the run's --repo)
     return tell_director(lanes, lane, why, msg, show)
 
 
+# --- a transient unit: the teardown's (octo-feather-lane --help, archive) and the coverage map
+# job's (step 5): finite, named, bounded, its end recorded by its stop hook ---
+
+# What systemd sets in each unit itself, never carried over from the starter's environment.
+UNIT_OWN = frozenset({
+    "INVOCATION_ID", "JOURNAL_STREAM", "SYSTEMD_EXEC_PID", "MANAGERPID", "NOTIFY_SOCKET",
+    "LISTEN_PID", "LISTEN_FDS", "LISTEN_FDNAMES", "WATCHDOG_PID", "WATCHDOG_USEC", "SERVICE_RESULT",
+    "EXIT_CODE", "EXIT_STATUS", "MONITOR_SERVICE_RESULT", "MONITOR_EXIT_CODE",
+    "MONITOR_EXIT_STATUS",
+})  # fmt: skip
+MANAGER_UP = ("running", "degraded", "starting", "initializing", "maintenance", "stopping")
+
+
+def manager() -> bool:
+    """Whether a systemd user manager answers (`systemctl --user is-system-running`): none on
+    macOS."""
+    try:
+        p = subprocess.run(
+            ["systemctl", "--user", "is-system-running"],  # noqa: S607 (systemctl from PATH)
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            timeout=20,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return p.stdout.strip() in MANAGER_UP
+
+
+def transient(  # noqa: PLR0913 (the unit's parts, each keyword-only)
+    unit: str,
+    run: Sequence[str],
+    *,
+    hook: Sequence[str],
+    fallback: Sequence[str],
+    cwd: Path,
+    limit: int,
+    log: Path,
+    managed: bool,
+) -> str:
+    """RUN started in one transient unit UNIT in CWD with this process's environment, returning
+    at once: with MANAGED (manager()) `systemd-run --user`, never a service or timer, bounded by
+    RuntimeMaxSec LIMIT, its lines appended to LOG, HOOK its stop hook (ExecStopPost, after any
+    end, reading SERVICE_RESULT, EXIT_CODE, EXIT_STATUS); else FALLBACK in its own session
+    (start_new_session), which runs RUN under the same limit (bounded) and then the same end.
+    Empty when started, else why not."""
+    env = {k: v for k, v in os.environ.items() if k not in UNIT_OWN}
+    try:
+        if managed:
+            cmd = ["systemd-run", "--user", "--quiet", "--collect", f"--unit={unit}"]
+            cmd += [f"--working-directory={cwd}", "-p", f"RuntimeMaxSec={limit}"]
+            cmd += ["-p", f"ExecStopPost={shlex.join(hook)}"]
+            cmd += ["-p", f"StandardOutput=append:{log}", "-p", f"StandardError=append:{log}"]
+            cmd += [*(f"--setenv={k}={v}" for k, v in env.items()), "--", *run]
+            p = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                timeout=60,
+                check=False,
+            )
+            err = (p.stderr or p.stdout).strip().splitlines()
+            said = err[-1][:200] if err else "no output"
+            return f"systemd-run exit {p.returncode}: {said}" if p.returncode else ""
+        with log.open("a") as f:
+            subprocess.Popen(
+                fallback,
+                cwd=cwd,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=f,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return f"{type(e).__name__}: {e}"
+    return ""
+
+
+def bounded(run: Sequence[str], limit: int) -> tuple[str, str]:
+    """A fallback unit's run (transient): RUN in its own session, its group killed past LIMIT
+    seconds; its end as systemd names it, (SERVICE_RESULT, status)."""
+    with subprocess.Popen(run, stdin=subprocess.DEVNULL, start_new_session=True) as p:
+        try:
+            rc = p.wait(limit)
+        except subprocess.TimeoutExpired:
+            os.killpg(p.pid, signal.SIGKILL)
+            p.wait()
+            return "timeout", "killed KILL"
+    return ("success" if rc == 0 else "exit-code"), f"exited {rc}"
+
+
 WAIT = 300  # post-merge's --wait when none is given (octo-feather-lane --help, post-merge)
 
 
@@ -1969,7 +2386,7 @@ def _tell_end(lanes: Path, rec: Record, show: Callable[[str], None]) -> int:
 
 
 def tell_director(lanes: Path, lane: str, key: str, msg: str, show: Callable[[str], None]) -> int:
-    """MSG to the director's pane (director.toml beside LANES), bounded as step 6's sends, once
+    """MSG to the director's pane (director.toml beside LANES), bounded as step 7's sends, once
     per KEY (tell); 1 when it is not told, else 0."""
     path = lanes.parent / "director.toml"
     pane: object = None
