@@ -43,7 +43,14 @@ Interface:
         Pure, no I/O. Each refusal line the merge ask prints for S, in order, by rule, in the
         parts the command's own item goes between; none when S passes; with what a passing ask
         prints; Ask.order, the merge-order lines (spec #gates-merge-order), and Ask.gate_time,
-        never a gap.
+        never a gap. Ask.tier (Tier, spec #gates-tiers), on any Ask: the tier N, the highest its
+        reasons give (none: 1), and the block merge-ask prints, `Tier: N`, one `- <reason>` line
+        per reason, `Waits for: nobody | the director's order (PR #N: <why>) | the owner` (tier 3
+        always the owner; a tier 1 or 2 ask whose merge order names an open PR this merge sets
+        back, or holds a read that failed (`not read: <what>`), the director's order). Its
+        reasons (tier): each criterion the section's `Failed:` lists, with its triage (3), each
+        column-0 line starting `Owner decision` up to its first colon in the section (3), shown
+        as written.
 
 Shared with octo-feather-lane's other commands: bad_checks (lane status), check_runs, git,
 resolution_files (verdict, resolution), full_pass (ci-start: its reads, then its rule), and the
@@ -71,6 +78,7 @@ __all__ = [  # check's interface, then the helpers octo-feather-lane's other com
     "Round",
     "Sibling",
     "Snapshot",
+    "Tier",
     "Trend",
     "Unread",
     "Workflows",
@@ -407,7 +415,8 @@ class Ask:
     source; JUDGMENTS, the model judgment comments (shown only); ORDER, the merge-order lines
     (shown only, spec #gates-merge-order, on any Ask); NO_CI, the no-CI fact's line on a pass,
     else ''; CURRENT, the head's checks after the current-head projection (the rollup when it
-    could not be made); CARRIED_OK, a line per skipped check carried; GATE_TIME, the gate time
+    could not be made); CARRIED_OK, a line per skipped check carried; TIER, the ask's tier
+    (Tier, spec #gates-tiers: on any Ask check returns); GATE_TIME, the gate time
     lines (shown only, spec #lanes-checkpoints); ROUNDS, the verdict comment's review rounds, one
     line each, its check lines indented under it."""
 
@@ -432,6 +441,7 @@ class Ask:
     gate_time: list[str] = dataclasses.field(default_factory=list)
     rounds: list[str] = dataclasses.field(default_factory=list)
     replay: str = ""  # the correction lane's `Replay:` line (#1222), '' for none
+    tier: "Tier | None" = None  # the ask's tier (spec #gates-tiers), on any Ask check returns
 
     @property
     def gaps(self) -> list[str]:
@@ -876,7 +886,7 @@ def qc_latest(d: Path, judged: str) -> dict[str, tuple[dict[str, object], str]]:
 
 
 def check(s: Snapshot) -> Ask:
-    a = _check(s)
+    a = dataclasses.replace(_check(s), tier=tier(s))
     return dataclasses.replace(a, order=merge_order(s.order)) if s.order else a
 
 
@@ -2710,6 +2720,78 @@ def merge_order(o: Order) -> list[str]:
         "fails the same without it):"
     )
     return [head, *out]
+
+
+# The tier rule, pure (spec #gates-tiers, #gates-tier-relay; issue #1257): each reason one entry
+
+
+class Reason(NamedTuple):
+    """One reason the ask found: the TIER it gives and its TEXT, the `- <text>` line printed."""
+
+    tier: int
+    text: str
+
+
+@dataclass(frozen=True)
+class Tier:
+    """The ask's tier N (the highest its REASONS give, 1 with none) and whom its merge WAITS for:
+    `nobody`, `the director's order (PR #N: <why>)` or `the owner` (always at tier 3)."""
+
+    n: int
+    reasons: list[Reason]
+    waits: str
+
+    @property
+    def lines(self) -> list[str]:
+        """The tier block as merge-ask prints it."""
+        reasons = [f"- {r.text}" for r in self.reasons]
+        return [f"Tier: {self.n}", *reasons, f"Waits for: {self.waits}"]
+
+
+# a column-0 line starting `Owner decision` up to its first colon (#1184 wrote `Owner decision 1
+# (...): ...`); it only raises a tier, so the looser match is the safe side
+OWNER_DECISION = re.compile(r"Owner decision[^:\n]*:", re.IGNORECASE)
+OWNER_TIER = 3  # the tier that waits for the owner, whatever the merge order names
+
+
+def sets_back(o: Order) -> list[str]:
+    """`PR #N: <why>` for each other open PR O names this merge sets back, or may: its head
+    conflicting with this one, a pinned run this merge newly stales, a pinned run not read
+    (merge_order's own findings); then `not read: <line>` for each read of O that failed. A read
+    that failed cannot prove no PR is set back, so it waits as one that is."""
+    out: list[str] = []
+    for p in o.prs:
+        files = ", ".join(p.conflicts)
+        why = [f"its head conflicts with this head in {files}"] if files else []
+        for pin in p.pins:
+            was, now = _stale(pin.main), _stale(pin.merged)
+            if was is None or now is None:
+                why.append(f"its pinned run {pin.run} not read")
+            elif [x for x in now if x not in was]:
+                why.append(f"this merge stales its pinned run {pin.run}")
+        if why:
+            out.append(f"PR #{p.number}: {' and '.join(why)}")
+    return out + [f"not read: {u}" for u in o.unread]
+
+
+def tier(s: Snapshot) -> Tier:
+    """S's tier from the records the ask already holds: each criterion its section's `Failed:`
+    lists (3), each column-0 `Owner decision...:` line in the section (3); a merge order naming
+    an open PR this merge sets back, or a merge-order read that failed, makes a tier 1 or 2 ask
+    wait for the director's order, tier unchanged."""
+    lines = section(s.body) or []
+    fails = failed(s, lines)[1]
+    reasons = [Reason(3, f"failed criterion {c}{': ' + w if w else ''}") for c, w in fails.items()]
+    reasons += [Reason(3, ln.strip()) for ln in lines if OWNER_DECISION.match(ln)]
+    n = max((r.tier for r in reasons), default=1)
+    back = sets_back(s.order) if s.order else []
+    if n >= OWNER_TIER:
+        waits = "the owner"
+    elif back:
+        waits = f"the director's order ({'; '.join(back)})"
+    else:
+        waits = "nobody"
+    return Tier(n, reasons, waits)
 
 
 # The merge-order reads (spec #gates-merge-order)

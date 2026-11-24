@@ -203,6 +203,22 @@ lines for the owner, its `class: declaration` lines (the class: docs/adr/0008 ru
 at merge): <n>` after it (how: spec issue-lifecycle #lanes-one-head), shown only (send it all with herdr-say --parent). Failure: each missing item
 with its fix on stderr, exit 1.
 
+The tier (spec issue-lifecycle #gates-tiers, #gates-tier-relay): every ask is sorted into tier 1, 2 or 3, the
+highest any reason gives (no reason: 1), printed on a pass right after the section's lines, on stdout:
+
+  Tier: N
+  - <reason>                      one line per reason
+  Waits for: nobody | the director's order (PR #N: <why>) | the owner
+
+Reasons (tier): each criterion the section's `Failed:` lists, with its triage (3); each line of the section that
+starts at column 0 with `Owner decision` and holds a colon (`Owner decision: <text>`, `Owner decision 1 (<what>):
+<text>`), shown as written (3): any agent raises the tier by adding one. A tier 3 ask waits for the owner;
+a tier 1 or 2 ask whose merge order (below) names an open PR this merge sets back (its head conflicts with this head,
+or this merge stales its pinned run), or one of whose reads failed (a `- not read:` line: it cannot prove none is set
+back), waits for the director's order, naming each (`PR #N: <why>`, `PR #N: its pinned run <run> not read`,
+`not read: <what>`; `; ` between), its tier unchanged; else for nobody. A failing ask prints the block on stderr alone, after the line `Incomplete
+merge ask (it fails below; never send this tier):`, after the merge order and before the items, never on stdout.
+
 `Merge order` (spec issue-lifecycle #gates-merge-order), shown only, after `Gate time` on a pass, and on stderr
 after it, before the items, on a failure (before the refusal when nothing can be judged): the ask passes or fails
 the same without it. It names each other open PR on the PR's base (`gh pr list --state open --base <base>`), its
@@ -1616,10 +1632,13 @@ def cmd_merge_ask(args: list[str]) -> int:
                            trend=state_dir() / ReportSources.TREND, err=Refuse, lanes=lanes_dir(), base=base_arg)
     head = d["headRefOid"]
     a = merge_ask.check(s)
+    tier = a.tier.lines if a.tier else []   # spec #gates-tiers; incomplete on a failing ask, stderr only
+    incomplete = ["", "Incomplete merge ask (it fails below; never send this tier):", *tier]
     if a.refusal:
-        print("\n".join(a.order), file=sys.stderr)   # shown only (spec #gates-merge-order)
+        print("\n".join([*a.order, *incomplete]), file=sys.stderr)   # shown only (spec #gates-merge-order)
         raise Refuse(a.refusal)
     if a.abort:   # a read the full pass needs failed
+        print("\n".join(incomplete).strip(), file=sys.stderr)
         raise Refuse(a.abort)
     miss = list(a.head); lines = a.section
 
@@ -1628,10 +1647,11 @@ def cmd_merge_ask(args: list[str]) -> int:
     miss += [*a.checks, *a.judged, *a.carried, *a.full, *a.review]   # the full pass: every lane, one building no criterion too
     no_ci, carried, gate_time = a.no_ci, a.carried_ok, a.gate_time   # the gate time: shown only
     if miss:
-        print("\n".join([*gate_time, "", *a.order]), file=sys.stderr)   # shown only (spec #gates-merge-order)
+        print("\n".join([*gate_time, "", *a.order, *incomplete]), file=sys.stderr)   # shown only (spec #gates-merge-order)
         raise Refuse(f"PR #{pr} merge ask incomplete ({len(miss)} item{'s' * (len(miss) > 1)}), head {head[:12]}:\n"
                      + "\n".join(f"  - {x}" for x in miss))
     print("\n".join(lines).strip())
+    print("\n" + "\n".join(tier))   # the tier block, inside the section (spec #gates-tiers)
     if no_ci:
         print(f"\nChecks: {no_ci}")
     if carried:
