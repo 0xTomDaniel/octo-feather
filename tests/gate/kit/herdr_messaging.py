@@ -1015,6 +1015,7 @@ def post_merge_busy(s: Scratch) -> None:
 TELL_JUSTFILE = "vendored-fetch:\n    @true\n\ninstall-check target:\n    @true\n"
 RULED = ".agents/skills/foo/SKILL.md, agents/supervisor.md"
 REREAD = "re-read the changed ones before your next step."
+SENDER = "(from the post-merge routine of lane gh7)"  # step 6's sender, its line and prod line
 
 
 def build_tell(p: Scratch) -> None:
@@ -1169,7 +1170,7 @@ def told_live(t: Tell) -> None:
     t.dlog.write_text(earlier + "\n")
     tell, last = t.run(3, 7, "--lane", "gh7", "--repo", "o/r")
     assert t.said() == ["zt1:p1"], t.said()
-    want = f"main moved to {t.m[:12]} (#7 Add foo); rule files changed: {RULED}; {REREAD}"
+    want = f"main moved to {t.m[:12]} (#7 Add foo); rule files changed: {RULED}; {REREAD} {SENDER}"
     assert t.told() == [want], t.told()
     assert "told: live1 zt1:p1" in tell, tell
     gone = "gone: director to resume or archive: none"
@@ -1178,7 +1179,7 @@ def told_live(t: Tell) -> None:
     assert "agent get zt3:p1" not in lines(t.d / "log"), lines(t.d / "log")
     prods = t.prods()
     assert len(prods) == 2, prods
-    note = f"post-merge {t.m} #7: main moved, told live1 to re-read {RULED}"
+    note = f"post-merge {t.m} #7: main moved, told live1 to re-read {RULED} {SENDER}"
     p = prods[1]
     assert sorted(p) == ["at", "issue", "kind", "note"], p
     assert (p["kind"], p["issue"], p["note"]) == ("prod", 11, note), p
@@ -1189,9 +1190,12 @@ def told_live(t: Tell) -> None:
     assert "already told: live1" in tell, tell
     assert "not woken: parked zt2:p1" in tell, tell
     t.run(3, 8, "--lane", "gh7", "--repo", "o/r")
-    none = f"main moved to {t.m2[:12]} (#8 Notes); rule files changed: none; {REREAD}"
+    none = f"main moved to {t.m2[:12]} (#8 Notes); rule files changed: none; {REREAD} {SENDER}"
     assert t.told()[-1] == none, t.told()
-    assert t.prods()[-1]["note"] == f"post-merge {t.m2} #8: main moved, told live1 to re-read none"
+    assert (
+        t.prods()[-1]["note"]
+        == f"post-merge {t.m2} #8: main moved, told live1 to re-read none {SENDER}"
+    )
 
 
 def told_kit(t: Tell) -> None:

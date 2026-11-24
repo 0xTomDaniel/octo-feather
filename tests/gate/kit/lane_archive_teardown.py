@@ -5,12 +5,14 @@ issue-lifecycle #gates-main-moved, #acceptance-archive-tears-down; comms #transp
 tests/gate/kit/lane_merge.py's world (PR #7 of lane gh7,
 parent issue 70 with sub-issue 71, lane gh8 open, the kit install and the director's checkout of
 o/r), with testkit.reflector's reflection world (each reflector finding no gap, the director's
-pane w9:p99 in director.toml) and these on top: lane gh7's branch gh70 (`lane-key 70`) at the
+pane w9:p99 in director.toml) and these on top: lane gh7's branch gh70 (`lane-key gh70`) at the
 base, pushed to origin, checked out in worktree wt, where the supervisor runs the archive; PR #9
 open based on gh70; Herdr's agents (the testkit's Herdr stand-in under the kit's own herdr-close
 and herdr-say) the director, gh7's supervisor zt1:p1 alone in its space and gh8's zt2:p1, each
 idle; the testkit's systemd stand-in (testkit/systemd.py) as systemd-run and systemctl, its calls
-and each unit's end in a log. Space ids `zt*`, which no real Herdr gives.
+and each unit's end in a log. Each command runs with gh7's supervisor's environment (lane_merge.py's
+SUPERVISOR), herdr-say's up-chain guard active, as in that supervisor's pane (#1249); the teardown
+unit inherits it. Space ids `zt*`, which no real Herdr gives.
 
 The demo's commands and output are printed: the merge, the archive, the teardown unit's lines
 and the director's one message, `post-merge --lane gh7`.
@@ -26,7 +28,7 @@ import time
 from typing import TYPE_CHECKING
 
 from herdr_messaging import ASSETS, agent, lines
-from lane_merge import H, World
+from lane_merge import DIRECTOR, SUPERVISOR, H, World
 from lane_post_merge import run1
 from testkit import HERE, Scratch, kit, main, reflector
 
@@ -36,7 +38,6 @@ if TYPE_CHECKING:
     from testkit import Ran
 
 UNIT = "octo-feather-teardown-gh7"
-DIRECTOR = "w9:p99"
 
 
 class Lane:
@@ -51,6 +52,7 @@ class Lane:
         w.lanes.rename(aside)
         w.st.rmdir()
         reflector(s)  # its state dir and Herdr world World's own, FAKE_HERDR as World's
+        s.env |= SUPERVISOR  # the pane reflector clears: the archive runs in gh7's supervisor's
         aside.rename(w.lanes)
         world = json.loads((w.herdr / "agents.json").read_text())
         world[DIRECTOR]["agent_status"] = "idle"
@@ -248,7 +250,7 @@ def shared_supervisor_kept(s: Scratch) -> None:
     the tab kept with gh8, the lane holding it, and the worktree kept with that pane, among what
     is left on disk on purpose; PR #9 retargeted as when not shared."""
     t = Lane(s)
-    t.w.record("gh8", "zt1:p1", 80, None)
+    t.w.record("gh8", "zt1:p1", "gh80", None)
     world = json.loads((t.w.herdr / "agents.json").read_text())
     world["zt1:p1"]["cwd"] = str(t.wt)
     (t.w.herdr / "agents.json").write_text(json.dumps(world))
