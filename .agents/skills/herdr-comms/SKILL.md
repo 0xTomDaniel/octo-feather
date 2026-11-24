@@ -160,8 +160,8 @@ swept, named in the report. Only the unit spawn named for that pane
 stopped (#1070). A Herdr answer that fails or breaks the shape
 Herdr states for it stops the close before anything is closed (Herdr's exit, or
 76 for a malformed one, the field named; `assets/herdr_scope.py`). Run it from outside
-what it closes: the spawner closes a tab, the director closes a finished lane's
-own space, or only its supervisor tab when the lane started in a shared space.
+what it closes: the spawner closes a tab; a lane's teardown: comms spec
+`#transport-close-space`.
 Prints `tab= tab_close_rc= killed=` or `space= space_close_rc= killed=`
 (`killed=` the scopes' members when stopped), plus `unowned=PANE[,PANE...]`
 when any, and exits with the close status.

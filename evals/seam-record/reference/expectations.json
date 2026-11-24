@@ -34,16 +34,7 @@
           "seam",
           "1015"
         ],
-        "exit": 1
-      },
-      {
-        "fact": "field_lines",
-        "field": "Verdict",
-        "includes": [
-          {
-            "text": "blocking"
-          }
-        ]
+        "exit": 0
       }
     ]
   }

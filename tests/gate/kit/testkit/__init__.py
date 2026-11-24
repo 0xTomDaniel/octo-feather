@@ -51,7 +51,8 @@ FAKES = {
 }
 # Stand-ins a scenario puts first on PATH itself, where its command reaches the system another
 # way: pi_agent.py (Pi at the agent boundary, an eval case's role run; qa_box.py copies it
-# too), and gh.py (above) on a PATH of its own; each file's header says what it answers.
+# too), and gh.py (above) on a PATH of its own; systemd.py as systemd-run (a transient unit;
+# agent_scope.py runs the box's real one); each file's header says what it answers.
 # provider.py stands in for a model provider, a server its caller starts (its header).
 # tests/fixtures/install-check/pi stands in for Pi at its version and its model proxy, the
 # install-check items' one (install_check.py, its header).
