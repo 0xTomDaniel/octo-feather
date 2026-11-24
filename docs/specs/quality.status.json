@@ -355,8 +355,8 @@
     "acceptance-fast-map-slot-free": {
       "status": "built",
       "pr": 1246,
-      "record": "20261124T220358Z-8e80df5e",
-      "commit": "bbbdf018c2368c22298556de8b828d755e8fef49",
+      "record": "20261124T225540Z-85af3b4b",
+      "commit": "bd1c47598ed9480dd508bfe4a3980695485b5297",
       "tests": [
         "tests/gate/kit/test_fast_map.py"
       ]
@@ -364,8 +364,8 @@
     "acceptance-fast-map-behind": {
       "status": "built",
       "pr": 1246,
-      "record": "20261124T220358Z-40a3d53a",
-      "commit": "bbbdf018c2368c22298556de8b828d755e8fef49",
+      "record": "20261124T225540Z-53ecc778",
+      "commit": "bd1c47598ed9480dd508bfe4a3980695485b5297",
       "tests": [
         "tests/gate/kit/test_fast_map.py"
       ]
@@ -373,8 +373,8 @@
     "acceptance-fast-diff-base": {
       "status": "built",
       "pr": 1246,
-      "record": "20261124T220358Z-d3827f33",
-      "commit": "bbbdf018c2368c22298556de8b828d755e8fef49",
+      "record": "20261124T225540Z-94ecf15c",
+      "commit": "bd1c47598ed9480dd508bfe4a3980695485b5297",
       "tests": [
         "tests/gate/kit/test_fast_map.py"
       ]
@@ -400,8 +400,8 @@
     "acceptance-map-after-merge": {
       "status": "built",
       "pr": 1246,
-      "record": "20261124T220358Z-1e7f6845",
-      "commit": "bbbdf018c2368c22298556de8b828d755e8fef49",
+      "record": "20261124T225540Z-4e900a90",
+      "commit": "bd1c47598ed9480dd508bfe4a3980695485b5297",
       "tests": [
         "tests/gate/kit/test_fast_map.py",
         "tests/gate/kit/test_lane_post_merge_map.py"
@@ -410,8 +410,8 @@
     "acceptance-map-full-daily": {
       "status": "built",
       "pr": 1246,
-      "record": "20261124T220358Z-849e96cc",
-      "commit": "bbbdf018c2368c22298556de8b828d755e8fef49",
+      "record": "20261124T225541Z-606756d6",
+      "commit": "bd1c47598ed9480dd508bfe4a3980695485b5297",
       "tests": [
         "tests/gate/kit/test_lane_post_merge_map.py"
       ]
@@ -419,8 +419,8 @@
     "acceptance-map-build-failed": {
       "status": "built",
       "pr": 1246,
-      "record": "20261124T220359Z-e4b514c0",
-      "commit": "bbbdf018c2368c22298556de8b828d755e8fef49",
+      "record": "20261124T225541Z-d12454e4",
+      "commit": "bd1c47598ed9480dd508bfe4a3980695485b5297",
       "tests": [
         "tests/gate/kit/test_lane_post_merge_map.py"
       ]
