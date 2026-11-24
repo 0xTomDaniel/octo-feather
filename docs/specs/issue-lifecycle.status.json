@@ -459,9 +459,9 @@
     },
     "acceptance-merge-starts-routine": {
       "status": "built",
-      "pr": 1153,
-      "record": "20261123T203921Z-a87d7afb",
-      "commit": "1008da14c8cb9bfe338cec07505aa57a874c3ff5",
+      "pr": 1265,
+      "record": "20261124T224524Z-956a0566",
+      "commit": "334600845eeff9c77fe192398fe4494a6e248d49",
       "tests": [
         "tests/gate/kit/lane_merge.py"
       ]
@@ -477,9 +477,9 @@
     },
     "acceptance-archive-tears-down": {
       "status": "built",
-      "pr": 1153,
-      "record": "20261123T203921Z-df0da214",
-      "commit": "1008da14c8cb9bfe338cec07505aa57a874c3ff5",
+      "pr": 1265,
+      "record": "20261124T224525Z-ddf4bbbd",
+      "commit": "334600845eeff9c77fe192398fe4494a6e248d49",
       "tests": [
         "tests/gate/kit/lane_archive_teardown.py"
       ]
