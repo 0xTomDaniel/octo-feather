@@ -38,6 +38,11 @@ absent: a file absent at the map head, not on the list: every non-e2e item, the 
 full_pass: a commit past the map (fixture-a gated, tests/b.sh changed); with no git identity the
 record of its full pass is refused, naming how to set one, and records nothing; recorded, only
 changes past it feed coverage selection, and b.sh, changed since the map head, stays selected.
+diff_base (quality #acceptance-fast-diff-base): three main commits past the map (one changing
+shared-machinery.txt, one adding a file, one changing tests/b.sh), then branch lane cut from main
+with fixture-a changed in a commit of its own: `just fast-list` names the diff base, lane's merge
+base with main, and chooses a.sh and test_one (coverage reaches fixture-a), b.sh (changed since
+the map), d.sh and e.sh (unmapped), each with why, and none for main's listed or added files.
 """
 
 from __future__ import annotations
@@ -300,5 +305,40 @@ def full_pass(s: Scratch) -> None:
         assert want in out, f"want {want!r}: {out}"
 
 
+def diff_base(s: Scratch) -> None:
+    k = kit(s, mapped=True)
+    with (k / "shared-machinery.txt").open("a") as f:
+        f.write("# main's own change\n")
+    s.git(k, "commit", "-qam", "main: the list")
+    (k / "scripts" / "fixture-main").write_text('#!/usr/bin/env python3\nprint("main")\n')
+    s.git(k, "add", "-A")
+    s.git(k, "commit", "-qm", "main: a new file")
+    with (k / "tests" / "b.sh").open("a") as f:
+        f.write("# main changed this test\n")
+    s.git(k, "commit", "-qam", "main: a test")
+    left = s.git(k, "rev-parse", "HEAD")
+    s.git(k, "checkout", "-qb", "lane")
+    with (k / "scripts" / "fixture-a").open("a") as f:
+        f.write("# one-script change\n")
+    s.git(k, "commit", "-qam", "lane: one script")
+    rc, out, ran = just(s, k, "fast-list")
+    said = f"just fast-list: exit {rc}\n{out}"
+    assert rc == 0, said
+    assert ran == [], f"an item ran: {said}"
+    for want in (
+        f"fast: diff base: {left[:12]}, HEAD's merge base with main",
+        "fast: tests/a.sh: recorded coverage reaches scripts/fixture-a",
+        "fast: tests/gate/kit/test_f.py::test_one: recorded coverage reaches scripts/fixture-a",
+        "fast: tests/b.sh: changed since the map at ",
+        "fast: tests/d.sh: no recorded coverage in the map at ",
+        "fast: tests/e.sh: did not pass the mapping run at ",
+        "fast: 1 non-e2e test items skipped",
+        "fast: selected 6 of 9 gate items (1 static, 5 of 8 test items)",
+    ):
+        assert want in out, f"want {want!r}: {said}"
+    for main_only in ("shared-machinery.txt", "fixture-main", "test_f.py::test_two:"):
+        assert main_only not in out, f"want no {main_only!r}: {said}"
+
+
 if __name__ == "__main__":
-    main(slot_free, behind, unchanged, one_script, listed, absent, full_pass)
+    main(slot_free, behind, unchanged, one_script, listed, absent, full_pass, diff_base)

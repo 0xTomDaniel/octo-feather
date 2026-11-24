@@ -26,13 +26,15 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
       collects them (tests/gate/kit/). The selection reads the coverage map (below) and the list;
       an item without recorded coverage always runs; a tests/*.sh whose own header has the line
       `# gate: e2e`, or a pytest item carrying pytest's e2e marker, is end-to-end. A pytest item's
-      file is the file its node id names. Changed files count from the diff
-      base, the newer of the map head and the latest commit of HEAD's history with a recorded full
-      pass on a clean tree (record); a test item changed since the map head always runs. A changed
-      file no recorded coverage reaches that the list names, or that is absent at the map head (the
-      map cannot know it), runs every non-e2e item. When main's newest map (the map nearest main's
-      tip, main the default branch as `changed` finds it) holds main commits the map used lacks, one
-      line names the map used and how many; selection goes on from it, never waiting or failing.
+      file is the file its node id names. Changed files count from the diff base, the newest of
+      the map head, the latest commit of HEAD's history with a recorded full pass on a clean tree
+      (record), and HEAD's merge base with the default branch as `changed` finds it (why: quality
+      #recipe-fast), each descending from the map head; a test item changed since the map head
+      always runs. A changed file no recorded coverage reaches that the list names, or that is
+      absent at the map head (the map cannot know it), runs every non-e2e item. When main's
+      newest map (the map nearest main's tip, main the default branch as `changed` finds it)
+      holds main commits the map used lacks, one line names the map used and how many;
+      selection goes on from it, never waiting or failing.
   octo-feather-gate changed
       The test items the change adds or changes, one pytest argument per line: a tests/*.sh as its
       test_gate.py node id, any other changed file as its path (a pytest item's file); test_gate.py
@@ -46,8 +48,8 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
       too: the change's net changes, so a file changed and restored is none, the same on CI (a
       checkout with the default branch's history). The default branch from local refs, no
       network: origin/HEAD; else origin/<name>, then the local <name>, for init.defaultBranch,
-      main, master. None found: none judged. Where from on stderr. Not select's diff base, which
-      is for selection. The gate's per-test CPU budget reads it (tests/gate/conftest.py; quality
+      main, master. None found: none judged. Where from on stderr. Select's diff base can be
+      newer (select). The gate's per-test CPU budget reads it (tests/gate/conftest.py; quality
       #acceptance-test-cpu-budget).
   octo-feather-gate map DATA_DIR --junit FILE
       In the kit, under its uv venv (coverage): writes the coverage map from a mapping run's data
@@ -347,8 +349,10 @@ def is_e2e(root: Path, item: str) -> bool:
 
 
 def diff_base(at: str) -> str:
-    """The newer of the map head AT and the latest commit of HEAD's history descending from it
-    with a recorded full pass on a clean tree (record): what that pass gated needs no selection."""
+    """The newest of the map head AT, the latest commit of HEAD's history descending from it
+    with a recorded full pass on a clean tree (record): what that pass gated needs no selection,
+    and HEAD's merge base with the default branch (main_base) descending from AT: main's own
+    changes before the branch left it are not the branch's."""
     best: tuple[int, str] = (int(git("rev-list", "--count", f"{at}..HEAD")), at)
     for rec in records():
         head = rec.get("head")
@@ -358,6 +362,18 @@ def diff_base(at: str) -> str:
             "merge-base", "--is-ancestor", head, "HEAD"
         ):
             best = min(best, (int(git("rev-list", "--count", f"{head}..HEAD")), head))
+    ref, base = main_base()
+    if base and ok("merge-base", "--is-ancestor", at, base):
+        n = int(git("rev-list", "--count", f"{base}..HEAD"))
+        if n < best[0]:
+            name = (ref or "").removeprefix("refs/heads/").removeprefix("refs/remotes/")
+            say(
+                f"diff base: {base[:12]}, HEAD's merge base with {name}",
+                f"newer than the map at {at[:12]}"
+                f"{'' if best[1] == at else f' and the full pass at {best[1][:12]}'}"
+                ": what main changed before the branch left it does not select",
+            )
+            return base
     if best[1] != at:
         say(
             f"diff base: {best[1][:12]}, the latest recorded full pass on HEAD's history",
@@ -410,10 +426,16 @@ def imported(root: Path, test: str, dirs: list[str]) -> set[str]:
     return out
 
 
+def main_base() -> tuple[str | None, str]:
+    """The default branch's ref (default_branch) and HEAD's merge base with it, empty when there
+    is no HEAD, no default branch or no merge base."""
+    ref = default_branch() if ok("rev-parse", "--verify", "-q", "HEAD") else None
+    return ref, git("merge-base", "HEAD", ref, check=False).strip() if ref else ""
+
+
 def changed_items() -> None:
     """The test items the change adds or changes (--help, changed), as pytest arguments."""
-    ref = default_branch() if ok("rev-parse", "--verify", "-q", "HEAD") else None
-    base = git("merge-base", "HEAD", ref, check=False).strip() if ref else ""
+    ref, base = main_base()
     if not base:
         sys.stderr.write("changed: none judged: no default branch or no merge base with it\n")
         return
