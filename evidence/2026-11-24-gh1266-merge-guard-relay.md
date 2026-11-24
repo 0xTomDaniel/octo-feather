@@ -75,7 +75,9 @@ Result (stdout, verbatim):
 
 Each run from a scratch world (tests/gate/kit/lane_merge_guard.py's World: scratch state dir, lane record and
 director.toml, scratch kit install, Herdr's stand-in), real gh recorded into
-tests/gate/kit/testkit/recordings/merge-guard-1266.json: PR #36 (tier 3) and #34 (waiting for the director's
-order, #35 conflicting) refused, open; #33 (tier 1, nobody) merged at ee3c86bc6f73; #34 merged at 9bc1520502a9
-on the director's relay; #36 refused at its fix 7f7e09c5147b against the relay of d44992873d63, then merged at
-16dc9236b3d0, the relay of 7f7e09c5147b carried over a clean merge of the base.
+tests/gate/kit/testkit/recordings/merge-guard-1266.json: PR #36 (tier 3) and #34 (tier 1, waiting for the
+director's order, #35 conflicting) refused, open; #36 refused at its fix 7f7e09c5147b against the relay of
+d44992873d63, then merged at 16dc9236b3d0, the relay of 7f7e09c5147b carried over a clean merge of the base;
+#39 (tier 2, a clarifying spec call, waiting for nobody) merged at 7c8fd62a66ad with no relay; #40 (tier 2,
+waiting for the director's order, #41 conflicting) refused, then merged at bd4fccb637aa on the director's relay.
+(#33 and #34 were merged on tier 1 asks before the tier 2 reasons of #1258 reached the branch.)

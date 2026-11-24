@@ -589,7 +589,8 @@ tier or the director's relay allows (allowed, below). In order, each refusal bef
            head, refuses. Then the merge ask check, run here afresh as merge-ask runs it (never a stored print),
            with --status every docs/specs/*.status.json of the repo's top: an ask with no `## Merge ask` section, a
            Failed list it cannot read, or one merge-ask refuses outright, refuses (no tier to sort). An ask of tier
-           1 or 2 waiting for nobody goes. Any other goes only on the director's relay of lane NAME's merge on
+           1 or 2 waiting for nobody goes, `allowed: PR #<n> at <sha12>, its merge ask (<the tier block>)` on stderr
+           (`on the director's relay ...` when a relay let it). Any other goes only on the director's relay of lane NAME's merge on
            record (relay, below) naming HEAD, or naming an earlier head when the commits between are only merges
            of main the one-head check proves clean (#lanes-one-head; printed `relay carried: ...`). No relay
            refuses, `its merge waits for <whom>` (the owner; the director's order, naming each set-back PR) with
@@ -3523,15 +3524,18 @@ def merge_allowed(pr: int, head: str, repo: str | None, lane: str) -> str:
     if a.refusal or unread or t is None:
         raise Refuse(f"PR #{pr}'s merge ask at {oid[:12]} cannot be sorted into a tier ({'; '.join([a.refusal, *unread]).strip('; ')}): "
                      f"{stays}; fix the merge ask (octo-feather-lane merge-ask {pr} names each fix), then rerun")
-    if t.n <= 2 and t.waits == "nobody":
-        return oid
     block = "; ".join(t.lines)
+    if t.n <= 2 and t.waits == "nobody":
+        print(f"allowed: PR #{pr} at {oid[:12]}, its merge ask ({block})", file=sys.stderr, flush=True)
+        return oid
     relays = relays_of(lane, pr)
     if not relays:
         raise Refuse(f"PR #{pr} at {oid[:12]}: its merge waits for {t.waits}, and no relay of its merge is on record "
                      f"({block}): {stays}; send the merge ask up (herdr-say --parent)")
     rh = str(relays[-1]["head"])
     if any(head_matches(str(x["head"]), oid) for x in relays):
+        print(f"allowed: PR #{pr} at {oid[:12]} on the director's relay of that head, its merge ask ({block})",
+              file=sys.stderr, flush=True)
         return oid
     try:
         full = git("rev-parse", "--verify", "--quiet", f"{rh}^{{commit}}")[1].strip()
@@ -3542,6 +3546,8 @@ def merge_allowed(pr: int, head: str, repo: str | None, lane: str) -> str:
         proof, why = merge_ask.relay_proof(s, full, oid)
         if proof:
             print(f"relay carried: the director's relay of PR #{pr} at {rh[:12]} carries to {oid[:12]}: {proof}", flush=True)
+            print(f"allowed: PR #{pr} at {oid[:12]} on the director's relay carried, its merge ask ({block})",
+                  file=sys.stderr, flush=True)
             return oid
     raise Refuse(f"PR #{pr}: the director's relay on record allows head {rh[:12]}, the merge was given head {oid[:12]} "
                  f"({'; '.join(why)}): {stays}; its merge waits for {t.waits} ({block})")
