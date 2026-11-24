@@ -5,7 +5,8 @@
 .agents/skills), `tracker_skill` names the target's tracker skill, `utc` reads gh's and the
 records' times. The reads over them: `pr_view` (a PR's fields), `ci_workflows` (a commit's
 workflow files), `issue_view` (a ticket), with `head_matches` (a named head against a PR's,
-`SHA` the form of a named commit) and `key_order` (tracker keys in order). Each call raises
+`SHA` the form of a named commit), `parent_key` (a lane key's tracker key) and `key_order` (tracker
+keys in order). Each call raises
 the error class its caller passes (ERR), so each command keeps its own refusals. Standard
 library only; how a command finds this module: the docstring of scripts/correction_lanes.py.
 """
@@ -179,6 +180,22 @@ def issue_view(key: str, *, err: type[Exception]) -> dict[str, Any]:
         )
         raise err(msg) from e
     return cast("dict[str, Any]", d)
+
+
+def parent_key(lane: str, *, err: type[Exception]) -> str:
+    """The tracker key of lane key LANE (a lane record's `issue`, comms #lane-record): the tracker
+    skill's key-from-branch of LANE, checked by its lane-key giving LANE back, as review-host checks
+    a slug (github-issues: gh70 is 70); ERR naming both keys when it does not."""
+    key = tracker("key-from-branch", lane, err=err).strip()
+    back = tracker("lane-key", key, err=err).strip()
+    if back != lane:
+        msg = (
+            f"lane key {lane} maps to tracker key {key} (key-from-branch), whose lane key is "
+            f"{back}, not {lane} (lane-key): the lane record's issue must be its lane key (comms "
+            "#lane-record); fix it, then rerun"
+        )
+        raise err(msg)
+    return key
 
 
 def key_order(k: str) -> tuple[str, int]:
