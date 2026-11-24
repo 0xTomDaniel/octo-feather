@@ -355,8 +355,8 @@
     "acceptance-fast-map-slot-free": {
       "status": "built",
       "pr": 1246,
-      "record": "20261124T012053Z-9e44ecb2",
-      "commit": "1a3c59485be3095f8007d7ea5f1f4006010c1c8b",
+      "record": "20261124T220358Z-8e80df5e",
+      "commit": "bbbdf018c2368c22298556de8b828d755e8fef49",
       "tests": [
         "tests/gate/kit/test_fast_map.py"
       ]
@@ -364,8 +364,8 @@
     "acceptance-fast-map-behind": {
       "status": "built",
       "pr": 1246,
-      "record": "20261124T012053Z-f3502927",
-      "commit": "1a3c59485be3095f8007d7ea5f1f4006010c1c8b",
+      "record": "20261124T220358Z-40a3d53a",
+      "commit": "bbbdf018c2368c22298556de8b828d755e8fef49",
       "tests": [
         "tests/gate/kit/test_fast_map.py"
       ]
@@ -373,8 +373,8 @@
     "acceptance-fast-diff-base": {
       "status": "built",
       "pr": 1246,
-      "record": "20261124T012053Z-87e89a2d",
-      "commit": "1a3c59485be3095f8007d7ea5f1f4006010c1c8b",
+      "record": "20261124T220358Z-d3827f33",
+      "commit": "bbbdf018c2368c22298556de8b828d755e8fef49",
       "tests": [
         "tests/gate/kit/test_fast_map.py"
       ]
@@ -398,16 +398,32 @@
       ]
     },
     "acceptance-map-after-merge": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1246,
+      "record": "20261124T220358Z-1e7f6845",
+      "commit": "bbbdf018c2368c22298556de8b828d755e8fef49",
+      "tests": [
+        "tests/gate/kit/test_fast_map.py",
+        "tests/gate/kit/test_lane_post_merge_map.py"
+      ]
     },
     "acceptance-map-full-daily": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1246,
+      "record": "20261124T220358Z-849e96cc",
+      "commit": "bbbdf018c2368c22298556de8b828d755e8fef49",
+      "tests": [
+        "tests/gate/kit/test_lane_post_merge_map.py"
+      ]
     },
     "acceptance-map-build-failed": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1246,
+      "record": "20261124T220359Z-e4b514c0",
+      "commit": "bbbdf018c2368c22298556de8b828d755e8fef49",
+      "tests": [
+        "tests/gate/kit/test_lane_post_merge_map.py"
+      ]
     }
   }
 }
