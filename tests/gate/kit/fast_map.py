@@ -28,7 +28,8 @@ from it; on main at M2 it names none.
 On the mapped copy:
 unchanged: the mapping run with e.sh failing was red, yet wrote the map from the items that
 passed (a, b, one, two), e.sh named left out; `just fast` with nothing changed runs only the items
-with no recorded coverage, d (unmapped) and e (did not pass), e named so.
+with no recorded coverage, d (unmapped) and e (did not pass), e named so, as `just fast-list`
+names it first, running nothing.
 one_script: fixture-a changed: `just fast` runs the static check, the items whose recorded
 coverage reaches fixture-a (a.sh, and test_one alone of its file's functions) and the unmapped
 ones, each named; the e2e items named skipped.
@@ -218,8 +219,17 @@ def unchanged(s: Scratch) -> None:
     assert not m.startswith("exit 0\n"), f"want the mapping run red (e.sh failed): {m}"
     assert re.search(r"fast-map: 4 test items mapped at ", m), f"want a, b, one, two: {m}"
     assert "fast-map: tests/e.sh did not pass: left out of the map, always selected" in m, m
+    failed = (
+        r"fast: tests/e\.sh: did not pass the mapping run at [0-9a-f]{12}, so unmapped:"
+        r" always selected"
+    )
+    rc, dry, ran = just(s, k, "fast-list")
+    said = f"just fast-list: exit {rc}\n{dry}"
+    assert rc == 0, said
+    assert ran == [], f"an item ran: {said}"
+    assert re.search(failed, dry), f"want e.sh named as not passing the mapping run: {said}"
     out = fast(s, k, "d e")
-    assert "fast: tests/e.sh: did not pass the mapping run at " in out, out
+    assert re.search(failed, out), out
 
 
 def one_script(s: Scratch) -> None:
