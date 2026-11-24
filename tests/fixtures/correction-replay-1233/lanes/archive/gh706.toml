@@ -1,0 +1,8 @@
+supervisor = "w8Y:p6"
+repository = "0xTomDaniel/octo-feather"
+issue = "gh706"
+goal = "Spec revision keeps built criteria"
+started_at = "2026-11-20T10:18:56Z"
+waiting_on = ""
+last_handoff_at = "2026-11-20T17:46:44Z"
+pr = 1190
