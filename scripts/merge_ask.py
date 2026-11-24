@@ -3096,13 +3096,9 @@ def _validated(out: str, schema: Mapping[str, object], what: str) -> object:
     return json.loads(out)
 
 
-# The `## Replay` section read by a real Markdown engine, markdown-it-py (pinned in pyproject.toml
-# and uv.lock; CommonMark with GitHub's table rule, as GitHub renders a PR body), in the kit's
-# locked environment as VALIDATE is: a table in a fence or an HTML comment is no table, `\\|`
-# stays in its cell, a cell's text is its inline text (backticks cut). The section: the level-2
-# heading `Replay` to the next level-1 or level-2 heading. Prints {"section": bool, "tables":
-# [{"head": [cell...], "rows": [[cell...]...]}...]}, each row padded or cut to its header as
-# GitHub renders it.
+# The `## Replay` section read by markdown-it-py (pinned in pyproject.toml and uv.lock) in the
+# kit's locked environment, as VALIDATE is; what it reads as a row: octo-feather-lane --help,
+# merge-ask. Prints {"section": bool, "tables": [{"head": [cell...], "rows": [[cell...]...]}...]}.
 REPLAY_TABLE = """import json, sys
 from markdown_it import MarkdownIt
 tokens = MarkdownIt("commonmark").enable("table").parse(sys.stdin.read())
@@ -3140,9 +3136,8 @@ class _Section(TypedDict):
 
 
 def _replay_table(body: str) -> tuple[list[Row], list[str]] | None:
-    """(the `## Replay` section's rows in BODY, why a table or row of it is no row); None when
-    BODY has no such section. A table's columns must be REPLAY_HEAD; a row's four fields must
-    each be filled, a refusal naming those empty."""
+    """(the `## Replay` section's rows in BODY, why a table or row of it is no row, empty fields
+    named); None when BODY has no such section. The rule: octo-feather-lane --help, merge-ask."""
     out = _kit(REPLAY_TABLE, stdin=body or "", what="the PR body's Markdown (markdown-it-py)")
     got = cast("_Section", json.loads(out))  # REPLAY_TABLE's own answer, its shape above
     if not got["section"]:

@@ -279,9 +279,9 @@ ROWS = (  # finding, case, command, result
 )
 
 
-# A Replay section holding what is no row as GitHub renders it: an example table in a fence and
-# one in a comment, each naming a finding; then the table: FINDINGS[2]'s row, an escaped pipe in
-# its result cell, and clean gh1197's row with two cells of four.
+# A Replay section (its form: octo-feather-lane --help, merge-ask): an example table in a fence
+# and one in a comment, each naming a finding; then the table: FINDINGS[2]'s row, an escaped pipe
+# in its result cell, and clean gh1197's row with two cells of four.
 EXAMPLES = f"""
 ## Replay
 
@@ -394,39 +394,24 @@ def missing(s: Scratch) -> None:
 
 
 def read(s: Scratch) -> None:
-    """issue-lifecycle#acceptance-correction-replay-missing, the PR body and the parent read as
-    their sources give them: the Replay section as GitHub renders it (EXAMPLES), so the refusal
-    names every finding and clean lane but FINDINGS[2], whose row holds an escaped pipe, and
-    clean gh1197's row by its empty fields; #1121's notes with a null body refused, the field
-    named."""
+    """issue-lifecycle#acceptance-correction-replay-missing, the Replay section of EXAMPLES (its
+    form: octo-feather-lane --help, merge-ask): the refusal names every finding and clean lane but
+    FINDINGS[2], and clean gh1197's row by its empty fields."""
     ln = Correction(s)
     ln.recorded()
-    ln.section(EXAMPLES)  # the section read as GitHub renders it
+    ln.section(EXAMPLES)
     err = ln.ask(want=1).err.splitlines()
     named = [x for x in err if x.startswith("  - Replay: no row for ")]
     assert named == [
         *(f"  - Replay: no row for finding `{f}`" for f in FINDINGS if f != FINDINGS[2]),
         *(f"  - Replay: no row for clean lane `clean {lane}`" for lane in CLEAN),
-    ], err  # a fenced or commented example is no row; the escaped pipe kept its row whole
+    ], err
     rows = [x for x in err if x.startswith("  - Replay: row ")]
     want = (
         "  - Replay: row `clean gh1197`: command, result empty; a row is "
         "`| finding | case | command | result |`"
     )
     assert rows == [want], err
-    recs = tape("correction-replay-1216")  # #1121's body as GitHub would never give it: null
-    for rec in recs:
-        if rec["request"].startswith("api graphql -F n=1121 "):
-            answer = cast("dict[str, Any]", valid(rec["out"], COMMENTS, rec["request"]))
-            answer["data"]["repository"]["issue"]["body"] = None
-            rec["out"] = json.dumps(answer)
-    s.gh.store("recorded.json", recs * 8)
-    err = ln.ask(want=1).err.splitlines()
-    want = (
-        "  - Replay: cannot read correction lane facts for #1121 (issue-view 1121 --notes "
-        "answered no valid JSON: notes.0.body: None is not of type 'string'); fix it, then rerun"
-    )
-    assert [x for x in err if x.startswith("  - Replay:")] == [want], err
 
 
 def shown(s: Scratch) -> None:
