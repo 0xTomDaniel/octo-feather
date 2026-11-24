@@ -1,7 +1,7 @@
 """The scenarios of tests/gate/kit/test_lane_merge_tier.py (its items), this file their command
-(testkit.main): `octo-feather-lane merge-ask` sorts the ask into a tier and prints its block, `Tier:
-N`, a `- <reason>` line each, `Waits for: ...` (spec issue-lifecycle #gates-tiers,
-#gates-tier-relay; issue #1257), offline: the testkit's gh answers only real gh's recorded answers
+(testkit.main): `octo-feather-lane merge-ask` sorts the ask into a tier and prints its block (its
+form: octo-feather-lane --help, merge-ask; spec issue-lifecycle #gates-tiers, #gates-tier-relay;
+issue #1257), offline: the testkit's gh answers only real gh's recorded answers
 (testkit/recordings/merge-tier-1257.json, one tape per scenario), never its store.
 
 The realcase PRs (RealCase): on 0xTomDaniel/octo-feather-realcase (the standing private test
