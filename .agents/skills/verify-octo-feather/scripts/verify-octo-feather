@@ -2711,8 +2711,10 @@ def drive_gate_tiers(f: Feature) -> None:
 
 
 def drive_kit_hook(f: Feature) -> None:
-    """The kit's git hook: just setup in a worktree of a scratch kit copy, then a commit with a red static check
-    refused by the hook's just fast, naming the check, and the fixed commit through, its one test item run."""
+    """The kit's git hook: just setup refused under an agent, run by a maintainer in a scratch kit copy's main
+    checkout, refused in its worktree; then an implementer's commit with a red static check refused by the hook's
+    just fast, naming the check, the fixed commit through, its one test item run, and a supervisor's red commit
+    through with the hook's skip line, no fast tier run."""
     sc = RUN_DIR / "scratch" / "kit-hook"
     shutil.rmtree(sc, ignore_errors=True)
     sc.mkdir(parents=True)
@@ -2739,17 +2741,27 @@ def drive_kit_hook(f: Feature) -> None:
     git(k, "init", "-q", "-b", "main")
     git(k, "add", "-A")
     git(k, "commit", "-q", "-m", "kit copy")
-    git(k, "worktree", "add", "-q", "-b", "gh1", str(w))
     ran.write_text("")
     f.env = {**ident, "XDG_STATE_HOME": str(sc / "state"), "FAST_RAN": str(ran),
              "UV_PROJECT_ENVIRONMENT": os.path.realpath(Path(f.s.repo) / ".venv")}
-    f.run("setup", "env", "-C", str(w), "just", "setup")
-    f.obs("setup", "hooks-path", output(["git", "-C", str(w), "config", "--get", "core.hooksPath"])[1])
+    refused = "The git hook is for a maintainer's own clone, not factory worktrees; git config unchanged"
+    # A drive's env carries no OCTO_FEATHER_ROLE (DRIVER_LEAKS): the maintainer's; each agent case sets one.
+    f.run("setup-agent", "env", "-C", str(k), "OCTO_FEATHER_ROLE=implementer", "just", "setup")
+    f.obs("setup-agent", "hooks-path", output(["git", "-C", str(k), "config", "--get", "core.hooksPath"])[1])
+    f.check("setup-agent", lambda c: c.code != 0 and c.o["hooks-path"] == ""
+            and "OCTO_FEATHER_ROLE=implementer is set" in c.err and refused in c.err)
+    f.run("setup", "env", "-C", str(k), "just", "setup")
+    f.obs("setup", "hooks-path", output(["git", "-C", str(k), "config", "--get", "core.hooksPath"])[1])
     f.check("setup", lambda c: c.code == 0 and c.o["hooks-path"].strip() == ".githooks")
+    git(k, "worktree", "add", "-q", "-b", "gh1", str(w))
+    f.run("setup-worktree", "env", "-C", str(w), "OCTO_FEATHER_ROLE=implementer", "just", "setup")
+    f.obs("setup-worktree", "config", output(["git", "-C", str(k), "config", "--local", "--list"])[1])
+    f.check("setup-worktree", lambda c: c.code != 0 and "core.hookspath=.githooks" in c.o["config"].lower()
+            and "worktrees besides its main one (1" in c.err and refused in c.err)
     before = git(w, "rev-parse", "HEAD")
     (w / "hook-red.txt").write_text("one \u2014 dash\n")
     git(w, "add", "hook-red.txt")
-    f.run("commit-red", "env", "-C", str(w), "git", "commit", "-m", "red")
+    f.run("commit-red", "env", "-C", str(w), "OCTO_FEATHER_ROLE=implementer", "git", "commit", "-m", "red")
     f.obs("commit-red", "head", git(w, "rev-parse", "HEAD") + "\n")
     f.obs("commit-red", "ran", ran.read_text())
     f.check("commit-red", lambda c: c.code != 0 and c.o["head"].strip() == before and c.o["ran"] == ""
@@ -2762,6 +2774,14 @@ def drive_kit_hook(f: Feature) -> None:
     f.obs("commit-green", "ran", ran.read_text())
     f.check("commit-green", lambda c: c.code == 0 and c.o["head"] == f"{before} green\n" and c.o["ran"] == "a own\n"
             and "heavy slot: not needed: fast tier" in c.out + c.err)
+    (w / "hook-red.txt").write_text("one \u2014 dash, again\n")
+    git(w, "add", "hook-red.txt")
+    f.run("commit-machine", "env", "-C", str(w), "OCTO_FEATHER_ROLE=supervisor", "git", "commit", "-m", "machine")
+    f.obs("commit-machine", "head", git(w, "log", "-1", "--format=%s") + "\n")
+    f.obs("commit-machine", "ran", ran.read_text())
+    f.check("commit-machine", lambda c: c.code == 0 and c.o["head"] == "machine\n" and c.o["ran"] == "a own\n"
+            and "pre-commit: fast tier skipped: OCTO_FEATHER_ROLE=supervisor" in c.out + c.err
+            and "heavy slot" not in c.out + c.err)
     f.env = {}
     say(f"kit-hook evidence: {f.d}")
 

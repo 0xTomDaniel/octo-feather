@@ -351,6 +351,24 @@
       "tests": [
         "tests/gate/kit/test_fast_hook.py"
       ]
+    },
+    "acceptance-setup-not-factory": {
+      "status": "built",
+      "pr": 1245,
+      "record": "20261124T002949Z-fbf4c9e9",
+      "commit": "01004f1c563ae1f2b1c465a3ac17421b23d7814b",
+      "tests": [
+        "tests/gate/kit/test_hook_guards.py"
+      ]
+    },
+    "acceptance-hook-machine-commit": {
+      "status": "built",
+      "pr": 1245,
+      "record": "20261124T002949Z-bc66be23",
+      "commit": "01004f1c563ae1f2b1c465a3ac17421b23d7814b",
+      "tests": [
+        "tests/gate/kit/test_hook_guards.py"
+      ]
     }
   }
 }
