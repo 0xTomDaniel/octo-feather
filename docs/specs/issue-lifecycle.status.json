@@ -1,6 +1,6 @@
 {
   "spec": "issue-lifecycle.spec.html",
-  "accepted_commit": "2f2a4d696acc0fa2ffeb4a69ce4d556b6a86294c",
+  "accepted_commit": "387211490351e1f775853b4e990f97b6dd205639",
   "criteria": {
     "acceptance-kickoff-refuses": {
       "status": "planned",
@@ -65,6 +65,13 @@
     "acceptance-tracer-tickets": {
       "status": "built",
       "pr": 180
+    },
+    "acceptance-ticket-skills": {
+      "status": "built",
+      "pr": 1233,
+      "record": "20261122T214216Z-3518def9",
+      "commit": "0310af8c5494b5320e37274893ea4b824edf399c",
+      "tests": []
     },
     "acceptance-pilot-alone": {
       "status": "planned",
@@ -358,6 +365,82 @@
         "tests/gate/kit/lane_stale.py"
       ]
     },
+    "acceptance-tier-one": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-tier-clarify": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-tier-optout-cleared": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-tier-optout-uncleared": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-tier-adds": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-tier-weakens": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-tier-ruled": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-tier-ruling-unconfirmed": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-tier-failed": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-tier-owner-decision": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-tier-code-owner": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-tier-highest": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-tier-spec-pr": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-tier-self-merge": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-tier-order-waits": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-tier-relayed": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-tier-three-waits": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-merge-digest": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-merge-digest-veto": {
+      "status": "planned",
+      "pr": null
+    },
     "acceptance-merge-starts-routine": {
       "status": "built",
       "pr": 1153,
@@ -393,13 +476,6 @@
       "tests": [
         "tests/gate/kit/lane_live_run.py"
       ]
-    },
-    "acceptance-ticket-skills": {
-      "status": "built",
-      "pr": 1233,
-      "record": "20261122T214216Z-3518def9",
-      "commit": "0310af8c5494b5320e37274893ea4b824edf399c",
-      "tests": []
     },
     "acceptance-lane-start": {
       "status": "built",
@@ -454,6 +530,26 @@
       "tests": [
         "tests/gate/kit/lane_start.py"
       ]
+    },
+    "acceptance-lane-start-usage": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-lane-start-room": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-lane-start-clear": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-lane-start-unread": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-lane-start-carried": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
