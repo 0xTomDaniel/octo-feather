@@ -355,8 +355,8 @@
     "acceptance-setup-not-factory": {
       "status": "built",
       "pr": 1245,
-      "record": "20261123T235942Z-4d2633a1",
-      "commit": "b439cd8ea6172bac8a138970b44dc8c53b4d0825",
+      "record": "20261124T002949Z-fbf4c9e9",
+      "commit": "01004f1c563ae1f2b1c465a3ac17421b23d7814b",
       "tests": [
         "tests/gate/kit/test_hook_guards.py"
       ]
@@ -364,8 +364,8 @@
     "acceptance-hook-machine-commit": {
       "status": "built",
       "pr": 1245,
-      "record": "20261123T235942Z-845d0caa",
-      "commit": "b439cd8ea6172bac8a138970b44dc8c53b4d0825",
+      "record": "20261124T002949Z-bc66be23",
+      "commit": "01004f1c563ae1f2b1c465a3ac17421b23d7814b",
       "tests": [
         "tests/gate/kit/test_hook_guards.py"
       ]
