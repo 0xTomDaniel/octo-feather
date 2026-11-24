@@ -28,6 +28,7 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import sys
 from typing import TYPE_CHECKING
 
@@ -211,7 +212,9 @@ class Lane:
 
     def run(self, want: int, *args: str, tools: str = "rec", cwd: Path | None = None) -> Ran:
         """post-merge ARGS from the target repo (or CWD), exit WANT; gh only read (each logged
-        call)."""
+        call). Each run a fresh routine: the post-merge records removed first (a rerun's resume:
+        tests/gate/kit/lane_merge.py)."""
+        shutil.rmtree(self.state / "octo-feather" / "post-merge", ignore_errors=True)
         env = {"PATH": self.path[tools] + self.s.env["PATH"]} | self.homes
         r = self.s.run(
             [kit("octo-feather-lane"), *args], want=want, cwd=cwd or self.target, env=env
@@ -383,7 +386,8 @@ def superseded(s: Scratch) -> None:
     head contains the merge commit (gh compare ahead or identical): ok only on its success, naming
     both; still running, it is watched to its end; cancelled in turn, it defers again; red, it
     stops naming both; none within the bound (only an older one, and one on a diverged head)
-    stops as red; another run red beside the cancelled one stops first, no later-run read."""
+    stops as red; another run red beside the cancelled one stops first, no later read of the
+    cancelled one's workflow."""
     lane = Lane(s)
     m = lane.m
     m12 = m[:12]
@@ -464,7 +468,9 @@ def superseded(s: Scratch) -> None:
         "https://github.com/o/r/actions/runs/24;"
     )
     assert want in r.out, f"red beside cancelled: {r.out}"
-    assert not [x for x in s.gh.log() if "--branch" in x], f"red beside cancelled: {s.gh.log()}"
+    assert not [x for x in s.gh.log() if "--workflow check" in x], (
+        f"red beside cancelled: {s.gh.log()}"
+    )
 
 
 def kit_refresh(s: Scratch) -> None:
