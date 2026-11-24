@@ -122,6 +122,14 @@ _Avoid_: Blanket permission, command approval
 A point where work stops until the owner decides, such as accepting a spec or a merge.
 _Avoid_: Checkpoint, approval step
 
+**Merge tier**:
+The class the merge ask check gives a merge ask, from the lane's own records: tier 1 and tier 2 merge without the owner, tier 3 waits for the owner.
+_Avoid_: Risk level, auto-merge
+
+**Merge digest**:
+The one daily list of what merged without the owner, which the owner may veto from.
+_Avoid_: Report, changelog
+
 **QC**:
 Quality control of the product a work item delivers: `just check`, `just qc` and code review. Owner: docs/specs/quality.spec.html#split.
 _Avoid_: QA, testing (alone)

@@ -89,7 +89,7 @@ import base64, fcntl, hashlib, importlib.machinery, importlib.util, json, os, re
 from dataclasses import dataclass, field
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, NoReturn, cast
 
 from eval_grading import DEFAULT_TIMEOUT
 
@@ -178,8 +178,9 @@ Your final message is exactly one fenced json block and nothing else:
 ```"""
 
 
-def github_snapshot(skip, runid):
-    """Fetch this run's GitHub snapshot outside the sandbox; return {dir, line, repo, meta} or {off}."""
+def github_snapshot(skip, runid, issues: "tuple[int, ...]" = ()):
+    """Fetch this run's GitHub snapshot outside the sandbox, ISSUES (numbers) in full beside its window
+    (octo-feather-qc-ghsnap); return {dir, line, repo, meta} or {off}."""
     url = subprocess.run(["git", "remote", "get-url", "origin"], capture_output=True, text=True).stdout.strip()
     m = re.search(r"github\.com[:/]+([^/\s]+/[^/\s]+?)(?:\.git)?/?$", url)
     if not m:
@@ -188,7 +189,7 @@ def github_snapshot(skip, runid):
         return {"off": f"github: SKIPPED (--no-github; {m.group(1)} not fetched, the judge has no GitHub evidence)"}
     snap = Path(tempfile.mkdtemp(prefix=f"qc-ghsnap-{runid}-"))
     try:   # killed mid-fetch (SIGTERM, see main): the partial snapshot goes too
-        p = subprocess.run([str(KIT / "scripts" / "octo-feather-qc-ghsnap"), m.group(1), str(snap)], capture_output=True, text=True)
+        p = subprocess.run([str(KIT / "scripts" / "octo-feather-qc-ghsnap"), m.group(1), str(snap), *map(str, issues)], capture_output=True, text=True)
         if p.returncode:
             die(67, f"GitHub snapshot of {m.group(1)} failed; judge not started (rerun with --no-github to judge without it): "
                     f"{p.stderr.strip() or p.stdout.strip()}")
@@ -216,6 +217,8 @@ def evidence(gh):
         return f"{gh['off']}. `gh` here is the offline gh and refuses every call."
     m = gh["meta"]
     cap = f" Older items, list rows only: {' '.join(m['capped'])}." if m["capped"] else ""
+    named: list[str] = cast("dict[str, Any]", m).get("named") or []
+    cap += f" Also in full, issues named for this run: {' '.join(named)}." if named else ""
     return (f"`gh` is an offline, read-only {gh['line']}, fetched before this run. Full views (comments, reviews, commits, "
             f"files, closing issues, sub-issues, blocked-by, timeline, head check runs) for the {m['counts']['detail']} most "
             f"recently updated issues and PRs.{cap} It answers `gh issue view|list`, `gh pr view|list|diff|checks`, "
