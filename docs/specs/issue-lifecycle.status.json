@@ -230,8 +230,8 @@
     "acceptance-correction-replay-missing": {
       "status": "built",
       "pr": 1242,
-      "record": "20261124T000748Z-bd80645e",
-      "commit": "a77e0e1faef03a38349c83048d7605d5cbfe02bf",
+      "record": "20261124T194755Z-cf68ddc8",
+      "commit": "b18d7935f64b58e640c02084e2b620f82f950473",
       "tests": [
         "tests/gate/kit/lane_correction_replay.py"
       ]
@@ -239,8 +239,8 @@
     "acceptance-correction-replay-shown": {
       "status": "built",
       "pr": 1242,
-      "record": "20261124T000748Z-c15baba1",
-      "commit": "a77e0e1faef03a38349c83048d7605d5cbfe02bf",
+      "record": "20261124T194755Z-797e6350",
+      "commit": "b18d7935f64b58e640c02084e2b620f82f950473",
       "tests": [
         "tests/gate/kit/lane_correction_replay.py"
       ]
