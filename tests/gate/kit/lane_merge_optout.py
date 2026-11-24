@@ -22,7 +22,7 @@ import json
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
-from lane_merge_tier import APP, B, GIT_ENV, STATUS, block, status
+from lane_merge_tier import APP, GIT_ENV, STATUS, B, block, status
 from testkit import Scratch, kit, main
 
 if TYPE_CHECKING:
@@ -36,7 +36,12 @@ NOTE = "Behaviour-neutral: a new note no role loads"
 # each lane branch: its commits (message, files) on B, and its head as pushed (headRefOid)
 LANES: dict[str, tuple[list[tuple[str, dict[str, str]]], str]] = {
     "cleared": (
-        [(f"docs(agents): a cleared note\n\n{NOTE}", {"agents/cleared.md": "A note no role loads.\n"})],
+        [
+            (
+                f"docs(agents): a cleared note\n\n{NOTE}",
+                {"agents/cleared.md": "A note no role loads.\n"},
+            )
+        ],
         "6195f3b615ad1ce1b12fd9c4d2815d24acc1640d",
     ),
     "uncleared": (
