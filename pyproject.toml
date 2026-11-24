@@ -420,7 +420,6 @@ extraPaths = ["tests/gate", "scripts"]
   "PLR0917",
   "PLR2004",
   "PLW1510",
-  "PT018",
   "PTH117",
   "RUF005",
   "RUF021",

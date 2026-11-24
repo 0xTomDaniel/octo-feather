@@ -163,7 +163,7 @@
     "role": "director",
     "fixture": "python-app",
     "fake_gh": true,
-    "task": "Message from the supervisor of lane gh12 (pane w3:p5): \"Merge report: PR #12 (app hello --shout) merged into main at pinned head {head}. Close report follows once I archive the lane.\"\nSandbox run: this directory is the target repo's clone; GitHub answers through gh; there is no Herdr, so no message or self-callback can reach you: run any long job in the foreground and skip every herdr-say. Put your report as your final message."
+    "task": "Message from lane gh12's post-merge routine (the supervisor of lane gh12, pane w3:p5, merged PR #12, app hello --shout, at pinned head {head} with `octo-feather-lane merge`): \"post-merge gh12 PR #12 stopped: step 3 kit refresh stopped: kit refresh waits: eval run pid 4242 of lane gh9 since 2026-11-20T10:02:11Z reads /home/exedev/src/octo-feather; fix it, then rerun `octo-feather-lane post-merge 12 {head} --lane gh12`\"\nSince then lane gh9's eval run ended and released its slot.\nSandbox run: this directory is the target repo's clone; GitHub answers through gh; there is no Herdr, so no message or self-callback can reach you: run any long job in the foreground and skip every herdr-say. Put your report as your final message."
   },
   {
     "id": "shaper-code-ask-shapes-spec",
