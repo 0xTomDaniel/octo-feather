@@ -1224,7 +1224,7 @@ def map_end(lanes: Path, result: str, status: str, show: Callable[[str], None]) 
     return _map_told(lanes, r, why, show)
 
 
-# The live-run rule (issue 1136; issue-lifecycle #gates-main-moved; --help, steps 3 and 7).
+# The live-run rule (issue 1136; issue-lifecycle #gates-main-moved; --help, steps 3 and 8).
 RUN_POLL = 1  # seconds between reads of the slot runs while a step waits
 
 
