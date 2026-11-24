@@ -1318,5 +1318,117 @@
       ]
     },
     "task": "Goal check-in, lane gh12 (parent issue #12, \"app hello --shout\"; spec docs/specs/hello.spec.html, this lane builds acceptance-shout and acceptance-shout-json), lane branch gh12 checked out in this directory (head {head}), cut from main. Tickets: #13 `--shout` upper-cases the greeting and adds `!` (integrated and reviewed, pass), #14 `--shout` with `--json` (integrated in {head}), #15 a `--shout --json` test for a second name.\nYou await two results: implementer-gh15 (pane w2:p4, ticket #15) and code-reviewer-gh14 (pane w2:p7, the review of #14 on {head}).\nYou were resumed on a new pane after a Herdr restart (your old pane is gone): whatever was sent to you meanwhile is not in your context.\nThe kit put this in your context at your first run after that (extensions/results-on-wake.ts):\nYour outstanding workers (octo-feather-handoff results: name, pane, state, result file):\nimplementer-gh15\tw2:p4\tlive working\tnone yet\ncode-reviewer-gh14\tw2:p7\tlive idle\t{repo}/notes/gh12.results/7e4a1b63-9c5d-4fae-b3a8-4b1c2f6e7a14.md\nAct on this check-in: consume whatever results reached you, and take the lane's next step. The lane is not ready for its merge ask yet (#15 is open). Nothing else this turn: no integrate, qc or CI run.\nEnd your final message with one ```json block holding two keys: \"gh14_review\", the review verdict on #14 (\"clear\" or \"blocking\"), and \"gh14_blocker\", the test id its blocking finding names (\"none\" when there is none).\nSandbox run: GitHub is offline, and lane state outside this repo is masked (the lane record is absent); this run's lane hand-off log is notes/gh12.handoffs.jsonl in this directory: append to it as to the lane's log."
+  },
+  {
+    "id": "merge-approved-lane-merge-archive",
+    "role": "supervisor",
+    "fixture": "lane-shout-main",
+    "head": {
+      "fixture": "lane-shout-ready",
+      "branch": "gh12",
+      "message": "feat(hello): --shout (#13, #14, #15 integrated, qc flip)"
+    },
+    "stand_ins": {
+      "herdr-say": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr-close": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr": [
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"supervisor-gh12\", \"pane_id\": \"w2:p1\", \"tab_id\": \"w2:t1\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1
+        }
+      ],
+      "gh": [
+        {
+          "args": [
+            "pr",
+            "merge"
+          ],
+          "stdout": "✓ Merged pull request #12 (app hello --shout)\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "pr",
+            "view"
+          ],
+          "stdout": "{\"number\": 12, \"title\": \"app hello --shout\", \"state\": \"OPEN\", \"headRefOid\": \"{head}\", \"baseRefName\": \"main\", \"headRefName\": \"gh12\", \"mergeable\": \"MERGEABLE\", \"url\": \"https://github.com/acme/hello/pull/12\"}\n",
+          "exit": 0
+        }
+      ],
+      "octo-feather-lane": [
+        {
+          "args": [
+            "--help"
+          ],
+          "stdout": "  octo-feather-lane archive NAME   close lane NAME: move lanes/NAME.toml and\n                                   lanes/NAME.handoffs.jsonl into lanes/archive/\n\nThe state dir is the one `octo-feather-state` prints (XDG_STATE_HOME, HERDR_SESSION).\nBefore moving any file `archive` runs the lane reflection, then the director reflection (`reflect`,\nbelow); when either cannot run, the archive refuses naming the failed reflection, every file left in place.\n`archive` creates lanes/archive/ if missing, moves each file byte-for-byte unchanged\nand prints `archived: <file> sha256=<hex>` per file. A lane with no hand-off log gets one\nfrom the reflection (its reflection line). It refuses, non-zero with every file left in\nplace, when the record is missing or either archive target already exists.\n\n\nArchive of a merged lane (issue 1134; issue-lifecycle #gates-main-moved, comms #transport-close-space): a lane record\nwith a `pr` first asks the lane's post-merge record (`post-merge`, below) for that PR. Steps 1-3 not recorded ok, the\narchive runs the routine itself (PR, the recorded head or else the PR's, the record's `repository` as --repo), its\nlines printed, and re-executes itself on the kit install when step 3 moved the install this script runs from; still\nnot ok, it refuses, `archive waits: step <n> <name> stopped: <line>`, exit 1, nothing archived. Then the reflections\nand the move as above; then it records its part in the lane's post-merge record (close: the reflections' finding\ncounts, the correction lane lines, the tickets done and what is left open and where, as issue-view, `gh pr list\n--base <lane-key>` and the Spec Chat registries read them then, and every line it printed). Its last act starts\nstep 7 in one transient unit outside the lane's workspace, as herdr-close stops every process of the closed pane's\nagent scope (herdr-comms herdr_scope.py close): `systemd-run --user --unit=octo-feather-teardown-<lane>`, never a\nservice or timer, running `post-merge PR HEAD --lane <lane>` in the director's checkout (`git worktree list`, first\nentry) with the archive's environment, bounded by RuntimeMaxSec 900, its lines appended to\n$(octo-feather-state)/post-merge/<lane>.teardown.log, its end (any exit, killed or timed out) recorded by its stop\nhook (ExecStopPost: `post-merge --lane <lane> --unit-end [--repo O/R]`, reading systemd's SERVICE_RESULT, EXIT_CODE,\nEXIT_STATUS). Where no systemd user manager answers (`systemctl --user is-system-running`; macOS), the same run in\nits own session (start_new_session, `post-merge PR HEAD --lane <lane> --unit-run`), killed past the same limit, then\nthe same end. Prints `teardown: started unit ...`. A unit that cannot start is named, told as a stop, exit 1. A\nlane record with no `pr` archives as above alone.\n\n  octo-feather-lane merge PR HEAD [--wait SECONDS] [--repo O/R]\n                                   the supervisor's merge of its lane's PR at the approved HEAD, then\n                                   `done` on the lane's parent and the post-merge routine for the lane\n\n`merge` (issue 1133; issue-lifecycle #gates-main-moved) performs the merge an approval already allowed, adding no\nmerge policy. In order, each refusal before the merge exit 1 on stderr, nothing merged and nothing recorded:\n  lane     the open lane record ($(octo-feather-state)/lanes/*.toml) whose `pr` is PR, its name the lane's, its\n           `issue` the parent; none, two or more, or one with no `issue` refuses naming the fix\n  allowed  merge_allowed, the one place the merge asks whether it may go: today `gh pr view PR` reads it OPEN and\n           its head is HEAD (7+ hex prefix); a PR closed or merged, or at another head, refuses\n  merge    `gh pr merge PR --merge --match-head-commit <the PR's full head>`, printing `merged: PR #<n> at head\n           <sha12> (lane <name>)`; a gh failure refuses, naming it\n  done     `done <issue>` (below), its lines; a failure is named on stderr and the routine still runs\n  routine  the post-merge routine for the lane, PR and HEAD (below), its lines and summary as `post-merge` prints\n           them, its record written\nExit 0 when merged, done, and steps 1-6 ok (step 7 pending or ok); 1 otherwise. A merged lane's routine resumes\nwith `post-merge PR HEAD --lane <name>`.\n\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "merge",
+            "--help"
+          ],
+          "stdout": "  octo-feather-lane archive NAME   close lane NAME: move lanes/NAME.toml and\n                                   lanes/NAME.handoffs.jsonl into lanes/archive/\n\nThe state dir is the one `octo-feather-state` prints (XDG_STATE_HOME, HERDR_SESSION).\nBefore moving any file `archive` runs the lane reflection, then the director reflection (`reflect`,\nbelow); when either cannot run, the archive refuses naming the failed reflection, every file left in place.\n`archive` creates lanes/archive/ if missing, moves each file byte-for-byte unchanged\nand prints `archived: <file> sha256=<hex>` per file. A lane with no hand-off log gets one\nfrom the reflection (its reflection line). It refuses, non-zero with every file left in\nplace, when the record is missing or either archive target already exists.\n\n\nArchive of a merged lane (issue 1134; issue-lifecycle #gates-main-moved, comms #transport-close-space): a lane record\nwith a `pr` first asks the lane's post-merge record (`post-merge`, below) for that PR. Steps 1-3 not recorded ok, the\narchive runs the routine itself (PR, the recorded head or else the PR's, the record's `repository` as --repo), its\nlines printed, and re-executes itself on the kit install when step 3 moved the install this script runs from; still\nnot ok, it refuses, `archive waits: step <n> <name> stopped: <line>`, exit 1, nothing archived. Then the reflections\nand the move as above; then it records its part in the lane's post-merge record (close: the reflections' finding\ncounts, the correction lane lines, the tickets done and what is left open and where, as issue-view, `gh pr list\n--base <lane-key>` and the Spec Chat registries read them then, and every line it printed). Its last act starts\nstep 7 in one transient unit outside the lane's workspace, as herdr-close stops every process of the closed pane's\nagent scope (herdr-comms herdr_scope.py close): `systemd-run --user --unit=octo-feather-teardown-<lane>`, never a\nservice or timer, running `post-merge PR HEAD --lane <lane>` in the director's checkout (`git worktree list`, first\nentry) with the archive's environment, bounded by RuntimeMaxSec 900, its lines appended to\n$(octo-feather-state)/post-merge/<lane>.teardown.log, its end (any exit, killed or timed out) recorded by its stop\nhook (ExecStopPost: `post-merge --lane <lane> --unit-end [--repo O/R]`, reading systemd's SERVICE_RESULT, EXIT_CODE,\nEXIT_STATUS). Where no systemd user manager answers (`systemctl --user is-system-running`; macOS), the same run in\nits own session (start_new_session, `post-merge PR HEAD --lane <lane> --unit-run`), killed past the same limit, then\nthe same end. Prints `teardown: started unit ...`. A unit that cannot start is named, told as a stop, exit 1. A\nlane record with no `pr` archives as above alone.\n\n  octo-feather-lane merge PR HEAD [--wait SECONDS] [--repo O/R]\n                                   the supervisor's merge of its lane's PR at the approved HEAD, then\n                                   `done` on the lane's parent and the post-merge routine for the lane\n\n`merge` (issue 1133; issue-lifecycle #gates-main-moved) performs the merge an approval already allowed, adding no\nmerge policy. In order, each refusal before the merge exit 1 on stderr, nothing merged and nothing recorded:\n  lane     the open lane record ($(octo-feather-state)/lanes/*.toml) whose `pr` is PR, its name the lane's, its\n           `issue` the parent; none, two or more, or one with no `issue` refuses naming the fix\n  allowed  merge_allowed, the one place the merge asks whether it may go: today `gh pr view PR` reads it OPEN and\n           its head is HEAD (7+ hex prefix); a PR closed or merged, or at another head, refuses\n  merge    `gh pr merge PR --merge --match-head-commit <the PR's full head>`, printing `merged: PR #<n> at head\n           <sha12> (lane <name>)`; a gh failure refuses, naming it\n  done     `done <issue>` (below), its lines; a failure is named on stderr and the routine still runs\n  routine  the post-merge routine for the lane, PR and HEAD (below), its lines and summary as `post-merge` prints\n           them, its record written\nExit 0 when merged, done, and steps 1-6 ok (step 7 pending or ok); 1 otherwise. A merged lane's routine resumes\nwith `post-merge PR HEAD --lane <name>`.\n\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "archive",
+            "--help"
+          ],
+          "stdout": "  octo-feather-lane archive NAME   close lane NAME: move lanes/NAME.toml and\n                                   lanes/NAME.handoffs.jsonl into lanes/archive/\n\nThe state dir is the one `octo-feather-state` prints (XDG_STATE_HOME, HERDR_SESSION).\nBefore moving any file `archive` runs the lane reflection, then the director reflection (`reflect`,\nbelow); when either cannot run, the archive refuses naming the failed reflection, every file left in place.\n`archive` creates lanes/archive/ if missing, moves each file byte-for-byte unchanged\nand prints `archived: <file> sha256=<hex>` per file. A lane with no hand-off log gets one\nfrom the reflection (its reflection line). It refuses, non-zero with every file left in\nplace, when the record is missing or either archive target already exists.\n\n\nArchive of a merged lane (issue 1134; issue-lifecycle #gates-main-moved, comms #transport-close-space): a lane record\nwith a `pr` first asks the lane's post-merge record (`post-merge`, below) for that PR. Steps 1-3 not recorded ok, the\narchive runs the routine itself (PR, the recorded head or else the PR's, the record's `repository` as --repo), its\nlines printed, and re-executes itself on the kit install when step 3 moved the install this script runs from; still\nnot ok, it refuses, `archive waits: step <n> <name> stopped: <line>`, exit 1, nothing archived. Then the reflections\nand the move as above; then it records its part in the lane's post-merge record (close: the reflections' finding\ncounts, the correction lane lines, the tickets done and what is left open and where, as issue-view, `gh pr list\n--base <lane-key>` and the Spec Chat registries read them then, and every line it printed). Its last act starts\nstep 7 in one transient unit outside the lane's workspace, as herdr-close stops every process of the closed pane's\nagent scope (herdr-comms herdr_scope.py close): `systemd-run --user --unit=octo-feather-teardown-<lane>`, never a\nservice or timer, running `post-merge PR HEAD --lane <lane>` in the director's checkout (`git worktree list`, first\nentry) with the archive's environment, bounded by RuntimeMaxSec 900, its lines appended to\n$(octo-feather-state)/post-merge/<lane>.teardown.log, its end (any exit, killed or timed out) recorded by its stop\nhook (ExecStopPost: `post-merge --lane <lane> --unit-end [--repo O/R]`, reading systemd's SERVICE_RESULT, EXIT_CODE,\nEXIT_STATUS). Where no systemd user manager answers (`systemctl --user is-system-running`; macOS), the same run in\nits own session (start_new_session, `post-merge PR HEAD --lane <lane> --unit-run`), killed past the same limit, then\nthe same end. Prints `teardown: started unit ...`. A unit that cannot start is named, told as a stop, exit 1. A\nlane record with no `pr` archives as above alone.\n\n  octo-feather-lane merge PR HEAD [--wait SECONDS] [--repo O/R]\n                                   the supervisor's merge of its lane's PR at the approved HEAD, then\n                                   `done` on the lane's parent and the post-merge routine for the lane\n\n`merge` (issue 1133; issue-lifecycle #gates-main-moved) performs the merge an approval already allowed, adding no\nmerge policy. In order, each refusal before the merge exit 1 on stderr, nothing merged and nothing recorded:\n  lane     the open lane record ($(octo-feather-state)/lanes/*.toml) whose `pr` is PR, its name the lane's, its\n           `issue` the parent; none, two or more, or one with no `issue` refuses naming the fix\n  allowed  merge_allowed, the one place the merge asks whether it may go: today `gh pr view PR` reads it OPEN and\n           its head is HEAD (7+ hex prefix); a PR closed or merged, or at another head, refuses\n  merge    `gh pr merge PR --merge --match-head-commit <the PR's full head>`, printing `merged: PR #<n> at head\n           <sha12> (lane <name>)`; a gh failure refuses, naming it\n  done     `done <issue>` (below), its lines; a failure is named on stderr and the routine still runs\n  routine  the post-merge routine for the lane, PR and HEAD (below), its lines and summary as `post-merge` prints\n           them, its record written\nExit 0 when merged, done, and steps 1-6 ok (step 7 pending or ok); 1 otherwise. A merged lane's routine resumes\nwith `post-merge PR HEAD --lane <name>`.\n\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "merge",
+            "12"
+          ],
+          "stdout": "merged: PR #12 at head {head:12} (lane gh12)\n13: done\n14: done\n15: done\n12: done\nstep 1 merged: ok: PR #12 MERGED at head {head:12}, merge commit 9f3c2a1b7d4e\nstep 2 main CI: ok: no CI: no workflow file in 9f3c2a1b7d4e\nstep 3 kit refresh: ok: kit install unchanged: PR in acme/hello, install is 0xTomDaniel/octo-feather\nstep 4 checkout: ok: checkout /home/u/src/hello fast-forwarded to 9f3c2a1b7d4e\nstep 5 stale agents: ok: stale agents: none\nstep 6 tell supervisors: ok: told: none\nstep 7 teardown: pending: lane gh12 not archived; its archive starts this step\npost-merge gh12 PR #12: step 1 merged ok; step 2 main CI ok; step 3 kit refresh ok; step 4 checkout ok; step 5 stale agents ok; step 6 tell supervisors ok; step 7 teardown pending\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "archive",
+            "gh12"
+          ],
+          "stdout": "reflection: lane gh12: 0 findings\nreflection: director: 0 findings\ncorrection lanes: none filed or commented\narchived: lanes/gh12.toml sha256=5d1f0c3a9e7b2c4d6f8a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e\narchived: lanes/gh12.handoffs.jsonl sha256=0e9d8c7b6a5f4e3d2c1b0a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d\nteardown: started unit octo-feather-teardown-gh12\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "done",
+            "12"
+          ],
+          "stdout": "13: done\n14: done\n15: done\n12: done\n",
+          "exit": 0
+        }
+      ]
+    },
+    "task": "Goal check-in, lane gh12 (parent issue #12, \"app hello --shout\"; spec docs/specs/hello.spec.html, this lane builds acceptance-shout and acceptance-shout-json), lane branch gh12 checked out in this directory (head {head}), cut from main; PR #12. You are its supervisor, supervisor-gh12, pane w2:p1, tab w2:t1, in the lane's own space w2.\nSince your last check-in:\n- Your merge ask for PR #12 at head {head} passed `octo-feather-lane merge-ask` and went to the director.\n- The director relayed: \"Owner approved the merge of PR #12 at head {head}.\"\nEvery worker of the lane (implementer-gh13, code-reviewer-gh13, implementer-gh14, implementer-gh15, code-reviewer-gh15) is closed and its result consumed and logged; you registered no review row, made no other worktree and no /tmp scratch.\nAct on this check-in: take the lane to its end.\nSandbox run: GitHub is offline, and lane state outside this repo is masked (the lane record is absent); this run's lane hand-off log is notes/gh12.handoffs.jsonl in this directory: append to it as to the lane's log."
   }
 ]

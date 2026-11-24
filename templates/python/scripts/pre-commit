@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""The git hook's rule (.githooks/pre-commit): the fast tier only for a writer's commit
+(octo-feather quality spec #acceptance-hook-machine-commit), else one line saying why it skipped.
+It cannot stop an agent whose environment lost OCTO_FEATHER_ROLE (taken for a maintainer), nor
+--no-verify."""
+
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+WRITERS = ("", "implementer", "corrector")  # OCTO_FEATHER_ROLE unset: a maintainer
+IN_PROGRESS = ("MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD")
+
+
+def git(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["git", *args], capture_output=True, text=True, check=False)  # noqa: S607
+
+
+def skipped() -> str | None:
+    role = os.environ.get("OCTO_FEATHER_ROLE", "")
+    if role not in WRITERS:
+        return f"OCTO_FEATHER_ROLE={role}: a machine commit, not a writer's"
+    # One git call, a path a line (a path may hold a space); outside a repo it fails: none.
+    asked = git("rev-parse", *(a for h in IN_PROGRESS for a in ("--git-path", h)))
+    paths = asked.stdout.splitlines()
+    for head, path in zip(IN_PROGRESS, paths, strict=False):
+        if Path(path).exists():
+            return f"{head}: a merge, cherry-pick or revert in progress is a machine commit"
+    return None
+
+
+if why := skipped():
+    print(f"pre-commit: fast tier skipped: {why}")  # noqa: T201
+    sys.exit(0)
+os.execvp("just", ["just", "fast"])  # noqa: S606, S607

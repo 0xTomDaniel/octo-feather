@@ -1,3 +1,3 @@
 #!/usr/bin/env bash
-# The fast tier agents run (AGENTS.md); CI runs the full one, just check.
-exec just fast
+# The fast tier agents run (AGENTS.md); CI runs the full one, just check. The rule: scripts/pre-commit.
+exec python3 scripts/pre-commit

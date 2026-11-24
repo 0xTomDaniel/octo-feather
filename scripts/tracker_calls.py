@@ -3,19 +3,25 @@
 
 `gh` and `tracker` run the real tool (gh on PATH; a tracker skill's scripts in the kit's
 .agents/skills), `tracker_skill` names the target's tracker skill, `utc` reads gh's and the
-records' times. Each call raises the error class its caller passes (ERR), so each command keeps
-its own refusals. Standard library only; how a command finds this module: the docstring of
-scripts/correction_lanes.py.
+records' times. The reads over them: `pr_view` (a PR's fields), `ci_workflows` (a commit's
+workflow files), `issue_view` (a ticket), with `head_matches` (a named head against a PR's,
+`SHA` the form of a named commit) and `key_order` (tracker keys in order). Each call raises
+the error class its caller passes (ERR), so each command keeps its own refusals. Standard
+library only; how a command finds this module: the docstring of scripts/correction_lanes.py.
 """
 
 import datetime as dt
 import importlib.machinery
 import importlib.util
+import json
 import os
+import re
 import subprocess
 from pathlib import Path
+from typing import Any, cast
 
 KIT = Path(__file__).resolve().parent.parent
+SHA = re.compile(r"[0-9a-fA-F]{7,40}")  # a commit as named: 7 to 40 hex
 
 
 def gh(args: list[str], fix: str, *, err: type[Exception]) -> str:
@@ -95,6 +101,91 @@ def tracker(
         )
         raise err(msg)
     return p.stdout
+
+
+# gh's and the tracker's JSON is typed Any: each caller narrows the fields it reads.
+def pr_view(pr: int, fields: str, repo: str | None, *, err: type[Exception]) -> dict[str, Any]:
+    """`gh pr view PR --json FIELDS` (in REPO, else this directory's repo): the object, every
+    field present; ERR otherwise."""
+    out = gh(
+        ["pr", "view", str(pr), "--json", fields, *(["-R", repo] if repo else [])],
+        f"check PR #{pr} exists in {repo or 'this repo'}, and gh auth status",
+        err=err,
+    )
+    try:
+        d: object = json.loads(out)
+    except ValueError as e:
+        msg = f"gh pr view {pr} printed no JSON: check the gh on PATH ({out[:100]!r})"
+        raise err(msg) from e
+    if not isinstance(d, dict) or any(f not in d for f in fields.split(",")):
+        msg = f"gh pr view {pr} lacks fields {fields}: update gh (2.40 or later)"
+        raise err(msg)
+    return cast("dict[str, Any]", d)
+
+
+def ci_workflows(repo: str | None, sha: str, *, err: type[Exception]) -> tuple[list[str], str]:
+    """The no-CI fact (rule: octo-feather-lane --help, post-merge step 2): the workflow files at
+    commit SHA and the source as printed."""
+    name = repo or "{owner}/{repo}"  # gh fills the placeholders from this directory's repo
+    src = f"gh api repos/{repo or '<this repo>'}/git/trees/{sha[:12]}"
+    tree = sha
+    for part in (".github", "workflows", None):
+        out = gh(
+            ["api", f"repos/{name}/git/trees/{tree}"],
+            f"check gh auth status and that {sha[:12]} is in {repo or 'this repo'}, then rerun",
+            err=err,
+        )
+        try:
+            raw = cast("list[dict[str, object]]", json.loads(out)["tree"])
+            entries = [(str(e["path"]), str(e["type"]), str(e["sha"])) for e in raw]
+        except (ValueError, KeyError, TypeError) as e:
+            msg = (
+                f"gh api git/trees/{tree[:12]} printed no tree ({out[:100]!r}): check the gh on"
+                " PATH"
+            )
+            raise err(msg) from e
+        if part is None:
+            wf = [p for p, t, _ in entries if t == "blob" and p.endswith((".yml", ".yaml"))]
+            return [f".github/workflows/{p}" for p in wf], src
+        tree = next((s for p, t, s in entries if p == part and t == "tree"), "")
+        if not tree:
+            return [], src
+    return [], src  # unreachable: the loop returns at its last part
+
+
+def head_matches(named: str, head: str) -> bool:
+    """Whether NAMED, a sha (SHA), is a prefix of HEAD."""
+    return bool(SHA.fullmatch(named)) and head.lower().startswith(named.lower())
+
+
+def issue_view(key: str, *, err: type[Exception]) -> dict[str, Any]:
+    """The tracker skill's issue-view of KEY: {key, ..., state, children}, children a list of key
+    strings."""
+    out = tracker("issue-view", key, err=err)
+    try:
+        d: object = json.loads(out)
+        if (
+            not isinstance(d, dict)
+            or not isinstance(cast("dict[str, object]", d).get("key"), str)
+            or not isinstance(kids := cast("dict[str, object]", d).get("children"), list)
+            or not all(isinstance(k, str) for k in cast("list[object]", kids))
+        ):
+            msg = "no key or children list of key strings"
+            raise ValueError(msg)  # noqa: TRY301 (one message for both failures, as JSON's own)
+    except ValueError as e:
+        msg = (
+            f"issue-view {key} printed unreadable JSON ({e}): the tracker skill's issue-view must"
+            " print key and children, then rerun"
+        )
+        raise err(msg) from e
+    return cast("dict[str, Any]", d)
+
+
+def key_order(k: str) -> tuple[str, int]:
+    """Keys in tracker order: the prefix, then the trailing number (101 before 110, ENG-9 before
+    ENG-10)."""
+    m = re.fullmatch(r"(.*?)(\d+)", k)
+    return (m.group(1), int(m.group(2))) if m else (k, 0)
 
 
 def utc(s: object) -> dt.datetime | None:

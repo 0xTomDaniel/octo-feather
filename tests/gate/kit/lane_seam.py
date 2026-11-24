@@ -53,9 +53,10 @@ def seam(s: Scratch, repo: str, *args: str, want: int = 0) -> Ran:
 
 def github(s: Scratch) -> None:
     """#876: issue-view --notes prints the body and both real comments with GitHub's times; seam
-    finds no record for herdr-spawn, exit 1. #1009: its Seam: lines are late for a commit at
-    74f80a78's time (exit 1, naming both times) and recorded before a later commit (exit 0, that
-    commit's own SHA), for both its criteria; a criterion it does not list, seam-off-criteria.
+    finds no record for herdr-spawn: with --before a note, exit 0 (#1236). #1009: its Seam: lines
+    are late for a commit at 74f80a78's time (a note, exit 0, naming both times, no owner step) and
+    recorded before a later commit (exit 0, that commit's own SHA), for both its criteria; a
+    criterion it does not list, seam-off-criteria (exit 1), with --before a note naming it.
     gh asked only issue view and the graphql read."""
     s.gh.store("tape.json", json.loads(TAPE.read_text()))
     s.git(s.root, "init", "-q", "-b", "main", "t")
@@ -66,16 +67,20 @@ def github(s: Scratch) -> None:
     assert got[:2] == want, f"#876 notes: {got}"
     assert v["key"] == "876", v["key"]
     crit = "roles#acceptance-fresh-independent-worker"
-    r = seam(s, "t", "876", crit, "herdr-spawn", "--before", early, want=1)
-    no = f"876: class: unlisted-test-seam: no `Seam:` record for {crit} `herdr-spawn` on 876"
+    r = seam(s, "t", "876", crit, "herdr-spawn", "--before", early)
+    no = f"876: note, class unlisted-test-seam: no `Seam:` record for {crit} `herdr-spawn` on 876"
     assert r.out.startswith(no), f"#876: {r.out}"
-    r = seam(s, "t", "1009", PUBLIC, "octo-feather-lane seam", "--before", early, want=1)
+    assert "\n" not in r.out, f"#876: {r.out}"
+    assert "supervisor" not in r.out, f"#876: {r.out}"
+    r = seam(s, "t", "1009", PUBLIC, "octo-feather-lane seam", "--before", early)
     url = "https://github.com/0xTomDaniel/octo-feather/issues/1009"
     said = (
         f"written at 2026-11-18T20:29:48Z ({url}), after commit {early[:8]} at 2026-11-18T03:24:33Z"
     )
-    assert "class: unlisted-test-seam" in r.out, f"#1009 late: {r.out}"
+    assert r.out.startswith("1009: note, class unlisted-test-seam: "), f"#1009 late: {r.out}"
     assert said in r.out, f"#1009 late: {r.out}"
+    assert "owner" not in r.out, f"#1009 late: {r.out}"
+    assert "supervisor" not in r.out, f"#1009 late: {r.out}"
     for crit, sm in ((PUBLIC, "octo-feather-lane seam"), (TRACKER, "issue-view")):
         r = seam(s, "t", "1009", crit, sm, "--before", late)
         ok = f"1009: seam {crit} `{sm}` recorded at 2026-11-18T20:29:48Z"
@@ -83,6 +88,9 @@ def github(s: Scratch) -> None:
         assert r.out.endswith(f", before commit {late[:8]}"), f"#1009 {crit}: {r.out}"
     r = seam(s, "t", "1009", "roles#acceptance-delegated-pr", "issue-view", want=1)
     assert "class: seam-off-criteria: roles#acceptance-delegated-pr" in r.out, r.out
+    r = seam(s, "t", "1009", "roles#acceptance-delegated-pr", "issue-view", "--before", late)
+    off = "1009: note, class unlisted-test-seam: roles#acceptance-delegated-pr is not an acceptance"
+    assert r.out.startswith(off), f"#1009 off-criteria, --before: {r.out}"
     asked = {" ".join(x.split(" ", 2)[:2]) for x in s.gh.log()}
     assert asked == {"issue view", "api graphql"}, f"gh asked: {s.gh.log()}"
 
@@ -90,7 +98,7 @@ def github(s: Scratch) -> None:
 def rule(s: Scratch) -> None:
     """A rule-only ticket's record `Seam: rule: `<seam>``, checked as `seam TICKET rule SEAM`:
     #1214's passes (exit 0, naming its body), before a later commit too, and is late for a commit
-    at 74f80a78's time (exit 1, unlisted-test-seam); #1168's prose seam is no record (exit 1);
+    at 74f80a78's time (a note, exit 0, #1236); #1168's prose seam is no record (exit 1);
     a criterion id on #1168 is seam-off-criteria, its fix naming the rule form; `rule` on #1009,
     which lists no rule item, is seam-off-criteria."""
     s.gh.store("tape.json", json.loads(TAPE.read_text()))
@@ -102,8 +110,8 @@ def rule(s: Scratch) -> None:
     assert r.out == ok, f"#1214: {r.out}"
     r = seam(s, "t", "1214", "rule", "octo-feather-lane seam", "--before", late)
     assert r.out == f"{ok}, before commit {late[:8]}", f"#1214 before: {r.out}"
-    r = seam(s, "t", "1214", "rule", "octo-feather-lane seam", "--before", early, want=1)
-    assert r.out.startswith("1214: class: unlisted-test-seam: `Seam:` record for rule "), r.out
+    r = seam(s, "t", "1214", "rule", "octo-feather-lane seam", "--before", early)
+    assert r.out.startswith("1214: note, class unlisted-test-seam: `Seam:` record for rule "), r.out
     assert f"({url}), after commit {early[:8]}" in r.out, f"#1214 late: {r.out}"
     r = seam(s, "t", "1168", "rule", "scripts/check-vendored", want=1)
     cv = "`scripts/check-vendored`"
@@ -177,7 +185,7 @@ def note(at: str, edited: str | None) -> dict[str, object]:
 
 
 def linear(s: Scratch) -> None:
-    """A comment record written before the test passes; written after it, late (exit 1); written
+    """A comment record written before the test passes; written after it, a note (exit 0); written
     before and edited after, unchecked (exit 2), never late. A description record: its edit time
     is its latest history entry with updatedDescription, so a later state move leaves it before
     (exit 0) and a later description edit makes it unchecked (exit 2); history past one page,
@@ -197,7 +205,8 @@ def linear(s: Scratch) -> None:
     ok = f"ENG-1: seam {CRIT} `herdr-spawn` recorded at 2026-11-18T03:22:00Z ({URL}#comment-1)"
     assert r.out == f"{ok}, before commit {sha[:8]}", r.out
     linear_tape(fl, DESC, [note(W2, None)], [])
-    r = seam(s, "t", *args, want=1)
+    r = seam(s, "t", *args)
+    assert r.out.startswith("ENG-1: note, class unlisted-test-seam: "), r.out
     assert f"written at 2026-11-18T04:21:10Z ({URL}#comment-1), after commit {sha[:8]}" in r.out, (
         r.out
     )

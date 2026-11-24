@@ -157,7 +157,7 @@ import tomllib
 
 # The slot queue's rule (scripts/slot_queue.py, its docstring): a kit module beside this script,
 # found because Python puts this script's own directory, symlinks resolved, first on sys.path.
-from slot_queue import Line, Ms, Outcome, Refused, Rule, SlotQueue, Taken
+from slot_queue import Line, Outcome, Refused, SlotQueue, Taken, box, home, system_clock
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -174,14 +174,8 @@ def say(line: str) -> None:
     sys.stdout.flush()
 
 
-def system_clock() -> Ms:
-    """The command's clock: now, in epoch milliseconds."""
-    return time.time_ns() // 1_000_000
-
-
 def slots_home() -> Path:
-    base = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
-    return Path(base) / "octo-feather" / "slots"
+    return home(os.environ)
 
 
 def slots_dir() -> Path:
@@ -192,7 +186,7 @@ def slots_dir() -> Path:
 
 def slot(kind: str) -> SlotQueue:
     """KIND's slot queue over the box's slots dir, by the kit's gate budget and this env."""
-    return SlotQueue(kind, slots_home(), Rule.load(kind, BUDGET, os.environ), system_clock)
+    return box(kind, BUDGET, os.environ)
 
 
 def apply(kind: str, o: Outcome, out: IO[str] | None = None) -> int:
