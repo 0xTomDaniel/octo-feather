@@ -17,9 +17,12 @@ slot_free (quality #acceptance-fast-map-slot-free): while gh8's run holds the he
 `just fast-map` (no grant: a run asking the slot would be refused, exit 75) passes, says it runs
 as the fast tier at the lowest priority, runs every non-e2e test item (a, b, d, e, one, two) at
 that priority, never the e2e ones or the static check (check-probe logs nothing), and maps the
-five whose Python it measured; the slot still names gh8's run. Then, fixture-a changed,
-`just fast-list` chooses a.sh and test_one (their coverage reaches it) and d.sh (unmapped), each
-named with why, the e2e items named skipped, and runs none.
+five whose Python it measured, naming d.sh, which left no coverage data; the slot still names
+gh8's run. The run's exit is the tests' and the map's alone: on a lane branch whose
+gate-budget.toml puts every item over the per-test CPU budget and whose tests/b.sh changed since
+main, the budget, which would fail a gate run on b.sh, does not judge the mapping run. Then,
+fixture-a changed, `just fast-list` chooses a.sh and test_one (their coverage reaches it) and
+d.sh (unmapped), each named with why, the e2e items named skipped, and runs none.
 behind (quality #acceptance-fast-map-behind): main at M0, then M1 and M2; branch lane cut at M0
 with a commit of its own; coverage maps at M0, M1 and M2 (the map file `just fast-map` writes,
 scripts/octo-feather-gate --help, here holding no item, so every item is unmapped). On lane,
@@ -28,7 +31,8 @@ from it; on main at M2 it names none.
 On the mapped copy:
 unchanged: the mapping run with e.sh failing was red, yet wrote the map from the items that
 passed (a, b, one, two), e.sh named left out; `just fast` with nothing changed runs only the items
-with no recorded coverage, d (unmapped) and e (did not pass), e named so.
+with no recorded coverage, d (unmapped) and e (did not pass), e named so, as `just fast-list`
+names it first, running nothing.
 one_script: fixture-a changed: `just fast` runs the static check, the items whose recorded
 coverage reaches fixture-a (a.sh, and test_one alone of its file's functions) and the unmapped
 ones, each named; the e2e items named skipped.
@@ -146,6 +150,14 @@ def fast(s: Scratch, k: Path, want: str) -> str:
 def slot_free(s: Scratch) -> None:
     k = kit(s)
     (s.root / "probe").write_text("")
+    s.git(k, "checkout", "-q", "-b", "lane")
+    budget = k / "gate-budget.toml"
+    tiny = "test_cpu_seconds = 0.001"
+    text = re.sub(r"^test_cpu_seconds = .*$", tiny, budget.read_text(), flags=re.MULTILINE)
+    budget.write_text(text)
+    with (k / "tests" / "b.sh").open("a") as f:
+        f.write("# changed in the lane\n")
+    s.git(k, "commit", "-qam", "every item over the CPU budget; b.sh changed since main")
     with held(s, k):
         rc, out, ran = just(s, k, "fast-map", GATE_WORKERS="8")
         said = f"just fast-map: exit {rc}\nran: {ran}\n{out}"
@@ -154,6 +166,8 @@ def slot_free(s: Scratch) -> None:
         assert sorted(ln.split()[0] for ln in ran) == ["a", "b", "d", "e", "one", "two"], said
         assert all(ln.endswith(LOWEST) for ln in ran if " " in ln), f"want {LOWEST}: {said}"
         assert re.search(r"fast-map: 5 test items mapped at [0-9a-f]{12}: ", out), said
+        no_data = "fast-map: tests/d.sh: no coverage data: left out of the map, always selected"
+        assert no_data in out, said
         static = (s.root / "probe").read_text()
         assert static == "", f"a static check ran: {static}\n{said}"
         st = status(s, k)
@@ -218,8 +232,17 @@ def unchanged(s: Scratch) -> None:
     assert not m.startswith("exit 0\n"), f"want the mapping run red (e.sh failed): {m}"
     assert re.search(r"fast-map: 4 test items mapped at ", m), f"want a, b, one, two: {m}"
     assert "fast-map: tests/e.sh did not pass: left out of the map, always selected" in m, m
+    failed = (
+        r"fast: tests/e\.sh: did not pass the mapping run at [0-9a-f]{12}, so unmapped:"
+        r" always selected"
+    )
+    rc, dry, ran = just(s, k, "fast-list")
+    said = f"just fast-list: exit {rc}\n{dry}"
+    assert rc == 0, said
+    assert ran == [], f"an item ran: {said}"
+    assert re.search(failed, dry), f"want e.sh named as not passing the mapping run: {said}"
     out = fast(s, k, "d e")
-    assert "fast: tests/e.sh: did not pass the mapping run at " in out, out
+    assert re.search(failed, out), out
 
 
 def one_script(s: Scratch) -> None:

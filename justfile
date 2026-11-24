@@ -294,7 +294,10 @@ fast-list:
 # venv; one data dir per item, GATE_ITEM: tests/gate/coverage.toml), on a clean tree, written for HEAD into the git
 # common dir (scripts/octo-feather-gate map), from the items that passed; exits as the run did. On fast_workers
 # workers, as just fast: a fast-tier run, no heavy slot, the lowest priority, one fast-run turn (quality
-# #recipes-static-first, tests/gate/heavy_slot.py). Extra arguments go to pytest. Never in just check or CI.
+# #recipes-static-first, tests/gate/heavy_slot.py). Its CPU is coverage's, not the tests': the run blocks the gate's
+# CPU show and per-test budget (tests/gate/conftest.py's cpu-shown plugin; -p no:, an argument, so a gate an item
+# runs still applies it), so its exit is its tests' and the map's alone. Extra arguments go to pytest. Never in just
+# check or CI.
 fast-map *args:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -303,7 +306,7 @@ fast-map *args:
     d="$(mktemp -d)"; trap 'rm -rf "$d"' EXIT
     cap="$(python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["fast_workers"])' "$root/gate-budget.toml")"
     rc=0; env -u GATE_ITEM COV_MAP_DIR="$d" COVERAGE_PROCESS_START="$root/tests/gate/coverage.toml" GATE_WORKERS="$cap" \
-      just check-tests --junitxml="$d/junit.xml" -m 'not e2e' --deselect tests/gate/test_gate.py::test_recipe "$@" || rc=$?
+      just check-tests --junitxml="$d/junit.xml" -p no:cpu-shown -m 'not e2e' --deselect tests/gate/test_gate.py::test_recipe "$@" || rc=$?
     uv run --locked --offline --no-sync python3 "$root/scripts/octo-feather-gate" map "$d" --junit "$d/junit.xml"
     exit "$rc"
 
