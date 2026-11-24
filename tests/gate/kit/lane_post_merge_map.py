@@ -35,10 +35,10 @@ import fcntl
 import hashlib
 import json
 import os
-import re
 import sys
 import time
 
+import tomllib
 from herdr_messaging import ASSETS, agent, herdr_world, lines
 from testkit import HERE, ROOT, Ran, Scratch, kit, main
 
@@ -194,11 +194,8 @@ class Turns:
     runs hold them (tests/gate/heavy_slot.py), until release."""
 
     def __init__(self, w: World) -> None:
-        n = int(
-            re.search(r"^fast_runs = (\d+)", (ROOT / "gate-budget.toml").read_text(), re.MULTILINE)[
-                1
-            ]
-        )  # type: ignore[index]
+        budget = tomllib.loads((ROOT / "gate-budget.toml").read_text())
+        n = int(budget["fast_runs"])
         slots = w.state / "octo-feather" / "slots"
         self.held = [(slots / f"fast-{i}.lock").open("a") for i in range(n)]
         for f in self.held:
