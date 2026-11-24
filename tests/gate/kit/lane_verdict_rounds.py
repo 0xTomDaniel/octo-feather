@@ -15,6 +15,8 @@ The three code-reviewer reports are the lane's result files verbatim
 reviewer would write. round3-alone.md is the verdict comment holding round 3 alone, as verdict
 writes rounds; verdict itself refuses to post it there. The legacy comment is the one the old
 verdict posted for round 3 (comment 7062437841 at 2026-11-21T12:15:27Z: its header and report).
+The parent #1121 stands in the fake gh's store with no correction-lane marker in its title, a
+non-correction lane's (#1222); tests/gate/kit/lane_correction_replay.py replays it as recorded.
 
 A declaration-only check (issue-lifecycle #acceptance-declaration-check-shown; #1221): round 2's
 trailer line as it should have read, `class: declaration` (DECLARED), swapped into round 2's
@@ -65,6 +67,8 @@ class Lane:
         s.env["XDG_STATE_HOME"] = str(s.root / "xdg")
         s.env["OCTO_FEATHER_QC_DIR"] = str(s.root / "qc")
         s.prepare("lane-verdict-rounds", Lane.build)
+        url = "https://github.com/o/r/issues/1121"
+        s.gh.store("issue/1121.json", {"number": 1121, "title": "a lane", "body": "", "url": url})
 
     @staticmethod
     def build(s: Scratch) -> None:
@@ -94,12 +98,18 @@ class Lane:
         s.run([G, "record", "--reason", "lane final head", "--seconds", "1"], cwd=r)
 
     def pr(
-        self, head: str = R3, comments: list[dict[str, str]] | None = None, url: str = ""
+        self,
+        head: str = R3,
+        comments: list[dict[str, str]] | None = None,
+        url: str = "",
+        more: str = "",
     ) -> None:
-        """PR #1216 at HEAD with COMMENTS, its merge ask naming the verdict comment URL."""
+        """PR #1216 at HEAD with COMMENTS, its merge ask naming the verdict comment URL, MORE
+        after it."""
         body = (
             f"Closes #1121\n\n## Merge ask\n\nHead: {head[:12]}\n"
             f"Checks: check pass on {head[:12]}\nReview verdict: {url}\nBuilt: none\nFailed: none\n"
+            + more
         )
         self.s.gh.put(
             PR,
@@ -114,11 +124,11 @@ class Lane:
             },
         )
 
-    def keep_body(self, url: str) -> None:
-        """The PR as the fake gh holds it, its merge ask naming URL."""
+    def keep_body(self, url: str, more: str = "") -> None:
+        """The PR as the fake gh holds it, its merge ask naming URL, MORE after it."""
         d: dict[str, Any] = self.s.gh.pr(PR)
         comments = d["comments"]
-        self.pr(d["headRefOid"], comments, url)
+        self.pr(d["headRefOid"], comments, url, more)
 
     def report(self, name: str, rng: str = "") -> str:
         """The recorded report NAME, with the line `Range: RNG` when given."""
