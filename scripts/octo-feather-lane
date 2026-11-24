@@ -3451,11 +3451,6 @@ def cmd_merge(args: list[str]) -> int:
 # archive of a merged lane) ---
 
 PM_UNIT_LIMIT = 900   # s: the teardown unit's runtime limit (systemd RuntimeMaxSec; the fallback's own kill)
-# What systemd sets in each unit itself, never carried over from the archive's environment.
-PM_UNIT_OWN = frozenset({"INVOCATION_ID", "JOURNAL_STREAM", "SYSTEMD_EXEC_PID", "MANAGERPID", "NOTIFY_SOCKET", "LISTEN_PID",
-                         "LISTEN_FDS", "LISTEN_FDNAMES", "WATCHDOG_PID", "WATCHDOG_USEC", "SERVICE_RESULT", "EXIT_CODE",
-                         "EXIT_STATUS", "MONITOR_SERVICE_RESULT", "MONITOR_EXIT_CODE", "MONITOR_EXIT_STATUS"})
-PM_MANAGER_UP = ("running", "degraded", "starting", "initializing", "maintenance", "stopping")
 
 
 def cmd_archive_lane(args: list[str]) -> int:
@@ -3522,16 +3517,6 @@ def archive_waits(name: str, pr: int, repo: str | None, args: list[str]) -> str:
     return now.head
 
 
-def pm_manager() -> bool:
-    """Whether a systemd user manager answers (`systemctl --user is-system-running`): none on macOS."""
-    try:
-        p = subprocess.run(["systemctl", "--user", "is-system-running"], capture_output=True, text=True,
-                           stdin=subprocess.DEVNULL, timeout=20)
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-    return p.stdout.strip() in PM_MANAGER_UP
-
-
 def pm_unit_start(name: str, pr: int, head: str, repo: str | None) -> int:
     """The archive's last act: step 7 in one finite transient unit outside the lane's workspace, cwd the director's
     checkout (--help, archive). A unit that cannot start is a stop the director is told once; exit 1."""
@@ -3539,27 +3524,12 @@ def pm_unit_start(name: str, pr: int, head: str, repo: str | None) -> int:
     records = post_merge.records(lanes_dir())
     log = records / f"{name}.teardown.log"
     run = [str(me), "post-merge", str(pr), head, "--lane", name, *(["--repo", repo] if repo else [])]
-    managed = pm_manager()
+    managed = post_merge.manager()
     how = "systemd-run --user" if managed else "start_new_session"
     post_merge.update(records, name, lambda r: dataclasses.replace(r, unit=post_merge.Unit(unit, how, post_merge.now(), "", "", "")))
-    env = {k: v for k, v in os.environ.items() if k not in PM_UNIT_OWN}
-    why = ""
-    try:
-        if managed:
-            hook = shlex.join([str(me), "post-merge", "--lane", name, "--unit-end", *(["--repo", repo] if repo else [])])
-            cmd = ["systemd-run", "--user", "--quiet", "--collect", f"--unit={unit}", f"--working-directory={top}",
-                   "-p", f"RuntimeMaxSec={PM_UNIT_LIMIT}", "-p", f"ExecStopPost={hook}",
-                   "-p", f"StandardOutput=append:{log}", "-p", f"StandardError=append:{log}",
-                   *(f"--setenv={k}={v}" for k, v in env.items()), "--", *run]
-            p = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=60)
-            err = (p.stderr or p.stdout).strip().splitlines()
-            why = f"systemd-run exit {p.returncode}: {err[-1][:200] if err else 'no output'}" if p.returncode else ""
-        else:
-            with log.open("a") as f:
-                subprocess.Popen([*run, "--unit-run"], cwd=top, env=env, stdin=subprocess.DEVNULL, stdout=f,
-                                 stderr=subprocess.STDOUT, start_new_session=True)
-    except (OSError, subprocess.TimeoutExpired) as e:
-        why = f"{type(e).__name__}: {e}"
+    hook = [str(me), "post-merge", "--lane", name, "--unit-end", *(["--repo", repo] if repo else [])]
+    why = post_merge.transient(unit, run, hook=hook, fallback=[*run, "--unit-run"], cwd=top, limit=PM_UNIT_LIMIT,
+                               log=log, managed=managed)
     if why:
         print(f"teardown: unit {unit} not started ({why})", flush=True)
         post_merge.unit_end(lanes_dir(), name, "start failed", why, show_line, repo=repo)
@@ -3572,16 +3542,8 @@ def pm_unit_start(name: str, pr: int, head: str, repo: str | None) -> int:
 def pm_unit_run(pr: int, head: str, lane: str, repo: str | None) -> int:
     """The unit where no systemd user manager answers: the routine under PM_UNIT_LIMIT, then its end
     (post_merge.unit_end)."""
-    import signal
     run = [str(Path(__file__).resolve()), "post-merge", str(pr), head, "--lane", lane, *(["--repo", repo] if repo else [])]
-    with subprocess.Popen(run, stdin=subprocess.DEVNULL, start_new_session=True) as p:
-        try:
-            rc = p.wait(PM_UNIT_LIMIT)
-            result, status = ("success" if rc == 0 else "exit-code"), f"exited {rc}"
-        except subprocess.TimeoutExpired:
-            os.killpg(p.pid, signal.SIGKILL)
-            p.wait()
-            result, status = "timeout", "killed KILL"
+    result, status = post_merge.bounded(run, PM_UNIT_LIMIT)
     return post_merge.unit_end(lanes_dir(), lane, result, status, show_line, repo=repo)
 
 

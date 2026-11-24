@@ -23,6 +23,11 @@ Interface:
     stale_report(state) -> (lines, read): step 5's report, `stale`'s output; STATE the state dir.
     kit_install(), top(), git_here(*args), records(lanes), now(): the install step 3 moves, the
         director's checkout, git in the current directory, the records' dir, a record's time.
+    manager(), transient(unit, run, hook=, fallback=, cwd=, limit=, log=, managed=) -> why,
+    bounded(run, limit) -> (result, status)
+        Whether a systemd user manager answers; RUN started in one finite transient unit, its stop
+        hook HOOK, or FALLBACK in its own session where no manager answers, "" when started; the
+        fallback's bounded run of RUN and its end as systemd names it.
     run(lane, pm, steps, show, records) -> Record
         STEPS the routine's (name, function) pairs in order; each function takes PM (its pr, head,
         merge and base) and returns its outcome (ok, stopped or pending) and its line. Under the
@@ -56,8 +61,9 @@ a stop). Written whole each time (a temp file renamed over it), so a reader neve
 
 __all__ = [
     "STEPS", "Body", "Close", "Merge", "Outcome", "PostMerge", "Ran", "Record", "Refused", "Step",
-    "Unit", "Unreadable", "archived", "git_here", "kit_install", "now", "post_merge", "read",
-    "records", "run", "stale_report", "tell", "tell_director", "top", "unit_end", "update",
+    "Unit", "Unreadable", "archived", "bounded", "git_here", "kit_install", "manager", "now",
+    "post_merge", "read", "records", "run", "stale_report", "tell", "tell_director", "top",
+    "transient", "unit_end", "update",
 ]  # fmt: skip
 
 import contextlib
@@ -1912,6 +1918,100 @@ def unit_end(  # noqa: PLR0913 (the unit's end and the run's --repo)
         f"(the unit's lines: {records(lanes) / (lane + '.teardown.log')})"
     )
     return tell_director(lanes, lane, why, msg, show)
+
+
+# --- a transient unit: the teardown's (octo-feather-lane --help, archive) and the coverage map
+# job's (step 5): finite, named, bounded, its end recorded by its stop hook ---
+
+# What systemd sets in each unit itself, never carried over from the starter's environment.
+UNIT_OWN = frozenset({
+    "INVOCATION_ID", "JOURNAL_STREAM", "SYSTEMD_EXEC_PID", "MANAGERPID", "NOTIFY_SOCKET",
+    "LISTEN_PID", "LISTEN_FDS", "LISTEN_FDNAMES", "WATCHDOG_PID", "WATCHDOG_USEC", "SERVICE_RESULT",
+    "EXIT_CODE", "EXIT_STATUS", "MONITOR_SERVICE_RESULT", "MONITOR_EXIT_CODE",
+    "MONITOR_EXIT_STATUS",
+})  # fmt: skip
+MANAGER_UP = ("running", "degraded", "starting", "initializing", "maintenance", "stopping")
+
+
+def manager() -> bool:
+    """Whether a systemd user manager answers (`systemctl --user is-system-running`): none on
+    macOS."""
+    try:
+        p = subprocess.run(
+            ["systemctl", "--user", "is-system-running"],  # noqa: S607 (systemctl from PATH)
+            capture_output=True,
+            text=True,
+            stdin=subprocess.DEVNULL,
+            timeout=20,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return p.stdout.strip() in MANAGER_UP
+
+
+def transient(  # noqa: PLR0913 (the unit's parts, each keyword-only)
+    unit: str,
+    run: Sequence[str],
+    *,
+    hook: Sequence[str],
+    fallback: Sequence[str],
+    cwd: Path,
+    limit: int,
+    log: Path,
+    managed: bool,
+) -> str:
+    """RUN started in one transient unit UNIT in CWD with this process's environment, returning
+    at once: with MANAGED (manager()) `systemd-run --user`, never a service or timer, bounded by
+    RuntimeMaxSec LIMIT, its lines appended to LOG, HOOK its stop hook (ExecStopPost, after any
+    end, reading SERVICE_RESULT, EXIT_CODE, EXIT_STATUS); else FALLBACK in its own session
+    (start_new_session), which runs RUN under the same limit (bounded) and then the same end.
+    Empty when started, else why not."""
+    env = {k: v for k, v in os.environ.items() if k not in UNIT_OWN}
+    try:
+        if managed:
+            cmd = ["systemd-run", "--user", "--quiet", "--collect", f"--unit={unit}"]
+            cmd += [f"--working-directory={cwd}", "-p", f"RuntimeMaxSec={limit}"]
+            cmd += ["-p", f"ExecStopPost={shlex.join(hook)}"]
+            cmd += ["-p", f"StandardOutput=append:{log}", "-p", f"StandardError=append:{log}"]
+            cmd += [*(f"--setenv={k}={v}" for k, v in env.items()), "--", *run]
+            p = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                stdin=subprocess.DEVNULL,
+                timeout=60,
+                check=False,
+            )
+            err = (p.stderr or p.stdout).strip().splitlines()
+            said = err[-1][:200] if err else "no output"
+            return f"systemd-run exit {p.returncode}: {said}" if p.returncode else ""
+        with log.open("a") as f:
+            subprocess.Popen(
+                fallback,
+                cwd=cwd,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=f,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return f"{type(e).__name__}: {e}"
+    return ""
+
+
+def bounded(run: Sequence[str], limit: int) -> tuple[str, str]:
+    """A fallback unit's run (transient): RUN in its own session, its group killed past LIMIT
+    seconds; its end as systemd names it, (SERVICE_RESULT, status)."""
+    with subprocess.Popen(run, stdin=subprocess.DEVNULL, start_new_session=True) as p:
+        try:
+            rc = p.wait(limit)
+        except subprocess.TimeoutExpired:
+            os.killpg(p.pid, signal.SIGKILL)
+            p.wait()
+            return "timeout", "killed KILL"
+    return ("success" if rc == 0 else "exit-code"), f"exited {rc}"
 
 
 WAIT = 300  # post-merge's --wait when none is given (octo-feather-lane --help, post-merge)
