@@ -49,10 +49,13 @@ append-only, one judgement call per line:
    "criteria": ["<criterion id>"...], "what": "...", "why": "...",
    "passes_as_written": false, "evidence": "<failing command, error, or two
    contradicting spec lines>", "commit": "<optional sha>",
-   "denied": {"at": "...", "note": "..."} (optional, written when the owner denies)}
+   "denied": {"at": "...", "note": "..."} (optional, written when the owner denies),
+   "ruling": "<optional: the URL of the GitHub issue or issue comment where the owner's
+   ruling on this change is written, made before the call (issue-lifecycle #gates-tiers)>"}
 `check` fails on a line that is not JSON, a missing, empty or whitespace-only field, a lane that
 is no tracker's lane key (one some kit tracker skill's lane-key maps to itself: gh12, eng-123), a role other
-than supervisor, passes_as_written not false, an unknown kind, or a criterion id
+than supervisor, passes_as_written not false, an unknown kind, a ruling that is no such URL
+(https://github.com/<owner>/<repo>/issues/<n>, optionally #issuecomment-<id>), or a criterion id
 in neither the spec nor the spec at accepted_commit, unless the call was already in
 the log at accepted_commit (checked when written; a revision may drop a criterion it
 names; an identical copy added since is a new call). It then compares the spec
@@ -68,7 +71,7 @@ such a call of kind weakens, an added one of kind adds.
 log at REF (a call is the same call with or without `denied`), grouped as the
 loudness table orders them (#gates-call-loudness): weakens, adds, clarifies, each
 group by time. Each call shows its spec, lane, role, anchors, criteria, what, why
-and evidence, and DENIED when the owner denied it. It ends with the count, and a
+and evidence, its ruling when it links one, and DENIED when the owner denied it. It ends with the count, and a
 line per lane with more than three calls.
 """
 from collections import Counter
@@ -213,6 +216,8 @@ VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "met
 KINDS = ("clarifies", "adds", "weakens")
 FIELDS = ("at", "lane", "role", "kind", "anchors", "criteria", "what", "why",
           "passes_as_written", "evidence")
+# a call's optional ruling: where the owner's ruling is written, a GitHub issue or a comment on one
+RULING = re.compile(r"https://github\.com/([\w.-]+/[\w.-]+)/issues/(\d+)(?:#issuecomment-(\d+))?")
 PAGE = "(page)"
 
 
@@ -367,6 +372,10 @@ def read_calls(log: Path, known: set[str], settled: "Counter[str] | None" = None
         d = c.get("denied")
         if d is not None and not (isinstance(d, dict) and d.get("at") and d.get("note")):
             line_errs.append('denied, when set, is {"at": ..., "note": ...}')
+        r = c.get("ruling")
+        if r is not None and not (isinstance(r, str) and RULING.fullmatch(r)):
+            line_errs.append("ruling, when set, is the URL of the GitHub issue or issue comment where the owner's "
+                             "ruling is written (https://github.com/<owner>/<repo>/issues/<n>[#issuecomment-<id>])")
         if line_errs:
             errs.extend(f"{where}: {e}; {fix}" for e in line_errs); continue
         calls.append(c)
@@ -442,6 +451,10 @@ def _identity(c: dict) -> str:
     return json.dumps({k: v for k, v in c.items() if k != "denied"}, sort_keys=True)
 
 
+# the call log's reader, for scripts/merge_ask.py (the merge ask's spec calls, issue-lifecycle #gates-tiers)
+parse_log, identity = _parse_log, _identity
+
+
 def _base(d: Path, since: str | None) -> tuple[str | None, str | None]:
     """The commit to list calls since: REF, else the merge base of HEAD and origin/main."""
     if since:
@@ -504,6 +517,8 @@ def list_calls(found: list[tuple[Path, dict]], base_desc: str) -> str:
                          f"at {_field(c.get('at'))}" + (f", commit {c['commit']}" if c.get("commit") else ""))
             for f in ("anchors", "criteria", "what", "why", "evidence"):
                 lines.append(f"   {f}: {_field(c.get(f))}")
+            if c.get("ruling"):
+                lines.append(f"   ruling: {_field(c['ruling'])}")
     other = [x for x in found if x[1].get("kind") not in KINDS]
     if other:
         lines += ["", f"Unknown kind (fix: run `octo-feather-spec-status check`): {len(other)}"]

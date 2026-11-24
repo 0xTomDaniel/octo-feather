@@ -119,7 +119,10 @@ in scope is the verdict, and lines that disagree are refused. What the check fie
 docs/adr/0008, Who builds what. Refused: no
 verdict, neither check form, both, a malformed Check line, a class other than exact, proxy or declaration, and
 a `class: proxy` line with `Verdict: clear` (a proxy check blocks; the declaration class: docs/adr/0008 rung 2). The comment's header carries
-the lines; merge-ask prints them under the section for the owner. HEAD is the head the review judged, H, a commit
+the lines; merge-ask prints them under the section for the owner. The header carries the report's `Ruling covers:
+<url>` lines too, each the URL a spec call links as its ruling (scripts/octo-feather-spec-status, call log; refused
+in another form): the reviewer's word that the owner's ruling covers that call's change (merge-ask's tier, below);
+each post carries the report's own, never an earlier round's. HEAD is the head the review judged, H, a commit
 of the PR (7+ hex prefix); the comment names it (`Head:`) and the PR's head when posted (`PR head:`).
 Review rounds (rule: issue-lifecycle #lanes-one-head, #acceptance-verdict-covers-lane): the report's one `Range:`
 line (its form: Report fields, above). Refused: no Range, `to` not HEAD, `from` not an ancestor of `to`, and a
@@ -212,7 +215,17 @@ highest any reason gives (no reason: 1), printed on a pass right after the secti
 
 Reasons (tier): each criterion the section's `Failed:` lists, with its triage (3); each line of the section that
 starts at column 0 with `Owner decision` and holds a colon (`Owner decision: <text>`, `Owner decision 1 (<what>):
-<text>`), shown as written (3): any agent raises the tier by adding one. A tier 3 ask waits for the owner;
+<text>`), shown as written (3): any agent raises the tier by adding one; each spec call the lane diff adds (a
+line of a `*.calls.jsonl` the diff from the merge base to the PR head changes, read at both ends with git show,
+not at the merge base: the same call with or without `denied`, as `octo-feather-spec-status calls` counts it),
+named `spec call <slug> <at> <kind> <anchors>`: denied by the owner, `: denied <at>` (2); clarifies (2); any
+other kind (3, `: no ruling linked`), unless its `ruling` URL's issue or issue comment was created before its
+`at` (GitHub's created_at, `gh api ... --jq .created_at`) and the header of the review verdict comment the
+section links carries `Ruling covers: <that URL>` (verdict, above): then `: ruled by <url> (<created_at>), the
+review verdict covers it` (2); else the reason it is not, `ruling <url> is no GitHub issue or issue comment
+URL`, `not read (...)`, `made <created_at>, not before the call` or `not confirmed: the review verdict carries no
+...` (3); a log not read, `spec calls not
+read: <why>` (3). A tier 3 ask waits for the owner;
 a tier 1 or 2 ask whose merge order (below) names an open PR this merge sets back (its head conflicts with this head,
 or this merge stales its pinned run), or one of whose reads failed (a `- not read:` line: it cannot prove none is set
 back), waits for the director's order, naming each (`PR #N: <why>`, `PR #N: its pinned run <run> not read`,
@@ -1259,6 +1272,10 @@ def cmd_verdict(args: list[str]) -> int:
     if proxy and verdict == "clear":
         raise Refuse(f"report says `Verdict: clear` with a proxy check ({proxy[0]}): a proxy check blocks "
                      "(docs/adr/0008); make it a blocking finding and `Verdict: blocking`, then rerun")
+    covers = merge_ask.ruling_covers(report)
+    if bad := [u for u in covers if not merge_ask.ruling_form(u)]:
+        raise Refuse(f"`Ruling covers: {bad[0]}` is not `Ruling covers: <the URL of the GitHub issue or issue comment "
+                     "where the owner's ruling is written>`, as the call links it; fix the report, then rerun")
     d = pr_view(pr, "headRefOid,baseRefName,comments", repo)
     head = cast("str", d["headRefOid"])
     at = [oid for oid, _ in pr_commits(pr, head, pr_base(cast("str | None", d["baseRefName"]) or "", None)) if head_matches(want, oid)]
@@ -1280,7 +1297,8 @@ def cmd_verdict(args: list[str]) -> int:
     rounds = review_rounds(report, judged, base, mine[0]["body"] if len(mine) == 1 else "", verdict, tuple(cls))
     lines = [ln for n, r in enumerate(rounds, 1) for ln in r.line(n)]
     body = (f"{MARKER}\n## Code review verdict\n\nHead: {judged}\nPR head: {head}\nVerdict: {verdict}\n"
-            + "".join(f"{c}\n" for c in merge_ask.check_set(rounds)) + f"\n{merge_ask.ROUNDS}\n\n" + "".join(f"{x}\n" for x in lines)
+            + "".join(f"{c}\n" for c in merge_ask.check_set(rounds)) + "".join(f"Ruling covers: {u}\n" for u in covers)
+            + f"\n{merge_ask.ROUNDS}\n\n" + "".join(f"{x}\n" for x in lines)
             + f"\n### Findings\n\n{report.strip()}\n")
     out, said = post_comment(pr, repo, d["comments"], MARKER, body, "verdict")
     print(f"verdict: {said} ({verdict}, head {judged[:12]})", file=sys.stderr)

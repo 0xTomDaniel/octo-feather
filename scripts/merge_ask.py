@@ -50,7 +50,10 @@ Interface:
         back, or holds a read that failed (`not read: <what>`), the director's order). Its
         reasons (tier): each criterion the section's `Failed:` lists, with its triage (3), each
         column-0 line starting `Owner decision` up to its first colon in the section (3), shown
-        as written.
+        as written; each spec call the lane diff adds (call_reasons; the form: octo-feather-lane
+        --help, merge-ask). Its reads (snapshot): each `*.calls.jsonl` the diff from the merge
+        base to the head changes, at both (git show), and each added call's ruling's created_at
+        (gh api).
 
 Shared with octo-feather-lane's other commands: bad_checks (lane status), check_runs, git,
 resolution_files (verdict, resolution), full_pass (ci-start: its reads, then its rule), and the
@@ -102,6 +105,7 @@ __all__ = [  # check's interface, then the helpers octo-feather-lane's other com
 import contextlib
 import dataclasses
 import datetime as dt
+import functools
 import hashlib
 import importlib.machinery
 import importlib.util
@@ -399,6 +403,9 @@ class Snapshot:
     # the correction lane's replay (#1222): None when the lane is none or its verdict lists no
     # check
     replay: Replay | Unread | None = None
+    # the lane's spec calls (#1258, spec #gates-tiers): CALLS, those its diff adds, read at the
+    # head, and their rulings' times; Unread naming why not (no merge base among them)
+    calls: "Calls | Unread | None" = None
 
 
 @dataclass(frozen=True)
@@ -495,10 +502,15 @@ def snapshot(  # noqa: PLR0913  each read's input, the command's reader among th
     base_branch = str(view["baseRefName"] or "")
     order = _order(pr, head, base_branch or "main", pr_base(base_branch, base), repo)
     g = _git_facts(head, pr_base(base_branch, base), files, err)
+    why = ""
     try:
         fork = git("merge-base", head, pr_base(base_branch, base), err=_Unread)[1].strip()
-    except _Unread:
-        fork = ""
+    except _Unread as e:
+        fork, why = "", str(e)
+    try:
+        calls: Calls | Unread = _calls(head, fork) if fork else Unread(why)
+    except _Unread as e:
+        calls = Unread(str(e))
     s = Snapshot(
         body,
         branch,
@@ -517,6 +529,7 @@ def snapshot(  # noqa: PLR0913  each read's input, the command's reader among th
         gate=_gate_facts(g, head),
         trend=_trend(trend, head),
         fork=fork,
+        calls=calls,
     )
     # the judged head's check runs: read only when a check skipped on the head and a Judged proof
     # carries it (the rules' own judged head and proof, over the facts read above)
@@ -2776,13 +2789,15 @@ def sets_back(o: Order) -> list[str]:
 
 def tier(s: Snapshot) -> Tier:
     """S's tier from the records the ask already holds: each criterion its section's `Failed:`
-    lists (3), each column-0 `Owner decision...:` line in the section (3); a merge order naming
+    lists (3), each column-0 `Owner decision...:` line in the section (3), each spec call the
+    lane diff adds (call_reasons); a merge order naming
     an open PR this merge sets back, or a merge-order read that failed, makes a tier 1 or 2 ask
     wait for the director's order, tier unchanged."""
     lines = section(s.body) or []
     fails = failed(s, lines)[1]
     reasons = [Reason(3, f"failed criterion {c}{': ' + w if w else ''}") for c, w in fails.items()]
     reasons += [Reason(3, ln.strip()) for ln in lines if OWNER_DECISION.match(ln)]
+    reasons += call_reasons(s, lines)
     n = max((r.tier for r in reasons), default=1)
     back = sets_back(s.order) if s.order else []
     if n >= OWNER_TIER:
@@ -2792,6 +2807,179 @@ def tier(s: Snapshot) -> Tier:
     else:
         waits = "nobody"
     return Tier(n, reasons, waits)
+
+
+# The lane's spec calls (spec #gates-tiers, #gates-spec-calls, #gates-call-loudness; issue #1258)
+
+RULING_COVERS = re.compile(r"^Ruling covers:[ \t]*(.*?)\s*$")
+
+
+@dataclass(frozen=True)
+class Call:
+    """A spec call: its spec's SLUG (its log `<slug>.calls.jsonl`) and the fields the call log
+    holds (scripts/octo-feather-spec-status docstring): AT, KIND, ANCHORS, RULING ('' for none)
+    and DENIED, the owner's denial's `at` ('' for none)."""
+
+    slug: str
+    at: str
+    kind: str
+    anchors: tuple[str, ...]
+    ruling: str = ""
+    denied: str = ""
+
+    @property
+    def name(self) -> str:
+        return f"spec call {self.slug} {self.at} {self.kind} {', '.join(self.anchors)}"
+
+
+@dataclass(frozen=True)
+class Calls:
+    """The calls the lane diff adds (ADDED, each log's in its order), and RULINGS: for each call
+    not denied that links a ruling of its form (scripts/octo-feather-spec-status, RULING),
+    GitHub's created_at of that issue or comment, or why it was not read."""
+
+    added: list[Call]
+    rulings: dict[str, str | Unread]
+
+
+def ruling_covers(text: str) -> list[str]:
+    """Each `Ruling covers: <url>` line's value in TEXT, in the verdict reader's scope, in order
+    (octo-feather-lane verdict checks its form, ruling_form)."""
+    return [m.group(1) for ln in outside(text) if (m := RULING_COVERS.match(ln))]
+
+
+def ruling_form(url: str) -> bool:
+    """URL is of a call's ruling's form (scripts/octo-feather-spec-status, RULING)."""
+    return bool(_spec_status().RULING.fullmatch(url))
+
+
+def _verdict_header(s: Snapshot, lines: list[str]) -> str:
+    """The header of the review verdict comment the section's `Review verdict:` links ('' for
+    none): the helper's own lines, never the quoted report."""
+    rv = field(lines, "Review verdict")
+    m = COMMENT_URL.fullmatch(rv[1].strip("<>` ")) if rv else None
+    c = next((c for c in s.comments if m and c.url.endswith(f"#issuecomment-{m.group(3)}")), None)
+    if not c or not c.body.lstrip().startswith(MARKER):
+        return ""
+    return c.body.split("\n### Findings", 1)[0]
+
+
+def _instant(t: str) -> dt.datetime | None:
+    try:
+        return dt.datetime.fromisoformat(t)
+    except ValueError:
+        return None
+
+
+def call_reasons(s: Snapshot, lines: list[str]) -> list[Reason]:
+    """A reason per call the lane diff adds, by the rule and in the form octo-feather-lane --help
+    (merge-ask, the tier) states."""
+    if s.calls is None:
+        return []
+    if isinstance(s.calls, Unread):
+        return [Reason(3, f"spec calls not read: {s.calls.why}")]
+    covers = ruling_covers(_verdict_header(s, lines))
+    out: list[Reason] = []
+    for c in s.calls.added:
+        if c.denied:
+            out.append(Reason(2, f"{c.name}: denied {c.denied}"))
+        elif c.kind == "clarifies":
+            out.append(Reason(2, c.name))
+        else:
+            out.append(_ruled(c, s.calls.rulings.get(c.ruling), covers))
+    return out
+
+
+def _ruled(c: Call, made: str | Unread | None, covers: list[str]) -> Reason:
+    """Call_reasons' reason for C, of a kind other than clarifies and not denied: MADE its
+    ruling's created_at (None: no ruling of the form _calls reads), COVERS the verdict's
+    `Ruling covers:` URLs."""
+    r = c.ruling
+    if not r:
+        return Reason(3, f"{c.name}: no ruling linked")
+    if made is None:  # _calls reads every ruling of the form
+        return Reason(3, f"{c.name}: ruling {r} is no GitHub issue or issue comment URL")
+    if isinstance(made, Unread):
+        return Reason(3, f"{c.name}: ruling {r} not read ({made.why})")
+    at, when = _instant(c.at), _instant(made)
+    if not at or not when or when >= at:
+        return Reason(3, f"{c.name}: ruling {r} made {made}, not before the call")
+    if r not in covers:
+        why = f"the review verdict carries no `Ruling covers: {r}`"
+        return Reason(3, f"{c.name}: ruling {r} ({made}) not confirmed: {why}")
+    return Reason(2, f"{c.name}: ruled by {r} ({made}), the review verdict covers it")
+
+
+def _calls(head: str, fork: str) -> Calls:
+    """Calls' reads: each `*.calls.jsonl` the lane diff (FORK to HEAD) changes, at both ends; a
+    call at HEAD not at FORK (scripts/octo-feather-spec-status's identity: a call denied since is
+    the same call) is added; then each such ruling's created_at (gh api). _Unread on a log that is
+    not one JSON call per line."""
+    spec_status = _spec_status()
+    diff = git("diff", "--name-only", "--no-renames", "-z", fork, head, err=_Unread)[1]
+    added: list[Call] = []
+    for f in sorted(p for p in diff.split("\0") if p.endswith(".calls.jsonl")):
+        ends: list[list[dict[str, object]]] = []
+        for rev in (fork, head):
+            rc, text = git("show", f"{rev}:{f}", ok=(0, 128), err=_Unread)
+            got, errs = spec_status.parse_log("" if rc else text, f"{f} at {rev[:12]}")
+            if errs:
+                raise _Unread(errs[0])
+            ends.append(got)
+        seen = [spec_status.identity(c) for c in ends[0]]
+        for c in ends[1]:
+            if (k := spec_status.identity(c)) in seen:
+                seen.remove(k)
+                continue
+            denied = c.get("denied")
+            anchors = c.get("anchors")
+            added.append(
+                Call(
+                    Path(f).name.removesuffix(".calls.jsonl"),
+                    str(c.get("at", "")),
+                    str(c.get("kind", "")),
+                    tuple(map(str, cast("list[object]", anchors)))
+                    if isinstance(anchors, list)
+                    else (),
+                    str(c.get("ruling") or ""),
+                    str(cast("dict[str, object]", denied).get("at") or "denied")
+                    if isinstance(denied, dict) and denied
+                    else "",
+                )
+            )
+    rulings: dict[str, str | Unread] = {}
+    for c in added:
+        m = spec_status.RULING.fullmatch(c.ruling)
+        if c.denied or c.kind == "clarifies" or not m or c.ruling in rulings:
+            continue
+        repo, n, comment = m.groups()
+        path = f"repos/{repo}/issues/comments/{comment}" if comment else f"repos/{repo}/issues/{n}"
+        try:
+            fix = f"read the ruling {c.ruling} (gh auth status)"
+            rulings[c.ruling] = gh(["api", path, "--jq", ".created_at"], fix, err=_Unread).strip()
+        except _Unread as e:
+            rulings[c.ruling] = Unread(str(e))
+    return Calls(added, rulings)
+
+
+@functools.cache
+def _spec_status() -> "_SpecStatus":
+    """scripts/octo-feather-spec-status, the call log's owner, as a module."""
+    loader = importlib.machinery.SourceFileLoader(
+        "spec_status", str(KIT / "scripts" / "octo-feather-spec-status")
+    )
+    spec = importlib.util.spec_from_loader("spec_status", loader)
+    assert spec is not None, "a SourceFileLoader always yields a spec"
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return cast("_SpecStatus", mod)
+
+
+class _SpecStatus(Protocol):
+    RULING: re.Pattern[str]
+
+    def parse_log(self, text: str, where: str) -> tuple[list[dict[str, object]], list[str]]: ...
+    def identity(self, c: dict[str, object]) -> str: ...
 
 
 # The merge-order reads (spec #gates-merge-order)
