@@ -12,6 +12,7 @@ Every merge was the owner's gate. Of 15 merge asks on 18 and 19 November 2026, 7
 ## Consequences
 
 - A merge ask the owner never saw can land a mistake; the digest and the veto, which opens a lane, are how he reaches it within a day.
+- The merge command refuses a merge the tier does not allow; a tier 3 merge rests on the director's recorded relay of the owner's word until the owner's own approval is on record.
 - A ruling the owner gives must be written where a call can link it, or the call waits for him again.
 - Lane start depends on the model route passing the provider's usage headers through; without one the brake runs on the week's last reading carried forward, and with none this week it is off.
 - Until the kit's watchdog exists, nothing resumes lane starts after the weekly reset by itself.
