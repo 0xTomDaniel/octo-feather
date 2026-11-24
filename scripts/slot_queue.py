@@ -31,6 +31,15 @@ Interface:
       release(taken) -> Outcome           the run's end recorded against the grant it started
                                           under, the lock freed
       status() -> list[str]
+      runs() -> list[Run]                 the runs holding KIND's locks now, each as its
+                                          KIND-I.run.json records it (Run(pid, lane, since,
+                                          items)); one held with its record unreadable is
+                                          Run(0, "unknown", "unknown", None)
+    box(kind, budget, env) -> SlotQueue   KIND's queue over the box's slots dir, home(env),
+        by BUDGET and ENV (Rule.load), on system_clock: the one way every command opens it
+    home(env) -> Path                     the box's slots dir from ENV: octo-feather/slots
+                                          under XDG_STATE_HOME, else ~/.local/state
+    system_clock() -> Ms                  now, the commands' clock
     Outcome(steps: (Line | Notice, ...), wakes: (Wake, ...), code=0, settle=False)
     Line(text)                 a line the command prints, in order
     Notice(pane, session, text)  one herdr-say the command sends (session "": the caller's)
@@ -43,6 +52,7 @@ herdr-say. Each mutating call on KIND.json, KIND.queue.json, KIND.runs.json is o
 read-modify-write under KIND.files.lock; the files keep their shapes (the command's --help,
 Files) and are written only when something changed. Precise stamps (a run's end, `freed`) are
 written from milliseconds, their last three digits 000, a shape every reader parses.
+home and box read only the env the command hands them.
 """
 
 from __future__ import annotations
@@ -58,14 +68,19 @@ __all__ = [
     "Outcome",
     "Refused",
     "Rule",
+    "Run",
     "SlotQueue",
     "Taken",
     "Wake",
+    "box",
+    "home",
+    "system_clock",
 ]
 
 import datetime as dt
 import fcntl
 import json
+import time
 from collections.abc import Callable
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
@@ -376,8 +391,8 @@ class SlotQueue:
         for i in range(self.rule.count):
             yield self._file(f"-{i}.lock"), self._file(f"-{i}.run.json")
 
-    def _runs(self) -> list[Run]:
-        """The runs holding KIND's locks now."""
+    def runs(self) -> list[Run]:
+        """The runs holding KIND's locks now (this module's docstring)."""
         return [r for lk, rec in self._lock_paths() if (r := _held_run(lk, rec))]
 
     # The interface.
@@ -450,7 +465,7 @@ class SlotQueue:
                 q = Queued(lane, _stamp(t), by, str(lanes), session)
                 self._write_queue([*qs, q], self._queue_file()[1])
                 line = Line(f"queued: lane {lane} for the {k} slot, position {len(qs) + 1}")
-                ends, running = self._run_ends(), {r.lane for r in self._runs()}
+                ends, running = self._run_ends(), {r.lane for r in self.runs()}
                 unused = [
                     _parse_stamp(g.since)
                     for g in gs
@@ -489,7 +504,7 @@ class SlotQueue:
             queued, was = self._queue_file()
             freed = was
             qs = [q for q in queued if q.lane not in {g.lane for g in gs}]  # granted meanwhile: off
-            running = {r.lane for r in self._runs()}
+            running = {r.lane for r in self.runs()}
             due = [
                 (g, "ended")
                 for g in gs
@@ -607,7 +622,7 @@ class SlotQueue:
                 line = f"free: {items} items, heavy_items {b.heavy_items}: no heavy slot needed"
                 return Outcome((Line(line),))
         mine = set(ancestors)
-        for r in self._runs():
+        for r in self.runs():
             if r.pid in mine:
                 return Outcome(
                     (Line(f"nested: under the {kind} run {r.show()}, which holds the slot"),)
@@ -639,7 +654,7 @@ class SlotQueue:
             r = Run(pid, under.lane, _stamp(t), items)
             rec.write_text(json.dumps(asdict(r)) + "\n", encoding="utf-8")
             return Taken(f, rec, under, f"held: the {kind} slot for lane {r.lane}, run {r.show()}")
-        busy = "; ".join(r.show() for r in self._runs()) or "a run now ending"
+        busy = "; ".join(r.show() for r in self.runs()) or "a run now ending"
         msg = (
             f"octo-feather-slot: refused, nothing ran: {what}; lane {ln} holds the {kind} grant, "
             f"but every {kind} slot is held now by a run: {busy}; wait for it to end, or "
@@ -666,7 +681,7 @@ class SlotQueue:
         """KIND's status lines: its count, grants, the run holding it, its queue, a free slot."""
         kind, b, t = self.kind, self.rule, self.clock()
         over = f", over heavy_items {b.heavy_items} items" if kind == "heavy" else ""
-        rs = self._runs()
+        rs = self.runs()
         queued, freed = self._queue_file()
         qs = "; ".join(f"{i}. {q.show()}" for i, q in enumerate(queued, 1))
         out = [
@@ -680,6 +695,22 @@ class SlotQueue:
                 f"  free since {freed}: to the queue's head after the {b.grace_ms // 1000} s grace"
             )
         return out
+
+
+def system_clock() -> Ms:
+    """The commands' clock: now, in epoch milliseconds."""
+    return time.time_ns() // 1_000_000
+
+
+def home(env: Mapping[str, str]) -> Path:
+    """The box's slots dir, box-wide, never per Herdr session (octo-feather-slot --help, Files)."""
+    base = env.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+    return Path(base) / "octo-feather" / "slots"
+
+
+def box(kind: str, budget: Path, env: Mapping[str, str]) -> SlotQueue:
+    """KIND's slot queue over the box's slots dir, by BUDGET (gate-budget.toml) and ENV."""
+    return SlotQueue(kind, home(env), Rule.load(kind, budget, env), system_clock)
 
 
 def _no(refusal: str, why: str, *, if_granted: bool) -> Outcome:

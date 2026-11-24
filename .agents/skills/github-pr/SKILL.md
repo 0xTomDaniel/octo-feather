@@ -75,15 +75,11 @@ durable workflow artifacts.
 - Merge: who merges, when, and at which head is spec `#gates-merge` alone
   (docs/specs/issue-lifecycle.spec.html); read it there, never restate it.
   The command, with the head that rule names:
-  `gh pr merge <N> --merge --match-head-commit <head>`.
+  `octo-feather-lane merge <N> <head>` (what it runs after the merge, tickets
+  done included: its `--help`). A spec PR, with no lane record: `gh pr merge <N> --merge --match-head-commit <head>`.
   Required failed checks remain blockers until fixed or durably waived
   through a repository-approved path.
-- The merge completes the worklane. Then move every ticket of the lane and its
-  parent ticket to done, whether or not the tracker already did:
-  `octo-feather-lane done <parent key>` runs the tracker skill's `issue-done`
-  on each sub-issue the parent's `issue-view` lists, then on the parent (a
-  ticket already done stays done), and reads each back. Then stop the lane.
-  Do not assume deployment-named labels exist.
+- The merge completes the worklane. Do not assume deployment-named labels exist.
 - Verify the state change landed, whether performed by repository automation
   or by the owning agent. Do not claim a hook succeeded without readback.
 - Record merge and deployment evidence separately. A completion state does
