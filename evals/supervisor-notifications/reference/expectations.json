@@ -123,5 +123,58 @@
         "count": 0
       }
     ]
+  },
+  "merge-approved-lane-merge-archive": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "octo-feather-lane",
+        "args": [
+          "merge",
+          "12",
+          "{head}"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "octo-feather-lane",
+        "args": [
+          "archive",
+          "gh12"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 0
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-close",
+        "args": [
+          "w2"
+        ],
+        "count": 0
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-close",
+        "args": [
+          "w2:t1"
+        ],
+        "count": 0
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-close",
+        "args": [
+          "w2:p1"
+        ],
+        "count": 0
+      }
+    ]
   }
 }

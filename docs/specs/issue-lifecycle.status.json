@@ -348,6 +348,42 @@
         "tests/gate/kit/lane_stale.py"
       ]
     },
+    "acceptance-merge-starts-routine": {
+      "status": "built",
+      "pr": 1153,
+      "record": "20261123T203921Z-a87d7afb",
+      "commit": "1008da14c8cb9bfe338cec07505aa57a874c3ff5",
+      "tests": [
+        "tests/gate/kit/lane_merge.py"
+      ]
+    },
+    "acceptance-red-main-stops": {
+      "status": "built",
+      "pr": 1153,
+      "record": "20261123T203921Z-812ea3be",
+      "commit": "1008da14c8cb9bfe338cec07505aa57a874c3ff5",
+      "tests": [
+        "tests/gate/kit/lane_archive_teardown.py"
+      ]
+    },
+    "acceptance-archive-tears-down": {
+      "status": "built",
+      "pr": 1153,
+      "record": "20261123T203921Z-df0da214",
+      "commit": "1008da14c8cb9bfe338cec07505aa57a874c3ff5",
+      "tests": [
+        "tests/gate/kit/lane_archive_teardown.py"
+      ]
+    },
+    "acceptance-refresh-waits-run": {
+      "status": "built",
+      "pr": 1153,
+      "record": "20261123T203922Z-7d99bbf7",
+      "commit": "1008da14c8cb9bfe338cec07505aa57a874c3ff5",
+      "tests": [
+        "tests/gate/kit/lane_live_run.py"
+      ]
+    },
     "acceptance-ticket-skills": {
       "status": "built",
       "pr": 1233,

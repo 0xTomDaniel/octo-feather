@@ -77,12 +77,10 @@ fails every call as a herdr with no server does (`error: could not connect to he
 exit 1). Anything else exits 2.
 """
 
-import contextlib
+# contextlib, shutil, signal and subprocess imported where used: most calls need none of them,
+# and each call is a fresh process whose imports are its CPU (#1133).
 import json
 import os
-import shutil
-import signal
-import subprocess
 import sys
 import time
 from pathlib import Path
@@ -211,6 +209,9 @@ class World:
         for g in self.agents.values():
             pid = g.get("shell_pid")
             if g[key] == target and isinstance(pid, int):
+                import contextlib  # noqa: PLC0415 (lazy: the module comment above)
+                import signal  # noqa: PLC0415
+
                 with contextlib.suppress(ProcessLookupError):
                     os.kill(pid, signal.SIGHUP)
         self.agents = {p: g for p, g in self.agents.items() if g[key] != target}
@@ -237,6 +238,8 @@ class World:
         if g is None:
             return fail("pane_not_found")
         if not isinstance(g.get("shell_pid"), int):
+            import subprocess  # noqa: PLC0415 (lazy: the module comment above)
+
             loop = 'i=0; while [ -d "$0" ] && [ $i -lt 600 ]; do sleep 1; i=$((i+1)); done'
             shell = subprocess.Popen(
                 ["sh", "-c", loop, str(self.dir)],  # noqa: S607
@@ -460,6 +463,8 @@ if a[:2] == ["session", "stop"] and len(a) == 3:
     (home / "sessions" / a[2] / "herdr.sock").unlink(missing_ok=True)
     sys.exit(0)
 if a[:2] == ["session", "delete"] and len(a) == 3:
+    import shutil
+
     shutil.rmtree(home / "sessions" / a[2], ignore_errors=True)
     sys.exit(0)
 if os.environ.get("FAKE_HERDR_LEAK"):
@@ -473,6 +478,8 @@ if a[:2] == ["workspace", "create"]:
 if a[:2] == ["pane", "run"] and len(a) > 3:
     with (sock.parent / "panes").open("a") as f:
         f.write(json.dumps({"pane_id": a[2]}) + "\n")
+    import subprocess
+
     io = subprocess.DEVNULL
     cmd = ["sh", "-c", " ".join(a[3:])]
     subprocess.Popen(cmd, stdin=io, stdout=io, stderr=io, start_new_session=True)
