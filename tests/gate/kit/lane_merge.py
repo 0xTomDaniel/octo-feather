@@ -4,10 +4,13 @@ issue-lifecycle #gates-main-moved, #acceptance-merge-starts-routine), offline, i
 tests/gate/kit/lane_post_merge.py prepares (Lane: origin, the kit install clone of o/r detached at
 B, the director's checkout, the target clone, on main at B; the merge commit M). The testkit's fake
 gh holds PR #7 open at head H, merging as M, with a green push run on M, and parent issue 70 with
-sub-issue 71; the scratch state dir (XDG_STATE_HOME) holds lane gh7's record (`pr = 7`, issue 70,
-supervisor zt1:p1) and one other open lane, gh8 (supervisor zt2:p1); the testkit's Herdr stand-in
-(FAKE_HERDR) has both supervisors live, idle, under the kit's own herdr-say. Space ids `zt*`, which
-no real Herdr gives.
+sub-issue 71; the scratch state dir (XDG_STATE_HOME) holds lane gh7's record (`pr = 7`, issue
+gh70, a lane key as every real record holds, comms #lane-record; supervisor zt1:p1) and one other
+open lane, gh8 (issue gh80, supervisor zt2:p1); the testkit's Herdr stand-in (FAKE_HERDR) has both
+supervisors and the director (w9:p99) live, idle, under the kit's own herdr-say. Every command runs
+with gh7's supervisor's environment (SUPERVISOR: its role, the director pane its parent, its own
+Herdr pane and workspace), so herdr-say's up-chain guard (docs/adr/0015) is active as in that
+supervisor's pane (#1249). Space ids `zt*`, which no real Herdr gives.
 """
 
 from __future__ import annotations
@@ -35,6 +38,14 @@ STEPS = (
     "teardown",
 )
 MERGE = f"pr merge 7 --merge --match-head-commit {H}"
+DIRECTOR = "w9:p99"
+# gh7's supervisor's environment in its own pane, as octo-feather-start and Herdr give it
+SUPERVISOR = {
+    "OCTO_FEATHER_ROLE": "supervisor",
+    "OCTO_FEATHER_PARENT": DIRECTOR,
+    "HERDR_PANE_ID": "zt1:p1",
+    "HERDR_WORKSPACE_ID": "zt1",
+}
 
 
 class World:
@@ -65,16 +76,20 @@ class World:
         self.st = lane.state / "octo-feather"
         self.lanes = self.st / "lanes"
         self.lanes.mkdir(parents=True)
-        self.record("gh7", "zt1:p1", 70, 7)
-        self.record("gh8", "zt2:p1", 80, None)
+        self.record("gh7", "zt1:p1", "gh70", 7)
+        self.record("gh8", "zt2:p1", "gh80", None)
         self.herdr = s.root / "herdr"
         self.herdr.mkdir()
-        world = {p: agent(p, n, "idle") for p, n in (("zt1:p1", "gh7"), ("zt2:p1", "gh8"))}
+        world = {
+            p: agent(p, n, "idle")
+            for p, n in (("zt1:p1", "gh7"), ("zt2:p1", "gh8"), (DIRECTOR, "director"))
+        }
         (self.herdr / "agents.json").write_text(json.dumps(world))
-        # the caller's Herdr pane and role cleared: the merge runs as a supervisor shell would
+        # the caller's Herdr pane and role replaced: the merge runs as gh7's supervisor in its pane
         for k in [k for k in s.env if k.startswith(("HERDR_", "OCTO_FEATHER_"))]:
             if k != "OCTO_FEATHER_KIT_INSTALL":
                 del s.env[k]
+        s.env |= SUPERVISOR
         s.env["FAKE_HERDR"] = str(self.herdr)
         self.path = lane.path["rec"] + str(ASSETS) + os.pathsep + s.env["PATH"]
 
@@ -95,9 +110,9 @@ class World:
         )
         (self.s.gh.dir / "log").write_text("")
 
-    def record(self, name: str, pane: str, issue: int, pr: int | None) -> None:
+    def record(self, name: str, pane: str, issue: str, pr: int | None) -> None:
         (self.lanes / f"{name}.toml").write_text(
-            f'supervisor = "{pane}"\nrepository = "o/r"\nissue = {issue}\n'
+            f'supervisor = "{pane}"\nrepository = "o/r"\nissue = "{issue}"\n'
             + (f"pr = {pr}\n" if pr else "")
             + 'goal = "g"\nstarted_at = "2026-11-19T00:00:00Z"\n'
         )
@@ -135,11 +150,14 @@ def outcomes(shown: list[str]) -> list[str]:
 def merge_starts_routine(s: Scratch) -> None:
     """issue-lifecycle#acceptance-merge-starts-routine: `merge 7 H --repo o/r` (the ticket's
     demo, its commands and output printed) merges pinned to H (the fake
-    gh logs the pinned merge, after the PR read), runs done on parent 70 (71 then 70 closed),
-    leaves the kit install and the director's checkout at the merge commit, tells lane gh8's
-    supervisor main moved (not gh7's own), and prints steps 1-6 ok and step 7 pending; exit 0.
-    The only gh writes: the merge and the two closes. `post-merge --lane gh7` then prints the
-    record: PR, head and merge commit, steps 1-6 ok and step 7 pending."""
+    gh logs the pinned merge, after the PR read), runs done on parent 70, the tracker key of the
+    record's lane key gh70 (71 then 70 closed), leaves the kit install and the director's checkout
+    at the merge commit, tells lane gh8's supervisor main moved (not gh7's own) through the
+    guard of the supervisor's environment, that line and its prod line in the director log naming
+    the post-merge routine of lane gh7 as sender, and prints steps 1-6 ok and step 7 pending;
+    exit 0. The only gh writes: the merge and the two closes. `post-merge --lane gh7` then prints
+    the record: PR, head and merge commit, steps 1-6 ok and step 7 pending. The guard still holds
+    for the supervisor's own send: its `herdr-say zt2:p1 ...` exits 77, nothing delivered."""
     w = World(s)
     lane = w.lane
     m, m12 = lane.m, lane.m[:12]
@@ -162,6 +180,19 @@ def merge_starts_routine(s: Scratch) -> None:
     told = w.told()
     assert [x.split("\t")[0] for x in told] == ["zt2:p1"], f"told: {told}"
     assert told[0].startswith(f"zt2:p1\tmain moved to {m12} (#7 Add foo); "), told
+    sender = "from the post-merge routine of lane gh7"
+    assert sender in told[0], told
+    prods = [
+        json.loads(x)["note"]
+        for x in lines(w.st / "director.handoffs.jsonl")
+        if json.loads(x)["kind"] == "prod"
+    ]
+    assert len(prods) == 1, prods
+    assert prods[0].startswith(f"post-merge {m} #7: main moved, told gh8 to re-read "), prods
+    assert sender in prods[0], prods
+    own = s.run([str(ASSETS / "herdr-say"), "zt2:p1", "mine"], want=77, env={"PATH": w.path})
+    assert "supervisor may message only up its chain" in own.err, own.err
+    assert w.told() == told, "the supervisor's own send delivered"
     shown = w.shown()
     head = w.run(0, "post-merge", "--lane", "gh7").out.split("\n")[0]
     record = w.st / "post-merge" / "gh7.json"
@@ -172,16 +203,23 @@ def merge_starts_routine(s: Scratch) -> None:
 
 
 def resume(s: Scratch) -> None:
-    """`merge 7 H` with the director's checkout dirty: merged and done, step 3 stops before the
-    install moves, exit 1. Cleaned, `post-merge 7 H --lane gh7` resumes at step 3: steps 1 and 2
+    """`merge 7 H` with the director's checkout dirty and lane gh7's record holding issue `gh70-x`,
+    a lane key the tracker skill does not round-trip (key-from-branch gives 70, whose lane-key is
+    gh70): merged, its done step refuses naming both keys, closing nothing, and step 3 stops before
+    the install moves, exit 1. Cleaned, `post-merge 7 H --lane gh7` resumes at step 3: steps 1 and 2
     print their recorded lines, not rerun (no PR read for step 1, no run list for step 2 in the
     fake gh's log), steps 3-6 run, step 7 pending, exit 3; the record shows 1-6 ok, 7 pending."""
     w = World(s)
     lane = w.lane
     t = lane.target
     (t / "a").write_text("mine\n")
+    w.record("gh7", "zt1:p1", "gh70-x", 7)
     r = w.run(1, "merge", "7", H)
     assert MERGE in s.gh.log(), s.gh.log()
+    assert not [x for x in s.gh.log() if x.startswith("issue close")], s.gh.log()
+    done = next((x for x in r.err.split("\n") if "done gh70-x" in x), "")
+    assert "lane key gh70-x maps to tracker key 70" in done, r.err
+    assert "whose lane key is gh70, not gh70-x" in done, r.err
     stop = f"step 3 kit refresh: stopped: checkout {t} is dirty (M a): commit"
     assert any(x.startswith(stop) for x in r.out.split("\n")), r.out
     assert lane.head() == lane.b, "install moved past a stop"
@@ -211,13 +249,17 @@ def refused(s: Scratch) -> None:
     cases = (
         ("head", lambda: w.pr(head=other), "PR #7's head is abcdef0890ab, not the approved head"),
         ("closed", lambda: w.pr("CLOSED"), "PR #7 is CLOSED, not open: nothing merged"),
-        ("no lane", lambda: w.record("gh7", "zt1:p1", 70, None), "no open lane record in "),
-        ("two", lambda: w.record("gh8", "zt2:p1", 80, 7), "lane records gh7.toml, gh8.toml in "),
+        ("no lane", lambda: w.record("gh7", "zt1:p1", "gh70", None), "no open lane record in "),
+        (
+            "two",
+            lambda: w.record("gh8", "zt2:p1", "gh80", 7),
+            "lane records gh7.toml, gh8.toml in ",
+        ),
     )
     for what, setup, want in cases:
         w.pr()
-        w.record("gh7", "zt1:p1", 70, 7)
-        w.record("gh8", "zt2:p1", 80, None)
+        w.record("gh7", "zt1:p1", "gh70", 7)
+        w.record("gh8", "zt2:p1", "gh80", None)
         setup()
         before = s.gh.pr(7)
         r = w.run(1, "merge", "7", H)
