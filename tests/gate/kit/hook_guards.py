@@ -14,9 +14,10 @@ revert each finished with `git commit` as an implementer, each go through, sayin
 skipped (the role, MERGE_HEAD, CHERRY_PICK_HEAD, REVERT_HEAD), PROBE empty. An implementer's
 red commit runs the fast tier and is refused: tests/gate/kit/fast_hook.py red implementer.
 template LANG: a repo of templates/LANG's tracked files, its hook on, a recording `just` first on
-PATH exiting 1 (a red fast tier), as scripts/check-templates runs a template's hook: an
-implementer's commit calls `just fast` once and is refused; a supervisor's, and a conflicted merge
-finished as an implementer, go through, saying why, `just` never called.
+PATH exiting 1 (a red fast tier), as scripts/check-templates runs a template's hook; in a linked
+worktree (the repo's path, as the kit copy's in skipped, holds a space): an implementer's commit
+calls `just fast` once and is refused; a supervisor's, and a conflicted merge finished as an
+implementer, go through, saying why, `just` never called.
 """
 
 from __future__ import annotations
@@ -38,9 +39,10 @@ RECORDER = '#!/bin/sh\necho "$*" >> "$JUST_CALLS"\nexit 1\n'
 
 
 def clone(s: Scratch) -> tuple[Path, Path]:
-    """The kit copy and its linked worktree on branch gh1."""
+    """The kit copy, moved to a path with a space (a linked worktree's --git-path answers are
+    absolute, under the clone's .git), and its linked worktree on branch gh1."""
     (s.root / "user-mise").mkdir()
-    k = kit_copy(s)
+    k = kit_copy(s).rename(s.root / "kit copy")
     w = s.root / "wt"
     s.git(k, "worktree", "add", "-q", "-b", "gh1", str(w))
     return k, w
@@ -105,7 +107,7 @@ def skipped(s: Scratch) -> None:
 
 
 def template(s: Scratch, lang: str) -> None:
-    src, r, calls = ROOT / "templates" / lang, s.root / lang, s.root / "just-calls"
+    src, r, calls = ROOT / "templates" / lang, s.root / f"{lang} repo", s.root / "just-calls"
     for f in filter(None, s.git(src, "ls-files", "-z").split("\0")):
         (r / f).parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(src / f, r / f, follow_symlinks=False)
@@ -118,6 +120,8 @@ def template(s: Scratch, lang: str) -> None:
     s.git(r, *nohook, "commit", "-qm", "template")
     s.git(r, "branch", "other")
     s.git(r, "config", "core.hooksPath", ".githooks")
+    w = s.root / "lane"  # a linked worktree of a clone whose path holds a space, as the kit's
+    s.git(r, "worktree", "add", "-q", "-b", "lane", str(w))
     env = {k: v for k, v in s.env.items() if k != "OCTO_FEATHER_ROLE"}
     env |= {"PATH": f"{s.root / 'rec'}{os.pathsep}{env['PATH']}", "JUST_CALLS": str(calls)}
 
@@ -125,7 +129,7 @@ def template(s: Scratch, lang: str) -> None:
         calls.write_text("")
         p = subprocess.run(
             [*GIT, "commit", *args],
-            cwd=r,
+            cwd=w,
             env=env | {"OCTO_FEATHER_ROLE": role},
             capture_output=True,
             text=True,
@@ -133,8 +137,8 @@ def template(s: Scratch, lang: str) -> None:
         )
         return Ran(p.returncode, p.stdout + p.stderr, ""), calls.read_text().splitlines()
 
-    (r / "note.txt").write_text("main\n")
-    s.git(r, "add", "note.txt")
+    (w / "note.txt").write_text("lane\n")
+    s.git(w, "add", "note.txt")
     ran, called = commit("implementer", "-m", "writer")
     said = f"{lang}, implementer: exit {ran.rc}, just calls {called}\n{ran.out}"
     assert ran.rc != 0, f"want the red fast tier to refuse: {said}"
@@ -149,9 +153,9 @@ def template(s: Scratch, lang: str) -> None:
     s.git(r, "add", "note.txt")
     s.git(r, *nohook, "commit", "-qm", "other")
     s.git(r, "switch", "-q", "main")
-    s.run([*GIT, "-C", str(r), "merge", "other"], want=1)
-    (r / "note.txt").write_text("merged\n")
-    s.git(r, "add", "note.txt")
+    s.run([*GIT, "-C", str(w), "merge", "other"], want=1)
+    (w / "note.txt").write_text("merged\n")
+    s.git(w, "add", "note.txt")
     ran, called = commit("implementer", "--no-edit")
     said = f"{lang}, merge in progress: exit {ran.rc}, just calls {called}\n{ran.out}"
     assert ran.rc == 0, said

@@ -23,8 +23,9 @@ def skipped() -> str | None:
     role = os.environ.get("OCTO_FEATHER_ROLE", "")
     if role not in WRITERS:
         return f"OCTO_FEATHER_ROLE={role}: a machine commit, not a writer's"
-    # One git call for the three paths; outside a repo it fails: no operation in progress.
-    paths = git("rev-parse", *(a for h in IN_PROGRESS for a in ("--git-path", h))).stdout.split()
+    # One git call, a path a line (a path may hold a space); outside a repo it fails: none.
+    asked = git("rev-parse", *(a for h in IN_PROGRESS for a in ("--git-path", h)))
+    paths = asked.stdout.splitlines()
     for head, path in zip(IN_PROGRESS, paths, strict=False):
         if Path(path).exists():
             return f"{head}: a merge, cherry-pick or revert in progress is a machine commit"
