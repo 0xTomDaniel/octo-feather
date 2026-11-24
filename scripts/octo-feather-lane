@@ -799,7 +799,7 @@ import dataclasses
 import datetime as dtm
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 # Kit modules, .py files beside this script, found through its own directory (symlinks resolved) on sys.path: from any
 # cwd and through a symlink (scripts/correction_lanes.py docstring). correction_lanes is the correction filer.
@@ -3517,6 +3517,7 @@ def merge_allowed(pr: int, head: str, repo: str | None, lane: str) -> str:
         return oid
     try:
         full = git("rev-parse", "--verify", "--quiet", f"{rh}^{{commit}}")[1].strip()
+        why: list[str] = []
     except Refuse as e:
         full, why = "", [f"commit {rh} is not in this repo ({e}): run the merge in the lane worktree after git fetch origin"]
     if full:
