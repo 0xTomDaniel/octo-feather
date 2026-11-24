@@ -1604,6 +1604,22 @@ def ci_full_run(head: str, repo: str | None) -> tuple[list[str], list[str]]:
     return why, ([] if why else lines)
 
 
+def ask_of(pr: int, repo: str | None, files: list[str], base_arg: str | None) -> "tuple[merge_ask.Snapshot, merge_ask.Ask]":
+    """The merge ask check of PR as it stands, read fresh (merge_ask.snapshot) and judged (merge_ask.check): merge-ask's
+    and the merge's one read of it (--help, merge-ask, merge)."""
+    def read() -> tuple[dict[str, object], list[tuple[str, str]] | str]:
+        """The PR as gh prints it, and its commits or why they are unread (named with the other gaps)."""
+        d = pr_view(pr, "body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments", repo)
+        try:
+            return d, pr_commits(pr, cast("str", d["headRefOid"]), pr_base(cast("str | None", d["baseRefName"]) or "", base_arg))
+        except Refuse as e:
+            return d, str(e)
+
+    s = merge_ask.snapshot(pr, repo, files, read, Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state_dir() / "qc"),
+                           trend=state_dir() / ReportSources.TREND, err=Refuse, lanes=lanes_dir(), base=base_arg)
+    return s, merge_ask.check(s)
+
+
 @no_traceback
 def cmd_merge_ask(args: list[str]) -> int:
     args, repo = take_repo(args)
@@ -1618,20 +1634,8 @@ def cmd_merge_ask(args: list[str]) -> int:
     if len(rest) != 1:
         raise Refuse(f"usage: octo-feather-lane merge-ask PR [--status FILE...] [--base REF] [--repo O/R] (got {' '.join(args) or 'nothing'})")
     pr = pr_number(rest[0])
-    d: dict[str, Any] = {}   # the PR as gh printed it
-
-    def read() -> tuple[dict[str, object], list[tuple[str, str]] | str]:
-        """The PR as gh prints it, and its commits or why they are unread (named with the other gaps)."""
-        d.update(pr_view(pr, "body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments", repo))
-        try:
-            return d, pr_commits(pr, cast("str", d["headRefOid"]), pr_base(cast("str | None", d["baseRefName"]) or "", base_arg))
-        except Refuse as e:
-            return d, str(e)
-
-    s = merge_ask.snapshot(pr, repo, cast("list[str]", files), read, Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state_dir() / "qc"),
-                           trend=state_dir() / ReportSources.TREND, err=Refuse, lanes=lanes_dir(), base=base_arg)
-    head = d["headRefOid"]
-    a = merge_ask.check(s)
+    s, a = ask_of(pr, repo, cast("list[str]", files), base_arg)
+    head = s.head
     tier = a.tier.lines if a.tier else []   # spec #gates-tiers; incomplete on a failing ask, stderr only
     incomplete = ["", "Incomplete merge ask (it fails below; never send this tier):", *tier]
     if a.refusal:
