@@ -41,10 +41,11 @@ Interface:
         prints; Ask.order, the merge-order lines (spec #gates-merge-order), and Ask.gate_time,
         never a gap.
 
-Shared with octo-feather-lane's other commands: bad_checks (lane status), check_runs and
-ci_workflows (post-merge), git, resolution_files (verdict, resolution), full_pass (ci-start:
-its reads, then its rule), and the gate time's lines (report: budget_parse, budget_lines,
-passed_full, numbered_jsonl, stamp), each read raising the ERR its caller passes.
+Shared with octo-feather-lane's other commands: bad_checks (lane status), check_runs, git,
+resolution_files (verdict, resolution), full_pass (ci-start: its reads, then its rule), and the
+gate time's lines (report: budget_parse, budget_lines, passed_full, numbered_jsonl, stamp), each
+read raising the ERR its caller passes. The plain gh reads (ci_workflows) and head_matches come
+from scripts/tracker_calls.py.
 """
 
 __all__ = [  # check's interface, then the helpers octo-feather-lane's other commands share
@@ -75,7 +76,6 @@ __all__ = [  # check's interface, then the helpers octo-feather-lane's other com
     "check",
     "check_runs",
     "check_set",
-    "ci_workflows",
     "full_pass",
     "git",
     "numbered_jsonl",
@@ -104,7 +104,7 @@ from pathlib import Path
 from typing import Literal, NamedTuple, TypedDict, cast
 
 import tomllib
-from tracker_calls import KIT, gh, tracker, utc
+from tracker_calls import KIT, ci_workflows, gh, head_matches, tracker, utc
 
 # GitHub's closing keywords: a PR body line with one closes that GitHub issue at merge, named
 # as #N, as owner/repo#N or by the issue URL.
@@ -783,37 +783,6 @@ def check_runs(
         )
         raise err(msg) from e
     return [cast("dict[str, object]", r) for r in got if isinstance(r, dict)]
-
-
-def ci_workflows(repo: str | None, sha: str, *, err: type[Exception]) -> tuple[list[str], str]:
-    """The no-CI fact (rule: octo-feather-lane --help, post-merge step 2): the workflow files at
-    commit SHA and the source as printed; a failed read raises ERR."""
-    name = repo or "{owner}/{repo}"  # gh fills the placeholders from this directory's repo
-    src = f"gh api repos/{repo or '<this repo>'}/git/trees/{sha[:12]}"
-    tree = sha
-    for part in (".github", "workflows", None):
-        out = gh(
-            ["api", f"repos/{name}/git/trees/{tree}"],
-            f"check gh auth status and that {sha[:12]} is in {repo or 'this repo'}, then rerun",
-            err=err,
-        )
-        try:
-            entries = [
-                (str(e["path"]), str(e["type"]), str(e["sha"])) for e in json.loads(out)["tree"]
-            ]
-        except (ValueError, KeyError, TypeError) as e:
-            msg = (
-                f"gh api git/trees/{tree[:12]} printed no tree ({out[:100]!r}): "
-                "check the gh on PATH"
-            )
-            raise err(msg) from e
-        if part is None:
-            files = [p for p, t, _ in entries if t == "blob" and p.endswith((".yml", ".yaml"))]
-            return [f".github/workflows/{p}" for p in files], src
-        tree = next((s for p, t, s in entries if p == part and t == "tree"), "")
-        if not tree:
-            return [], src
-    return [], src  # unreachable: the loop returns at its last part
 
 
 def statuses(files: list[str], err: type[Exception]) -> dict[str, dict[str, dict[str, object]]]:
@@ -2285,7 +2254,6 @@ MARKER = "<!-- octo-feather-review-verdict -->"
 # The one comment per reviewed resolution of a main merge, naming the merge (issue-lifecycle
 # #lanes-one-head); octo-feather-lane's RESOLUTION_MARKER writes it.
 RESOLUTION_HEAD = re.compile(r"^<!-- octo-feather-review-resolution: ([0-9a-f]{40}) -->")
-SHA = re.compile(r"[0-9a-fA-F]{7,40}")
 COMMENT_URL = re.compile(r"https://github\.com/([^/\s]+/[^/\s]+)/pull/(\d+)#issuecomment-(\d+)")
 VERDICT_LINE = re.compile(r"^Verdict: (clear|blocking)\s*$")
 HEAD_LINE = re.compile(r"^Head:\s*`?([0-9a-fA-F]{7,40})`?\s*$", re.MULTILINE)
@@ -2436,10 +2404,6 @@ def check_lines(text: str) -> tuple[list[str], list[str]]:
         )
     lines = [c for c, _ in checks] or (["Checks: none"] if nones and not bad_none else [])
     return lines, why
-
-
-def head_matches(named: str, head: str) -> bool:
-    return bool(SHA.fullmatch(named)) and head.lower().startswith(named.lower())
 
 
 # The review rounds of the verdict comment (#1220, spec #lanes-one-head): octo-feather-lane
