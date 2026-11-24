@@ -7,6 +7,7 @@ from collections.abc import Callable
 import pytest
 from lane_merge_tier import (
     failing_ask,
+    failing_history,
     order_waits,
     owner_decision,
     spec_pr,
@@ -28,10 +29,6 @@ def test_merge_tier_failed(case: Case) -> None:
     case(tier_failed)
 
 
-def test_merge_tier_owner_decision(case: Case) -> None:
-    case(owner_decision)
-
-
 @pytest.mark.criterion("issue-lifecycle#acceptance-tier-order-waits", source=SOURCE)
 def test_merge_tier_order_waits(case: Case) -> None:
     case(order_waits)
@@ -44,3 +41,11 @@ def test_merge_tier_spec_pr(case: Case) -> None:
 
 def test_merge_tier_failing_ask(case: Case) -> None:
     case(failing_ask)
+
+
+def test_merge_tier_failing_history(case: Case) -> None:
+    case(failing_history)
+
+
+def test_merge_tier_owner_decision(case: Case) -> None:
+    case(owner_decision)

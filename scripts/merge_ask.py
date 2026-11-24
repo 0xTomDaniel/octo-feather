@@ -48,7 +48,8 @@ Interface:
         per reason, `Waits for: nobody | the director's order (PR #N: <why>) | the owner` (tier 3
         always the owner; a tier 1 or 2 ask whose merge order names an open PR this merge sets
         back, the director's order). Its reasons (tier): each criterion the section's `Failed:`
-        lists, with its triage (3), each `Owner decision: <text>` line in the section (3).
+        lists, with its triage (3), each column-0 line starting `Owner decision` up to its first
+        colon in the section (3), shown as written.
 
 Shared with octo-feather-lane's other commands: bad_checks (lane status), check_runs, git,
 resolution_files (verdict, resolution), full_pass (ci-start: its reads, then its rule), and the
@@ -2746,7 +2747,9 @@ class Tier:
         return [f"Tier: {self.n}", *reasons, f"Waits for: {self.waits}"]
 
 
-OWNER_DECISION = re.compile(r"\s*Owner decision:", re.IGNORECASE)
+# a column-0 line starting `Owner decision` up to its first colon (#1184 wrote `Owner decision 1
+# (...): ...`); it only raises a tier, so the looser match is the safe side
+OWNER_DECISION = re.compile(r"Owner decision[^:\n]*:", re.IGNORECASE)
 OWNER_TIER = 3  # the tier that waits for the owner, whatever the merge order names
 
 
@@ -2768,8 +2771,9 @@ def sets_back(o: Order) -> list[str]:
 
 def tier(s: Snapshot) -> Tier:
     """S's tier from the records the ask already holds: each criterion its section's `Failed:`
-    lists (3), each `Owner decision:` line in the section (3); a merge order naming an open PR
-    this merge sets back makes a tier 1 or 2 ask wait for the director's order, tier unchanged."""
+    lists (3), each column-0 `Owner decision...:` line in the section (3); a merge order naming
+    an open PR this merge sets back makes a tier 1 or 2 ask wait for the director's order, tier
+    unchanged."""
     lines = section(s.body) or []
     fails = failed(s, lines)[1]
     reasons = [Reason(3, f"failed criterion {c}{': ' + w if w else ''}") for c, w in fails.items()]
