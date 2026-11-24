@@ -369,6 +369,10 @@
       "tests": [
         "tests/gate/kit/test_fast_map.py"
       ]
+    },
+    "acceptance-fast-diff-base": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
