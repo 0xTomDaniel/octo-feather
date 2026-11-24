@@ -57,8 +57,9 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
       tests/*.sh path, or a pytest node id, its `/` and `::` kept); files measured under
       /tmp copies of the kit map back to tracked files by their longest shared path suffix. FILE is
       the run's pytest junit xml: only an item it reports passed is mapped; a failed or skipped one
-      is left out and named in the map as not passed. An item with no data (not run, or no Python
-      measured) is left out of the map too.
+      is left out and named in the map as not passed. An item that passed with no data (no Python
+      measured) or with a data file coverage cannot read is left out of the map too; each left out
+      is named on stdout, always selected.
   octo-feather-gate untouched save FILE [--mise-state DIR] [--run-tmp TMP]
   octo-feather-gate untouched check FILE
       A gate run leaves the caller's mise state and its repo's git config as it found them (owner
@@ -574,6 +575,18 @@ def junit_key(item: str) -> str:
     return ".".join([path.removesuffix(".py").replace("/", "."), *rest[:-1]]) + "::" + rest[-1]
 
 
+def node_id(key: str, files: set[str]) -> str:
+    """A pytest junit key (junit_key) as its node id: the longest leading dotted path that is a
+    tracked PATH.py, the rest its classes; the key itself when none is."""
+    mod, _, name = key.partition("::")
+    parts = mod.split(".")
+    for n in range(len(parts), 0, -1):
+        path = "/".join(parts[:n]) + ".py"
+        if path in files:
+            return "::".join([path, *parts[n:], name])
+    return key
+
+
 def outcomes(junit: Path) -> dict[str, bool]:
     """Each test item in a pytest junit xml report (junit_key): whether it passed (no failure,
     error, skip)."""
@@ -603,6 +616,7 @@ def build_map(data: Path, junit: Path) -> None:
     tracked = Tracked()
     items: dict[str, list[str]] = {}
     unread: list[str] = []
+    no_data: list[str] = []
     # The pytest items: each data dir named by a node id (GATE_ITEM holds its `/` and `::`).
     native = {f.parent.relative_to(data).as_posix() for f in data.rglob("cov*") if f.is_file()}
     native = {i for i in native if "::" in i}
@@ -617,7 +631,8 @@ def build_map(data: Path, junit: Path) -> None:
         if not ran.get(junit_key(i)):  # not run, or did not pass: partial coverage, always selected
             continue
         runs = list((data / i).glob("cov*"))
-        if not runs:  # not run, or no Python measured: no recorded coverage, so always selected
+        if not runs:  # no Python measured: no recorded coverage, so always selected
+            no_data.append(i)
             continue
         files: set[str] = set()
         try:
@@ -630,6 +645,11 @@ def build_map(data: Path, junit: Path) -> None:
             unread.append(f"{i} ({e})")
             continue
         items[i] = sorted(files)
+    # A pytest item that passed and measured no Python has no data dir: named from the junit report.
+    seen = {junit_key(i) for i in scripts | native}
+    no_data += [
+        node_id(k, tracked.files) for k, good in sorted(ran.items()) if good and k not in seen
+    ]
     head = git("rev-parse", "HEAD").strip()
     out = map_dir() / f"{head}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
@@ -637,12 +657,10 @@ def build_map(data: Path, junit: Path) -> None:
         json.dumps({"head": head, "items": items, "not_passed": not_passed}, indent=1) + "\n"
     )
     sys.stdout.write(f"fast-map: {len(items)} test items mapped at {head[:12]}: {out}\n")
-    for i in not_passed:
-        sys.stdout.write(f"fast-map: {i} did not pass: left out of the map, always selected\n")
-    for i in unread:
-        sys.stdout.write(
-            f"fast-map: {i}: coverage unreadable: left out of the map, always selected\n"
-        )
+    why = [f"{i} did not pass" for i in not_passed]
+    why += [f"{i}: no coverage data" for i in sorted(no_data)]
+    why += [f"{i}: coverage unreadable" for i in unread]
+    sys.stdout.write("".join(f"fast-map: {w}: left out of the map, always selected\n" for w in why))
 
 
 MISE_DIRS = ("tracked-configs", "trusted-configs")
