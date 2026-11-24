@@ -214,8 +214,9 @@ Reasons (tier): each criterion the section's `Failed:` lists, with its triage (3
 starts at column 0 with `Owner decision` and holds a colon (`Owner decision: <text>`, `Owner decision 1 (<what>):
 <text>`), shown as written (3): any agent raises the tier by adding one. A tier 3 ask waits for the owner;
 a tier 1 or 2 ask whose merge order (below) names an open PR this merge sets back (its head conflicts with this head,
-or this merge stales its pinned run) waits for the director's order, naming each (`PR #N: <why>`, `; ` between),
-its tier unchanged; else for nobody. A failing ask prints the block on stderr alone, after the line `Incomplete
+or this merge stales its pinned run), or one of whose reads failed (a `- not read:` line: it cannot prove none is set
+back), waits for the director's order, naming each (`PR #N: <why>`, `PR #N: its pinned run <run> not read`,
+`not read: <what>`; `; ` between), its tier unchanged; else for nobody. A failing ask prints the block on stderr alone, after the line `Incomplete
 merge ask (it fails below; never send this tier):`, after the merge order and before the items, never on stdout.
 
 `Merge order` (spec issue-lifecycle #gates-merge-order), shown only, after `Gate time` on a pass, and on stderr

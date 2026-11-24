@@ -47,9 +47,10 @@ Interface:
         reasons give (none: 1), and the block merge-ask prints, `Tier: N`, one `- <reason>` line
         per reason, `Waits for: nobody | the director's order (PR #N: <why>) | the owner` (tier 3
         always the owner; a tier 1 or 2 ask whose merge order names an open PR this merge sets
-        back, the director's order). Its reasons (tier): each criterion the section's `Failed:`
-        lists, with its triage (3), each column-0 line starting `Owner decision` up to its first
-        colon in the section (3), shown as written.
+        back, or holds a read that failed (`not read: <what>`), the director's order). Its
+        reasons (tier): each criterion the section's `Failed:` lists, with its triage (3), each
+        column-0 line starting `Owner decision` up to its first colon in the section (3), shown
+        as written.
 
 Shared with octo-feather-lane's other commands: bad_checks (lane status), check_runs, git,
 resolution_files (verdict, resolution), full_pass (ci-start: its reads, then its rule), and the
@@ -2754,26 +2755,30 @@ OWNER_TIER = 3  # the tier that waits for the owner, whatever the merge order na
 
 
 def sets_back(o: Order) -> list[str]:
-    """`PR #N: <why>` for each other open PR O names this merge sets back: its head conflicting
-    with this one, or a pinned run this merge newly stales (merge_order's own findings)."""
+    """`PR #N: <why>` for each other open PR O names this merge sets back, or may: its head
+    conflicting with this one, a pinned run this merge newly stales, a pinned run not read
+    (merge_order's own findings); then `not read: <line>` for each read of O that failed. A read
+    that failed cannot prove no PR is set back, so it waits as one that is."""
     out: list[str] = []
     for p in o.prs:
         files = ", ".join(p.conflicts)
         why = [f"its head conflicts with this head in {files}"] if files else []
         for pin in p.pins:
             was, now = _stale(pin.main), _stale(pin.merged)
-            if was is not None and now is not None and [x for x in now if x not in was]:
+            if was is None or now is None:
+                why.append(f"its pinned run {pin.run} not read")
+            elif [x for x in now if x not in was]:
                 why.append(f"this merge stales its pinned run {pin.run}")
         if why:
             out.append(f"PR #{p.number}: {' and '.join(why)}")
-    return out
+    return out + [f"not read: {u}" for u in o.unread]
 
 
 def tier(s: Snapshot) -> Tier:
     """S's tier from the records the ask already holds: each criterion its section's `Failed:`
     lists (3), each column-0 `Owner decision...:` line in the section (3); a merge order naming
-    an open PR this merge sets back makes a tier 1 or 2 ask wait for the director's order, tier
-    unchanged."""
+    an open PR this merge sets back, or a merge-order read that failed, makes a tier 1 or 2 ask
+    wait for the director's order, tier unchanged."""
     lines = section(s.body) or []
     fails = failed(s, lines)[1]
     reasons = [Reason(3, f"failed criterion {c}{': ' + w if w else ''}") for c, w in fails.items()]

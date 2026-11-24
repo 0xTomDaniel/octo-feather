@@ -231,7 +231,8 @@ def failing_ask(s: Scratch) -> None:
 
 def failing_history(s: Scratch) -> None:
     """Kit PR #1248, the spec PR merged with no `## Merge ask` section: exit 1, stdout empty,
-    `Tier: 1` on stderr after the incomplete mark."""
+    `Tier: 1` on stderr after the incomplete mark, waiting for the director's order: open PR
+    #1246's pinned runs are not read (a real unread merge order)."""
     head, base = (
         "08548de59a78ea1644fab491706bbdef7250de49",
         "7b39556a6f17b02665bf92194b302842a9fe5219",
@@ -241,7 +242,11 @@ def failing_history(s: Scratch) -> None:
     err = r.err.splitlines()
     i = err.index(INCOMPLETE)
     assert err[i + 1] == "Tier: 1", r.err
-    assert err[i + 2].startswith("Waits for: "), r.err
+    # the tape's open PR #1246 pins runs no qa store here holds: a merge-order read that failed,
+    # so the ask cannot prove no PR is set back and waits for the director's order
+    assert err[i + 2].startswith("Waits for: the director's order ("), r.err
+    # read here (its pins), or its head not in this repo's objects (the PR not read): unread both
+    assert "PR #1246: its pinned run " in err[i + 2] or "not read: PR #1246 " in err[i + 2], r.err
     assert "`## Merge ask` section: none in the PR body" in r.err, r.err
 
 
