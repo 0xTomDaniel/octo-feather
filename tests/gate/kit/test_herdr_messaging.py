@@ -8,6 +8,7 @@ from herdr_messaging import (
     director_moved,
     director_prune,
     director_relaunched,
+    director_worker_moved,
     director_worker_resume,
     fresh_worker_session,
     herdr_malformed,
@@ -28,6 +29,7 @@ from herdr_messaging import (
     spawn_fails_closed,
     spawn_one_bound,
     spawn_ready_late,
+    supervisor_parked_moved,
     tell_failed,
     tell_gone,
     tell_kit,
@@ -144,6 +146,20 @@ def test_director_relaunched(case: Case) -> None:
 @pytest.mark.criterion("comms#acceptance-parent-gone", source="tests/gate/kit/herdr_messaging.py")
 def test_parent_relaunched_gone(case: Case) -> None:
     case(parent_relaunched_gone)
+
+
+@pytest.mark.criterion(
+    "comms#acceptance-director-worker-resume", source="tests/gate/kit/herdr_messaging.py"
+)
+def test_director_worker_moved(case: Case) -> None:
+    case(director_worker_moved)
+
+
+@pytest.mark.criterion(
+    "comms#acceptance-parent-director-relaunched", source="tests/gate/kit/herdr_messaging.py"
+)
+def test_supervisor_parked_moved(case: Case) -> None:
+    case(supervisor_parked_moved)
 
 
 @pytest.mark.e2e
