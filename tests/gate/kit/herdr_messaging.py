@@ -632,6 +632,93 @@ def director_moved(s: Scratch) -> None:
     show(f"director resumed as {new}: general worker --parent exit 0 {ran.err.strip()}")
 
 
+OLD, NEW = "w0:p1", "w0:p5"  # the director's pane before and after its relaunch
+
+
+def relaunched(s: Scratch, *, live: bool = True) -> tuple[Path, dict[str, str], dict[str, str]]:
+    """worker_world's, its director relaunched from OLD into NEW: OLD gone, director.toml `pane`
+    NEW, live unless not LIVE. A director-owned general worker general-worker-a1 at w0:p2, its
+    spawn line (session S9) in the director log. The Herdr world, lane gh7's supervisor's env and
+    the worker's, both launched under OLD; the supervisor started from a pane owning no log (no
+    spawn line)."""
+    d, _ = worker_world(s, director=False)
+    agents = json.loads((d / "agents.json").read_text())
+    agents["w0:p2"] = agent("w0:p2", "general-worker-a1", "idle")
+    if live:
+        agents[NEW] = agent(NEW, "director", "idle")
+    (d / "agents.json").write_text(json.dumps(agents))
+    state = state_dir(s)
+    (state / "director.toml").write_text(f'pane = "{NEW}"\n')
+    spawn = {"at": "2026-11-25T00:00:00Z", "kind": "spawn", "name": "general-worker-a1"}
+    spawn |= {"role": "general-worker", "pane": "w0:p2", "cwd": str(s.root), "session": "S9"}
+    (state / "director.handoffs.jsonl").write_text(json.dumps(spawn) + "\n")
+    sup = SUPERVISOR | {"HERDR_PANE_ID": "w1:p1"}
+    worker = {"OCTO_FEATHER_ROLE": "general-worker", "OCTO_FEATHER_PARENT": OLD}
+    worker |= {"OCTO_FEATHER_SESSION_ID": "S9", "HERDR_PANE_ID": "w0:p2"}
+    worker["HERDR_WORKSPACE_ID"] = "w0"
+    assert sup["OCTO_FEATHER_PARENT"] == OLD, sup
+    return d, sup, worker
+
+
+def director_relaunched(s: Scratch) -> None:
+    """comms #acceptance-parent-director-relaunched, and a supervisor messages only up its chain
+    (docs/adr/0015): relaunched's supervisor (OCTO_FEATHER_PARENT the old pane OLD): its
+    `herdr-say --parent` reaches NEW; `octo-feather-handoff parent OLD` prints NEW without a spawn
+    line for its session and with one in the director log (a worker with no spawn line keeps
+    OLD); a send to a peer lane's agent or to OLD exits 77 naming NEW, never OLD, nothing sent;
+    one to an agent in its own workspace is delivered."""
+    d, sup, _ = relaunched(s)
+    s.run([SAY, "--parent", "parent check"], env=sup)
+    assert to(d, NEW) == ["parent check"], lines(d / "prompts")
+    show(f"supervisor launched under {OLD}, --parent: {NEW} received: {to(d, NEW)}")
+    parent = [kit("octo-feather-handoff"), "parent", OLD]
+    assert s.run(parent, env=sup).out == NEW, "no spawn line"
+    log = state_dir(s) / "director.handoffs.jsonl"
+    spawn = {"at": "2026-11-25T00:00:00Z", "kind": "spawn", "name": "gh7", "role": "supervisor"}
+    with log.open("a") as f:
+        f.write(json.dumps(spawn | {"pane": "w1:p1", "session": "S7"}) + "\n")
+    assert s.run(parent, env=sup | {"OCTO_FEATHER_SESSION_ID": "S7"}).out == NEW, "spawn line"
+    lone = sup | {"OCTO_FEATHER_ROLE": "general-worker", "OCTO_FEATHER_SESSION_ID": "S0"}
+    assert s.run(parent, env=lone).out == OLD, "a worker with no spawn line"
+    show(f"octo-feather-handoff parent {OLD}, supervisor with and without a spawn line: {NEW}")
+    for outside in ("w2:p2", OLD):
+        ran = s.run([SAY, outside, RESULT], want=77, env=sup)
+        assert f"its parent {NEW};" in ran.err, ran.err
+        assert f"its parent {OLD}" not in ran.err, ran.err
+        show(f"supervisor to {outside}: exit 77: {ran.err.strip()}")
+    assert lines(d / "prompts") == [f"{NEW}\tparent check"], lines(d / "prompts")
+    s.run([SAY, "w1:p2", "in my workspace"], env=sup)
+    assert to(d, "w1:p2") == ["in my workspace"], lines(d / "prompts")
+
+
+def parent_relaunched_gone(s: Scratch) -> None:
+    """comms #acceptance-parent-gone after a director relaunch, and a worker messages only its
+    parent (docs/adr/0015): relaunched's director worker (spawned under OLD) may send to NEW, its
+    resolved parent, never to OLD (77 naming NEW). NEW then gone: its `herdr-say --parent` exits
+    68, the alert naming NEW as the gone parent; the supervisor's gets the not-delivered error
+    naming NEW, never OLD, and no alert."""
+    d, sup, worker = relaunched(s)
+    s.run([SAY, NEW, "to my parent"], env=worker)
+    assert to(d, NEW) == ["to my parent"], lines(d / "prompts")
+    ran = s.run([SAY, OLD, RESULT], want=77, env=worker)
+    assert f"its parent {NEW};" in ran.err, ran.err
+    show(f"director worker to {NEW}: delivered; to {OLD}: exit 77: {ran.err.strip()}")
+
+    s2 = sub(s, "gone")
+    d, sup, worker = relaunched(s2, live=False)
+    ran = s2.run([SAY, "--parent", RESULT], want=68, env=worker)
+    assert f"parent {NEW} is gone" in ran.err, ran.err
+    assert f"alert NOT delivered to the director (pane {NEW}" in ran.err, ran.err
+    assert OLD not in ran.err, ran.err
+    show(f"director worker, {NEW} gone: exit 68: {ran.err.strip()}")
+    ran = s2.run([SAY, "--parent", RESULT], want=1, env=sup)
+    assert f"{NEW} is gone" in ran.err, ran.err
+    assert OLD not in ran.err, ran.err
+    assert "alert" not in ran.err, ran.err
+    assert lines(d / "prompts") == [], lines(d / "prompts")
+    show(f"supervisor, {NEW} gone: exit 1: {ran.err.strip()}")
+
+
 REPORT = "DONE commit abc123: the report\nevidence: just fast green\nnext: review"
 
 
@@ -1415,6 +1502,8 @@ if __name__ == "__main__":
         parent_resumed,
         parked_resumed,
         director_moved,
+        director_relaunched,
+        parent_relaunched_gone,
         result_compacting,
         result_resumed,
         results_listing,
