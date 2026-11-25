@@ -199,6 +199,12 @@ covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.to
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 merge-ask-proof"
 covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.toml"]
 
+# The merge-tiers drive's director-reply case: a headless director, its real model, handed a recorded tier 3 merge ask
+# (features/merge-tiers.md). The qc sandbox runs no Pi, so there the step is unreachable (77): drive it on the box.
+[demo."issue-lifecycle#acceptance-tier-three-waits"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 merge-tiers"
+covers = ["agents/director.md", "scripts/pi-role", "scripts/octo-feather-lane", "scripts/merge_ask.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/merge-tiers.md", "tests/gate/kit/testkit/gh.py", "tests/gate/kit/testkit/recordings/merge-tier-1257.json"]
+
 # Proven by its tagged test, tests/web-tools.sh (headless roles and herdr-spawn tab launches, real Pi, codemode).
 [demo."roles#acceptance-codemode-every-role"]
 covers = ["scripts/pi-role", ".agents/skills/herdr-comms/assets/herdr-spawn", "agents/director.md", "agents/supervisor.md", "agents/general-worker.md", "agents/implementer.md", "agents/corrector.md", "agents/code-reviewer.md", "agents/qc-judge.md", "extensions/web-servers.ts", "web-mcp.json", "pi-version"]
