@@ -27,7 +27,6 @@ from testkit import Scratch, kit, main
 if TYPE_CHECKING:
     from testkit import Ran
 
-H = "1234567890abcdef1234567890abcdef12345678"  # PR #7's head, the approved one
 STEPS = (
     "merged",
     "main CI",
@@ -37,7 +36,6 @@ STEPS = (
     "tell supervisors",
     "teardown",
 )
-MERGE = f"pr merge 7 --merge --match-head-commit {H}"
 DIRECTOR = "w9:p99"
 # gh7's supervisor's environment in its own pane, as octo-feather-start and Herdr give it
 SUPERVISOR = {
@@ -58,6 +56,14 @@ class World:
         lane.install(lane.b)  # the install of o/r, the PR's repo: step 3 moves it
         lane.checkout(lane.b)
         lane.store([run1("check", "completed", "success", 11, lane.m)])
+        # PR #7's head H, a lane commit on B in the target (branch gh7): the merge's guard reads
+        # the ask's spec calls from the lane diff, so the head is a commit here (#1266)
+        t = lane.target
+        tree = s.git(t, "rev-parse", f"{lane.b}^{{tree}}")
+        ident = ["-c", "user.name=t", "-c", "user.email=t@t"]
+        self.h = s.git(t, *ident, "commit-tree", tree, "-p", lane.b, "-m", "gh7")
+        s.git(t, "update-ref", "refs/heads/gh7", self.h)
+        self.merge = f"pr merge 7 --merge --match-head-commit {self.h}"
         self.pr()
         for n, kids in ((70, [71]), (71, [])):
             s.gh.store(
@@ -93,11 +99,13 @@ class World:
         s.env["FAKE_HERDR"] = str(self.herdr)
         self.path = lane.path["rec"] + str(ASSETS) + os.pathsep + s.env["PATH"]
 
-    def pr(self, state: str = "OPEN", head: str = H) -> None:
-        """PR #7 STATE at HEAD, merging as M; the gh call log emptied."""
+    def pr(self, state: str = "OPEN", head: str = "") -> None:
+        """PR #7 STATE at HEAD (H by default), merging as M; the gh call log emptied."""
+        head = head or self.h
         self.s.gh.put(
             7,
             {
+                "number": 7,
                 "state": state,
                 "headRefOid": head,
                 "mergeCommit": None,
@@ -106,6 +114,8 @@ class World:
                 "headRefName": "gh7",
                 "title": "Add foo",
                 "url": "https://github.com/o/r/pull/7",
+                # a merge ask building no criterion, tier 1: the merge's guard lets it go (#1266)
+                "body": f"## Merge ask\n\nHead: {head[:12]}\nBuilt: none\nFailed: none\n",
             },
         )
         (self.s.gh.dir / "log").write_text("")
@@ -161,14 +171,14 @@ def merge_starts_routine(s: Scratch) -> None:
     w = World(s)
     lane = w.lane
     m, m12 = lane.m, lane.m[:12]
-    r = w.run(0, "merge", "7", H, "--repo", "o/r")
-    log, merge = s.gh.log(), f"{MERGE} -R o/r"
+    r = w.run(0, "merge", "7", w.h, "--repo", "o/r")
+    log, merge = s.gh.log(), f"{w.merge} -R o/r"
     assert merge in log, f"no pinned merge: {log}"
     assert log.index("pr view 7 --json state,headRefOid -R o/r") < log.index(merge), log
     writes = [x for x in log if x.startswith(("pr merge", "issue close", "pr edit", "api -X"))]
     assert writes == [merge, "issue close 71", "issue close 70"], f"gh writes: {log}"
     out = r.out.split("\n")
-    assert out[0] == "merged: PR #7 at head 1234567890ab (lane gh7)", r.out
+    assert out[0] == f"merged: PR #7 at head {w.h[:12]} (lane gh7)", r.out
     assert out[1:4] == ["71: done", "70: done", "70: parent and 1 tickets done"], r.out
     for n, name in enumerate(STEPS[:6], 1):
         assert any(x.startswith(f"step {n} {name}: ok: ") for x in out), f"step {n}: {r.out}"
@@ -196,7 +206,7 @@ def merge_starts_routine(s: Scratch) -> None:
     shown = w.shown()
     head = w.run(0, "post-merge", "--lane", "gh7").out.split("\n")[0]
     record = w.st / "post-merge" / "gh7.json"
-    want = f"post-merge record gh7: PR #7, head {H}, merge commit {m} ({record})"
+    want = f"post-merge record gh7: PR #7, head {w.h}, merge commit {m} ({record})"
     assert head == want, head
     ok = [f"{n} {name} ok" for n, name in enumerate(STEPS[:6], 1)]
     assert outcomes(shown) == [*ok, "7 teardown pending"], shown
@@ -214,8 +224,8 @@ def resume(s: Scratch) -> None:
     t = lane.target
     (t / "a").write_text("mine\n")
     w.record("gh7", "zt1:p1", "gh70-x", 7)
-    r = w.run(1, "merge", "7", H)
-    assert MERGE in s.gh.log(), s.gh.log()
+    r = w.run(1, "merge", "7", w.h)
+    assert w.merge in s.gh.log(), s.gh.log()
     assert not [x for x in s.gh.log() if x.startswith("issue close")], s.gh.log()
     done = next((x for x in r.err.split("\n") if "done gh70-x" in x), "")
     assert "lane key gh70-x maps to tracker key 70" in done, r.err
@@ -226,7 +236,7 @@ def resume(s: Scratch) -> None:
     assert outcomes(w.shown())[2:4] == ["3 kit refresh stopped", "4 checkout not"], w.shown()
     (t / "a").write_text("")
     (s.gh.dir / "log").write_text("")
-    r = w.run(3, "post-merge", "7", H, "--lane", "gh7")
+    r = w.run(3, "post-merge", "7", w.h, "--lane", "gh7")
     out = r.out.split("\n")
     for n, name in ((1, "merged"), (2, "main CI")):
         line = next((x for x in out if x.startswith(f"step {n} {name}: ok: ")), "")
@@ -245,9 +255,9 @@ def refused(s: Scratch) -> None:
     and nothing recorded (no post-merge dir): PR #7 at another head; PR #7 closed; no open lane
     record with `pr = 7`; two of them. Each refusal names its fix."""
     w = World(s)
-    other = "abcdef0" + H[7:]
+    other = "abcdef0" + w.h[7:]
     cases = (
-        ("head", lambda: w.pr(head=other), "PR #7's head is abcdef0890ab, not the approved head"),
+        ("head", lambda: w.pr(head=other), f"PR #7's head is {other[:12]}, not the approved head"),
         ("closed", lambda: w.pr("CLOSED"), "PR #7 is CLOSED, not open: nothing merged"),
         ("no lane", lambda: w.record("gh7", "zt1:p1", "gh70", None), "no open lane record in "),
         (
@@ -262,7 +272,7 @@ def refused(s: Scratch) -> None:
         w.record("gh8", "zt2:p1", "gh80", None)
         setup()
         before = s.gh.pr(7)
-        r = w.run(1, "merge", "7", H)
+        r = w.run(1, "merge", "7", w.h)
         assert want in r.err, f"{what}: {r.err}"
         assert not [x for x in s.gh.log() if x.startswith("pr merge")], f"{what}: {s.gh.log()}"
         assert s.gh.pr(7) == before, f"{what}: PR #7 changed"

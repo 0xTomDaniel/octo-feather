@@ -28,7 +28,7 @@ import time
 from typing import TYPE_CHECKING
 
 from herdr_messaging import ASSETS, agent, lines
-from lane_merge import DIRECTOR, SUPERVISOR, H, World
+from lane_merge import DIRECTOR, SUPERVISOR, World
 from lane_post_merge import run1
 from testkit import HERE, Scratch, kit, main, reflector
 
@@ -89,7 +89,7 @@ class Lane:
         return r
 
     def merged(self, want: int = 0) -> None:
-        self.run(want, "merge", "7", H, "--repo", "o/r", cwd="t")
+        self.run(want, "merge", "7", self.w.h, "--repo", "o/r", cwd="t")
 
     def unit(self) -> str:
         """The unit's line `post-merge --lane gh7` shows, its end after `ended `; "" with none."""
@@ -256,7 +256,7 @@ def shared_supervisor_kept(s: Scratch) -> None:
     (t.w.herdr / "agents.json").write_text(json.dumps(world))
     gh8 = t.w.lanes / "gh8.toml"
     before = gh8.read_bytes()
-    r = t.run(0, "merge", "7", H, "--repo", "o/r", cwd="t")
+    r = t.run(0, "merge", "7", t.w.h, "--repo", "o/r", cwd="t")
     s6 = next(x for x in r.out.split("\n") if x.startswith("step 6 tell supervisors: "))
     assert "; told: gh8 zt1:p1 (the merging supervisor); " in s6, s6
     sent = [x for x in lines(t.w.herdr / "prompts") if x.startswith("zt1:p1\t")]
@@ -346,7 +346,7 @@ def red_main(s: Scratch) -> None:
     said = t.said()
     assert len(said) == 1, said
     assert f"step 2 main CI stopped: {stop}" in said[0], said
-    rerun = f"rerun `octo-feather-lane post-merge 7 {H} --lane gh7 --repo o/r`"
+    rerun = f"rerun `octo-feather-lane post-merge 7 {t.w.h} --lane gh7 --repo o/r`"
     assert rerun in said[0], said
     assert t.w.lane.head() == t.w.lane.b, "kit install moved"
     before = t.tree()
@@ -390,7 +390,7 @@ def director_unread(s: Scratch) -> None:
     s.gh.store("run/11.json", run1("check", "completed", "failure", 11, t.w.lane.m))
     path = t.w.st / "director.toml"
     path.write_text("pane = [\n")
-    r = t.run(1, "merge", "7", H, "--repo", "o/r", cwd="t")
+    r = t.run(1, "merge", "7", t.w.h, "--repo", "o/r", cwd="t")
     line = next((x for x in r.out.split("\n") if x.startswith("director NOT told: ")), "")
     assert line.startswith(f"director NOT told: {path} unread ("), r.out
     assert "None" not in line, line
@@ -416,7 +416,7 @@ def watch_gh_gone(s: Scratch) -> None:
     )
     gh.chmod(0o755)
     t.w.path = os.pathsep.join([str(gone), t.w.lane.path["rec"] + str(ASSETS), s.env["PATH"]])
-    r = t.run(1, "merge", "7", H, "--repo", "o/r", cwd="t")
+    r = t.run(1, "merge", "7", t.w.h, "--repo", "o/r", cwd="t")
     assert not gh.exists(), "gh never gone"
     stop = "step 2 main CI: stopped: gh run watch 11: gh not on PATH: "
     assert any(x.startswith(stop) for x in r.out.split("\n")), r.out
