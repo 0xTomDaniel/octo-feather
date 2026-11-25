@@ -2875,8 +2875,8 @@ def tier(s: Snapshot) -> Tier:
 
 def relay_proof(s: Snapshot, relayed: str, head: str) -> tuple[str | None, list[str]]:
     """(proof line, []) when the director's relay recorded for the full head RELAYED carries to
-    the full HEAD over S's git facts: the same head, or only merges of main between them that the
-    one-head check proves clean (spec #gates-merge-guard, #lanes-one-head); else (None, why)."""
+    the full HEAD over S's git facts, else (None, why) (when it carries: octo-feather-lane --help,
+    merge, allowed)."""
     r, h = relayed.lower(), head.lower()
     rerun = f"send a new merge ask for {h[:12]}"
     p = _why(_proved(s, r, h, at="relayed head", kept="the director's relay", rerun=rerun))
