@@ -228,11 +228,12 @@ URL`, `not read (...)`, `made <created_at>, not before the call` or `not confirm
 ...` (3); a log not read, `spec calls not
 read: <why>` (3); each path the lane changes (git diff from
 the merge base of the head and BASE to the head, a rename as its two paths) whose owners in the code owners file at the
-head (the first of .github/CODEOWNERS, CODEOWNERS, docs/CODEOWNERS, GitHub's order; none: no path) include `@<owner>`,
+head or at the merge base (each end's first of .github/CODEOWNERS, CODEOWNERS, docs/CODEOWNERS, GitHub's order; either
+only raises, so a lane editing it never lowers its own tier; none at either: no path) include `@<owner>`,
 the owner login of --repo O/R (else of `gh repo view`; an `@org/team` never counts): `code owner: <path> is @<owner>'s
-(<file> line N: `<line>`)` (3). The line is the last one matching the path, as GitHub takes it, each line matched
+(<file>[ at the merge base <sha12>] line N: `<line>`)` (3), the head's file named first. The line is the last one matching the path, as GitHub takes it, each line matched
 by git's own matcher (`git check-ignore --no-index`, one line at a time: scripts/merge_ask.py, _owned). A line
-whose pattern git reads otherwise than GitHub (each such syntax and why: merge_ask.CODE_OWNERS_DIFFER) fails the
+of either file whose pattern git reads otherwise than GitHub (each such syntax and why: merge_ask.CODE_OWNERS_DIFFER) fails the
 ask, `code owners: <file> line N `<line>`: <why>; ...`, each named, and no path is sorted. A tier 3 ask waits for the owner;
 a tier 1 or 2 ask whose merge order (below) names an open PR this merge sets back (its head conflicts with this head,
 or this merge stales its pinned run), or one of whose reads failed (a `- not read:` line: it cannot prove none is set
