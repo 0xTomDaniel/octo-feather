@@ -4115,12 +4115,13 @@ def pi_model_settings(path: Path) -> dict[str, object]:
 
 
 def drive_director_relaunch(f: Feature) -> None:
-    """comms#acceptance-director-relaunch-busy, -own-scope, -same-session: a real scratch Herdr server (its own
+    """comms#acceptance-director-relaunch-busy, -own-scope, -same-session, -replace-outgoing: a real scratch Herdr server (its own
     XDG_CONFIG_HOME and session, never the box's), a real Pi director started by `octo-feather-start --director`, its
     model a local socket that never answers (a turn stays busy), its agent scope the box's real systemd user manager's.
     The refusals, each leaving the director's pane and director.toml as they were, then the relaunch: a new pane= that
-    `herdr agent get director` and director.toml name, one Pi on the session, one message naming the old pane. The
-    server and the dead model stopped through their pid files. Cases: features/director-relaunch.md."""
+    `herdr agent get director` and director.toml name, one Pi on the session, one message naming the old pane; then the
+    replace's refusals and the replace: a fresh director Herdr and director.toml name, the old pane live under its
+    outgoing name, each told once. The server and the dead model stopped through their pid files. Cases: features/director-relaunch.md."""
     pi_bin = shutil.which("pi") or str(Path.home() / ".local" / "pi" / "pi")
     need = [n for n, ok in (("herdr", shutil.which("herdr")), ("pi", Path(pi_bin).exists()),
                             ("a systemd user manager", output(["systemctl", "--user", "is-system-running"])[1].strip()
@@ -4297,6 +4298,55 @@ def drive_director_relaunch(f: Feature) -> None:
         f.check("relaunch", lambda c: c.code == 0 and new not in ("", old) and c.o["director"] == new
                 and c.o["toml"] == f'pane = "{new}"\n' and c.o["pi"] == "1" and len(c.o["received"].splitlines()) == 1
                 and f"replacing pane {old}, session {sid}" in c.o["received"] and "director.handoffs.jsonl" in c.o["received"])
+        # The replace (comms#acceptance-director-replace-outgoing) of the relaunched director NEW: its refusals, then it.
+        cur = f'pane = "{new}"\n'
+
+        def kept(c: Case) -> bool:
+            return c.o["director"] == new and c.o["toml"] == cur
+
+        subprocess.run([str(kit / ".agents/skills/herdr-comms/assets/herdr-say"), new, "verify: a turn the model never answers"],
+                       env=env, capture_output=True, check=False)
+        until(lambda: status(new) == "working", 20)
+        f.run("replace-busy", *start[:2], "--replace", "--wait", "20", *start[2:])
+        director_now("replace-busy")
+        f.obs("replace-busy", "status", status(new))
+        f.check("replace-busy", lambda c: c.code == 75 and "busy" in c.err and new in c.err and kept(c)
+                and c.o["status"] == "working")
+        h("pane", "send-keys", new, "Escape")
+        until(lambda: status(new) in ("idle", "done"), 20)
+        job = sc / "logs" / "replace-own-scope.log"
+        replace = f"octo-feather-start --director --replace --wait 20 --cwd {target}"
+        typed(new, "replace-own-scope", f"(env -u HERDR_PANE_ID setsid sh -c 'cat /proc/self/cgroup; {replace}; echo rc=$?' "
+                                        f"> {job} 2>&1 </dev/null &)\n")
+        f.run("replace-own-scope", "cat", str(sc / "steps" / "replace-own-scope.sh"))
+        until(lambda: job.is_file() and "rc=" in job.read_text(), 60)
+        f.obs("replace-own-scope", "job", job.read_text() if job.is_file() else "")
+        director_now("replace-own-scope")
+        f.check("replace-own-scope", lambda c: "rc=64" in c.o["job"] and f"octo-feather-agent-{new}-" in c.o["job"]
+                and f"director pane {new}'s agent scope" in c.o["job"] and kept(c))
+        f.run("replace-own-pane", "env", f"HERDR_PANE_ID={new}", *start[:2], "--replace", "--wait", "20", *start[2:])
+        director_now("replace-own-pane")
+        f.check("replace-own-pane", lambda c: c.code == 64 and f"HERDR_PANE_ID is the director's pane {new}" in c.err
+                and kept(c))
+        f.run("replace", *start[:2], "--replace", "--wait", "120", *start[2:])
+        out = (f.d / "replace.stdout").read_text()
+        fresh = next((x[5:] for x in out.split() if x.startswith("pane=")), "")
+        fsid = next((x[20:] for x in out.split() if x.startswith("provider_session_id=")), "")
+        director_now("replace")
+        gone = next((a.name for a in scope.agents() if a.pane_id == new), "")
+        f.obs("replace", "outgoing", f"{gone} {agent(gone, 'pane_id') if gone else ''}")
+        f.obs("replace", "pi", str(len(output(["pgrep", "-f", "--", f"--session-id {sid}"])[1].split())))
+        texts = [t for p in (sc / "pi-agent" / "sessions").glob(f"*/*_{sid}.jsonl") for t in pi_user_texts(p)]
+        f.obs("replace", "bye", "\n".join(t for t in texts if t.startswith("Replaced by a fresh director")))
+        texts = [t for p in (sc / "pi-agent" / "sessions").glob(f"*/*_{fsid}.jsonl") for t in pi_user_texts(p)]
+        f.obs("replace", "received", "\n".join(t for t in texts if t.startswith("Fresh director (")))
+        say(f"replace: fresh director {fresh}; {new} now {gone}; agent get, director.toml and both messages: {f.d}")
+        f.check("replace", lambda c: c.code == 0 and fresh not in ("", new) and c.o["director"] == fresh
+                and c.o["toml"] == f'pane = "{fresh}"\n' and c.o["outgoing"].startswith("director-outgoing-")
+                and c.o["outgoing"].endswith(f" {new}") and c.o["pi"] == "1" and "send the director its /goal" in c.err
+                and len(c.o["bye"].splitlines()) == 1 and "you are no longer the director" in c.o["bye"]
+                and len(c.o["received"].splitlines()) == 1 and f"replacing pane {new}, session {sid}" in c.o["received"]
+                and "director.handoffs.jsonl" in c.o["received"])
     finally:
         f.env = {}
         try:
