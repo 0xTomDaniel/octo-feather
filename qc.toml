@@ -203,7 +203,7 @@ covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.to
 # realcase PR #1's recorded tier 3 merge ask (evals/director-tier-relay). The run's generated evidence and the verify
 # skill's merge-tiers drive (its director-reply case, a drive, not this proof): evidence/2026-11-25-gh1284-merge-tiers.md.
 [demo."issue-lifecycle#acceptance-tier-three-waits"]
-command = "scripts/octo-feather-qa --verdict 20261125T061516Z-28de9a/director-tier-relay/tier-three-waits-for-owner"
+command = "scripts/octo-feather-qa --verdict 20261125T061748Z-468717/director-tier-relay/tier-three-waits-for-owner"
 covers = ["agents/director.md", "evals/director-tier-relay", "evals/fixtures/python-app", "scripts/octo-feather-qa", "scripts/eval_grading.py", "evidence/2026-11-25-gh1284-merge-tiers.md"]
 
 # Proven by its tagged test, tests/web-tools.sh (headless roles and herdr-spawn tab launches, real Pi, codemode).
