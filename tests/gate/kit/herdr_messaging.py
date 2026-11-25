@@ -38,9 +38,13 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 import tomllib
 from testkit import HERE, ROOT, MissingFixtureError, Ran, Scratch, kit, main, reflector
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 ASSETS = ROOT / ".agents" / "skills" / "herdr-comms" / "assets"
 TELL_BOUND = 20  # post-merge step 6's bound on one send, seconds (octo-feather-lane --help)
@@ -489,10 +493,10 @@ DIRECTOR = {"OCTO_FEATHER_ROLE": "director", "HERDR_PANE_ID": "w0:p1", "HERDR_WO
 SAY = str(ASSETS / "herdr-say")
 
 
-def director_parks(s: Scratch, d: Path) -> dict[str, str]:
+def director_parks(s: Scratch, d: Path) -> str:
     """The director spawns general-worker-a1 in w0 (a process standing in for it), parks it with
-    `herdr-close --park`, which appends its line to the director log after a note line: that
-    line."""
+    `herdr-close --park`, which appends its line to the director log after a note line
+    (parked_line reads it): the spawn's provider session id."""
     state = state_dir(s)
     (state / "lanes").mkdir(parents=True)
     (state / "director.toml").write_text('pane = "w0:p1"\n')
@@ -511,14 +515,33 @@ def director_parks(s: Scratch, d: Path) -> dict[str, str]:
     finally:
         worker.kill()
     assert not park.out, park.out
-    log = dlog.read_text().splitlines()
+    return got["provider_session_id"]
+
+
+def parked_line(s: Scratch, session: str) -> dict[str, str]:
+    """director_parks's park line, the director log's last after the note and the spawn line,
+    naming general-worker-a1, its role, parent, label and spawn's SESSION."""
+    log = (state_dir(s) / "director.handoffs.jsonl").read_text().splitlines()
     assert [json.loads(x)["kind"] for x in log] == ["note", "spawn", "parked"], log
-    show(f"herdr-close --park {got['pane']}: director.handoffs.jsonl gained {log[-1]}")
     line = json.loads(log[-1])
+    show(f"herdr-close --park {line['pane']}: director.handoffs.jsonl gained {log[-1]}")
     want = {"name": "general-worker-a1", "role": "general-worker", "parent": "w0:p1", "label": "a1"}
     assert {k: line[k] for k in want} == want, line
-    assert line["session"] == got["provider_session_id"], (line, got)
+    assert line["session"] == session, (line, session)
     return line
+
+
+def build_parked(s: Scratch) -> None:
+    """director_worker_resume's world up to the park, in S: worker_world, its Herdr session, the
+    director's spawn and park (director_parks, its park line checked), and parked.json (S's root,
+    the Herdr session, the spawn's provider session); its tabs' shells ended (end_shells)."""
+    d, _ = worker_world(s)
+    s.env["HERDR_SESSION"] = f"park-{os.getpid()}"  # only this scenario's processes count
+    provider = director_parks(s, d)
+    parked_line(s, provider)
+    end_shells(d)
+    got = {"root": str(s.root), "session": s.env["HERDR_SESSION"], "provider": provider}
+    (s.root / "parked.json").write_text(json.dumps(got))
 
 
 def lane_worker_resumes(s: Scratch, caller: str, who: str) -> None:
@@ -545,10 +568,12 @@ def director_worker_resume(s: Scratch) -> None:
     the resumed pane=, in w0, with the recorded role, session and parent, and the worker receives
     "Resumed from park as pane=..."; its `--parent RESULT` reaches the director. A parked lane
     worker still resumes in its supervisor's workspace w1, by its supervisor or by the director.
-    Each observation printed, for the qc demo."""
-    d, _ = worker_world(s)
-    s.env["HERDR_SESSION"] = f"park-{os.getpid()}"  # only this scenario's processes count
-    line = director_parks(s, d)
+    Each observation printed, for the qc demo. The world up to the park is built once per gate
+    run (build_parked) and copied here, its park line checked again."""
+    got = prepared(s, "herdr-parked", build_parked, "parked.json")
+    d = herdr_env(s, s.root / "herdr")
+    s.env["HERDR_SESSION"] = got["session"]
+    line = parked_line(s, got["provider"])
     got = s.run([SAY, "--parked", "general-worker-a1"], env=DIRECTOR)
     assert json.loads(got.out) == line, got.out
     show(f"herdr-say --parked general-worker-a1: {got.out}")
@@ -591,14 +616,7 @@ def supervised(s: Scratch) -> tuple[Path, dict[str, str], dict[str, str]]:
     the spawn line in the lane log. The Herdr world, the supervisor's start and the worker's env.
     Built once per gate run (build_supervised) and copied here, its paths moved to S's root (the
     tabs' env, the logs' cwd), as several items start from it."""
-    s.prepare("herdr-supervised", build_supervised)
-    got = json.loads((s.root / "supervised.json").read_text())
-    if got["root"] != str(s.root):
-        old, new = got["root"].encode(), str(s.root).encode()
-        for f in s.root.rglob("*"):
-            if f.is_file() and not f.is_symlink() and old in (b := f.read_bytes()):
-                f.write_bytes(b.replace(old, new))
-        got = json.loads((s.root / "supervised.json").read_text())
+    got = prepared(s, "herdr-supervised", build_supervised, "supervised.json")
     d = herdr_env(s, s.root / "herdr")
     s.env["HERDR_SESSION"] = got["session"]
     return d, got["sup"], got["worker"]
@@ -623,13 +641,34 @@ def build_supervised(s: Scratch) -> None:
     worker = dict(x.split("=", 1) for x in s.run(spawn, env=tab_env(d, sup["pane"])).out.split())
     got = {"root": str(s.root), "session": s.env["HERDR_SESSION"], "sup": sup}
     got["worker"] = tab_env(d, worker["pane"])
+    end_shells(d)
+    (s.root / "supervised.json").write_text(json.dumps(got))
+
+
+def end_shells(d: Path) -> None:
+    """The tabs' shells of Herdr's world in D (each a process Herdr names for a pane, alive while
+    D is) ended and unnamed: a prepared world's copy's own Herdr starts its own."""
     agents = json.loads((d / "agents.json").read_text())
     for g in agents.values():
         if isinstance(pid := g.pop("shell_pid", None), int):
             with contextlib.suppress(ProcessLookupError):
                 os.killpg(pid, signal.SIGKILL)
     (d / "agents.json").write_text(json.dumps(agents))
-    (s.root / "supervised.json").write_text(json.dumps(got))
+
+
+def prepared(s: Scratch, name: str, build: Callable[[Scratch], None], made: str) -> dict[str, Any]:
+    """S filled with prepared NAME (Scratch.prepare: BUILD once per gate run), the JSON file MADE
+    BUILD wrote, `root` its scratch's root: every file's paths moved from that root to S's (the
+    tabs' env, the logs' cwd); MADE read after."""
+    s.prepare(name, build)
+    got = json.loads((s.root / made).read_text())
+    if got["root"] != str(s.root):
+        old, new = got["root"].encode(), str(s.root).encode()
+        for f in s.root.rglob("*"):
+            if f.is_file() and not f.is_symlink() and old in (b := f.read_bytes()):
+                f.write_bytes(b.replace(old, new))
+        got = json.loads((s.root / made).read_text())
+    return got
 
 
 def parent_resumed(s: Scratch) -> None:
