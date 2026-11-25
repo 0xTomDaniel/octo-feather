@@ -5,7 +5,7 @@ proving the criterion carries its tag, its source that file (quality #qc-capture
 from collections.abc import Callable
 
 import pytest
-from lane_merge_code_owner import owner_path, real_file, refused
+from lane_merge_code_owner import dropped_line, owner_path, real_file, refused
 
 Case = Callable[..., None]
 SOURCE = "tests/gate/kit/lane_merge_code_owner.py"
@@ -22,3 +22,7 @@ def test_merge_tier_code_owner_real_file(case: Case) -> None:
 
 def test_merge_tier_code_owner_refused(case: Case) -> None:
     case(refused)
+
+
+def test_merge_tier_code_owner_dropped_line(case: Case) -> None:
+    case(dropped_line)
