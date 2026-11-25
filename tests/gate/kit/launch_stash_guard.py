@@ -102,6 +102,8 @@ def refused(s: Scratch) -> None:
         "git stash -mspam --help",
         "git stash push -q --help",
         "git stash import HEAD",
+        "git stash export --to-ref refs/stash",
+        "git stash export --print",
     ):
         ran = agent(s, second, push, want=1)
         assert WIP in ran.err, (push, ran.err)
