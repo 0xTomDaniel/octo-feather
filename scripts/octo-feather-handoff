@@ -43,8 +43,10 @@ parent PANE prints the caller's parent pane, resolved by identity at each call (
 #say-parent: the parent survives park, restart and resume): the hand-off log holding a spawn or
 worker-spawn line whose `session` is the caller's OCTO_FEATHER_SESSION_ID (lane logs first, then the
 director log) names it through its owner record, the lane record's `supervisor` or director.toml's
-`pane`, as that record reads now, so a hand edit is what the next call follows. PANE (the frozen
-OCTO_FEATHER_PARENT) when no such line or no such key. Whether that pane is live is herdr-say's.
+`pane`, as that record reads now, so a hand edit is what the next call follows. No such line: a
+caller whose OCTO_FEATHER_ROLE is supervisor faces the director (docs/adr/0015), director.toml's
+`pane` as it reads now. PANE (the frozen OCTO_FEATHER_PARENT) when none of these names a pane.
+Whether that pane is live is herdr-say's.
 
 report reads a worker's report on stdin, for its `herdr-say --parent` (comms spec #notify-done):
 for a worker role (OCTO_FEATHER_ROLE implementer, code-reviewer, corrector or general-worker)
@@ -190,6 +192,8 @@ def parent(args: argparse.Namespace) -> int:
     pane, found = cast("str", args.pane), own_spawn()
     if found is not None:
         pane = str(toml_key(*owner_record(found[0])) or pane)
+    elif os.environ.get("OCTO_FEATHER_ROLE") == "supervisor":
+        pane = str(toml_key(state_dir() / "director.toml", "pane") or pane)
     sys.stdout.write(pane + "\n")
     return 0
 

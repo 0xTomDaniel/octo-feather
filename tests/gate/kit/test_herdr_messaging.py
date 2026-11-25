@@ -7,10 +7,12 @@ import pytest
 from herdr_messaging import (
     director_moved,
     director_prune,
+    director_relaunched,
     director_worker_resume,
     fresh_worker_session,
     herdr_malformed,
     parent_gone,
+    parent_relaunched_gone,
     parent_resumed,
     parked_resumed,
     post_merge_busy,
@@ -130,6 +132,18 @@ def test_parked_resumed(case: Case) -> None:
 
 def test_director_moved(case: Case) -> None:
     case(director_moved)
+
+
+@pytest.mark.criterion(
+    "comms#acceptance-parent-director-relaunched", source="tests/gate/kit/herdr_messaging.py"
+)
+def test_director_relaunched(case: Case) -> None:
+    case(director_relaunched)
+
+
+@pytest.mark.criterion("comms#acceptance-parent-gone", source="tests/gate/kit/herdr_messaging.py")
+def test_parent_relaunched_gone(case: Case) -> None:
+    case(parent_relaunched_gone)
 
 
 @pytest.mark.e2e
