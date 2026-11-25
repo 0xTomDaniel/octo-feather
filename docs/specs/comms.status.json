@@ -65,6 +65,10 @@
       "commit": "75e20744d16e8e234ee84fd37f66ad6f30aeb726",
       "tests": []
     },
+    "acceptance-parent-director-relaunched": {
+      "status": "planned",
+      "pr": null
+    },
     "acceptance-result-file": {
       "status": "built",
       "pr": 1021,
