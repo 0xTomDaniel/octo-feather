@@ -1,0 +1,14 @@
+Seeded defect: just fast skips an item that did not pass the mapping run instead of always selecting it.
+diff --git a/scripts/octo-feather-gate b/scripts/octo-feather-gate
+index 813bab23..07312de4 100755
+--- a/scripts/octo-feather-gate
++++ b/scripts/octo-feather-gate
+@@ -481,7 +481,7 @@ def choose(root: Path, items: list[str], native_e2e: set[str]) -> set[str]:
+                 continue
+             say(i, f"recorded coverage reaches {', '.join(hit)}")
+         elif i in failed:
+-            say(i, f"did not pass the mapping run at {at[:12]}, so unmapped: always selected")
++            continue
+         else:
+             say(i, f"no recorded coverage in the map at {at[:12]}: always selected")
+         chosen.add(i)

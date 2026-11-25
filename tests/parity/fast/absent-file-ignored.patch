@@ -1,0 +1,14 @@
+Seeded defect: just fast lets a changed file absent at the map head select nothing: not every item.
+diff --git a/scripts/octo-feather-gate b/scripts/octo-feather-gate
+index 813bab23..4f549091 100755
+--- a/scripts/octo-feather-gate
++++ b/scripts/octo-feather-gate
+@@ -437,7 +437,7 @@ def beyond_map(at: str, base: str, unreached: list[str]) -> str:
+     pats = entries("HEAD")
+     listed = changed_since(base, *specs(pats)) if pats and unreached else set[str]()
+     residual = [f for f in unreached if f in listed]
+-    unknown = [f for f in unreached if f not in listed and not ok("cat-file", "-e", f"{at}:{f}")]
++    unknown = list[str]()
+     why = [f"{', '.join(residual)} on {LIST}"] if residual else []
+     why += [f"{', '.join(unknown)} absent at the map head {at[:12]}"] if unknown else []
+     return "; ".join(why)

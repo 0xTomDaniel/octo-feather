@@ -1,0 +1,16 @@
+Seeded defect: just fast runs fewer items than it lists: select counts and names a chosen pytest item but does not pass it to the run.
+diff --git a/scripts/octo-feather-gate b/scripts/octo-feather-gate
+index 813bab23..7f180dae 100755
+--- a/scripts/octo-feather-gate
++++ b/scripts/octo-feather-gate
+@@ -294,9 +294,8 @@ def select() -> None:
+         say(r, "static check (every GATE_RECIPES recipe)")
+     chosen = choose(root, items, native_e2e)
+     ids += [f"{NODE}test_script[{i}]" for i in scripts if i in chosen]
+-    ids += [i for i in native if i in chosen]
+     sys.stderr.write(
+-        f"fast: selected {len(ids)} of {len(recipes) + len(items)} gate items"
++        f"fast: selected {len(ids) + len([i for i in native if i in chosen])} of {len(recipes) + len(items)} gate items"
+         f" ({len(recipes)} static, {len(chosen)} of {len(items)} test items)\n"
+     )
+     sys.stdout.write("".join(f"{i}\n" for i in ids))

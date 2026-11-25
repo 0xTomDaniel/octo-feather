@@ -1,0 +1,14 @@
+Seeded defect: just fast selects a pytest item carrying the e2e marker: it is neither skipped nor named e2e.
+diff --git a/scripts/octo-feather-gate b/scripts/octo-feather-gate
+index 813bab23..3136af24 100755
+--- a/scripts/octo-feather-gate
++++ b/scripts/octo-feather-gate
+@@ -444,7 +444,7 @@ def beyond_map(at: str, base: str, unreached: list[str]) -> str:
+ 
+ 
+ def choose(root: Path, items: list[str], native_e2e: set[str]) -> set[str]:
+-    e2e = [i for i in items if i in native_e2e or ("::" not in i and is_e2e(root, i))]
++    e2e = [i for i in items if "::" not in i and is_e2e(root, i)]
+     for i in e2e:
+         say(i, f"e2e ({'marker' if i in native_e2e else E2E}): skipped, just check runs it")
+     items = [i for i in items if i not in e2e]

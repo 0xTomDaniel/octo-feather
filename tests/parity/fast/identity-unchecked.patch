@@ -1,0 +1,14 @@
+Seeded defect: octo-feather-gate record with no git identity records a full pass under one git makes up, never refusing.
+diff --git a/scripts/octo-feather-gate b/scripts/octo-feather-gate
+index 813bab23..63170e24 100755
+--- a/scripts/octo-feather-gate
++++ b/scripts/octo-feather-gate
+@@ -227,7 +227,7 @@ def record(reason: str, seconds: float) -> None:
+     }
+     # A note is a commit: it needs the repo's git identity, never one made up here.
+     idents = ("GIT_AUTHOR_IDENT", "GIT_COMMITTER_IDENT")
+-    if not all(ok("-c", "user.useConfigOnly=true", "var", v) for v in idents):
++    if False:
+         sys.exit(
+             f"octo-feather-gate: full pass of {head[:12]} not recorded: no git identity "
+             "(a git note "

@@ -1,0 +1,13 @@
+# The parity lever's case for tests/fast.sh, its selection cases moved to just fast-list with one real just fast beside
+# its dry run, and its copy's package files emptied (#1293; tests/parity/lever.py --help).
+old = "tests/fast.sh"
+old_at = "32130e87"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): its pytest kit test file.
+needs = ["tests/fixtures/fast"]
+# The same script, as its gate item: `just test` collects no .sh path.
+new = "tests/gate/test_gate.py::test_script[tests/fast.sh]"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: the copy's
+# scripts/octo-feather-gate, run by its justfile's fast and fast-list recipes and by the test itself under python3.
+[ran]
+"scripts/octo-feather-gate" = "exec scripts/octo-feather-gate"
