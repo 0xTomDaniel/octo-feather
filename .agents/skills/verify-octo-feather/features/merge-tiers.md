@@ -57,5 +57,5 @@ Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather d
 ## Gotchas
 
 - `tier-owner-decision-section` needs PR #1184's head in the kit checkout: missing, it is `UNREACHABLE` (fix: `git fetch origin main` in the kit).
-- `director-reply` runs with `--exclude-tools mcp__*` (no web search) and a scratch `XDG_STATE_HOME` whose commit identity the drive sets; it costs one director model run. The qc sandbox has no Pi, so `just qc` sees it unreachable (exit 77): drive it on the box.
+- `director-reply` runs with `--exclude-tools mcp__*` (no web search) and a scratch `XDG_STATE_HOME` whose commit identity the drive sets; it costs one director model run. It is a drive, not the criterion's proof: that is the pinned eval run qc.toml names (evals/director-tier-relay); the qc sandbox has no Pi.
 - The tapes replay calls in order: a merge-ask change that asks gh something new fails the case with `fake gh: no recording for call ...` on stderr; record the scenario again (the recording test's docstring names its world).
