@@ -100,6 +100,7 @@ from tracker_calls import (
     head_matches,
     issue_view,
     key_order,
+    parent_key,
     pr_view,
     tracker,
 )
@@ -1400,13 +1401,18 @@ def _agents() -> list[Seen] | str:
 TELL_BOUND = 20
 TELL_GRACE = 15
 TIMED_OUT = 124  # herdr-say's exit when no state change came within its --timeout
+# The caller's kit agent identity, read by herdr-say's up-chain guard; none in the routine's sends.
+AGENT_VARS = frozenset({"OCTO_FEATHER_ROLE", "OCTO_FEATHER_PARENT"})
 
 
 def _say(pane: str, msg: str) -> subprocess.CompletedProcess[str] | None:
     """`herdr-say --timeout TELL_BOUND PANE MSG`; None when it outlives the bound and its grace
-    (killed)."""
+    (killed). Every send of the routine goes through here, as the routine's own (rule:
+    octo-feather-lane --help, post-merge, the director's message): herdr-say without AGENT_VARS."""
+    env = {k: v for k, v in os.environ.items() if k not in AGENT_VARS}
     with subprocess.Popen(
         ["herdr-say", "--timeout", str(TELL_BOUND), pane, msg],  # noqa: S607 (herdr-say from PATH)
+        env=env,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         stdin=subprocess.DEVNULL,
@@ -1716,9 +1722,10 @@ def _tell(pm: PostMerge) -> str:  # noqa: C901, PLR0912, PLR0915 (the step's one
         due.append((name, sup, issue))
     files = _rule_files(pm) if due else []
     listed = ", ".join(files) or "none"
+    sender = f"from the post-merge routine of lane {pm.lane}"
     msg = (
         f"main moved to {pm.merge[:12]} (#{pm.pr} {d['title']}); rule files changed: {listed}; "
-        "re-read the changed ones before your next step."
+        f"re-read the changed ones before your next step. ({sender})"
     )
 
     def prod(name: str, sup: str, issue: object) -> bool:
@@ -1727,7 +1734,7 @@ def _tell(pm: PostMerge) -> str:  # noqa: C901, PLR0912, PLR0915 (the step's one
             "at": dt.datetime.now(dt.timezone.utc).isoformat(),
             "kind": "prod",
             "issue": issue,
-            "note": f"{mark}main moved, told {name} to re-read {listed}",
+            "note": f"{mark}main moved, told {name} to re-read {listed} ({sender})",
         }
         try:
             with dlog.open("a", encoding="utf-8") as f:
@@ -2146,7 +2153,7 @@ def archived(lanes: Path, name: str, rec: dict[str, object], printed: list[str])
     issue = str(rec.get("issue") or "")
     repo = rec.get("repository")
     try:
-        d = issue_view(issue, err=Refused)
+        d = issue_view(parent_key(issue, err=Refused), err=Refused)
         kids = sorted(set(cast("list[str]", d["children"])), key=key_order)
         for k in [*kids, str(d["key"])]:
             t = d if k == d["key"] else issue_view(k, err=Refused)
