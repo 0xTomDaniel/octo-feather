@@ -44,6 +44,10 @@ fail plain (`herdr: server not reachable`, exit 1), for the targets it lists, on
 every target when it is empty; a file `get-delay` holding S makes it answer no sooner than S
 seconds after the call (a slow Herdr); a file `get-answer`, a JSON object, makes a target it maps
 answer that text on stdout, exit 0 (a Herdr answer of a shape the kit must not trust).
+`agent rename T NAME` gives T's agent NAME and prints it as `agent get` does; a NAME not as
+Herdr 0.9.5 takes one (a lowercase letter, then lowercase letters, digits, - or _, 32 at most)
+fails invalid_agent_name, one another agent holds agent_name_taken, an unknown T
+agent_not_found, each exit 1.
 `agent wait T --until S... --timeout MS` returns once T reads a state S, else `timeout`: at once
 when T has booted, as its state then never changes. `agent prompt T TEXT --wait [--until S...]
 [--timeout MS]`: blocked is `agent_blocked`, nothing sent; an agent not yet taking input gets
@@ -342,6 +346,20 @@ class World:
             out["agent_session"] = {"source": "herdr:pi", "agent": "pi", "kind": "id", "value": "s"}
         return say({"agent": out, "type": "agent_info"})
 
+    def agent_rename(self, a: list[str]) -> int:
+        g = self.find(a[2])
+        if g is None:
+            return fail("agent_not_found")
+        name = a[3]
+        ok = 0 < len(name) <= 32 and name[0].isascii() and name[0].islower()
+        if not ok or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789-_" for c in name):
+            return fail("invalid_agent_name")
+        if any(o is not g and o["name"] == name for o in self.agents.values()):
+            return fail("agent_name_taken")
+        g["name"] = name
+        self.save()
+        return self.agent_get(["agent", "get", name])
+
     def agent_wait(self, a: list[str]) -> int:
         g = self.find(a[2])
         if g is None:
@@ -431,6 +449,7 @@ class World:
             ("workspace", "create"): self.workspace_create,
             ("agent", "start"): self.agent_start,
             ("agent", "get"): self.agent_get,
+            ("agent", "rename"): self.agent_rename,
             ("agent", "wait"): self.agent_wait,
             ("agent", "prompt"): self.prompt_induced,
             ("agent", "read"): self.agent_read,

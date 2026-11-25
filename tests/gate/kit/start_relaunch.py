@@ -10,7 +10,13 @@ scope with no HERDR_PANE_ID, then with HERDR_PANE_ID that pane from outside: ref
 naming it (end to end: a real scope, its two paths in its docstring).
 resume_same_session: `--director --resume D1` beside it: refused, exit 73, naming w0:p1. Each
 leaves Herdr's world, director.toml and the director's Pi as they were: nothing parked, closed or
-spawned."""
+spawned.
+replace_outgoing (comms #acceptance-director-replace-outgoing): `--replace` with HERDR_PANE_ID the
+director's pane refused, exit 64, nothing changed; then from outside it: exit 0, a fresh director
+at a new pane in workspace `director` that Herdr and director.toml name, the old one's tab still
+open under `director-outgoing-<UTC>` with its Pi live, told it is no longer the director; the new
+pane told once what it replaced; the kickoff line printed. replace_none: director.toml naming a
+pane Herdr no longer knows: `--replace` just spawns (no wait, nothing renamed)."""
 
 from __future__ import annotations
 
@@ -22,6 +28,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import cast
 
 from testkit import Scratch, kit, main
 
@@ -213,6 +220,95 @@ def resume_same_session(s: Scratch) -> None:
             p.kill()
 
 
+def prompts(d: Path) -> list[tuple[str, str]]:
+    """Each message Herdr's world delivered: (pane, text)."""
+    f = d / "prompts"
+    lines = f.read_text().splitlines() if f.exists() else []
+    return [cast("tuple[str, str]", tuple(x.split("\t", 1))) for x in lines]
+
+
+def new_pane(out: str) -> str:
+    """The pane= of the start's line, '' with none."""
+    return next((x[5:] for x in out.split() if x.startswith("pane=")), "")
+
+
+def replace_outgoing(s: Scratch) -> None:
+    """comms #acceptance-director-replace-outgoing (module docstring)."""
+    d, procs = director(s, "idle")
+    pi = procs[0]
+    before = snapshot(s, d)
+    state = s.home / ".local" / "state" / "octo-feather" / "sessions" / s.env["HERDR_SESSION"]
+    cmd = start("--replace", "--wait", "60", "--cwd", str(s.root / "target"))
+    try:
+        ran = s.run(cmd, env={"HERDR_PANE_ID": "w0:p1"}, want=64)
+        assert "HERDR_PANE_ID is the director's pane w0:p1" in ran.err, ran.err
+        unchanged(s, d, before, pi)
+        show(f"--replace with HERDR_PANE_ID=w0:p1: exit 64: {ran.err.strip()}")
+        t0 = time.monotonic()
+        ran = s.run(cmd)
+        took = time.monotonic() - t0
+        new = new_pane(ran.out)
+        agents = json.loads((d / "agents.json").read_text())
+        old = agents["w0:p1"]
+        assert took >= 45, took  # 4 idle reads 15 s apart
+        assert new not in ("", "w0:p1"), ran.out
+        assert agents[new]["name"] == "director", agents
+        assert agents[new]["workspace_id"] == "w0", agents  # beside the old tab
+        assert re.fullmatch(r"director-outgoing-\d{8}t\d{4}z", str(old["name"])), old
+        assert old["tab_id"] == "w0:t1", old
+        assert pi.poll() is None, "the old director's Pi ended"
+        toml = (state / "director.toml").read_text()
+        assert toml == f'pane = "{new}"\n', toml
+        told = prompts(d)
+        bye = [t for p, t in told if p == "w0:p1"]
+        assert len(bye) == 1, told
+        assert "you are no longer the director" in bye[0], bye
+        assert "no writes to director.toml or the director log" in bye[0], bye
+        hello = [t for p, t in told if p == new]
+        assert len(hello) == 1, told
+        assert "replacing pane w0:p1, session D1" in hello[0], hello
+        assert str(state / "director.handoffs.jsonl") in hello[0], hello
+        assert "send the director its /goal" in ran.err, ran.err
+        calls = (d / "log").read_text().splitlines()
+        assert not [x for x in calls if x.startswith(("tab close", "workspace close"))], calls
+        show(f"--replace after {took:.0f} s: {ran.out}; old w0:p1 now {old['name']}")
+        show(f"w0:p1 told: {bye[0]}")
+        show(f"{new} told: {hello[0]}")
+    finally:
+        for p in procs:
+            p.kill()
+
+
+def replace_none(s: Scratch) -> None:
+    """comms #acceptance-director-replace-outgoing, no live director (module docstring)."""
+    d, procs = director(s, "idle")
+    for p in procs:
+        p.kill()
+    (d / "agents.json").write_text("{}")
+    state = s.home / ".local" / "state" / "octo-feather" / "sessions" / s.env["HERDR_SESSION"]
+    t0 = time.monotonic()
+    ran = s.run(start("--replace", "--wait", "60", "--cwd", str(s.root / "target")))
+    took = time.monotonic() - t0
+    new = new_pane(ran.out)
+    assert took < 15, took  # no wait
+    assert new, ran.out
+    toml = (state / "director.toml").read_text()
+    assert toml == f'pane = "{new}"\n', toml
+    calls = (d / "log").read_text().splitlines()
+    assert not [x for x in calls if x.startswith("agent rename")], calls
+    hello = [t for p, t in prompts(d) if p == new]
+    assert len(hello) == 1, prompts(d)
+    assert "the previous director already gone" in hello[0], hello
+    show(f"--replace with no live director: {ran.out}; {new} told: {hello[0]}")
+
+
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).parent))
-    main(relaunch_busy, relaunch_short_wait, relaunch_own_scope, resume_same_session)
+    main(
+        relaunch_busy,
+        relaunch_short_wait,
+        relaunch_own_scope,
+        resume_same_session,
+        replace_outgoing,
+        replace_none,
+    )

@@ -23,11 +23,16 @@
 # --director --relaunch [--wait SECONDS] [--resume SESSION] relaunches the running director on
 # its own session in a new pane, from outside the director's pane (comms spec #director-relaunch):
 # its steps, refusals and exits, scripts/director_relaunch.py (--wait default 1800).
+# --director --replace [--wait SECONDS] replaces it with a fresh director the same way, the old one's
+# tab left open under an outgoing name (same rule; scripts/director_relaunch.py, replace). Its
+# --fresh-tab is that script's own call back here: a fresh director in a new tab of an existing
+# workspace `director`, director.toml repointed to it.
 set -euo pipefail
 
 cwd="$PWD"; name=""; issue=""; label=""; role="supervisor"; model=(); resume=(); parent=(); relaunch=""; wait=1800
+replace=""; fresh=""
 usage() {
-  echo "usage: octo-feather-start (--director [--relaunch [--wait SECONDS]] | --issue TICKET | --name LANE) [--cwd DIR]" \
+  echo "usage: octo-feather-start (--director [--relaunch|--replace [--wait SECONDS]] | --issue TICKET | --name LANE) [--cwd DIR]" \
        "[--label LABEL] [--operating-model FILE] [--resume SESSION] [--parent PANE]" >&2
   exit 64
 }
@@ -43,12 +48,15 @@ while (($#)); do
     --resume) resume=(--resume "${2:?}"); shift 2 ;;
     --parent) parent=(--parent "$2"); shift 2 ;;
     --relaunch) relaunch=1; shift ;;
+    --replace) replace=1; shift ;;
+    --fresh-tab) fresh=1; shift ;;
     --wait) wait="${2:?}"; [[ "$wait" =~ ^[0-9]+$ ]] || usage; shift 2 ;;
     *) usage ;;
   esac
 done
 [[ -n "$name$issue" ]] || usage
-[[ -z "$relaunch" || "$role" == director ]] || usage
+[[ -z "$relaunch$replace$fresh" || "$role" == director ]] || usage
+[[ -z "$replace$fresh" ]] || { [[ -z "$relaunch" ]] && ((${#resume[@]} == 0)); } || usage
 [[ -n "$label" ]] || label="supervisor"
 
 root="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd -P)"
@@ -80,6 +88,7 @@ fi
 # The relaunch parks the director and comes back here as --director --resume (director_relaunch.py).
 [[ -z "$relaunch" ]] || exec "$root/scripts/director_relaunch.py" relaunch --cwd "$cwd" --wait "$wait" \
   "${model[@]}" "${resume[@]}"
+[[ -z "$replace" ]] || exec "$root/scripts/director_relaunch.py" replace --cwd "$cwd" --wait "$wait" "${model[@]}"
 # A start runs the director reflection when due (comms spec #reflection-director), in the background so
 # the start never waits on it; its output goes to director-reflection.out in the state dir.
 reflect_due() {
@@ -93,10 +102,13 @@ spawn() { # $1: workspace id; run in the target, where pi-role resolves {tracker
   cd "$cwd" && "$root/.agents/skills/herdr-comms/assets/herdr-spawn" --workspace "$1" --name "$name" \
     --label "$label" --cwd "$cwd" --role "$role" "${model[@]}" "${resume[@]}" "${parent[@]}" -- pi
 }
-repoint() { # $1: herdr-spawn's line; a resume only
-  ((${#resume[@]})) || return 0
+repoint() { # $1: herdr-spawn's line; a resume or a --fresh-tab only
+  ((${#resume[@]})) || [[ -n "$fresh" ]] || return 0
   "$root/scripts/octo-feather-handoff" repoint "$name" <<<"$1" ||
     echo "octo-feather-start: $name's record not repointed to its new pane (error above); the agent runs" >&2
+}
+kickoff() { # a fresh director's next step
+  [[ "$role" != director ]] || ((${#resume[@]})) || echo "octo-feather-start: next, send the director its /goal, then a kickoff brief filled from $root/docs/kickoff-brief.md" >&2
 }
 
 # One workspace per name: refuse a second director or a second lane of one lane key.
@@ -106,14 +118,14 @@ repoint() { # $1: herdr-spawn's line; a resume only
 existing="$(herdr workspace list 2>/dev/null | jq -r --arg n "$name" \
   '[.result.workspaces[]? | select(.label == $n) | .workspace_id] | first // empty' 2>/dev/null || true)"
 if [[ -n "$existing" ]]; then
-  ((${#resume[@]})) || {
+  ((${#resume[@]})) || [[ -n "$fresh" ]] || {
     echo "octo-feather-start: workspace $name already exists$([[ "$role" != director ]] ||
       echo "; relaunch the director on its own session with --director --relaunch, or start a fresh one with --director --replace")" >&2
     exit 73; }
   spawned="$(spawn "$existing")"
   repoint "$spawned"
   reflect_due
-  echo "workspace=$existing $spawned"; exit 0
+  echo "workspace=$existing $spawned"; kickoff; exit 0
 fi
 
 out="$(herdr workspace create --label "$name" --cwd "$cwd" --no-focus)"
@@ -127,4 +139,4 @@ herdr tab close "$seed" >/dev/null
 repoint "$spawned"
 reflect_due
 echo "workspace=$workspace $spawned"
-[[ "$role" != director ]] || ((${#resume[@]})) || echo "octo-feather-start: next, send the director its /goal, then a kickoff brief filled from $root/docs/kickoff-brief.md" >&2
+kickoff

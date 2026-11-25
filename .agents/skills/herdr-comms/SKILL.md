@@ -22,7 +22,8 @@ kit's `.agents/skills/herdr-comms/assets` and `scripts` on `PATH`.
 - Workspace `director`, one tab `director`: the director,
   started by `octo-feather-start --director` (`just start`), and relaunched on
   its own session by `octo-feather-start --director --relaunch [--wait
-  SECONDS] [--resume SESSION]` (the rule, and where it runs from: comms spec
+  SECONDS] [--resume SESSION]`, or replaced by a fresh one by
+  `octo-feather-start --director --replace [--wait SECONDS]` (the rule, and where it runs from: comms spec
   `#director-relaunch`; its steps, refusals and exits:
   `scripts/director_relaunch.py`).
 - One workspace per lane, named by its lane key, what the tracker skill's

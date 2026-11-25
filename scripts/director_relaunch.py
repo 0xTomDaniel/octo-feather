@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""octo-feather-start's director relaunch (comms spec #director-relaunch; #1310), and the
+"""octo-feather-start's director relaunch and replace (comms spec #director-relaunch; #1310,
+#1311), and the
 one-session check every `octo-feather-start --director --resume` runs. octo-feather-start (its
 header) runs this file; the rule, its refusals and who runs it from where: comms spec
 #director-relaunch.
@@ -28,6 +29,25 @@ named by director.toml's `pane` (OLD) relaunched on its own session in a new pan
 9. Checks on the real artifacts: `herdr agent get director` answers the new pane, director.toml's
    `pane` names it, and one Pi (it) holds the session; each failing one named on stderr, exit 1.
 
+replace --cwd DIR --wait SECONDS [--operating-model FILE]: a fresh director in place of OLD, in
+order:
+
+1. Refused as relaunch's step 1, exit 64, nothing changed.
+2. OLD live (Herdr knows its pane): relaunch's wait (step 4), refused 75, nothing changed; its
+   session read as step 2 reads it, for the messages only (`unknown` with none). No live OLD: no
+   wait, nothing renamed, it just spawns.
+3. `herdr agent rename OLD director-outgoing-<UTC>` (OUTGOING; its tab, pane and Pi untouched):
+   refused, Herdr's exit, nothing else done.
+4. `octo-feather-start --director --fresh-tab --cwd DIR`: a fresh director in a new tab of
+   workspace `director` (a new workspace when none), its line printed and the kickoff line a fresh
+   start prints; director.toml repointed to it (made first when absent).
+5. OLD told once that it is no longer the director, now OUTGOING, with no writes to director.toml
+   or the director log, the owner closing it; the new pane told once OLD, its session, OUTGOING and
+   the director log's path (herdr-say).
+6. Checks on the real artifacts: `herdr agent get director` answers the new pane, director.toml's
+   `pane` names it, and `herdr agent get OUTGOING` answers OLD; each failing one named on stderr,
+   exit 1.
+
 A Herdr answer that fails or breaks its shape stops it: Herdr's exit, or 76 (herdr_scope.py).
 Standard library only (AGENTS.md Rules, kit scripts); Herdr read through herdr_scope.py's readers.
 """
@@ -51,6 +71,9 @@ ASSETS = KIT / ".agents" / "skills" / "herdr-comms" / "assets"
 SETTLE_READS = 4
 SETTLE_GAP = 15  # s
 ME = "octo-feather-start"
+# Herdr 0.9.5 takes an agent name of a lowercase letter, then lowercase letters, digits, - or _, 32
+# at most: the UTC minute, z-suffixed, fits.
+OUTGOING = "director-outgoing-%Y%m%dt%H%Mz"
 
 
 def _load(name: str, path: Path) -> Any:  # noqa: ANN401 (a kit file loaded by path: untyped)
@@ -170,21 +193,29 @@ def relaunch(args: argparse.Namespace) -> int:
     return after(args, toml, live, session, cwd)
 
 
-def prepare(args: argparse.Namespace, toml: Path) -> tuple[str, str, str]:
-    """Steps 1 to 5 (module docstring): the parked director's pane ('' for none), the session
-    and the cwd to resume in."""
-    old = recorded_pane(toml)
+def outside(old: str) -> Any:  # noqa: ANN401 (herdr_scope.ProcessInfo, loaded by path)
+    """Step 1 (module docstring): OLD's process info, None with no OLD or once Herdr knows no
+    such pane; refused 64 when this run sits in OLD's pane or its agent scope."""
     outside = "run it from outside the director's pane: the owner's shell, or another agent's pane"
     if old and os.environ.get("HERDR_PANE_ID") == old:
         raise RefusedError(64, f"this run's HERDR_PANE_ID is the director's pane {old}; {outside}")
     info = process_info(old) if old else None
-    session, cwd = cast("str", args.resume or ""), cast("str", args.cwd)
     if info is not None:
         own = scope.scope_of(info.shell_pid, old) if info.shell_pid is not None else None
         if own and scope.scope_of(os.getpid(), old) == own:
             unit = own.rsplit("/", 1)[-1]
             why = f"this run sits in the director pane {old}'s agent scope {unit}, so it would end"
             raise RefusedError(64, f"{why} with the pane it replaces; {outside}")
+    return info
+
+
+def prepare(args: argparse.Namespace, toml: Path) -> tuple[str, str, str]:
+    """Steps 1 to 5 (module docstring): the parked director's pane ('' for none), the session
+    and the cwd to resume in."""
+    old = recorded_pane(toml)
+    info = outside(old)
+    session, cwd = cast("str", args.resume or ""), cast("str", args.cwd)
+    if info is not None:
         got = scope.pi_session(info)
         if got is None or scope.environ(got[0].pid).get("OCTO_FEATHER_SESSION_ID") != got[1]:
             raise RefusedError(65, f"no herdr-spawn Pi session in the director's pane {old}")
@@ -238,14 +269,18 @@ def after(args: argparse.Namespace, toml: Path, live: str, session: str, cwd: st
     fails: list[str] = []
     if subprocess.run([str(ASSETS / "herdr-say"), new, told], check=False).returncode != 0:
         fails.append(f"the relaunch message to {new} not delivered (herdr-say above)")
-    fails += checks(new, session, toml)
+    fails += checks(new, toml)
+    held = holders(session)
+    if held != [new]:
+        fails.append(f"session {session} held by {held or 'no pane'}, not by {new} alone")
     for f in fails:
         sys.stderr.write(f"{ME}: relaunch check failed: {f}\n")
     return 1 if fails else 0
 
 
-def checks(new: str, session: str, toml: Path) -> list[str]:
-    """The checks on the real artifacts (module docstring, 9): each failing one, named."""
+def checks(new: str, toml: Path) -> list[str]:
+    """The checks on the real artifacts both run (module docstring, relaunch 9, replace 6): each
+    failing one, named."""
     fails: list[str] = []
     try:
         where = "herdr agent get director"
@@ -261,9 +296,92 @@ def checks(new: str, session: str, toml: Path) -> list[str]:
         pane = str(e)
     if pane != new:
         fails.append(f"{toml} names pane {pane or '(none)'}, not {new}")
-    held = holders(session)
-    if held != [new]:
-        fails.append(f"session {session} held by {held or 'no pane'}, not by {new} alone")
+    return fails
+
+
+def replace(args: argparse.Namespace) -> int:
+    """The replace (module docstring, replace)."""
+    toml = state() / "director.toml"
+    live, session, out = retire(args, toml)
+    new = fresh(args, toml, live, out)
+    fails = tell(toml, live, session, out, new) + checks(new, toml)
+    if live:
+        where = f"herdr agent get {out}"
+        try:
+            answer = scope.herdr("agent", "get", out)
+            got = scope.found(answer, where, "agent", scope.AGENT_FIELDS, "pane_id")
+            if got != live:
+                fails.append(f"{where} answers pane {got}, not {live}")
+        except (scope.HerdrFailedError, scope.BadAnswerError) as e:
+            fails.append(f"{where}: {e}")
+    for f in fails:
+        sys.stderr.write(f"{ME}: replace check failed: {f}\n")
+    return 1 if fails else 0
+
+
+def retire(args: argparse.Namespace, toml: Path) -> tuple[str, str, str]:
+    """Replace steps 1 to 3 (module docstring): OLD's pane ('' when not live), its session and
+    OUTGOING."""
+    try:
+        old = recorded_pane(toml)
+        info = outside(old)
+        if info is not None:
+            settle(old, cast("int", args.wait))
+    except RefusedError as e:
+        raise RefusedError(e.rc, f"{e}; nothing changed") from e
+    out = time.strftime(OUTGOING, time.gmtime())
+    if info is None:
+        return "", "unknown", out
+    got = scope.pi_session(info)
+    where = f"herdr agent rename {old} {out}"
+    try:
+        answer = scope.herdr("agent", "rename", old, out)
+    except scope.HerdrFailedError as e:
+        raise RefusedError(e.rc, f"{where} failed ({e}); nothing changed") from e
+    renamed = scope.found(answer, where, "agent", scope.AGENT_FIELDS, "pane_id")
+    if renamed != old:
+        msg = f"{where}: result.agent.pane_id {renamed!r}, not {old!r}"
+        raise scope.BadAnswerError(msg)
+    return old, got[1] if got else "unknown", out
+
+
+def fresh(args: argparse.Namespace, toml: Path, live: str, out: str) -> str:
+    """Replace step 4 (module docstring): the fresh director's pane."""
+    if not toml.is_file():  # repoint writes only a record that exists
+        toml.parent.mkdir(parents=True, exist_ok=True)
+        toml.write_text("", encoding="utf-8")
+    start = [str(KIT / "scripts" / "octo-feather-start"), "--director", "--fresh-tab"]
+    model = cast("str", args.operating_model)
+    start += ["--cwd", cast("str", args.cwd), *(["--operating-model", model] if model else [])]
+    ran = subprocess.run(start, stdout=subprocess.PIPE, text=True, check=False)
+    line = ran.stdout.strip().splitlines()[-1] if ran.stdout.strip() else ""
+    new = next((x[5:] for x in line.split() if x.startswith("pane=")), "")
+    if ran.returncode != 0 or not new:
+        was = f"renamed {live} to {out}" if live else "no live director"
+        why = f"{was}, but the fresh director did not start (exit {ran.returncode}, above); rerun"
+        raise RefusedError(ran.returncode or 1, f"{why}: {ME} --director --replace")
+    sys.stdout.write(line + "\n")
+    sys.stdout.flush()
+    return new
+
+
+def tell(toml: Path, live: str, session: str, out: str, new: str) -> list[str]:
+    """Replace step 5 (module docstring): each message not delivered, named."""
+    at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    log = toml.with_name("director.handoffs.jsonl")
+    say = str(ASSETS / "herdr-say")
+    fails: list[str] = []
+    if live:
+        bye = f"Replaced by a fresh director at pane {new} at {at}: you are no longer the director,"
+        bye += f" now named {out}; no writes to director.toml or the director log ({log}); the"
+        bye += " owner closes this pane."
+        if subprocess.run([say, live, bye], check=False).returncode != 0:
+            fails.append(f"the replaced message to {live} not delivered (herdr-say above)")
+    was = f"replacing pane {live}, session {session}, now named {out}" if live else ""
+    told = f"Fresh director ({was or 'the previous director already gone'}) as pane={new} at"
+    told += f" {at}; director log: {log}"
+    if subprocess.run([say, new, told], check=False).returncode != 0:
+        fails.append(f"the replace message to {new} not delivered (herdr-say above)")
     return fails
 
 
@@ -285,9 +403,15 @@ def main() -> int:
     r.add_argument("--wait", type=int, required=True)
     r.add_argument("--resume", default="")
     r.add_argument("--operating-model", default="")
+    p = verbs.add_parser("replace")
+    p.add_argument("--cwd", required=True)
+    p.add_argument("--wait", type=int, required=True)
+    p.add_argument("--operating-model", default="")
     args = parser.parse_args()
     try:
-        return held(cast("str", args.session)) if args.verb == "held" else relaunch(args)
+        if args.verb == "held":
+            return held(cast("str", args.session))
+        return replace(args) if args.verb == "replace" else relaunch(args)
     except RefusedError as e:
         sys.stderr.write(f"{ME}: refused: {e}\n")
         return e.rc
