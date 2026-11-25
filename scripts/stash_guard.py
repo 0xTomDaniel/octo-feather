@@ -33,6 +33,20 @@ VALUED = {
 REPO_OPTS = {"-C", "-c", "--git-dir", "--work-tree", "--config-env", "--bare"}
 WRITES = {"push", "save", "pop", "drop", "clear", "store", "branch"}
 HELP = {"-h", "--help"}
+# git's global options that are its command, not a setting (git.c handle_options: -h, --help,
+# -v, --version end the options; the path options print and exit).
+ACTIONS = {
+    "-h",
+    "--help",
+    "-v",
+    "--version",
+    "--exec-path",
+    "--html-path",
+    "--man-path",
+    "--info-path",
+}
+# Stash options whose value is the next word (git-stash(1)): a value is never an option.
+VALUE_OPTS = {"--message", "--pathspec-from-file"}
 REFUSAL = (
     "git stash refused (kit stash guard, spec roles#launch-stash-guard): this repository has {n} "
     "worktrees, and its stash is one list every worktree shares, so a stash here can take or drop "
@@ -44,12 +58,14 @@ REFUSAL = (
 
 
 def split(args: list[str]) -> tuple[list[str], list[str]]:
-    """ARGS as (the global options that pick the repository, the subcommand and its args)."""
+    """ARGS as (the global options that pick the repository, the subcommand and its args). A global
+    action option (--version, -h, ...) is git's command there, as git runs it (`git --version stash`
+    prints the version), so it starts the subcommand part."""
     repo: list[str] = []
     i = 0
     while i < len(args):
         a = args[i]
-        if not a.startswith("-"):
+        if not a.startswith("-") or a in ACTIONS or a.startswith("--list-cmds="):
             return repo, args[i:]
         name = a.split("=", 1)[0] if a.startswith("--") else a
         took = args[i : i + 2] if name in VALUED and "=" not in a else [a]
@@ -57,6 +73,22 @@ def split(args: list[str]) -> tuple[list[str], list[str]]:
             repo += took
         i += len(took)
     return repo, []
+
+
+def asks_help(opts: list[str]) -> bool:
+    """Whether stash options OPTS hold -h or --help as an option, not as another option's value
+    (`git stash -m --help` pushes with the message --help); options end at `--`."""
+    i = 0
+    while i < len(opts):
+        a = opts[i]
+        if a == "--":
+            return False
+        if a in HELP:
+            return True
+        if a in VALUE_OPTS or (a.startswith("-") and not a.startswith("--") and a.endswith("m")):
+            i += 1  # the next word is that option's value (a short cluster ending in m: -qm MSG)
+        i += 1
+    return False
 
 
 def writes_stash(sub: list[str]) -> bool:
@@ -67,9 +99,8 @@ def writes_stash(sub: list[str]) -> bool:
     if not rest:
         return True  # bare `git stash`: push
     if rest[0].startswith("-"):  # push's options, unless asking for help
-        opts = rest[: rest.index("--")] if "--" in rest else rest
-        return not HELP & set(opts)
-    return rest[0] in WRITES and not HELP & set(rest[1:2])
+        return not asks_help(rest)
+    return rest[0] in WRITES and not asks_help(rest[1:])
 
 
 def worktrees(git: str, repo: list[str]) -> int:

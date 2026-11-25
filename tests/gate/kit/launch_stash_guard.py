@@ -98,6 +98,9 @@ def refused(s: Scratch) -> None:
         "git stash push -q -u -m x",
         "git -C ../first stash pop",
         "git stash clear",
+        "git stash -m --help",
+        "git stash -m -h",
+        "git stash push -qm --help",
     ):
         ran = agent(s, second, push, want=1)
         assert WIP in ran.err, (push, ran.err)
@@ -130,6 +133,9 @@ def unchanged(s: Scratch) -> None:
         ("git log -1 --format=%s", 0),
         ("echo hi | git hash-object --stdin", 0),
         ("git -C ../first stash show --stat", 0),
+        ("git --version stash", 0),
+        ("git -h stash", 0),
+        ("git stash push -q --help", 129),
     ):
         got = agent(s, second, cmd, want=want)
         real = s.run(["sh", "-c", cmd], want=want, cwd=second)
