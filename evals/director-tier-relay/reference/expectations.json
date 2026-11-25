@@ -32,13 +32,6 @@
           "relay"
         ],
         "count": 0
-      },
-      {
-        "fact": "ran",
-        "program": "herdr-say",
-        "args": [
-          "w3:p5"
-        ]
       }
     ]
   }
