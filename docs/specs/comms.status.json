@@ -13,8 +13,8 @@
     "acceptance-parent-gone": {
       "status": "built",
       "pr": 1301,
-      "record": "20261125T095047Z-0d3852e8",
-      "commit": "b4b1a8de0b7e7a949275d21753d6d5729db00819",
+      "record": "20261125T115553Z-cd8285cc",
+      "commit": "5102566891b0c7ba2e7d83812f37733a89b4db8e",
       "tests": [
         "tests/gate/kit/herdr_messaging.py"
       ]
@@ -68,8 +68,8 @@
     "acceptance-parent-director-relaunched": {
       "status": "built",
       "pr": 1301,
-      "record": "20261125T095046Z-b0402911",
-      "commit": "b4b1a8de0b7e7a949275d21753d6d5729db00819",
+      "record": "20261125T115553Z-6e12e7a3",
+      "commit": "5102566891b0c7ba2e7d83812f37733a89b4db8e",
       "tests": [
         "tests/gate/kit/herdr_messaging.py"
       ]
@@ -90,9 +90,9 @@
     },
     "acceptance-director-worker-resume": {
       "status": "built",
-      "pr": 833,
-      "record": "20261114T035639Z-828a32ec",
-      "commit": "cb4a3f3fc53acb8e46fba0d5c5b0149b38924202",
+      "pr": 1301,
+      "record": "20261125T115553Z-5e24a711",
+      "commit": "5102566891b0c7ba2e7d83812f37733a89b4db8e",
       "tests": [
         "tests/gate/kit/herdr_messaging.py"
       ]
