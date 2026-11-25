@@ -8,7 +8,12 @@
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
-ident() { XDG_STATE_HOME="$1" "$kit/scripts/pi-role" --set-identity t t@t >/dev/null; }   # the commit identity a role launch needs (#665)
+# ident DIR: the commit identity a role launch needs (#665) in state dir DIR: set once through pi-role --set-identity,
+# its file copied for each later DIR (one Python start, not one per case: the CPU budget).
+ident() {
+  [[ -f "$t/ident/octo-feather/onboarding.toml" ]] || XDG_STATE_HOME="$t/ident" "$kit/scripts/pi-role" --set-identity t t@t >/dev/null
+  mkdir -p "$1/octo-feather"; cp "$t/ident/octo-feather/onboarding.toml" "$1/octo-feather/"
+}
 export XDG_STATE_HOME="$t/state"; ident "$t/state"
 mkdir -p "$t/bin" "$t/cwd" "$t/cache"
 # mise's state its own, also run bare outside the gate: mise in $t/cwd's mise.toml records it there, never in the caller's (#664).
@@ -35,8 +40,9 @@ spawn() { # $1: case dir; rest: env assignments
     --cwd "$t/cwd" >"$c/out" 2>"$c/err" || rc=$?
 }
 
-# 1. A plain spawn launches Pi with --approve, so no dialog opens and it succeeds.
-spawn ok
+# 1. A plain spawn launches Pi with --approve, so no dialog opens and it succeeds. Its caller has no LINEAR_API_KEY
+#    (1c's unset case reads its tab env).
+unset LINEAR_API_KEY; spawn ok
 grep -qx -- --approve "$t/ok/start-argv" || fail "agent start argv lacks --approve: $(tr '\n' ' ' <"$t/ok/start-argv")"
 # The implementer lists web: its tab gets the kit's web list, not --no-mcp (#262, roles#launch-web).
 for f in --no-skills --octo-feather-web-servers; do grep -qx -- "$f" "$t/ok/start-argv" || fail "pi-role --json args lost $f beside --approve"; done
@@ -83,9 +89,8 @@ filed="$(echo body | env -i "${tabenv[@]}" PATH="$t/key:$(sed -n 's/^PATH=//p' "
   || fail "issue-create from the tab env failed"
 [[ "$filed" == ENG-1 && "$(cat "$t/key/fl/log")" == '[["issue", "create", "--title", "T", "--description-file", "-", "--no-input"], "body\n"]' ]] \
   || fail "ticket did not reach the Linear stand-in: $filed $(cat "$t/key/fl/log")"
-unset LINEAR_API_KEY; spawn nokey
-[[ "$rc" == 0 ]] || fail "spawn without LINEAR_API_KEY: exit $rc: $(cat "$t/nokey/err")"
-! grep -q '^LINEAR_API_KEY=' "$t/nokey/tab-env" || fail "LINEAR_API_KEY set in a tab whose caller had none"
+# Unset in the caller: 1's spawn (ok), whose caller had none.
+! grep -q '^LINEAR_API_KEY=' "$t/ok/tab-env" || fail "LINEAR_API_KEY set in a tab whose caller had none"
 # 1d. #261: in a repo with its own mise.toml the tab's PATH is the kit dirs, then the caller's PATH with mise's
 #     shims dir (as pi-role reports it, "path") just before its first system dir; in a repo without one (the cases
 #     above: a repo the kit did not create) or with no mise on PATH, the caller's PATH as it was.
