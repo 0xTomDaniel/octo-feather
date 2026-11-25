@@ -12,7 +12,7 @@ with gh7's supervisor's environment (SUPERVISOR: its role, the director pane its
 Herdr pane and workspace), so herdr-say's up-chain guard (docs/adr/0015) is active as in that
 supervisor's pane (#1249). Space ids `zt*`, which no real Herdr gives.
 
-merge_starts_routine runs instead in gh1249's real case (RealCase, herdr_messaging.py): gh answers
+merge_starts_routine runs instead in gh1249's real case (testkit.realcase): gh answers
 only from its recorded tape (testkit/recordings/lane-merge-realcase.json), its git world the
 realcase repo's bundle, every expected value the tape's recorded answer (#1267).
 """
@@ -24,9 +24,10 @@ import os
 import sys
 from typing import TYPE_CHECKING
 
-from herdr_messaging import ASSETS, REALCASE, RealCase, agent, lines, recorded, recordings
+from herdr_messaging import ASSETS, agent, lines
 from lane_post_merge import Lane, run1
 from testkit import Scratch, kit, main
+from testkit.realcase import REALCASE, RealCase, recorded, recordings
 
 if TYPE_CHECKING:
     from testkit import Ran
@@ -154,7 +155,7 @@ def outcomes(shown: list[str]) -> list[str]:
 
 def merge_starts_routine(s: Scratch) -> None:
     """issue-lifecycle#acceptance-merge-starts-routine on gh1249's real case (RealCase,
-    herdr_messaging.py, the merge tape; the ticket's demo, its commands and output printed):
+    testkit.realcase, the merge tape; the ticket's demo, its commands and output printed):
     supervisor A's `merge 14 7d7155984818 --repo REALCASE` asks gh exactly the recorded run's
     calls, in its order, each answered by its recording: the PR read, the merge pinned to the
     PR's recorded head, done on parent 10, the tracker key of the record's lane key gh10
