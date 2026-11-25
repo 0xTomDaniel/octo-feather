@@ -5,8 +5,9 @@ argv holding the word `stash`: python3 stash_guard.py REAL_GIT [git args...].
 A repository's stash is one ref, refs/stash, shared by every worktree of it, and git offers no
 stash of a worktree's own (#1185 issuecomment-7168239371), so in a repository whose
 `git worktree list --porcelain` shows more than one worktree a `git stash` that adds, removes or
-replaces an entry (bare, its push options, push, save, pop, drop, clear, store, branch, import) is
-refused whatever its other arguments, exit 1, writing nothing, naming a work-in-progress commit
+replaces an entry (bare, its push options, push, save, pop, drop, clear, store, branch, import,
+export: its --to-ref may name refs/stash, so it is refused with --print too) is refused whatever
+its other arguments, exit 1, writing nothing, naming a work-in-progress commit
 instead; of such a subcommand only its help (-h or --help as its one argument) runs. Its option
 grammar is not parsed. Reading the stash (list, show), create, apply, every other git command, and
 any stash in a one-worktree repository exec REAL_GIT unchanged. Global options before the
@@ -33,7 +34,7 @@ VALUED = {
 }
 # Global options that tell git which repository or config to read: passed to the count as given.
 REPO_OPTS = {"-C", "-c", "--git-dir", "--work-tree", "--config-env", "--bare"}
-WRITES = {"push", "save", "pop", "drop", "clear", "store", "branch", "import"}
+WRITES = {"push", "save", "pop", "drop", "clear", "store", "branch", "import", "export"}
 # A write subcommand's help: -h or --help as its one argument (spec roles#launch-stash-guard).
 HELP_ONLY = (["-h"], ["--help"])
 # git's global options that are its command, not a setting (git.c handle_options: -h, --help,
