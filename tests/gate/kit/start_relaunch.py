@@ -16,7 +16,12 @@ director's pane refused, exit 64, nothing changed; then from outside it: exit 0,
 at a new pane in workspace `director` that Herdr and director.toml name, the old one's tab still
 open under `director-outgoing-<UTC>` with its Pi live, told it is no longer the director; the new
 pane told once what it replaced; the kickoff line printed. replace_none: director.toml naming a
-pane Herdr no longer knows: `--replace` just spawns (no wait, nothing renamed)."""
+pane Herdr no longer knows: `--replace` just spawns (no wait, nothing renamed).
+relaunch_report, replace_report (comms #acceptance-director-relaunch, #acceptance-director-replace):
+a supervisor the director started (`octo-feather-start --issue`, from its pane), its
+`herdr-say --parent` reaching w0:p1; after `--relaunch`, or `--replace`, from outside the pane,
+the same command, with nothing else run between, reaches the new pane alone (why, with no hand
+step: comms #director-relaunch)."""
 
 from __future__ import annotations
 
@@ -30,7 +35,7 @@ import time
 from pathlib import Path
 from typing import cast
 
-from testkit import Scratch, kit, main
+from testkit import ROOT, Scratch, kit, main
 
 PI = ["python3", "-c", "import time; time.sleep(300)", "--session-id", "D1"]  # a stand-in Pi
 
@@ -302,6 +307,76 @@ def replace_none(s: Scratch) -> None:
     show(f"--replace with no live director: {ran.out}; {new} told: {hello[0]}")
 
 
+def supervisor(s: Scratch, d: Path) -> tuple[str, dict[str, str]]:
+    """Supervisor gh7, started from the director's pane w0:p1 by `octo-feather-start --issue 7`, the
+    launch `octo-feather-lane start` runs: its pane, and the env its pane runs with as herdr-spawn
+    gave it (Herdr's world keeps a tab's env), HERDR_PANE_ID its pane."""
+    me = {"HERDR_PANE_ID": "w0:p1", "HERDR_WORKSPACE_ID": "w0", "OCTO_FEATHER_ROLE": "director"}
+    me |= {"OCTO_FEATHER_SESSION_ID": "D1"}
+    target = s.root / "target"
+    ran = s.run([kit("octo-feather-start"), "--issue", "7", "--cwd", str(target)], env=me)
+    pane = new_pane(ran.out)
+    agents = json.loads((d / "agents.json").read_text())
+    assert agents.get(pane, {}).get("name") == "gh7", (ran.out, agents)
+    return pane, cast("dict[str, str]", agents[pane]["env"]) | {"HERDR_PANE_ID": pane}
+
+
+def report(s: Scratch, env: dict[str, str], msg: str) -> None:
+    """The supervisor's `herdr-say --parent MSG`, run with its pane's ENV: exit 0."""
+    s.run([str(ROOT / ".agents/skills/herdr-comms/assets/herdr-say"), "--parent", msg], env=env)
+
+
+def reached(d: Path, msg: str) -> list[str]:
+    """Each pane Herdr's world delivered MSG to."""
+    return [p for p, t in prompts(d) if t == msg]
+
+
+def relaunch_report(s: Scratch) -> None:
+    """comms #acceptance-director-relaunch: a supervisor the director started; the director
+    relaunched (`--relaunch`, from outside its pane); the supervisor's `herdr-say --parent MSG`
+    reaches the new director pane only, no hand step between (comms #director-relaunch)."""
+    d, procs = director(s, "idle")
+    try:
+        sup, env = supervisor(s, d)
+        report(s, env, "before the relaunch")
+        assert reached(d, "before the relaunch") == ["w0:p1"], prompts(d)
+        cmd = start("--relaunch", "--wait", "60", "--cwd", str(s.root / "target"))
+        ran = s.run(cmd)
+        new = new_pane(ran.out)
+        assert new not in ("", "w0:p1", sup), ran.out
+        report(s, env, "hello")
+        assert reached(d, "hello") == [new], prompts(d)
+        show(f"supervisor {sup}: --parent before the relaunch reached w0:p1")
+        show(f"--relaunch: {ran.out}")
+        show(f"supervisor {sup}: herdr-say --parent hello reached {new} only")
+    finally:
+        for p in procs:
+            p.kill()
+
+
+def replace_report(s: Scratch) -> None:
+    """comms #acceptance-director-replace: as relaunch_report, the director replaced
+    (`--replace`): MSG reaches the fresh director's pane, never the outgoing one."""
+    d, procs = director(s, "idle")
+    try:
+        sup, env = supervisor(s, d)
+        report(s, env, "before the replace")
+        assert reached(d, "before the replace") == ["w0:p1"], prompts(d)
+        cmd = start("--replace", "--wait", "60", "--cwd", str(s.root / "target"))
+        ran = s.run(cmd)
+        new = new_pane(ran.out)
+        assert new not in ("", "w0:p1", sup), ran.out
+        report(s, env, "hello")
+        assert reached(d, "hello") == [new], prompts(d)
+        old = json.loads((d / "agents.json").read_text())["w0:p1"]["name"]
+        show(f"supervisor {sup}: --parent before the replace reached w0:p1")
+        show(f"--replace: {ran.out}; w0:p1 now {old}")
+        show(f"supervisor {sup}: herdr-say --parent hello reached {new} only, not w0:p1")
+    finally:
+        for p in procs:
+            p.kill()
+
+
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).parent))
     main(
@@ -311,4 +386,6 @@ if __name__ == "__main__":
         resume_same_session,
         replace_outgoing,
         replace_none,
+        relaunch_report,
+        replace_report,
     )

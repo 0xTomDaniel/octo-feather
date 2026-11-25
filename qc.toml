@@ -450,3 +450,13 @@ covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "tests/g
 # (features/director-relaunch.md) drives it on a real scratch Herdr session.
 [demo."comms#acceptance-director-replace-outgoing"]
 covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/test_start_relaunch.py", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/director-relaunch.md"]
+
+# Proven by their tagged tests (tests/gate/kit/test_start_relaunch.py, relaunch_report and replace_report): a supervisor
+# the director started (octo-feather-start --issue from the director's pane), then octo-feather-start --director
+# --relaunch, or --replace, against the testkit's Herdr stand-in; the supervisor's herdr-say --parent reaches the new
+# pane alone. The verify drive (features/director-relaunch.md, report cases) drives it on a real scratch Herdr session.
+[demo."comms#acceptance-director-relaunch"]
+covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "scripts/octo-feather-handoff", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/test_start_relaunch.py", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/director-relaunch.md"]
+
+[demo."comms#acceptance-director-replace"]
+covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "scripts/octo-feather-handoff", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/test_start_relaunch.py", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/director-relaunch.md"]
