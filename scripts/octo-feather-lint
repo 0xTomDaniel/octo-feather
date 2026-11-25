@@ -343,6 +343,9 @@ def cmd_types(files: list[str]) -> int:
         # (the tool's auto count). Each worker parses the imports its files share again: the kit's
         # 200 files on 8 take about 2/3 the wall for 2.5 times the CPU; tests/lint.sh's 3 files on 3
         # took twice the CPU for the same wall, so a small set stays on one (#1201).
+        # The count is the lowest-CPU one whose wall beside a full gate is no worse than 8's: of 1,
+        # 2, 4 and 8, none below 8 qualifies (#1300, measured in
+        # evidence/2026-11-25-gh1300-check-types-threads.md).
         threads = max(1, min(os.cpu_count() or 1, len(files) // FILES_PER_THREAD))
         report = pyright(files, copy, ["--threads", str(threads), "--baselinemode", "auto"])
         stale = base.is_file() and not filecmp.cmp(base, copy, shallow=False)
