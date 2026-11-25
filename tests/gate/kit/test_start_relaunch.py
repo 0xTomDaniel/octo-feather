@@ -11,6 +11,8 @@ from start_relaunch import (
     relaunch_busy,
     relaunch_own_scope,
     relaunch_short_wait,
+    replace_none,
+    replace_outgoing,
     resume_same_session,
 )
 
@@ -37,3 +39,13 @@ def test_relaunch_own_scope(case: Case) -> None:
 @pytest.mark.criterion("comms#acceptance-director-relaunch-same-session")
 def test_resume_same_session(case: Case) -> None:
     case(resume_same_session)
+
+
+@pytest.mark.criterion("comms#acceptance-director-replace-outgoing")
+def test_replace_outgoing(case: Case) -> None:
+    case(replace_outgoing)
+
+
+@pytest.mark.criterion("comms#acceptance-director-replace-outgoing")
+def test_replace_none(case: Case) -> None:
+    case(replace_none)

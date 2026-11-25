@@ -444,3 +444,9 @@ covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "tests/g
 
 [demo."comms#acceptance-director-relaunch-same-session"]
 covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/test_start_relaunch.py", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/director-relaunch.md"]
+
+# Proven by its tagged tests (tests/gate/kit/test_start_relaunch.py, replace_outgoing and replace_none): octo-feather-start
+# --director --replace against the testkit's Herdr stand-in, the old director's Pi a real process. The verify drive
+# (features/director-relaunch.md) drives it on a real scratch Herdr session.
+[demo."comms#acceptance-director-replace-outgoing"]
+covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/test_start_relaunch.py", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/director-relaunch.md"]
