@@ -1,12 +1,12 @@
 # tests/evidence.sh's driver contract (octo-feather quality spec #qc-contract), copied over each template's qc.toml:
-# the template's [values] and an empty [fixture], its app replaced by app.sh, a one-process stand-in, and no setup.
+# the template's [values] and an empty [fixture], its app replaced by app.py, a one-process stand-in, and no setup.
 format = 2
 setup = "true"
 
-# The stand-in named by sh, its first argument the template's unknown-key problem, JSON-escaped (python: pydantic's
-# message; tests/evidence.sh writes zod's for typescript).
+# The stand-in under python3 (-I -S: no site, no user path), its first argument the template's unknown-key problem
+# (python: pydantic's message; tests/evidence.sh writes zod's for typescript).
 [entry]
-command = '''sh "$QC_REPO/app.sh" 'Extra inputs are not permitted' '''
+command = '''python3 -I -S "$QC_REPO/app.py" 'Extra inputs are not permitted' '''
 
 [services]
 
