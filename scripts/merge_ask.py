@@ -40,6 +40,9 @@ Interface:
         dir's lanes/) and each `## Replay` row's command run at the head, each in its own qc
         sandbox over one GitHub snapshot (_runs; never outside it). The lane's behaviour-neutral
         opt-outs (Snapshot.optouts, #1259): the kit's check-behavior-smoke run here, its lines.
+        The code owners file at the head (Owned, #1260; _code_owners): its lines, the repository
+        owner's login (REPO, else gh repo view; read only when the file exists) and the lane's
+        changed paths each line gives them, matched by git check-ignore (_owned).
     check(s) -> Ask
         Pure, no I/O. Each refusal line the merge ask prints for S, in order, by rule, in the
         parts the command's own item goes between; none when S passes; with what a passing ask
@@ -358,6 +361,20 @@ class Replay:
 
 
 @dataclass(frozen=True)
+class Owned:
+    """The code owners file's facts at the PR head (spec #gates-tier-areas, issue #1260): FILE, the
+    file GitHub reads (CODE_OWNERS, the first found); OWNER, `@<login>` of the repository's owner;
+    PATHS, each path the lane changes whose last matching line names OWNER, with that line's
+    number and text; REFUSED, each line whose pattern git reads otherwise than GitHub (number,
+    text, why), none matched when any is."""
+
+    file: str
+    owner: str
+    paths: tuple[tuple[str, int, str], ...] = ()
+    refused: tuple[tuple[int, str, str], ...] = ()
+
+
+@dataclass(frozen=True)
 class Snapshot:
     """A PR's facts, read once."""
 
@@ -401,6 +418,8 @@ class Snapshot:
     # the lane's behaviour-neutral opt-outs (#1259): (commit, `Behaviour-neutral: <reason>`) each
     # as check-behavior-smoke prints them from FORK to the head, or why unread; None when not read
     optouts: list[tuple[str, str]] | Unread | None = None
+    # the code owners file at the head (#1260): None when the head has none
+    owners: Owned | Unread | None = None
     # the lane's spec calls (#1258, spec #gates-tiers): CALLS, those its diff adds, read at the
     # head, and their rulings' times; Unread naming why not (no merge base among them)
     calls: "Calls | Unread | None" = None
@@ -528,6 +547,7 @@ def snapshot(  # noqa: PLR0913  each read's input, the command's reader among th
         trend=_trend(trend, head),
         fork=fork,
         optouts=_optouts(head, fork) if fork else Unread("no merge base of the head and the base"),
+        owners=_code_owners(head, fork, repo),
         calls=calls,
     )
     # the judged head's check runs: read only when a check skipped on the head and a Judged proof
@@ -1008,6 +1028,7 @@ def _check(s: Snapshot) -> Ask:
         rest += rows_against(rows, built, fails)
     gaps, replayed = replay(s)
     rest += gaps
+    rest += code_owner_gaps(s.owners)
     return Ask(
         first,
         checks,
@@ -2831,6 +2852,11 @@ def tier(s: Snapshot) -> Tier:
     said = [ln.strip() for ln in lines if OWNER_DECISION.match(ln)]
     reasons += [Reason(3, ln) for ln in dict.fromkeys([*said, *(x.strip() for x in owner)])]
     reasons += _opt_out_reasons(s.optouts, cleared if clear else [])
+    if isinstance(o := s.owners, Owned):
+        who, at = o.owner, o.file
+        reasons += [
+            Reason(3, f"code owner: {p} is {who}'s ({at} line {n}: `{ln}`)") for p, n, ln in o.paths
+        ]
     reasons += call_reasons(s, lines)
     n = max((r.tier for r in reasons), default=1)
     back = sets_back(s.order) if s.order else []
@@ -2880,6 +2906,46 @@ def _optouts(head: str, base: str) -> list[tuple[str, str]] | Unread:
         return Unread(f"check-behavior-smoke exit {p.returncode}: {said[-1] if said else ''}")
     found = [m for ln in out if (m := OPT_OUT.match(ln))]
     return [(m.group(1).lower(), f"Behaviour-neutral: {m.group(2)}") for m in found]
+
+
+def code_owner_gaps(o: Owned | Unread | None) -> list[str]:
+    """The code owners file's refusal lines: its read that failed, or each line whose pattern git
+    reads otherwise than GitHub, named (CODE_OWNERS_DIFFER): never a guessed owner."""
+    if isinstance(o, Unread):
+        return [f"code owners: {o.why}"]
+    at = o.file if o else ""
+    return [
+        (
+            f"code owners: {at} line {n} `{ln}`: {why}; git's matcher would read another owner "
+            "than GitHub, so no path is sorted: write the line in syntax both read alike "
+            "(octo-feather-lane --help, merge-ask)"
+        )
+        for n, ln, why in (o.refused if o else ())
+    ]
+
+
+# The code owners file (spec #gates-tier-areas; issue #1260): where GitHub looks, in its order, the
+# first found the one read (docs.github.com, About code owners).
+CODE_OWNERS = (".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS")
+# A CODEOWNERS pattern follows gitignore's rules, matched here by git's own matcher (_owned), save
+# where GitHub reads the syntax otherwise (docs.github.com, About code owners: no `\#` escape, no
+# `!` negation, no `[ ]` range; the rest as GitHub was seen to read it, github.com/chdsbd/
+# gh-codeowners examples/CODEOWNERS). A line using one is refused, naming it, never matched.
+CODE_OWNERS_DIFFER: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"!"), "`!` negates in git, GitHub reads no negation"),
+    (re.compile(r"[\[\]]"), "`[ ]` is a range in git, GitHub has none and skips the line"),
+    (re.compile(r"\\"), "`\\` escapes in git (`\\#` a pattern starting with #), not in GitHub"),
+    (re.compile(r"\*\*\*"), "git reads `***` as `**`, GitHub skips the line"),
+    (re.compile(r"\*\*/$"), "a last `**/` matches directories only in git, files too in GitHub"),
+    (re.compile(r"^/+$"), "git reads a bare `/` otherwise than GitHub, which matches nothing"),
+    (re.compile(r"/\*$"), "a last `/*` matches direct files only in GitHub, all below in git"),
+)
+
+
+def code_owner_differs(pattern: str) -> str | None:
+    """Why git reads PATTERN, a CODEOWNERS line's first field, otherwise than GitHub; None when
+    both read it alike (CODE_OWNERS_DIFFER)."""
+    return next((why for rx, why in CODE_OWNERS_DIFFER if rx.search(pattern)), None)
 
 
 # The lane's spec calls (spec #gates-tiers, #gates-spec-calls, #gates-call-loudness; issue #1258)
@@ -3280,6 +3346,111 @@ def _order(pr: int, head: str, base_branch: str, base: str, repo: str | None) ->
             unread.append(f"pinned runs {' '.join(pins)}: {e}")
     prs = [Sibling(n, b, c, [Pin(p, *said[p]) for p in ps if p in said]) for n, b, c, ps in found]
     return Order(base_branch, prs, unread)
+
+
+# The code owners reads (#1260; the rule: tier, code_owner_gaps, above)
+
+
+class _Line(NamedTuple):
+    """A code owners line git and GitHub read alike: its NUMBER, TEXT, PATTERN and OWNERS."""
+
+    number: int
+    text: str
+    pattern: str
+    owners: tuple[str, ...]
+
+
+def _code_owners(head: str, fork: str, repo: str | None) -> Owned | Unread | None:
+    """The code owners file at HEAD (CODE_OWNERS) and each path the lane changes (git diff FORK
+    HEAD, renames as a delete and an add) its last matching line gives to REPO's owner (None: this
+    directory's gh repo, gh repo view); None when HEAD has no such file. A line both read
+    otherwise (code_owner_differs) is refused and nothing matched."""
+    try:
+        at = (
+            git("cat-file", "-e", f"{head}:{f}", ok=(0, 1, 128), err=_Unread)[0]
+            for f in CODE_OWNERS
+        )
+        file = next((f for f, rc in zip(CODE_OWNERS, at, strict=False) if not rc), None)
+        if file is None:
+            return None
+        lines, refused = _code_owner_lines(git("show", f"{head}:{file}", err=_Unread)[1])
+        if refused:
+            return Owned(file, "", refused=refused)
+        if repo is None:
+            out = gh(
+                ["repo", "view", "--json", "nameWithOwner"], "check gh auth status", err=_Unread
+            )
+            repo = cast("_NamedRepo", _validated(out, NAMED_REPO, "gh repo view"))["nameWithOwner"]
+        owner = f"@{repo.split('/', 1)[0]}"
+        diff = git("diff", "--name-only", "--no-renames", "-z", fork, head, err=_Unread)[1]
+        return Owned(file, owner, _owned(sorted(filter(None, diff.split("\0"))), lines, owner))
+    except _Unread as e:
+        return Unread(f"cannot read the code owners file at {head[:12]} ({e}); fix it, then rerun")
+
+
+def _code_owner_lines(text: str) -> tuple[list[_Line], tuple[tuple[int, str, str], ...]]:
+    """(the lines of code owners file TEXT git and GitHub read alike, each other line's number,
+    text and why), comments and blank lines aside; an owner field starting `#` ends the line."""
+    lines: list[_Line] = []
+    refused: list[tuple[int, str, str]] = []
+    for n, raw in enumerate(text.splitlines(), 1):
+        words = raw.split()
+        if not words or words[0].startswith("#"):
+            continue
+        if why := code_owner_differs(words[0]):
+            refused.append((n, raw.strip(), why))
+            continue
+        owners: list[str] = []
+        for w in words[1:]:
+            if w.startswith("#"):
+                break
+            owners.append(w)
+        lines.append(_Line(n, raw.strip(), words[0], tuple(owners)))
+    return lines, tuple(refused)
+
+
+def _owned(paths: list[str], lines: list[_Line], owner: str) -> tuple[tuple[str, int, str], ...]:
+    """Each of PATHS whose last matching line of LINES names OWNER (case aside, as GitHub logins),
+    with that line's number and text. git check-ignore --no-index (the real matcher, in an empty
+    scratch repo, case-sensitive as GitHub) runs one line at a time, the last first: over all the
+    lines at once git stops at the first leading directory any line matches (`*` then `*.js`
+    gives src/x.js to `*`), where GitHub takes the last line matching the path."""
+    left, out = set(paths), list[tuple[str, int, str]]()
+    env = {k: v for k, v in os.environ.items() if k not in ("GIT_DIR", "GIT_WORK_TREE")}
+    with tempfile.TemporaryDirectory(prefix="merge-ask-owners-") as tmp:
+        r, pat = Path(tmp) / "r", Path(tmp) / "pattern"
+        _run_git(["init", "-q", "--template=", str(r)], cwd=tmp, env=env)
+        for ln in reversed(lines):
+            if not left:
+                break
+            pat.write_text(ln.pattern + "\n", encoding="utf-8")
+            args = ["-c", f"core.excludesFile={pat}", "-c", "core.ignorecase=false"]
+            args += ["check-ignore", "--no-index", "-v", "-n", "-z", "--stdin"]
+            f = _run_git(args, cwd=str(r), env=env, stdin="".join(f"{p}\0" for p in sorted(left)))
+            f = f.split("\0")  # source, line number, pattern (empty: none), path; per path
+            hit = {f[i + 3] for i in range(0, len(f) - 3, 4) if f[i + 2]}
+            left -= hit
+            if owner.lower() in (o.lower() for o in ln.owners):
+                out += [(p, ln.number, ln.text) for p in hit]
+    return tuple(sorted(out))
+
+
+def _run_git(args: list[str], *, cwd: str, env: dict[str, str], stdin: str = "") -> str:
+    """git ARGS in CWD with ENV and STDIN: its stdout; _Unread naming it on an exit past 1."""
+    p = subprocess.run(
+        ["git", *args],  # noqa: S607 (git from PATH)
+        input=stdin,
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+        env=env,
+        check=False,
+    )
+    if p.returncode > 1:
+        sub = next(a for a in args if a in ("init", "check-ignore"))
+        msg = f"git {sub} failed ({_said(p)})"
+        raise _Unread(msg)
+    return p.stdout
 
 
 # The correction lane's replay reads (#1222; the rule: replay, above)
