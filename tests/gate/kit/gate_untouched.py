@@ -14,7 +14,7 @@ import re
 import subprocess
 from typing import TYPE_CHECKING
 
-from testkit import ROOT, Ran, Scratch, kit, main, pnpm_store, tool_homes
+from testkit import ROOT, Ran, Scratch, kit, main, pnpm_store, tool_homes, tracked
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -50,30 +50,14 @@ GATE = (
 
 
 def kit_copy(s: Scratch) -> Path:
-    """The kit's files (tracked, and new ones git would track) in a git repo of their own, with
-    the seeded item, and a copy of the kit's installed node_modules (ignored by its git), so the
-    copy's first `just test` finds them current, as on a box that ran the gate before: pnpm
-    installing them anew from its store costs that run ~2 s CPU more (#1180). A real copy, never
-    links: a pnpm install in the copy writes in place (.pnpm-workspace-state.json, .bin)."""
+    """The kit's tracked files (testkit tracked) in a git repo of their own, with the seeded item,
+    and no JavaScript packages (tests/lib/no-packages.py): the seeded item needs none, so each
+    nested `just test`'s pnpm install has nothing to install (#1180, #1290)."""
     k = s.root / "kit"
-    files = subprocess.run(
-        ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],  # noqa: S607
-        cwd=ROOT,
-        capture_output=True,
-        check=True,
-    ).stdout.decode()
-    subprocess.run(
-        ["tar", "-cf", str(s.root / "kit.tar"), "--null", "-T", "-"],  # noqa: S607
-        cwd=ROOT,
-        input=files.encode(),
-        check=True,
-    )
-    k.mkdir()
-    subprocess.run(["tar", "-xf", str(s.root / "kit.tar"), "-C", str(k)], check=True)  # noqa: S607
+    tracked(k)
+    s.run([str(ROOT / "tests" / "lib" / "no-packages.py"), str(k)])
     (k / "tests" / "zz-seed.sh").write_text(SEED)
     (k / "tests" / "zz-seed.sh").chmod(0o755)
-    if (ROOT / "node_modules").is_dir():
-        subprocess.run(["cp", "-a", str(ROOT / "node_modules"), str(k)], check=True)  # noqa: S607
     s.git(k, "init", "-q", "-b", "main")
     s.git(k, "add", "-A")
     s.git(k, "commit", "-qm", "copy")
@@ -82,7 +66,7 @@ def kit_copy(s: Scratch) -> Path:
 
 def homes() -> dict[str, str]:
     """The tools' homes a nested gate runs with (tool_homes, pnpm_store), asked once per scenario:
-    each ask runs uv or pnpm, ~0.3 s CPU a run (#1180)."""
+    each ask runs uv, or pnpm outside a gate run (pnpm_store), ~0.3 s CPU a run (#1180)."""
     return tool_homes() | {"npm_config_store_dir": pnpm_store()}
 
 

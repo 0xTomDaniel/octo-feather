@@ -329,8 +329,10 @@ def tool_homes() -> dict[str, str]:
 def pnpm_store() -> str:
     """pnpm's store as the caller's HOME and the kit's dir find it (`pnpm store path`, through
     asked; one store for the kit and its test copies, owner ruling #422), for
-    npm_config_store_dir."""
-    return asked("pnpm", "store", "path")
+    npm_config_store_dir: in a gate run, the one check-tests asked and exported to every item
+    (npm_config_store_dir, the justfile), never asked again (~0.5 s CPU a run)."""
+    # pnpm's own lowercase name for it
+    return os.environ.get("npm_config_store_dir") or asked("pnpm", "store", "path")  # noqa: SIM112
 
 
 def tracked(dest: Path) -> None:
