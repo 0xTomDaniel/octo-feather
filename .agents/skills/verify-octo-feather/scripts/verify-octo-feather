@@ -4097,8 +4097,9 @@ def drive_director_relaunch(f: Feature) -> None:
         for p in m.get("providers", {}).values():
             p["baseUrl"], p["apiKey"] = f"http://127.0.0.1:{port.read_text().strip()}", "invalid-verify"
         (sc / "pi-agent" / "models.json").write_text(json.dumps(m))
-        own = json.loads((models.parent / "settings.json").read_text()) if (models.parent / "settings.json").is_file() else {}
-        settings = {k: own[k] for k in ("defaultProvider", "defaultModel", "enabledModels") if k in own}
+        user = models.parent / "settings.json"
+        own = cast("dict[str, object]", json.loads(user.read_text()) if user.is_file() else {})
+        settings: dict[str, object] = {k: own[k] for k in ("defaultProvider", "defaultModel", "enabledModels") if k in own}
         (sc / "pi-agent" / "settings.json").write_text(json.dumps(settings | {"retry": {"enabled": False}}))
         (sc / "pi-agent" / "auth.json").write_text("{}")
         (xdg / "herdr" / "config.toml").write_text(
