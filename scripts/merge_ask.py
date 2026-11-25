@@ -38,10 +38,12 @@ Interface:
         replay (Replay, #1226; read only when the verdict comment lists a Check line): its parent
         issue through the tracker skill's issue-view, the clean sample from LANES (the state
         dir's lanes/) and each `## Replay` row's command run at the head, each in its own qc
-        sandbox over one GitHub snapshot (_runs; never outside it). The code owners files at the
-        head and the merge base (Owned, #1260; _code_owners): their lines, the repository owner's
-        login (REPO, else gh repo view; read only when a file exists) and the lane's changed paths
-        each gives them, matched by git check-ignore (_owned).
+        sandbox over one GitHub snapshot (_runs; never outside it). The lane's behaviour-neutral
+        opt-outs (Snapshot.optouts, #1259): the kit's check-behavior-smoke run here, its lines.
+        The code owners files at the head and the merge base (Owned, #1260; _code_owners): their
+        lines, the repository owner's login (REPO, else gh repo view; read only when a file
+        exists) and the lane's changed paths each gives them, matched by git check-ignore
+        (_owned).
     check(s) -> Ask
         Pure, no I/O. Each refusal line the merge ask prints for S, in order, by rule, in the
         parts the command's own item goes between; none when S passes; with what a passing ask
@@ -414,6 +416,9 @@ class Snapshot:
     # the correction lane's replay (#1222): None when the lane is none or its verdict lists no
     # check
     replay: Replay | Unread | None = None
+    # the lane's behaviour-neutral opt-outs (#1259): (commit, `Behaviour-neutral: <reason>`) each
+    # as check-behavior-smoke prints them from FORK to the head, or why unread; None when not read
+    optouts: list[tuple[str, str]] | Unread | None = None
     # the code owners files at the head and the merge base (#1260): None when neither has one
     owners: tuple[Owned, ...] | Unread | None = None
     # the lane's spec calls (#1258, spec #gates-tiers): CALLS, those its diff adds, read at the
@@ -542,6 +547,7 @@ def snapshot(  # noqa: PLR0913  each read's input, the command's reader among th
         gate=_gate_facts(g, head),
         trend=_trend(trend, head),
         fork=fork,
+        optouts=_optouts(head, fork) if fork else Unread("no merge base of the head and the base"),
         owners=_code_owners(head, fork, repo),
         calls=calls,
     )
@@ -2492,6 +2498,34 @@ def check_lines(text: str) -> tuple[list[str], list[str]]:
     return lines, why
 
 
+CLEARED_LINE = re.compile(r"^Opt-out cleared:[ \t]*(.*?)\s*$")
+
+
+def decision_lines(text: str) -> tuple[list[str], list[str], list[str]]:
+    """(TEXT's owner decision lines as written, the commits its `Opt-out cleared:` lines name, why
+    a line is unusable), in the verdict reader's scope (form: .agents/skills/code-review/SKILL.md,
+    Verdict step, Report fields; #1259)."""
+    owner: list[str] = []
+    cleared: list[str] = []
+    why: list[str] = []
+    for ln in outside(text):
+        if m := CLEARED_LINE.match(ln):
+            sha = m.group(1).strip("`")
+            if SHA_NAMED.fullmatch(sha):
+                cleared.append(sha.lower())
+            else:
+                why.append(
+                    f"`{ln.strip()}` is not `Opt-out cleared: <commit sha>`, the opt-out's commit "
+                    "as `check-behavior-smoke` names it (7 to 40 hex)"
+                )
+        elif OWNER_DECISION.match(ln):
+            if ln.split(":", 1)[1].strip():
+                owner.append(ln.rstrip())
+            else:
+                why.append(f"`{ln.strip()}` names no decision: write the decision after the colon")
+    return list(dict.fromkeys(owner)), list(dict.fromkeys(cleared)), why
+
+
 # The review rounds of the verdict comment (#1220, spec #lanes-one-head): octo-feather-lane
 # verdict writes them under ROUNDS, one ROUND_LINE each, its check lines under it; merge-ask reads
 # them. A comment with no ROUNDS section (posted before rounds) is one legacy round: the whole
@@ -2760,6 +2794,11 @@ class Reason(NamedTuple):
     text: str
 
 
+# The opt-outs check-behavior-smoke prints (that script owns what an opt-out is)
+OPT_OUT = re.compile(r"^behavior smoke: opt-out ([0-9a-f]{7,40}) Behaviour-neutral: (.*)$")
+SHA_NAMED = re.compile(r"[0-9a-fA-F]{7,40}")
+
+
 @dataclass(frozen=True)
 class Tier:
     """The ask's tier N, its REASONS and whom its merge WAITS for (octo-feather-lane --help,
@@ -2808,7 +2847,12 @@ def tier(s: Snapshot) -> Tier:
     lines = section(s.body) or []
     fails = failed(s, lines)[1]
     reasons = [Reason(3, f"failed criterion {c}{': ' + w if w else ''}") for c, w in fails.items()]
-    reasons += [Reason(3, ln.strip()) for ln in lines if OWNER_DECISION.match(ln)]
+    hdr = _verdict_header(s, lines)
+    owner, cleared, _ = decision_lines(hdr)
+    clear = set(verdicts(hdr)) == {"clear"}
+    said = [ln.strip() for ln in lines if OWNER_DECISION.match(ln)]
+    reasons += [Reason(3, ln) for ln in dict.fromkeys([*said, *(x.strip() for x in owner)])]
+    reasons += _opt_out_reasons(s.optouts, cleared if clear else [])
     seen: set[str] = set()  # a path either end's file gives the owner, named once (head first)
     for o in s.owners if isinstance(s.owners, tuple) else ():
         for p, n, ln in o.paths:
@@ -2847,6 +2891,45 @@ def relay_proof(s: Snapshot, relayed: str, head: str) -> tuple[str | None, list[
         for c in fixes
     ]
     return (None, why) if why else p
+
+
+def _opt_out_reasons(
+    optouts: list[tuple[str, str]] | Unread | None, cleared: list[str]
+) -> list[Reason]:
+    """A reason per behaviour-neutral opt-out, CLEARED the commits a clear verdict names (the
+    rule: octo-feather-lane --help, merge-ask)."""
+    if isinstance(optouts, Unread):
+        return [Reason(3, f"behaviour-neutral opt-outs not read: {optouts.why}")]
+    out: list[Reason] = []
+    for sha, why in optouts or []:
+        if any(c.startswith(sha) or sha.startswith(c) for c in cleared):
+            out.append(Reason(2, f"opt-out {sha} cleared by the review verdict: {why}"))
+        else:
+            out.append(Reason(3, f"opt-out {sha} not cleared by the review verdict: {why}"))
+    return out
+
+
+def _optouts(head: str, base: str) -> list[tuple[str, str]] | Unread:
+    """The lane's behaviour-neutral opt-outs, (commit, `Behaviour-neutral: <reason>`) each, as
+    the kit's check-behavior-smoke prints them for BASE..HEAD in this repo (#1259)."""
+    try:
+        top = git("rev-parse", "--show-toplevel", err=_Unread)[1].strip()
+    except _Unread as e:
+        return Unread(str(e))
+    cmd = [sys.executable, str(KIT / "scripts" / "check-behavior-smoke")]
+    p = subprocess.run(
+        [*cmd, "--base", base, "--head", head, "--repo", top],
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
+    out = p.stdout.splitlines()
+    if p.returncode not in (0, 1) or any(ln.startswith("behavior smoke: skipped") for ln in out):
+        said = (p.stdout + p.stderr).strip().splitlines()
+        return Unread(f"check-behavior-smoke exit {p.returncode}: {said[-1] if said else ''}")
+    found = [m for ln in out if (m := OPT_OUT.match(ln))]
+    return [(m.group(1).lower(), f"Behaviour-neutral: {m.group(2)}") for m in found]
 
 
 def code_owner_gaps(o: tuple[Owned, ...] | Unread | None) -> list[str]:

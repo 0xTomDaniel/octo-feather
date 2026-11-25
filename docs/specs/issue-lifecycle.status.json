@@ -1,6 +1,6 @@
 {
   "spec": "issue-lifecycle.spec.html",
-  "accepted_commit": "3e23fd46c7f0d39d18788e6b12000840fd64bc76",
+  "accepted_commit": "d08cd606cc897be8a132accd612449f2f92047b0",
   "criteria": {
     "acceptance-kickoff-refuses": {
       "status": "planned",
@@ -57,6 +57,10 @@
     "acceptance-status-check": {
       "status": "built",
       "pr": 24
+    },
+    "acceptance-status-record": {
+      "status": "planned",
+      "pr": null
     },
     "acceptance-sub-issues": {
       "status": "built",
