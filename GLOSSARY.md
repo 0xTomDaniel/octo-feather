@@ -83,7 +83,7 @@ An acceptance criterion of an accepted spec that no merged lane has built yet. E
 _Avoid_: Open, todo
 
 **Built criterion**:
-An acceptance criterion a merged lane PR delivers, which `just qc` passed on stored evidence, decided by its demo or the labelled agent fallback (docs/specs/quality.spec.html#qc-results, #qc-fallback), and flipped in the same merge as its code.
+An acceptance criterion a merged lane PR delivers, which `just qc` passed on stored evidence, decided by its tagged acceptance test or its declared demo, never by an agent (docs/specs/quality.spec.html#qc-results, #qc-fallback), and flipped in the same merge as its code. It always names its evidence record and the code paths it covers, and a lane that changes those paths proves it again (#qc-reprove).
 _Avoid_: Done, verified, accepted
 
 **Acceptance test**:

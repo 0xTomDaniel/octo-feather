@@ -58,7 +58,7 @@ default:
 
 # The recipes the gate runs, in order, each one pytest item of check-tests (tests/gate/). Only check-* recipes,
 # so check-gate-free's scan of them sees every recipe the gate runs.
-export GATE_RECIPES := "check-languages check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-owner-field check-vendored check-spec-status check-templates check-evals check-lint check-format check-types check-ts"
+export GATE_RECIPES := "check-languages check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-owner-field check-vendored check-spec-status check-templates check-evals check-parity check-lint check-format check-types check-ts"
 
 # Every GATE_RECIPES recipe and every tests/*.sh, through check-tests (#201, #224).
 # The gate: every tracked language gated, script syntax, Pi-only references, no dashes, skill frontmatter, decision logs, vendored skills, eval case shape, kit Python lint, format and types, kit tests.
@@ -360,6 +360,10 @@ integrate issue +refs:
 # Every eval case's shape (rules: .agents/skills/eval-cases/references/schema.md; quality #acceptance-qa-cases-checked).
 check-evals:
     @python3 "$root/scripts/check-evals"
+
+# Every tests/parity/*/*.patch still applies, so each parity case stays rerunnable; a stale one: re-anchor it (tests/parity/lever.py --help, Re-anchoring; #1154).
+check-parity:
+    @python3 "$root/scripts/check-parity"
 
 # Role files: only fields pi-role honours, skills resolve, allowed models (docs/adr/0013).
 check-roles:
