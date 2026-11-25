@@ -4304,16 +4304,20 @@ def drive_director_relaunch(f: Feature) -> None:
         def kept(c: Case) -> bool:
             return c.o["director"] == new and c.o["toml"] == cur
 
-        subprocess.run([str(kit / ".agents/skills/herdr-comms/assets/herdr-say"), new, "verify: a turn the model never answers"],
-                       env=env, capture_output=True, check=False)
-        until(lambda: status(new) == "working", 20)
+        # Its relaunch message already started a turn the model never answers; else one is started here.
+        if not until(lambda: status(new) == "working", 5):
+            subprocess.run([str(kit / ".agents/skills/herdr-comms/assets/herdr-say"), new,
+                            "verify: a turn the model never answers"], env=env, capture_output=True, check=False)
+            until(lambda: status(new) == "working", 20)
         f.run("replace-busy", *start[:2], "--replace", "--wait", "20", *start[2:])
         director_now("replace-busy")
         f.obs("replace-busy", "status", status(new))
         f.check("replace-busy", lambda c: c.code == 75 and "busy" in c.err and new in c.err and kept(c)
                 and c.o["status"] == "working")
-        h("pane", "send-keys", new, "Escape")
-        until(lambda: status(new) in ("idle", "done"), 20)
+        for _ in range(3):  # each Escape ends one turn; a message queued behind it would start the next
+            h("pane", "send-keys", new, "Escape")
+            if until(lambda: status(new) in ("idle", "done"), 10):
+                break
         job = sc / "logs" / "replace-own-scope.log"
         replace = f"octo-feather-start --director --replace --wait 20 --cwd {target}"
         typed(new, "replace-own-scope", f"(env -u HERDR_PANE_ID setsid sh -c 'cat /proc/self/cgroup; {replace}; echo rc=$?' "
