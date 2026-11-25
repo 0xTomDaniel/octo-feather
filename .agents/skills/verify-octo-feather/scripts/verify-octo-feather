@@ -3224,12 +3224,13 @@ def drive_director_reply(f: Feature, sc: Path, base: dict[str, str]) -> None:
     f.run(name, "pi-role", str(Path(f.s.repo) / "agents" / "director.md"), "--session-dir", str(sessions),
           "--exclude-tools", "mcp__*", "-p", brief)
     f.pre = []
-    calls = []
+    calls: list[str] = []   # each tool call's arguments in the director's Pi session (its JSON lines)
     for p in sorted(sessions.rglob("*.jsonl")):
         for ln in p.read_text().splitlines():
-            msg = json.loads(ln).get("message") or {}
-            calls += [json.dumps(x.get("arguments")) for x in msg.get("content") or []
-                      if isinstance(x, dict) and x.get("type") == "toolCall"]
+            msg = cast("dict[str, Any]", cast("dict[str, Any]", json.loads(ln)).get("message") or {})
+            content: object = msg.get("content")   # a system message's is text, the others' blocks
+            parts = cast("list[dict[str, Any]]", content) if isinstance(content, list) else []
+            calls += [json.dumps(x.get("arguments")) for x in parts if x.get("type") == "toolCall"]
     f.obs(name, "tool-calls", "".join(x + "\n" for x in calls))
     f.obs(name, "sessions", f"{len(list(sessions.rglob('*.jsonl')))}\n")
     log = st / "director.handoffs.jsonl"
