@@ -7,7 +7,8 @@
 # drive whose criterion has no text in the repo's specs fails naming it; earlier records stay
 # byte-identical and the repo's git status does not change (#acceptance-evidence-record). With records at two commits, reading the criterion at one commit shows
 # only its records (#acceptance-evidence-read). Run by `just check`; the store lives under a throwaway
-# XDG_STATE_HOME.
+# XDG_STATE_HOME. Each repo's contract is the one-step fixture tests/fixtures/evidence/qc.toml: the drive's app a
+# one-process stand-in, as the record is the store's, not the app's (#1292).
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'chmod -R u+w "$t" 2>/dev/null; rm -rf "$t"' EXIT
@@ -24,23 +25,22 @@ gitc() { git -C "$repo" -c user.name=t -c user.email=t@t "$@"; }
 for lang in python typescript; do
   repo="$t/$lang-app"; mkdir -p "$repo"
   (cd "$kit/templates/$lang" && git ls-files -z | xargs -0 cp --parents -t "$repo")
-  # Offline: typescript's packages copied first from the run's one offline install of the template from the pnpm
-  # store (tests/lib/prepared.py) (its helper reads qc.toml with smol-toml), its setup
-  # then a no-op; python's setup the template's own sync, offline from the uv cache (CI's uv step fills it).
-  sed -i -e 's/^setup = .*/setup = "true"/' "$repo/qc.toml"
+  # The contract fixture and its stand-in app; typescript's names zod's unknown-key problem.
+  cp "$kit/tests/fixtures/evidence/qc.toml" "$kit/tests/fixtures/evidence/app.sh" "$repo/"
+  # Offline: typescript's packages linked from the run's one offline install of the template from the pnpm store
+  # (tests/lib/prepared.py, read-only: nothing here writes them): its helper reads qc.toml with smol-toml.
   if [[ "$lang" == typescript ]]; then
-    p="$(python3 "$kit/tests/lib/prepared.py" typescript "$t")" && cp -a "$p/node_modules" "$repo/" \
+    sed -i -e 's/Extra inputs are not permitted/Unrecognized key: \\"mood\\"/' "$repo/qc.toml"
+    p="$(python3 "$kit/tests/lib/prepared.py" typescript "$t")" && ln -s "$p/node_modules" "$repo/node_modules" \
       || fail "typescript: pnpm install --offline failed: fill the pnpm store first (pnpm fetch in templates/typescript)"
   fi
-  if [[ "$lang" == python ]]; then
-    sed -i -e 's|^setup = .*|setup = "UV_OFFLINE=1 uv sync --locked --quiet"|' "$repo/qc.toml"
-  fi
-  git -C "$repo" init -q && gitc add -A && gitc commit -qm init
+  # The link is no file of the repo (the template ignores node_modules/, a folder, which a link is not).
+  git -C "$repo" init -q && echo /node_modules >"$repo/.git/info/exclude" && gitc add -A && gitc commit -qm init
   export VERIFY_APP_RUN_DIR="$t/va-$lang/run" VERIFY_APP_EVIDENCE_DIR="$t/va-$lang/evidence"
   va="$repo/.agents/skills/verify-app/scripts/verify-app"
+  # Each drive launches at its commit (launched again over the last run; one cleanup after the repo's last drive).
   drive() {
     set +e; vout="$("$va" launch 2>&1 && "$va" drive hello 2>&1)"; rc=$?; set -e
-    "$va" cleanup >/dev/null
     id="$(sed -n 's/^verify-app: evidence record \([^ ]*\) .*/\1/p' <<<"$vout")"
     [[ "$rc" == 0 && -n "$id" ]] || fail "$lang: drive failed or printed no record id (exit $rc): $vout"
   }
@@ -94,7 +94,8 @@ EOF
     "$out" "$text2" "$text1" || fail "$lang: record after the criterion text edit does not hash the new text: $out"
   # No text for the criterion in the repo's specs: the drive fails naming it, and keeps no record.
   mv "$repo/docs/specs/app.spec.html" "$t/app.spec.html.$lang"
-  set +e; vout="$("$va" launch 2>&1 && "$va" drive hello 2>&1)"; rc=$?; set -e
+  # Still launched at the second commit, the spec's move uncommitted.
+  set +e; vout="$("$va" drive hello 2>&1)"; rc=$?; set -e
   "$va" cleanup >/dev/null; mv "$t/app.spec.html.$lang" "$repo/docs/specs/app.spec.html"
   [[ "$rc" != 0 ]] && grep -qF "$crit" <<<"$vout" && ! grep -q '^verify-app: evidence record [^ ]* (criterion' <<<"$vout" \
     || fail "$lang: a drive with no criterion text did not fail naming $crit (exit $rc): $vout"
