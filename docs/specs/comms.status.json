@@ -287,8 +287,8 @@
     "acceptance-director-relaunch-busy": {
       "status": "built",
       "pr": 1313,
-      "record": "20261125T220357Z-bb86594b",
-      "commit": "d88b81a91e9eb396a26c4aa11183b3fab4c446bf",
+      "record": "20261125T222723Z-69b74880",
+      "commit": "2205d977b65436f35d84eae41879e810c6294a57",
       "tests": [
         "tests/gate/kit/test_start_relaunch.py"
       ]
@@ -296,8 +296,8 @@
     "acceptance-director-relaunch-own-scope": {
       "status": "built",
       "pr": 1313,
-      "record": "20261125T220357Z-09320158",
-      "commit": "d88b81a91e9eb396a26c4aa11183b3fab4c446bf",
+      "record": "20261125T222723Z-5e507e30",
+      "commit": "2205d977b65436f35d84eae41879e810c6294a57",
       "tests": [
         "tests/gate/kit/test_start_relaunch.py"
       ]
@@ -305,8 +305,8 @@
     "acceptance-director-relaunch-same-session": {
       "status": "built",
       "pr": 1313,
-      "record": "20261125T220357Z-2203f62d",
-      "commit": "d88b81a91e9eb396a26c4aa11183b3fab4c446bf",
+      "record": "20261125T222723Z-f8e79e67",
+      "commit": "2205d977b65436f35d84eae41879e810c6294a57",
       "tests": [
         "tests/gate/kit/test_start_relaunch.py"
       ]
