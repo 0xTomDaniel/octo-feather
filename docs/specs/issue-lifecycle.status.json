@@ -419,6 +419,10 @@
       "status": "planned",
       "pr": null
     },
+    "acceptance-tier-declaration": {
+      "status": "planned",
+      "pr": null
+    },
     "acceptance-tier-code-owner": {
       "status": "planned",
       "pr": null
