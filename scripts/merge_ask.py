@@ -40,9 +40,10 @@ Interface:
         dir's lanes/) and each `## Replay` row's command run at the head, each in its own qc
         sandbox over one GitHub snapshot (_runs; never outside it). The lane's behaviour-neutral
         opt-outs (Snapshot.optouts, #1259): the kit's check-behavior-smoke run here, its lines.
-        The code owners file at the head (Owned, #1260; _code_owners): its lines, the repository
-        owner's login (REPO, else gh repo view; read only when the file exists) and the lane's
-        changed paths each line gives them, matched by git check-ignore (_owned).
+        The code owners files at the head and the merge base (Owned, #1260; _code_owners): their
+        lines, the repository owner's login (REPO, else gh repo view; read only when a file
+        exists) and the lane's changed paths each gives them, matched by git check-ignore
+        (_owned).
     check(s) -> Ask
         Pure, no I/O. Each refusal line the merge ask prints for S, in order, by rule, in the
         parts the command's own item goes between; none when S passes; with what a passing ask
@@ -362,11 +363,11 @@ class Replay:
 
 @dataclass(frozen=True)
 class Owned:
-    """The code owners file's facts at the PR head (spec #gates-tier-areas, issue #1260): FILE, the
-    file GitHub reads (CODE_OWNERS, the first found); OWNER, `@<login>` of the repository's owner;
-    PATHS, each path the lane changes whose last matching line names OWNER, with that line's
-    number and text; REFUSED, each line whose pattern git reads otherwise than GitHub (number,
-    text, why), none matched when any is."""
+    """A code owners file's facts at one end of the lane (spec #gates-tier-areas, #1260): FILE,
+    the file GitHub reads (CODE_OWNERS, the first found), ` at the merge base <sha>` after it for
+    the base's; OWNER, `@<login>` of the repository's owner; PATHS, each path the lane changes
+    whose last matching line names OWNER, with that line's number and text; REFUSED, each line
+    whose pattern git reads otherwise than GitHub (number, text, why), none matched when any is."""
 
     file: str
     owner: str
@@ -418,8 +419,8 @@ class Snapshot:
     # the lane's behaviour-neutral opt-outs (#1259): (commit, `Behaviour-neutral: <reason>`) each
     # as check-behavior-smoke prints them from FORK to the head, or why unread; None when not read
     optouts: list[tuple[str, str]] | Unread | None = None
-    # the code owners file at the head (#1260): None when the head has none
-    owners: Owned | Unread | None = None
+    # the code owners files at the head and the merge base (#1260): None when neither has one
+    owners: tuple[Owned, ...] | Unread | None = None
     # the lane's spec calls (#1258, spec #gates-tiers): CALLS, those its diff adds, read at the
     # head, and their rulings' times; Unread naming why not (no merge base among them)
     calls: "Calls | Unread | None" = None
@@ -2852,11 +2853,14 @@ def tier(s: Snapshot) -> Tier:
     said = [ln.strip() for ln in lines if OWNER_DECISION.match(ln)]
     reasons += [Reason(3, ln) for ln in dict.fromkeys([*said, *(x.strip() for x in owner)])]
     reasons += _opt_out_reasons(s.optouts, cleared if clear else [])
-    if isinstance(o := s.owners, Owned):
-        who, at = o.owner, o.file
-        reasons += [
-            Reason(3, f"code owner: {p} is {who}'s ({at} line {n}: `{ln}`)") for p, n, ln in o.paths
-        ]
+    seen: set[str] = set()  # a path either end's file gives the owner, named once (head first)
+    for o in s.owners if isinstance(s.owners, tuple) else ():
+        for p, n, ln in o.paths:
+            if p not in seen:
+                seen.add(p)
+                reasons.append(
+                    Reason(3, f"code owner: {p} is {o.owner}'s ({o.file} line {n}: `{ln}`)")
+                )
     reasons += call_reasons(s, lines)
     n = max((r.tier for r in reasons), default=1)
     back = sets_back(s.order) if s.order else []
@@ -2908,19 +2912,19 @@ def _optouts(head: str, base: str) -> list[tuple[str, str]] | Unread:
     return [(m.group(1).lower(), f"Behaviour-neutral: {m.group(2)}") for m in found]
 
 
-def code_owner_gaps(o: Owned | Unread | None) -> list[str]:
-    """The code owners file's refusal lines: its read that failed, or each line whose pattern git
+def code_owner_gaps(o: tuple[Owned, ...] | Unread | None) -> list[str]:
+    """The code owners files' refusal lines: their read that failed, or each line whose pattern git
     reads otherwise than GitHub, named (CODE_OWNERS_DIFFER): never a guessed owner."""
     if isinstance(o, Unread):
         return [f"code owners: {o.why}"]
-    at = o.file if o else ""
     return [
         (
-            f"code owners: {at} line {n} `{ln}`: {why}; git's matcher would read another owner "
+            f"code owners: {f.file} line {n} `{ln}`: {why}; git's matcher would read another owner "
             "than GitHub, so no path is sorted: write the line in syntax both read alike "
             "(octo-feather-lane --help, merge-ask)"
         )
-        for n, ln, why in (o.refused if o else ())
+        for f in o or ()
+        for n, ln, why in f.refused
     ]
 
 
@@ -3360,22 +3364,31 @@ class _Line(NamedTuple):
     owners: tuple[str, ...]
 
 
-def _code_owners(head: str, fork: str, repo: str | None) -> Owned | Unread | None:
-    """The code owners file at HEAD (CODE_OWNERS) and each path the lane changes (git diff FORK
-    HEAD, renames as a delete and an add) its last matching line gives to REPO's owner (None: this
-    directory's gh repo, gh repo view); None when HEAD has no such file. A line both read
-    otherwise (code_owner_differs) is refused and nothing matched."""
+def _code_owners(head: str, fork: str, repo: str | None) -> tuple[Owned, ...] | Unread | None:
+    """The code owners file at HEAD and at FORK, the merge base (as GitHub reads the base's, so a
+    lane editing the file never lowers its own tier: either end's file only raises), each with
+    each path the lane changes (git diff FORK HEAD, renames as a delete and an add) its last
+    matching line gives to REPO's owner (None: this directory's gh repo, gh repo view); the head's
+    first. None when neither end has such a file (no FORK read: the head's alone). A line either
+    file's git and GitHub read otherwise (code_owner_differs) is refused and nothing matched."""
     try:
-        at = (
-            git("cat-file", "-e", f"{head}:{f}", ok=(0, 1, 128), err=_Unread)[0]
-            for f in CODE_OWNERS
-        )
-        file = next((f for f, rc in zip(CODE_OWNERS, at, strict=False) if not rc), None)
-        if file is None:
+        ends = [(head, "")]
+        if fork:
+            ends.append((fork, f" at the merge base {fork[:12]}"))
+        found: list[tuple[str, list[_Line], tuple[tuple[int, str, str], ...]]] = []
+        for rev, at in ends:
+            rcs = (
+                git("cat-file", "-e", f"{rev}:{f}", ok=(0, 1, 128), err=_Unread)[0]
+                for f in CODE_OWNERS
+            )
+            file = next((f for f, rc in zip(CODE_OWNERS, rcs, strict=False) if not rc), None)
+            if file is not None:
+                text = git("show", f"{rev}:{file}", err=_Unread)[1]
+                found.append((file + at, *_code_owner_lines(text)))
+        if not found:
             return None
-        lines, refused = _code_owner_lines(git("show", f"{head}:{file}", err=_Unread)[1])
-        if refused:
-            return Owned(file, "", refused=refused)
+        if any(refused for *_, refused in found):
+            return tuple(Owned(f, "", refused=r) for f, _, r in found if r)
         if repo is None:
             out = gh(
                 ["repo", "view", "--json", "nameWithOwner"], "check gh auth status", err=_Unread
@@ -3383,7 +3396,8 @@ def _code_owners(head: str, fork: str, repo: str | None) -> Owned | Unread | Non
             repo = cast("_NamedRepo", _validated(out, NAMED_REPO, "gh repo view"))["nameWithOwner"]
         owner = f"@{repo.split('/', 1)[0]}"
         diff = git("diff", "--name-only", "--no-renames", "-z", fork, head, err=_Unread)[1]
-        return Owned(file, owner, _owned(sorted(filter(None, diff.split("\0"))), lines, owner))
+        paths = sorted(filter(None, diff.split("\0")))
+        return tuple(Owned(f, owner, _owned(paths, lines, owner)) for f, lines, _ in found)
     except _Unread as e:
         return Unread(f"cannot read the code owners file at {head[:12]} ({e}); fix it, then rerun")
 
