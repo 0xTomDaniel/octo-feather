@@ -271,6 +271,30 @@
       "tests": [
         "tests/gate/kit/lane_archive_teardown.py"
       ]
+    },
+    "acceptance-director-relaunch": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-director-replace": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-director-replace-outgoing": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-director-relaunch-busy": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-director-relaunch-own-scope": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-director-relaunch-same-session": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
