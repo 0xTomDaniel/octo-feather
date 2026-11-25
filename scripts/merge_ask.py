@@ -2853,6 +2853,8 @@ def tier(s: Snapshot) -> Tier:
     said = [ln.strip() for ln in lines if OWNER_DECISION.match(ln)]
     reasons += [Reason(3, ln) for ln in dict.fromkeys([*said, *(x.strip() for x in owner)])]
     reasons += _opt_out_reasons(s.optouts, cleared if clear else [])
+    declared = [c for c in check_lines(hdr)[0] if c.endswith(DECLARATION)] if clear else []
+    reasons += [Reason(3, "declaration check: " + c.removeprefix("Check: ")) for c in declared]
     seen: set[str] = set()  # a path either end's file gives the owner, named once (head first)
     for o in s.owners if isinstance(s.owners, tuple) else ():
         for p, n, ln in o.paths:

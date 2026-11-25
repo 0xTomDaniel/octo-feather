@@ -225,7 +225,9 @@ verdict comment `Review verdict:` links (verdict, above), shown as written (3); 
 the kit's check-behavior-smoke prints for the lane (`--base` the merge base of the head and BASE, `--head` the
 head: its `opt-out <sha>` lines), `opt-out <sha> cleared by the review verdict: Behaviour-neutral: <reason>`
 when that comment is clear and an `Opt-out cleared:` line in its header names the commit (2), else `opt-out <sha>
-not cleared by the review verdict: ...` (3); opt-outs that could not be read, naming why (3); each spec call the lane diff adds (a
+not cleared by the review verdict: ...` (3); opt-outs that could not be read, naming why (3); each `Check:` line
+of that comment's header classed `class: declaration` (Declaration checks, above) when the comment is clear,
+`declaration check: <the line after `Check: `>` (3): the owner rules on it before the merge; each spec call the lane diff adds (a
 line of a `*.calls.jsonl` the diff from the merge base to the PR head changes, read at both ends with git show,
 not at the merge base: the same call with or without `denied`, as `octo-feather-spec-status calls` counts it),
 named `spec call <slug> <at> <kind> <anchors>`: denied by the owner, `: denied <at>` (2); clarifies (2); any
