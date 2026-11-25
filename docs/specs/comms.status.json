@@ -285,16 +285,31 @@
       "pr": null
     },
     "acceptance-director-relaunch-busy": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1313,
+      "record": "20261125T220357Z-bb86594b",
+      "commit": "d88b81a91e9eb396a26c4aa11183b3fab4c446bf",
+      "tests": [
+        "tests/gate/kit/test_start_relaunch.py"
+      ]
     },
     "acceptance-director-relaunch-own-scope": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1313,
+      "record": "20261125T220357Z-09320158",
+      "commit": "d88b81a91e9eb396a26c4aa11183b3fab4c446bf",
+      "tests": [
+        "tests/gate/kit/test_start_relaunch.py"
+      ]
     },
     "acceptance-director-relaunch-same-session": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1313,
+      "record": "20261125T220357Z-2203f62d",
+      "commit": "d88b81a91e9eb396a26c4aa11183b3fab4c446bf",
+      "tests": [
+        "tests/gate/kit/test_start_relaunch.py"
+      ]
     }
   }
 }
