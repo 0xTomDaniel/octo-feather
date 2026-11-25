@@ -209,7 +209,8 @@ fails the same without it (spec issue-lifecycle #lanes-checkpoints; on a failure
 the items). `Review check classes` lists the comment's
 lines for the owner, its `class: declaration` lines (the class: docs/adr/0008 rung 2) under `Declaration checks (stopgaps; owner rules
 at merge): <n>` after it (how: spec issue-lifecycle #lanes-one-head), shown only (send it all with herdr-say --parent). Failure: each missing item
-with its fix on stderr, exit 1.
+with its fix on stderr, exit 1. A pass ends with `next: octo-feather-lane merge <PR> <head>` on stderr, outside
+what is sent: merge (below) decides whether it goes.
 
 The tier (spec issue-lifecycle #gates-tiers, #gates-tier-relay): every ask is sorted into tier 1, 2 or 3, the
 highest any reason gives (no reason: 1), printed on a pass right after the section's lines, on stdout:
@@ -1751,6 +1752,7 @@ def cmd_merge_ask(args: list[str]) -> int:
         print("\n" + a.replay)
     print("\n" + "\n".join(gate_time))
     print("\n" + "\n".join(a.order))   # shown only, after the pass was decided above (spec #gates-merge-order)
+    print(f"next: octo-feather-lane merge {pr} {head} (it merges, or names whom the merge waits for)", file=sys.stderr)
     return 0
 
 
@@ -3536,10 +3538,8 @@ def merge_lane(pr: int, nothing: str = "nothing merged") -> tuple[str, dict[str,
 
 
 def merge_allowed(pr: int, head: str, repo: str | None, lane: str) -> str:
-    """Whether this merge may go, the one place the merge asks it (--help, merge): the PR is open, its head is HEAD,
-    and its merge ask, checked here afresh, reads tier 1 or 2 waiting for nobody, or the director's relay of lane
-    LANE's merge on record carries to HEAD (spec issue-lifecycle #gates-merge-guard). The PR's full head, the one the
-    merge pins; refuses naming why."""
+    """Whether lane LANE's merge of PR at HEAD may go, the one place the merge asks it (the rule: --help, merge,
+    allowed). The PR's full head, the one the merge pins; refuses naming why."""
     d = cast("dict[str, object]", pr_view(pr, "state,headRefOid", repo))
     oid = str(d["headRefOid"])
     if d["state"] != "OPEN":
@@ -3565,7 +3565,8 @@ def merge_allowed(pr: int, head: str, repo: str | None, lane: str) -> str:
     relays = relays_of(lane, pr)
     if not relays:
         raise Refuse(f"PR #{pr} at {oid[:12]}: its merge waits for {t.waits}, and no relay of its merge is on record "
-                     f"({block}): {stays}; send the merge ask up (herdr-say --parent)")
+                     f"({block}): {stays}; send up the section `octo-feather-lane merge-ask {pr}` prints, as printed (herdr-say "
+                     "--parent), then rerun this merge once the director says it relayed it")
     rh = str(relays[-1]["head"])
     if any(head_matches(str(x["head"]), oid) for x in relays):
         print(f"allowed: PR #{pr} at {oid[:12]} on the director's relay of that head, its merge ask ({block})",
