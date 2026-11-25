@@ -1,0 +1,14 @@
+Seeded defect: a role's own extensions load only for a web role, so supervisor loses results-on-wake.ts (spec roles#fm-extensions).
+diff --git a/scripts/pi-role b/scripts/pi-role
+index d9e07e89..1d8bb218 100755
+--- a/scripts/pi-role
++++ b/scripts/pi-role
+@@ -324,7 +324,7 @@ def launch(path: str, *, to_file: bool = False):
+     roots = skill_roots(path)
+     for e in EXTENSIONS:
+         args += ["--extension", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(path))), "extensions", e)]
+-    args += role_extensions(kit, path, fm.get("extensions", []))
++    args += role_extensions(kit, path, fm.get("extensions", [])) if web else []
+     if web:
+         args += ["--extension", os.path.join(kit, "extensions", WEB_EXTENSION),
+                  "--octo-feather-web-servers", os.path.join(kit, WEB_LIST)]

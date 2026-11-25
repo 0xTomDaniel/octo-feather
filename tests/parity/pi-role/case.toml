@@ -1,0 +1,11 @@
+# The parity lever's case for tests/pi-role.sh, its two per-role loops (tools, extensions) read from one pi-role --json launch per role (#1295; tests/parity/lever.py --help).
+old = "tests/pi-role.sh"
+old_at = "32130e87"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none.
+needs = []
+# The same script, as its gate item: `just test` collects no .sh path.
+new = "tests/gate/test_gate.py::test_script[tests/pi-role.sh]"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: scripts/pi-role, a Python script run as its program outside the kit venv.
+[ran]
+"scripts/pi-role" = "exec scripts/pi-role"

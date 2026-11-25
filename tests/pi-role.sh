@@ -12,6 +12,7 @@ g init -q "$t/repo"; echo '.agents/skills/spec-chat-*' > "$t/repo/.gitignore"
 g -C "$t/repo" add -A; g -C "$t/repo" commit -qm init; g -C "$t/repo" worktree add -q -b gh1 "$t/gh1"
 mkdir -p "$t/repo/.agents/skills/spec-chat-shape"; echo "# repo" > "$t/repo/.agents/skills/spec-chat-shape/SKILL.md"
 args="$(cd "$t/gh1" && HOME="$t/home" "$kit/scripts/pi-role" --json "$kit/agents/supervisor.md" 2>"$t/err")"
+printf '%s\n' "$args" >"$t/json.supervisor"   # read again below for its tools and extensions (#1295)
 grep -q "\"$t/repo/.agents/skills/spec-chat-shape\"" <<<"$args" || { echo "pi-role test: repo skill not found from the lane worktree: $args" >&2; exit 1; }
 ! grep -q "$t/home/.agents" <<<"$args" || { echo "pi-role test: a home skill loaded" >&2; exit 1; }
 grep -q "external skill spec-chat-review not installed" "$t/err" || { echo "pi-role test: no warning for the missing skill" >&2; exit 1; }
@@ -49,10 +50,29 @@ grep -qx "PATH=$t/bin:/usr/bin:/bin" "$t/env.nomise" || { echo "pi-role test: wi
 # #262 (roles#launch-web): a web role's tab args add the kit's two web servers and drop --no-mcp.
 ro=read,grep,find,ls,bash,codemode; rw=read,grep,find,ls,bash,edit,write,codemode
 web=',mcp__parallel__*,mcp__exa__*;web'
+# roles#fm-extensions: a role's own extensions on top of every role's; only director and supervisor load results-on-wake.ts.
+# One pi-role --json launch per role gives both its tools and its extensions, read in one python3 (#1295).
+roles=(director supervisor implementer code-reviewer corrector general-worker reflector shaper qc-judge)
+for role in "${roles[@]}"; do
+  [[ "$role" != supervisor ]] || continue   # launched above from the same lane worktree (HOME aside, which only external skills read)
+  (cd "$t/gh1" && "$kit/scripts/pi-role" --json "$kit/agents/$role.md" >"$t/json.$role" 2>/dev/null) || { echo "pi-role test: pi-role --json $role failed" >&2; exit 1; }
+done
+# Per role: TOOLS;WEB EXTENSIONS (WEB: --no-mcp, web for the kit's web list, ? for neither; ! when unreadable).
+declare -A got
+while read -r role tw ext; do got[$role]="$tw $ext"; done < <(cd "$t" && python3 -c '
+import json, os, sys
+for role in sys.argv[1:]:
+    a = json.load(open(f"json.{role}"))["args"]
+    try:
+        web = "--no-mcp" if "--no-mcp" in a else "web" if a[a.index("--octo-feather-web-servers")+1].endswith("/web-mcp.json") else "?"
+        tw = (a[a.index("--tools")+1] if "--tools" in a else "none") + ";" + web
+    except (ValueError, IndexError):
+        tw = "!"
+    ext = sorted(os.path.basename(a[i+1]) for i, x in enumerate(a) if x == "--extension" and os.path.basename(a[i+1]) != "web-servers.ts")
+    print(role, tw, ",".join(ext))' "${roles[@]}")
 for rt in "director:$ro$web" "code-reviewer:$ro$web" "qc-judge:$ro;--no-mcp" "supervisor:$rw;--no-mcp" "implementer:$rw$web" "general-worker:$rw$web" "corrector:$rw$web" "shaper:read,grep,find,ls,bash,edit,write,codemode$web"; do
   role="${rt%%:*}"; want="${rt#*:}"
-  got="$(cd "$t/gh1" && "$kit/scripts/pi-role" --json "$kit/agents/$role.md" 2>/dev/null | python3 -c 'import json,sys; a=json.load(sys.stdin)["args"]; print((a[a.index("--tools")+1] if "--tools" in a else "none") + ";" + ("--no-mcp" if "--no-mcp" in a else "web" if a[a.index("--octo-feather-web-servers")+1].endswith("/web-mcp.json") else "?"))')"
-  [[ "$got" == "$want" ]] || { echo "pi-role test: $role --tools is $got, want $want" >&2; exit 1; }
+  [[ "${got[$role]%% *}" == "$want" ]] || { echo "pi-role test: $role --tools is ${got[$role]%% *}, want $want" >&2; exit 1; }
 done
 
 # #175 (roles#fm-tools).
@@ -70,14 +90,12 @@ out="$("$t/kit/scripts/check-roles" 2>"$t/cr")" || { echo "pi-role test: check-r
 sed 's/^name: .*/name: stray/' "$kit/agents/general-worker.md" > "$t/kit/agents/stray.md"
 if "$t/kit/scripts/check-roles" >/dev/null 2>"$t/cr"; then echo "pi-role test: check-roles passed a role file not in ROLES" >&2; exit 1; fi
 grep -qF "agents/: role files ['stray'] are not in ROLES" "$t/cr" || { echo "pi-role test: check-roles did not name the stray role file: $(cat "$t/cr")" >&2; exit 1; }
-# roles#fm-extensions: a role's own extensions on top of every role's; only director and supervisor load results-on-wake.ts.
 rm "$t/kit/agents/stray.md"
-every="resume-on-error.ts spend-ledger.ts skills-loaded.ts"
-for role in director supervisor implementer code-reviewer corrector general-worker reflector shaper qc-judge; do
-  got="$(cd "$t/gh1" && "$kit/scripts/pi-role" --json "$kit/agents/$role.md" 2>/dev/null | python3 -c 'import json,os,sys; a=json.load(sys.stdin)["args"]; print(" ".join(sorted(os.path.basename(a[i+1]) for i,x in enumerate(a) if x=="--extension" and os.path.basename(a[i+1]) != "web-servers.ts")))')"
-  case "$role" in director|supervisor) want="$every results-on-wake.ts" ;; *) want="$every" ;; esac
-  want="$(tr ' ' '\n' <<<"$want" | sort | tr '\n' ' ' | sed 's/ $//')"
-  [[ "$got" == "$want" ]] || { echo "pi-role test: $role extensions are [$got], want [$want]" >&2; exit 1; }
+# roles#fm-extensions, read from the launches above.
+every="resume-on-error.ts,skills-loaded.ts,spend-ledger.ts"   # sorted
+for role in "${roles[@]}"; do
+  case "$role" in director|supervisor) want="results-on-wake.ts,$every" ;; *) want="$every" ;; esac
+  [[ "${got[$role]#* }" == "$want" ]] || { echo "pi-role test: $role extensions are [${got[$role]#* }], want [$want]" >&2; exit 1; }
 done
 # check-roles refuses an extension that is no file name in extensions/ (missing, or a path), naming file and name; a
 # key pi-role does not honour stays refused (roles#acceptance-unknown-key); pi-role refuses the launch too.

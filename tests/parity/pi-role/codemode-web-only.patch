@@ -1,0 +1,14 @@
+Seeded defect: a role without the web tool loses codemode from its --tools (spec roles#launch-codemode, roles#acceptance-codemode-every-role).
+diff --git a/scripts/pi-role b/scripts/pi-role
+index d9e07e89..a7084512 100755
+--- a/scripts/pi-role
++++ b/scripts/pi-role
+@@ -317,7 +317,7 @@ def launch(path: str, *, to_file: bool = False):
+     role_tools: list[str] = fm.get("tools", [])
+     web = WEB in role_tools
+     if "tools" in fm:
+-        tools = [t for t in role_tools if t != WEB] + ["codemode"] + (web_patterns(kit) if web else [])
++        tools = [t for t in role_tools if t != WEB] + (["codemode"] + web_patterns(kit) if web else [])
+         args += ["--tools", ",".join(tools)] if fm["tools"] else ["--no-tools"]
+     args += [] if web else ["--no-mcp"]
+     args += ["--no-skills"]
