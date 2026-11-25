@@ -161,6 +161,10 @@
     "acceptance-worker-in-lane": {
       "status": "built",
       "pr": 16
+    },
+    "acceptance-stash-guard": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
