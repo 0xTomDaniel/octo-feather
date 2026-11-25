@@ -86,8 +86,8 @@ durable workflow artifacts.
   says it relayed the merge, run the same merge again.
 - Director, relaying a merge: from your own pane,
   `octo-feather-lane relay <N> <the head the ask named> [--link <where the
-  word is written>]`, then tell the supervisor with `herdr-say <its pane>`.
-  A relay is only that record, never a message alone.
+  word is written>]`, then tell the supervisor with `herdr-say <its pane>`
+  (what a relay is: spec `#gates-merge-guard`).
 - The merge completes the worklane. Do not assume deployment-named labels exist.
 - Verify the state change landed, whether performed by repository automation
   or by the owning agent. Do not claim a hook succeeded without readback.
