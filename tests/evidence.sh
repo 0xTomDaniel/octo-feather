@@ -26,11 +26,11 @@ for lang in python typescript; do
   repo="$t/$lang-app"; mkdir -p "$repo"
   (cd "$kit/templates/$lang" && git ls-files -z | xargs -0 cp --parents -t "$repo")
   # The contract fixture and its stand-in app; typescript's names zod's unknown-key problem.
-  cp "$kit/tests/fixtures/evidence/qc.toml" "$kit/tests/fixtures/evidence/app.sh" "$repo/"
+  cp "$kit/tests/fixtures/evidence/qc.toml" "$kit/tests/fixtures/evidence/app.py" "$repo/"
   # Offline: typescript's packages linked from the run's one offline install of the template from the pnpm store
   # (tests/lib/prepared.py, read-only: nothing here writes them): its helper reads qc.toml with smol-toml.
   if [[ "$lang" == typescript ]]; then
-    sed -i -e 's/Extra inputs are not permitted/Unrecognized key: \\"mood\\"/' "$repo/qc.toml"
+    sed -i -e 's/Extra inputs are not permitted/Unrecognized key: "mood"/' "$repo/qc.toml"
     p="$(python3 "$kit/tests/lib/prepared.py" typescript "$t")" && ln -s "$p/node_modules" "$repo/node_modules" \
       || fail "typescript: pnpm install --offline failed: fill the pnpm store first (pnpm fetch in templates/typescript)"
   fi
