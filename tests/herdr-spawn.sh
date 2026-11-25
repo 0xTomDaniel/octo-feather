@@ -92,19 +92,21 @@ filed="$(echo body | env -i "${tabenv[@]}" PATH="$t/key:$(sed -n 's/^PATH=//p' "
 ! grep -q '^LINEAR_API_KEY=' "$t/ok/tab-env" || fail "LINEAR_API_KEY set in a tab whose caller had none"
 # 1d. #261: in a repo with its own mise.toml the tab's PATH is the kit dirs, then the caller's PATH with mise's
 #     shims dir (as pi-role reports it, "path") just before its first system dir; in a repo without one (the cases
-#     above: a repo the kit did not create) or with no mise on PATH, the caller's PATH as it was.
-shims="$(mise doctor --json | jq -r .dirs.shims)"
+#     above: a repo the kit did not create) or with no mise on PATH, the caller's PATH as it was. In each, the stash
+#     guard's dir ($g) where pi-role places it (pi-role --help, Stash guard).
+shims="$(mise doctor --json | jq -r .dirs.shims)"; g="$kit/scripts/stash-guard"
 kitpath="$kit/.agents/skills/herdr-comms/assets:$kit/scripts"; ub="$HOME/.local/bin"   # ub: the fallback, last
-grep -qxF "PATH=$kitpath:$t/bin:$PATH:$ub" "$t/ok/tab-env" || fail "tab PATH in a repo without mise.toml changed: $(grep ^PATH= "$t/ok/tab-env")"
+grep -qF ":$g:" "$t/ok/tab-env" || fail "tab PATH in a repo without mise.toml lacks the stash guard $g: $(grep ^PATH= "$t/ok/tab-env")"
+grep -qxF "PATH=$kitpath:$t/bin:$PATH:$ub" <(sed "s|:$g:|:|" "$t/ok/tab-env") || fail "tab PATH in a repo without mise.toml changed: $(grep ^PATH= "$t/ok/tab-env")"
 mkdir -p "$t/mbin"; ln -sf "$(command -v mise)" "$t/mbin/mise"; ln -sf "$(command -v jq)" "$t/mbin/jq"
 printf '[tools]\n' >"$t/cwd/mise.toml"
 spawn made PATH="$t/bin:$t/mbin:/usr/local/bin:/usr/bin:/bin"
 [[ "$rc" == 0 ]] || fail "spawn in a mise.toml repo: exit $rc: $(cat "$t/made/err")"
-grep -qxF "PATH=$kitpath:$t/bin:$t/mbin:$shims:/usr/local/bin:/usr/bin:/bin:$ub" "$t/made/tab-env" \
+grep -qxF "PATH=$kitpath:$t/bin:$t/mbin:$g:$shims:/usr/local/bin:/usr/bin:/bin:$ub" "$t/made/tab-env" \
   || fail "tab PATH in a mise.toml repo lacks mise's shims $shims before the system dirs, after the caller's: $(grep ^PATH= "$t/made/tab-env")"
 spawn nomise PATH="$t/bin:/usr/bin:/bin"
 [[ "$rc" == 0 ]] || fail "spawn without mise: exit $rc: $(cat "$t/nomise/err")"
-grep -qxF "PATH=$kitpath:$t/bin:/usr/bin:/bin:$ub" "$t/nomise/tab-env" || fail "tab PATH without mise changed: $(grep ^PATH= "$t/nomise/tab-env")"
+grep -qxF "PATH=$kitpath:$t/bin:$g:/usr/bin:/bin:$ub" "$t/nomise/tab-env" || fail "tab PATH without mise changed: $(grep ^PATH= "$t/nomise/tab-env")"
 rm "$t/cwd/mise.toml"
 # 1e. Owner ruling #261 (#437): a stub pi first on the caller's PATH beats the box's pi in ~/.local/bin in the tab's
 #     PATH (a fake one under a throwaway HOME); a tool only ~/.local/bin holds is still found there (its fallback).
