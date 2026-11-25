@@ -597,15 +597,25 @@ counted and named by line number. The last line is `unread: none` or `unread: <s
 Exit 0; 1 on any argument.
 
   octo-feather-lane merge PR HEAD [--wait SECONDS] [--repo O/R]
-                                   the supervisor's merge of its lane's PR at the approved HEAD, then
+                                   the supervisor's merge of its lane's PR at the HEAD its merge ask named, then
                                    `done` on the lane's parent and the post-merge routine for the lane
 
-`merge` (issue 1133; issue-lifecycle #gates-main-moved) performs the merge an approval already allowed, adding no
-merge policy. In order, each refusal before the merge exit 1 on stderr, nothing merged and nothing recorded:
+`merge` (issue 1133, 1266; issue-lifecycle #gates-main-moved, #gates-merge-guard) merges only what its merge ask's
+tier or the director's relay allows (allowed, below). In order, each refusal before the merge exit 1 on stderr, nothing merged and nothing recorded:
   lane     the open lane record ($(octo-feather-state)/lanes/*.toml) whose `pr` is PR, its name the lane's, its
            `issue` the parent; none, two or more, or one with no `issue` refuses naming the fix
-  allowed  merge_allowed, the one place the merge asks whether it may go: today `gh pr view PR` reads it OPEN and
-           its head is HEAD (7+ hex prefix); a PR closed or merged, or at another head, refuses
+  allowed  merge_allowed, the one place the merge asks whether it may go (issue-lifecycle #gates-merge-guard):
+           `gh pr view PR` reads it OPEN and its head is HEAD (7+ hex prefix); a PR closed or merged, or at another
+           head, refuses. Then the merge ask check, run here afresh as merge-ask runs it (never a stored print),
+           with --status every docs/specs/*.status.json of the repo's top: an ask with no `## Merge ask` section, a
+           Failed list it cannot read, or one merge-ask refuses outright, refuses (no tier to sort). An ask of tier
+           1 or 2 waiting for nobody goes, `allowed: PR #<n> at <sha12>, its merge ask (<the tier block>)` on stderr
+           (`on the director's relay ...` when a relay let it). Any other goes only on the director's relay of lane NAME's merge on
+           record (relay, below) naming HEAD, or naming an earlier head when the commits between are only merges
+           of main the one-head check proves clean (#lanes-one-head; printed `relay carried: ...`). No relay
+           refuses, `its merge waits for <whom>` (the owner; the director's order, naming each set-back PR) with
+           the tier block (its form: merge-ask) and `PR #<n> stays open`; a relay naming another head refuses
+           naming the head it allows, the head given and why it does not carry
   merge    `gh pr merge PR --merge --match-head-commit <the PR's full head>`, printing `merged: PR #<n> at head
            <sha12> (lane <name>)`; a gh failure refuses, naming it
   done     `done <key>` (below), its lines, <key> the tracker key of the record's `issue`, a lane key (comms
@@ -615,6 +625,17 @@ merge policy. In order, each refusal before the merge exit 1 on stderr, nothing 
            them, its record written
 Exit 0 when merged, done, and steps 1-6 ok (step 7 pending or ok); 1 otherwise. A merged lane's routine resumes
 with `post-merge PR HEAD --lane <name>`.
+
+  octo-feather-lane relay PR HEAD [--link <where the word is written>]
+                                   the director's relay of lane PR's merge at HEAD, on record
+
+`relay` (issue 1266; issue-lifecycle #gates-merge-guard, #gates-tier-relay) runs only in the director's pane:
+HERDR_PANE_ID must be the `pane` of $(octo-feather-state)/director.toml, else it refuses, `only the director relays
+a merge`, nothing recorded. The open lane record whose `pr` is PR names the lane (merge's rule above). It appends
+one line to $(octo-feather-state)/director.handoffs.jsonl, {"at", "kind": "relay", "lane", "pr", "head"} and
+"link" when given (stored, never required or checked), and prints `relayed: PR #<n> at head <sha12> (lane
+<name>)`. merge reads these lines (above). Check class: declaration (docs/adr/0008): for a tier 3 ask the line
+proves the director's relay, not the owner's word. Exit 0 recorded; 1 refused or bad arguments.
 
   octo-feather-lane post-merge PR HEAD --lane NAME [--wait SECONDS] [--repo O/R]
                                    the post-merge routine for lane NAME, its steps in order
@@ -819,7 +840,7 @@ import dataclasses
 import datetime as dtm
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any, cast
+from typing import cast
 
 # Kit modules, .py files beside this script, found through its own directory (symlinks resolved) on sys.path: from any
 # cwd and through a symlink (scripts/correction_lanes.py docstring). correction_lanes is the correction filer.
@@ -1656,6 +1677,22 @@ def ci_full_run(head: str, repo: str | None) -> tuple[list[str], list[str]]:
     return why, ([] if why else lines)
 
 
+def ask_of(pr: int, repo: str | None, files: list[str], base_arg: str | None) -> "tuple[merge_ask.Snapshot, merge_ask.Ask]":
+    """The merge ask check of PR as it stands, read fresh (merge_ask.snapshot) and judged (merge_ask.check): merge-ask's
+    and the merge's one read of it (--help, merge-ask, merge)."""
+    def read() -> tuple[dict[str, object], list[tuple[str, str]] | str]:
+        """The PR as gh prints it, and its commits or why they are unread (named with the other gaps)."""
+        d = pr_view(pr, "body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments", repo)
+        try:
+            return d, pr_commits(pr, cast("str", d["headRefOid"]), pr_base(cast("str | None", d["baseRefName"]) or "", base_arg))
+        except Refuse as e:
+            return d, str(e)
+
+    s = merge_ask.snapshot(pr, repo, files, read, Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state_dir() / "qc"),
+                           trend=state_dir() / ReportSources.TREND, err=Refuse, lanes=lanes_dir(), base=base_arg)
+    return s, merge_ask.check(s)
+
+
 @no_traceback
 def cmd_merge_ask(args: list[str]) -> int:
     args, repo = take_repo(args)
@@ -1670,20 +1707,8 @@ def cmd_merge_ask(args: list[str]) -> int:
     if len(rest) != 1:
         raise Refuse(f"usage: octo-feather-lane merge-ask PR [--status FILE...] [--base REF] [--repo O/R] (got {' '.join(args) or 'nothing'})")
     pr = pr_number(rest[0])
-    d: dict[str, Any] = {}   # the PR as gh printed it
-
-    def read() -> tuple[dict[str, object], list[tuple[str, str]] | str]:
-        """The PR as gh prints it, and its commits or why they are unread (named with the other gaps)."""
-        d.update(pr_view(pr, "body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments", repo))
-        try:
-            return d, pr_commits(pr, cast("str", d["headRefOid"]), pr_base(cast("str | None", d["baseRefName"]) or "", base_arg))
-        except Refuse as e:
-            return d, str(e)
-
-    s = merge_ask.snapshot(pr, repo, cast("list[str]", files), read, Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state_dir() / "qc"),
-                           trend=state_dir() / ReportSources.TREND, err=Refuse, lanes=lanes_dir(), base=base_arg)
-    head = d["headRefOid"]
-    a = merge_ask.check(s)
+    s, a = ask_of(pr, repo, cast("list[str]", files), base_arg)
+    head = s.head
     tier = a.tier.lines if a.tier else []   # spec #gates-tiers; incomplete on a failing ask, stderr only
     incomplete = ["", "Incomplete merge ask (it fails below; never send this tier):", *tier]
     if a.refusal:
@@ -3486,33 +3511,35 @@ def cmd_post_merge(args: list[str]) -> int:
 
 # --- merge: the supervisor's merge, then done and the post-merge routine (issue 1133; rules: --help, merge) ---
 
-def merge_lane(pr: int) -> tuple[str, dict[str, object]]:
-    """The open lane record whose `pr` is PR: its name and record; none or two refuses."""
+def merge_lane(pr: int, nothing: str = "nothing merged") -> tuple[str, dict[str, object]]:
+    """The open lane record whose `pr` is PR: its name and record; none or two refuses, saying NOTHING."""
     import tomllib
     lanes, hits = lanes_dir(), list[tuple[str, dict[str, object]]]()
     for p in sorted(lanes.glob("*.toml")):
         try:
             rec: dict[str, object] = tomllib.loads(p.read_text(encoding="utf-8"))
         except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
-            raise Refuse(f"cannot read lane record {p} ({e}): fix it, then rerun; nothing merged")
+            raise Refuse(f"cannot read lane record {p} ({e}): fix it, then rerun; {nothing}")
         if rec.get("pr") == pr:
             hits.append((p.stem, rec))
     if not hits:
         raise Refuse(f"no open lane record in {lanes} has pr = {pr}: set `pr = {pr}` in the lane's record "
-                     "(octo-feather-lane --help, report), then rerun; nothing merged")
+                     f"(octo-feather-lane --help, report), then rerun; {nothing}")
     if len(hits) > 1:
         raise Refuse(f"lane records {', '.join(n + '.toml' for n, _ in hits)} in {lanes} all have pr = {pr}: "
-                     "keep it only in the lane's own, then rerun; nothing merged")
+                     f"keep it only in the lane's own, then rerun; {nothing}")
     name, rec = hits[0]
     if not isinstance(rec.get("issue"), (int, str)) or isinstance(rec.get("issue"), bool) or not str(rec.get("issue")).strip():
         raise Refuse(f"lane record {lanes / (name + '.toml')} has no `issue` (the parent ticket key): set it, then rerun; "
-                     "nothing merged")
+                     f"{nothing}")
     return name, rec
 
 
-def merge_allowed(pr: int, head: str, repo: str | None) -> str:
-    """Whether this merge may go, the one place the merge asks it (--help, merge): today the PR is open and its head is
-    HEAD. The PR's full head, the one the merge pins; refuses naming why."""
+def merge_allowed(pr: int, head: str, repo: str | None, lane: str) -> str:
+    """Whether this merge may go, the one place the merge asks it (--help, merge): the PR is open, its head is HEAD,
+    and its merge ask, checked here afresh, reads tier 1 or 2 waiting for nobody, or the director's relay of lane
+    LANE's merge on record carries to HEAD (spec issue-lifecycle #gates-merge-guard). The PR's full head, the one the
+    merge pins; refuses naming why."""
     d = cast("dict[str, object]", pr_view(pr, "state,headRefOid", repo))
     oid = str(d["headRefOid"])
     if d["state"] != "OPEN":
@@ -3521,7 +3548,84 @@ def merge_allowed(pr: int, head: str, repo: str | None) -> str:
     if not head_matches(head, oid) or not SHA.fullmatch(oid):
         raise Refuse(f"PR #{pr}'s head is {oid[:12]}, not the approved head {head}: nothing merged; "
                      "what would merge is not what was approved, ask for the merge again at its head")
-    return oid.lower()
+    oid = oid.lower()
+    top = Path(git("rev-parse", "--show-toplevel")[1].strip())
+    files = [str(p) for p in sorted((top / "docs" / "specs").glob("*.status.json"))]   # every spec's: Failed resolves
+    s, a = ask_of(pr, repo, files, None)
+    t, stays = a.tier, f"nothing merged, PR #{pr} stays open"
+    sec = merge_ask.section(s.body)
+    unread = merge_ask.failed(s, sec)[0] if sec is not None else ["`## Merge ask` section: none in the PR body"]
+    if a.refusal or unread or t is None:
+        raise Refuse(f"PR #{pr}'s merge ask at {oid[:12]} cannot be sorted into a tier ({'; '.join([a.refusal, *unread]).strip('; ')}): "
+                     f"{stays}; fix the merge ask (octo-feather-lane merge-ask {pr} names each fix), then rerun")
+    block = "; ".join(t.lines)
+    if t.n <= 2 and t.waits == "nobody":
+        print(f"allowed: PR #{pr} at {oid[:12]}, its merge ask ({block})", file=sys.stderr, flush=True)
+        return oid
+    relays = relays_of(lane, pr)
+    if not relays:
+        raise Refuse(f"PR #{pr} at {oid[:12]}: its merge waits for {t.waits}, and no relay of its merge is on record "
+                     f"({block}): {stays}; send the merge ask up (herdr-say --parent)")
+    rh = str(relays[-1]["head"])
+    if any(head_matches(str(x["head"]), oid) for x in relays):
+        print(f"allowed: PR #{pr} at {oid[:12]} on the director's relay of that head, its merge ask ({block})",
+              file=sys.stderr, flush=True)
+        return oid
+    try:
+        full = git("rev-parse", "--verify", "--quiet", f"{rh}^{{commit}}")[1].strip()
+        why: list[str] = []
+    except Refuse as e:
+        full, why = "", [f"commit {rh} is not in this repo ({e}): run the merge in the lane worktree after git fetch origin"]
+    if full:
+        proof, why = merge_ask.relay_proof(s, full, oid)
+        if proof:
+            print(f"relay carried: the director's relay of PR #{pr} at {rh[:12]} carries to {oid[:12]}: {proof}", flush=True)
+            print(f"allowed: PR #{pr} at {oid[:12]} on the director's relay carried, its merge ask ({block})",
+                  file=sys.stderr, flush=True)
+            return oid
+    raise Refuse(f"PR #{pr}: the director's relay on record allows head {rh[:12]}, the merge was given head {oid[:12]} "
+                 f"({'; '.join(why)}): {stays}; its merge waits for {t.waits} ({block})")
+
+
+def relays_of(lane: str, pr: int) -> list[dict[str, object]]:
+    """The director's relay lines (--help, relay) for lane LANE's PR, oldest first."""
+    log = lanes_dir().parent / DIRECTOR_LOG
+    if not log.exists():
+        return []
+    try:
+        lines, _ = read_log(log)
+    except OSError as e:
+        raise Refuse(f"cannot read the director's hand-off log {log} ({e}): fix it, then rerun; nothing merged")
+    return [x for x in lines if x.get("kind") == "relay" and x.get("lane") == lane and x.get("pr") == pr
+            and isinstance(x.get("head"), str) and SHA.fullmatch(str(x["head"]))]
+
+
+def cmd_relay(args: list[str]) -> int:
+    """`relay` (--help): the director's record of a merge it relays."""
+    import tomllib
+    args, link = take_opt(args, "--link")
+    if len(args) != 2 or not SHA.fullmatch(args[1]):
+        raise Refuse("usage: octo-feather-lane relay PR HEAD [--link <where the word is written>] (the lane's PR and the "
+                     f"head its merge ask named, 7 to 40 hex; got {' '.join(args) or 'nothing'})")
+    toml = lanes_dir().parent / "director.toml"
+    try:
+        director = tomllib.loads(toml.read_text(encoding="utf-8")).get("pane")
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        director = f"unread ({type(e).__name__})"
+    me = os.environ.get("HERDR_PANE_ID", "")
+    if not me or not isinstance(director, str) or me != director:
+        raise Refuse(f"only the director relays a merge: this pane is {me or 'unset (no HERDR_PANE_ID)'}, the director's "
+                     f"pane in {toml} is {director if isinstance(director, str) else 'unset'}; nothing recorded, no relay "
+                     "is on record: send the merge ask up (herdr-say --parent)")
+    pr, head = pr_number(args[0]), args[1].lower()
+    lane, _ = merge_lane(pr, "nothing recorded")
+    line: dict[str, object] = {"at": f"{dtm.datetime.now(dtm.timezone.utc):%Y-%m-%dT%H:%M:%SZ}", "kind": "relay",
+                               "lane": lane, "pr": pr, "head": head, **({"link": link} if link else {})}
+    log = lanes_dir().parent / DIRECTOR_LOG
+    with log.open("a", encoding="utf-8") as f:
+        f.write(encode(line) + "\n")
+    print(f"relayed: PR #{pr} at head {head[:12]} (lane {lane}){', link ' + link if link else ''}; recorded in {log}")
+    return 0
 
 
 def cmd_merge(args: list[str]) -> int:
@@ -3529,12 +3633,12 @@ def cmd_merge(args: list[str]) -> int:
     args, wait = take_opt(args, "--wait")
     if len(args) != 2:
         raise Refuse("usage: octo-feather-lane merge PR HEAD [--wait SECONDS] [--repo O/R] "
-                     f"(the lane's PR and the head the owner approved; got {' '.join(args) or 'nothing'})")
+                     f"(the lane's PR and the head its merge ask named; got {' '.join(args) or 'nothing'})")
     if not SHA.fullmatch(args[1]):
         raise Refuse(f"HEAD must be the approved head, 7 to 40 hex, got {args[1]!r}")
     pr, head, secs = pr_number(args[0]), args[1].lower(), pm_wait(wait)
     lane, rec = merge_lane(pr)
-    oid = merge_allowed(pr, head, repo)
+    oid = merge_allowed(pr, head, repo, lane)
     gh(["pr", "merge", str(pr), "--merge", "--match-head-commit", oid, *(["-R", repo] if repo else [])],
        f"nothing merged unless gh pr view {pr} reads MERGED; check it, then rerun")
     print(f"merged: PR #{pr} at head {oid[:12]} (lane {lane})", flush=True)
@@ -3717,6 +3821,7 @@ COMMANDS = {
     "report": cmd_report,
     "intake": cmd_intake,
     "merge": cmd_merge,
+    "relay": cmd_relay,
     "post-merge": cmd_post_merge,
     "stale": cmd_stale,
     "start": cmd_start,
