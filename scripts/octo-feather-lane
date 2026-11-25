@@ -67,7 +67,8 @@ archive runs the routine itself (PR, the recorded head or else the PR's, the rec
 lines printed, and re-executes itself on the kit install when step 3 moved the install this script runs from; still
 not ok, it refuses, `archive waits: step <n> <name> stopped: <line>`, exit 1, nothing archived. Then the reflections
 and the move as above; then it records its part in the lane's post-merge record (close: the reflections' finding
-counts, the correction lane lines, the tickets done and what is left open and where, as issue-view, `gh pr list
+counts, the correction lane lines, the tickets done and what is left open and where, as issue-view (of the tracker key
+of the record's `issue`, as merge's done step maps it, below), `gh pr list
 --base <lane-key>` and the Spec Chat registries read them then, and every line it printed). Its last act starts
 step 7 in one transient unit outside the lane's workspace, as herdr-close stops every process of the closed pane's
 agent scope (herdr-comms herdr_scope.py close): `systemd-run --user --unit=octo-feather-teardown-<lane>`, never a
@@ -119,7 +120,10 @@ in scope is the verdict, and lines that disagree are refused. What the check fie
 docs/adr/0008, Who builds what. Refused: no
 verdict, neither check form, both, a malformed Check line, a class other than exact, proxy or declaration, and
 a `class: proxy` line with `Verdict: clear` (a proxy check blocks; the declaration class: docs/adr/0008 rung 2). The comment's header carries
-the lines; merge-ask prints them under the section for the owner. HEAD is the head the review judged, H, a commit
+the lines; merge-ask prints them under the section for the owner. The header carries the report's `Ruling covers:
+<url>` lines too, each the URL a spec call links as its ruling (scripts/octo-feather-spec-status, call log; refused
+in another form): the reviewer's word that the owner's ruling covers that call's change (merge-ask's tier, below);
+each post carries the report's own, never an earlier round's. HEAD is the head the review judged, H, a commit
 of the PR (7+ hex prefix); the comment names it (`Head:`) and the PR's head when posted (`PR head:`).
 Review rounds (rule: issue-lifecycle #lanes-one-head, #acceptance-verdict-covers-lane): the report's one `Range:`
 line (its form: Report fields, above). Refused: no Range, `to` not HEAD, `from` not an ancestor of `to`, and a
@@ -212,15 +216,24 @@ highest any reason gives (no reason: 1), printed on a pass right after the secti
 
 Reasons (tier): each criterion the section's `Failed:` lists, with its triage (3); each line of the section that
 starts at column 0 with `Owner decision` and holds a colon (`Owner decision: <text>`, `Owner decision 1 (<what>):
-<text>`), shown as written (3): any agent raises the tier by adding one; each path the lane changes (git diff from
+<text>`), shown as written (3): any agent raises the tier by adding one; each spec call the lane diff adds (a
+line of a `*.calls.jsonl` the diff from the merge base to the PR head changes, read at both ends with git show,
+not at the merge base: the same call with or without `denied`, as `octo-feather-spec-status calls` counts it),
+named `spec call <slug> <at> <kind> <anchors>`: denied by the owner, `: denied <at>` (2); clarifies (2); any
+other kind (3, `: no ruling linked`), unless its `ruling` URL's issue or issue comment was created before its
+`at` (GitHub's created_at, `gh api ... --jq .created_at`) and the header of the review verdict comment the
+section links carries `Ruling covers: <that URL>` (verdict, above): then `: ruled by <url> (<created_at>), the
+review verdict covers it` (2); else the reason it is not, `ruling <url> is no GitHub issue or issue comment
+URL`, `not read (...)`, `made <created_at>, not before the call` or `not confirmed: the review verdict carries no
+...` (3); a log not read, `spec calls not
+read: <why>` (3); each path the lane changes (git diff from
 the merge base of the head and BASE to the head, a rename as its two paths) whose owners in the code owners file at the
 head (the first of .github/CODEOWNERS, CODEOWNERS, docs/CODEOWNERS, GitHub's order; none: no path) include `@<owner>`,
 the owner login of --repo O/R (else of `gh repo view`; an `@org/team` never counts): `code owner: <path> is @<owner>'s
 (<file> line N: `<line>`)` (3). The line is the last one matching the path, as GitHub takes it, each line matched
 by git's own matcher (`git check-ignore --no-index`, one line at a time: scripts/merge_ask.py, _owned). A line
 whose pattern git reads otherwise than GitHub (each such syntax and why: merge_ask.CODE_OWNERS_DIFFER) fails the
-ask, `code owners: <file> line N `<line>`: <why>; ...`, each named, and no path is sorted. A tier 3 ask waits for
-the owner;
+ask, `code owners: <file> line N `<line>`: <why>; ...`, each named, and no path is sorted. A tier 3 ask waits for the owner;
 a tier 1 or 2 ask whose merge order (below) names an open PR this merge sets back (its head conflicts with this head,
 or this merge stales its pinned run), or one of whose reads failed (a `- not read:` line: it cannot prove none is set
 back), waits for the director's order, naming each (`PR #N: <why>`, `PR #N: its pinned run <run> not read`,
@@ -583,7 +596,9 @@ merge policy. In order, each refusal before the merge exit 1 on stderr, nothing 
            its head is HEAD (7+ hex prefix); a PR closed or merged, or at another head, refuses
   merge    `gh pr merge PR --merge --match-head-commit <the PR's full head>`, printing `merged: PR #<n> at head
            <sha12> (lane <name>)`; a gh failure refuses, naming it
-  done     `done <issue>` (below), its lines; a failure is named on stderr and the routine still runs
+  done     `done <key>` (below), its lines, <key> the tracker key of the record's `issue`, a lane key (comms
+           #lane-record), as tracker_calls.py parent_key maps it (#1249); a failure is named on stderr and the
+           routine still runs
   routine  the post-merge routine for the lane, PR and HEAD (below), its lines and summary as `post-merge` prints
            them, its record written
 Exit 0 when merged, done, and steps 1-6 ok (step 7 pending or ok); 1 otherwise. A merged lane's routine resumes
@@ -607,7 +622,10 @@ reflection findings, correction lanes, left on disk on purpose (the teardown's k
 once: the record's told keeps what was told (the end, or the stop's line), and a run telling it again sends nothing
 (`director already told`). Sent as step 6 sends (herdr-say --timeout 20, killed 15 s past); a failed send prints
 `director NOT told: <why>; re-send by hand: herdr-say ...` (no pane in director.toml: DIRECTOR_PANE and where
-to find it), exit 1, nothing recorded. One run of a lane at a
+to find it), exit 1, nothing recorded. Every send of the routine (step 6, the director's messages, the teardown
+unit's end) is the routine's own, not its caller's: herdr-say runs without the caller's OCTO_FEATHER_ROLE and
+OCTO_FEATHER_PARENT, so the up-chain guard of the supervisor whose pane runs merge or archive does not refuse it
+(#1249; docs/adr/0015 holds for that supervisor's own herdr-say). One run of a lane at a
 time: a second waits for the first (a lock per lane). Each run records each step it runs, its outcome, line and
 time, in the lane's record, $(octo-feather-state)/post-merge/<lane>.json (its form: scripts/post_merge.py). A rerun for the same merge (its PR, and a
 head one of the two is a prefix of) runs no step recorded ok before the first one not ok: each prints its recorded
@@ -666,7 +684,8 @@ before its end) and `director told: <each>`; exit 0, 1 with no or an unreadable 
   step 6 tell supervisors  each open lane record but --lane's, of the PR's repo (every lane when the PR is the kit
                    install's origin repo: every lane runs kit roles), whose supervisor pane `herdr agent get` finds
                    gets one herdr-say: "main moved to <merge sha12> (#PR <title>); rule files changed: <list or
-                   none>; re-read the changed ones before your next step." Rule files: what the merge commit
+                   none>; re-read the changed ones before your next step. (from the post-merge routine of lane
+                   <lane>)", <lane> the merging lane, its sender. Rule files: what the merge commit
                    changed against its first parent (git in the current repo, fetched from origin when missing)
                    under agents/*.md, .agents/skills/, .skillfile/patches/, AGENTS.md, docs/adr/, docs/specs/.
                    A pane Herdr does not find (agent_not_found, read from stderr or stdout) is never sent to (why:
@@ -677,7 +696,8 @@ before its end) and `director told: <each>`; exit 0, 1 with no or an unreadable 
                    archived: that supervisor runs this routine, mid-turn) is never sent to, listed `told: <lane>
                    <pane> (the merging supervisor)`. Each lane told gets one line in
                    $(octo-feather-state)/director.handoffs.jsonl, {"at", "kind": "prod", "issue", "note":
-                   "post-merge <merge sha> #PR: main moved, told <lane> to re-read <files|none>"} (spec comms
+                   "post-merge <merge sha> #PR: main moved, told <lane> to re-read <files|none> (from the
+                   post-merge routine of lane <merging lane>)"} (spec comms
                    #handoff-director-prod); a rerun skips a lane whose prod line names that merge (`already told`).
                    Each send is bounded (#619, #666): `herdr-say --timeout 20`, Herdr's own wait bound (herdr-say
                    exit 124 past it); a herdr-say still running 15 s past it is killed. A failed send (timed out,
@@ -1267,6 +1287,10 @@ def cmd_verdict(args: list[str]) -> int:
     if proxy and verdict == "clear":
         raise Refuse(f"report says `Verdict: clear` with a proxy check ({proxy[0]}): a proxy check blocks "
                      "(docs/adr/0008); make it a blocking finding and `Verdict: blocking`, then rerun")
+    covers = merge_ask.ruling_covers(report)
+    if bad := [u for u in covers if not merge_ask.ruling_form(u)]:
+        raise Refuse(f"`Ruling covers: {bad[0]}` is not `Ruling covers: <the URL of the GitHub issue or issue comment "
+                     "where the owner's ruling is written>`, as the call links it; fix the report, then rerun")
     d = pr_view(pr, "headRefOid,baseRefName,comments", repo)
     head = cast("str", d["headRefOid"])
     at = [oid for oid, _ in pr_commits(pr, head, pr_base(cast("str | None", d["baseRefName"]) or "", None)) if head_matches(want, oid)]
@@ -1288,7 +1312,8 @@ def cmd_verdict(args: list[str]) -> int:
     rounds = review_rounds(report, judged, base, mine[0]["body"] if len(mine) == 1 else "", verdict, tuple(cls))
     lines = [ln for n, r in enumerate(rounds, 1) for ln in r.line(n)]
     body = (f"{MARKER}\n## Code review verdict\n\nHead: {judged}\nPR head: {head}\nVerdict: {verdict}\n"
-            + "".join(f"{c}\n" for c in merge_ask.check_set(rounds)) + f"\n{merge_ask.ROUNDS}\n\n" + "".join(f"{x}\n" for x in lines)
+            + "".join(f"{c}\n" for c in merge_ask.check_set(rounds)) + "".join(f"Ruling covers: {u}\n" for u in covers)
+            + f"\n{merge_ask.ROUNDS}\n\n" + "".join(f"{x}\n" for x in lines)
             + f"\n### Findings\n\n{report.strip()}\n")
     out, said = post_comment(pr, repo, d["comments"], MARKER, body, "verdict")
     print(f"verdict: {said} ({verdict}, head {judged[:12]})", file=sys.stderr)
@@ -3496,7 +3521,7 @@ def cmd_merge(args: list[str]) -> int:
     print(f"merged: PR #{pr} at head {oid[:12]} (lane {lane})", flush=True)
     parent, rc = str(rec["issue"]), 0
     try:
-        cmd_done([parent])
+        cmd_done([tracker_calls.parent_key(parent, err=Refuse)])   # the record's lane key, as a tracker key
     except Refuse as e:
         print(f"octo-feather-lane merge: done {parent}: {e}", file=sys.stderr, flush=True)
         rc = 1
