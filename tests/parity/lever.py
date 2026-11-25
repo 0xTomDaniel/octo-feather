@@ -50,9 +50,10 @@ line and exit 0).
 Re-anchoring (#1154): when scripts/check-parity names a case's patch, the change that moved its
 code remakes that patch against the code as it now is, seeding the same defect (and points the
 case's `ran` at the file it now patches), then runs `tests/parity/lever.py CASE` to exit 0; a
-case whose target behaviour is gone is deleted in the same change. A case is retired (deleted)
-when the behaviour its old test asserts was changed on purpose, the change that retires it naming
-that change (its commit and PR); a one-sided case is never kept.
+case whose target behaviour is gone is deleted in the same change. A case retires when the
+behaviour or the input contract its old test relies on was changed on purpose, naming that change
+(commit and PR) in the change that retires it; no one-sided case is kept, and no old side mixes
+commits.
 
 The CPU budget (quality spec #acceptance-test-cpu-budget): before each run the lever commits what
 the run adds (the restored files, the defect) on the copy's own branch, so the copy's default
