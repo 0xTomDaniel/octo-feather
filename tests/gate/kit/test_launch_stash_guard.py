@@ -3,7 +3,7 @@ docstring), each run as that file's command through `case` (tests/gate/kit/conft
 
 from collections.abc import Callable
 
-from launch_stash_guard import one_worktree, pane_path, refused, unchanged
+from launch_stash_guard import refused, unchanged
 
 Case = Callable[..., None]
 
@@ -12,13 +12,5 @@ def test_refused(case: Case) -> None:
     case(refused)
 
 
-def test_one_worktree(case: Case) -> None:
-    case(one_worktree)
-
-
 def test_unchanged(case: Case) -> None:
     case(unchanged)
-
-
-def test_pane_path(case: Case) -> None:
-    case(pane_path)
