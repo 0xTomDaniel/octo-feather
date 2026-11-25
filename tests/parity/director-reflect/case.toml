@@ -11,7 +11,7 @@ needs = [
 ]
 new = "tests/gate/kit/test_director_reflect.py"
 
-# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit script run by the kit venv's python: coverage.py measures it; exec: the start, a bash script, run as its program.
+# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit module the kit venv runs (octo-feather-lane imports it): coverage.py measures it; exec: the start, a bash script, run as its program.
 [ran]
-"scripts/octo-feather-lane" = "coverage"
+"scripts/correction_lanes.py" = "coverage"
 "scripts/octo-feather-start" = "exec scripts/octo-feather-start"

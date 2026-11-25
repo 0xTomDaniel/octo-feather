@@ -1,14 +1,14 @@
 Seeded defect: a lane's correction lane files in the current directory's repo, not the lane record's target (spec comms #reflection-correction).
-diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
-index 4a22a60e..4164f376 100755
---- a/scripts/octo-feather-lane
-+++ b/scripts/octo-feather-lane
-@@ -722,7 +722,7 @@ def file_corrections(lanes: Path) -> list[str]:
-     for (skill, repo), dues in trackers.items():
-         mine = r.merge(dues)   # one per class: one issue or one comment per class per tracker
-         where = f"{skill} {repo or 'of the current directory'}"
--        env = {"GH_REPO": repo} if repo else {}
-+        env = {}
-         if skill != GITHUB_ISSUES:
-             for d in mine:
-                 print(f"correction lane: due, not filed: {d.cls}: tracker skill {skill} offers no search for an existing"
+diff --git a/scripts/correction_lanes.py b/scripts/correction_lanes.py
+index 82516854..f5bfd3e2 100755
+--- a/scripts/correction_lanes.py
++++ b/scripts/correction_lanes.py
+@@ -418,7 +418,7 @@ def _write(out: list[Outcome], repo: str, text: str, script: str, *args: str) ->
+             "-",
+             err=Refused,
+             skill=GITHUB_ISSUES,
+-            env={"GH_REPO": repo},
++            env={"GH_REPO": repo} if repo == KIT_REPO else {},
+             stdin=text,
+         ).strip()
+     except Refused as e:
