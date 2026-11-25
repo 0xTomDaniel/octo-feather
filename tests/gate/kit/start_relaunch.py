@@ -4,7 +4,8 @@ and real processes standing in for the director's shell and Pi.
 
 A director at w0:p1 in workspace `director`, its Pi a herdr-spawn one on session D1, named by
 director.toml. relaunch_busy: its turn outlasts `--relaunch --wait 1`: refused, exit 75, naming
-the busy director. relaunch_own_scope: run by a detached job inside the director pane's agent
+the busy director; relaunch_short_wait: idle, but --wait 31 leaves no full gap for the fourth
+read: refused, exit 75. relaunch_own_scope: run by a detached job inside the director pane's agent
 scope with no HERDR_PANE_ID, then with HERDR_PANE_ID w0:p1 from outside: refused, exit 64,
 naming w0:p1 (end to end: the scope is the box's real systemd user manager's).
 resume_same_session: `--director --resume D1` beside it: refused, exit 73, naming w0:p1. Each
@@ -94,6 +95,27 @@ def relaunch_busy(s: Scratch) -> None:
             p.kill()
 
 
+def relaunch_short_wait(s: Scratch) -> None:
+    """comms #acceptance-director-relaunch-busy, the wait's bound: an idle director and --wait 31,
+    room for reads at 0, 15 and 30 s but not the fourth, 15 s after the third: refused, exit 75,
+    nothing changed (#1141 design: 4 reads 15 s apart; a shortened last gap never counts)."""
+    d, procs = director(s, "idle")
+    pi = procs[0]
+    before = snapshot(s, d)
+    try:
+        t0 = time.monotonic()
+        cmd = start("--relaunch", "--wait", "31", "--cwd", str(s.root / "target"))
+        ran = s.run(cmd, want=75)
+        took = time.monotonic() - t0
+        assert "w0:p1 is not settled" in ran.err, ran.err
+        assert took < 45, took  # the fourth read's earliest time
+        unchanged(s, d, before, pi)
+        show(f"--relaunch --wait 31, director idle: exit 75 after {took:.0f} s: {ran.err.strip()}")
+    finally:
+        for p in procs:
+            p.kill()
+
+
 def relaunch_own_scope(s: Scratch) -> None:
     """comms #acceptance-director-relaunch-own-scope: the director's shell in its own agent
     scope (as herdr-spawn adopts it), and from it a detached job, with no HERDR_PANE_ID of its
@@ -154,4 +176,4 @@ def resume_same_session(s: Scratch) -> None:
 
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).parent))
-    main(relaunch_busy, relaunch_own_scope, resume_same_session)
+    main(relaunch_busy, relaunch_short_wait, relaunch_own_scope, resume_same_session)
