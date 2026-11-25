@@ -11,13 +11,8 @@
       "pr": 24
     },
     "acceptance-parent-gone": {
-      "status": "built",
-      "pr": 833,
-      "record": "20261114T035639Z-05147b7a",
-      "commit": "cb4a3f3fc53acb8e46fba0d5c5b0149b38924202",
-      "tests": [
-        "tests/gate/kit/herdr_messaging.py"
-      ]
+      "status": "planned",
+      "pr": null
     },
     "acceptance-worker-ended": {
       "status": "built",
