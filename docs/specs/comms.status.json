@@ -11,8 +11,13 @@
       "pr": 24
     },
     "acceptance-parent-gone": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1301,
+      "record": "20261125T095047Z-0d3852e8",
+      "commit": "b4b1a8de0b7e7a949275d21753d6d5729db00819",
+      "tests": [
+        "tests/gate/kit/herdr_messaging.py"
+      ]
     },
     "acceptance-worker-ended": {
       "status": "built",
@@ -61,8 +66,13 @@
       "tests": []
     },
     "acceptance-parent-director-relaunched": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1301,
+      "record": "20261125T095046Z-b0402911",
+      "commit": "b4b1a8de0b7e7a949275d21753d6d5729db00819",
+      "tests": [
+        "tests/gate/kit/herdr_messaging.py"
+      ]
     },
     "acceptance-result-file": {
       "status": "built",
