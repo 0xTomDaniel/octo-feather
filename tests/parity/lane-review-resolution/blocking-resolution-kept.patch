@@ -1,14 +1,14 @@
 Seeded defect: a blocking resolution verdict carries the review over a resolved merge (issue-lifecycle #lanes-one-head, #acceptance-review-resolution).
-diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
-index a9b3c986..535d115f 100755
---- a/scripts/octo-feather-lane
-+++ b/scripts/octo-feather-lane
-@@ -1953,7 +1953,7 @@ def resolution_verdicts(comments: "list[dict[str, object]]") -> dict[str, str]:
-         body = str(c.get("body") or "")
-         rm = RESOLUTION_HEAD.match(body.lstrip()); hdr = body.split("\n### Findings", 1)[0]
+diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
+index e1fa1baa..5f2fb040 100755
+--- a/scripts/merge_ask.py
++++ b/scripts/merge_ask.py
+@@ -2259,7 +2259,7 @@ def resolution_verdicts(comments: list[Comment]) -> dict[str, str]:
+         rm = RESOLUTION_HEAD.match(c.body.lstrip())
+         hdr = c.body.split("\n### Findings", 1)[0]
          vs = verdicts(hdr)
 -        if rm and set(vs) == {"clear"} and not check_lines(hdr)[1]:
 +        if rm and vs and not check_lines(hdr)[1]:
-             out[rm.group(1)] = str(c.get("url") or "")
+             out[rm.group(1)] = c.url
      return out
  

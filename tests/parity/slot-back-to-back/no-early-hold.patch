@@ -1,10 +1,10 @@
 Seeded defect: the gate's plugin takes no early hold before its static checks (no `hold --if-granted`), so a lane's second gate leaves its slot free through them and the grace runs out under them (heavy_slot.py docstring, #1113).
 diff --git a/tests/gate/heavy_slot.py b/tests/gate/heavy_slot.py
-index 100a8c73..9565875d 100644
+index 8d97d923..6974ba9e 100644
 --- a/tests/gate/heavy_slot.py
 +++ b/tests/gate/heavy_slot.py
-@@ -129,8 +129,6 @@ def _counted(config: pytest.Config, ids: Sequence[str]) -> None:
-     _run.left = {i for i in ids if _static(i)}
+@@ -285,8 +285,6 @@ def _counted(config: pytest.Config, ids: Sequence[str], e2e: set[str] | None) ->
+             (_run.verdict.parent / FAST).write_text("")
      if not _run.left:
          _decide(config)
 -    else:
