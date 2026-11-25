@@ -165,8 +165,8 @@
     "acceptance-stash-guard": {
       "status": "built",
       "pr": 1309,
-      "record": "20261125T182357Z-2cefe6f4",
-      "commit": "9ccde1b71bece762ffb6681ef7e3813dbae19f8c",
+      "record": "20261125T184857Z-9069f029",
+      "commit": "256d8c996ad58bc987d9c45f3887019a912ea4db",
       "tests": [
         "tests/gate/kit/launch_stash_guard.py"
       ]
