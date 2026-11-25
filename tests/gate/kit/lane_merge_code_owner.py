@@ -15,7 +15,8 @@ cited in testkit/recordings/codeowners-prometheus.json, its patterns and order v
 maintainer's handle, @bwplotka, made the realcase owner's, with a file at each path below; PR #29
 (gh1255-1260-refuse, F) adds a .github/CODEOWNERS with a `!`, a `[ ]` and a `\\#` line. The
 scratch repo rebuilds those commits byte for byte (lane_merge_tier.GIT_ENV), a full gate pass
-recorded at each head as the recording did.
+recorded at each head as the recording did. PR #42 (gh1255-1260-drop, on gh1255-1260-base2, B2:
+B with OWNERS as .github/CODEOWNERS) drops the `app.py` line and changes app.py.
 """
 
 from __future__ import annotations
@@ -76,6 +77,32 @@ def lanes(r: Path, s: Scratch) -> dict[int, str]:
     return out
 
 
+# PR #42: base gh1255-1260-base2 (B2: B, then .github/CODEOWNERS as OWNERS), its lane
+# gh1255-1260-drop dropping the owner's app.py line and changing app.py
+DROP_PR = 42
+B2 = "1cd4e4641b4af9d2e94d228c77265d35fa3ed795"
+DROP_HEAD = "b7ec8646c914bcec34a977dec3fd074a8b0bba82"
+
+
+def dropped(r: Path, s: Scratch) -> str:
+    """B2 on its branch (origin's too), then PR #42's commit on gh1255-1260-drop: its sha."""
+
+    def commit(msg: str, files: dict[str, str]) -> str:
+        for name, text in files.items():
+            (r / name).parent.mkdir(parents=True, exist_ok=True)
+            (r / name).write_text(text)
+        s.git(r, "add", "-A")
+        s.run(["git", "-C", str(r), "commit", "-q", "-m", msg], env=GIT_ENV)
+        return s.git(r, "rev-parse", "HEAD")
+
+    s.git(r, "checkout", "-q", "-B", "gh1255-1260-base2", B)
+    base = commit("test: base with a code owners file (#1260)", {".github/CODEOWNERS": OWNERS})
+    assert base == B2, "B2 rebuilt"
+    s.git(r, "update-ref", "refs/remotes/origin/gh1255-1260-base2", B2)
+    s.git(r, "checkout", "-q", "-B", "gh1255-1260-drop", B2)
+    return commit(MESSAGE, {".github/CODEOWNERS": "* @0xTomDaniel/maintainers\n", "app.py": APP1})
+
+
 class RealCase:
     """The scratch repo R: B rebuilt, then each PR's commit, PR's checked out on its branch at
     HEAD, a full pass recorded there."""
@@ -99,7 +126,9 @@ class RealCase:
         assert lanes(r, s) == {27: OWN, 28: REAL_HEAD, 29: REFUSE_HEAD}, (
             "the realcase heads rebuilt"
         )
-        s.git(r, "checkout", "-q", LANES[pr][0])
+        if pr == DROP_PR:
+            assert dropped(r, s) == DROP_HEAD, "the dropped-line head rebuilt"
+        s.git(r, "checkout", "-q", LANES[pr][0] if pr in LANES else "gh1255-1260-drop")
         assert s.git(r, "rev-parse", "HEAD") == head, f"PR #{pr}'s head"
         s.run([G, "record", "--reason", "recording", "--seconds", "1"], cwd=r)
 
@@ -166,5 +195,20 @@ def refused(s: Scratch) -> None:
     assert "code owner:" not in r.err.split(INCOMPLETE, 1)[1].split("Waits for:", 1)[0], r.err
 
 
+def dropped_line(s: Scratch) -> None:
+    """Realcase PR #42 drops `app.py @0xTomDaniel` from the CODEOWNERS its base holds and changes
+    app.py: the merge base's file still gives app.py to the owner, so tier 3 names it from there,
+    waiting for the owner: a lane never lowers its own tier by editing the file."""
+    out = RealCase(s, DROP_PR, DROP_HEAD).ask("dropped_line").out
+    assert block(out) == [
+        "Tier: 3",
+        (
+            f"- code owner: app.py is @0xTomDaniel's (.github/CODEOWNERS at the merge base "
+            f"{B2[:12]} line 2: `app.py @0xTomDaniel`)"
+        ),
+        "Waits for: the owner",
+    ], out
+
+
 if __name__ == "__main__":
-    main(owner_path, real_file, refused)
+    main(owner_path, real_file, refused, dropped_line)
