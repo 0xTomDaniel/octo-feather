@@ -1,0 +1,15 @@
+Seeded defect: eslint-files fails unnamed: exit 1 with no line naming the eslint step or its error.
+diff --git a/templates/typescript/justfile b/templates/typescript/justfile
+index bee1da80..1e082ee5 100644
+--- a/templates/typescript/justfile
++++ b/templates/typescript/justfile
+@@ -83,8 +83,7 @@ eslint-files:
+       const { ESLint } = await import(process.getBuiltinModule("node:url").pathToFileURL(path).href);
+       const parserOptions = { projectService: false, project: null };
+       results = await new ESLint({ ruleFilter: () => false, overrideConfig: { languageOptions: { parserOptions } } }).lintFiles(["."]);
+-    } catch (e) {
+-      process.stderr.write(`eslint-files: ${step} failed; ${e instanceof Error ? e.message : String(e)}\n`);
++    } catch {
+       process.exit(1);
+     }
+     for (const f of results) console.log(f.filePath);

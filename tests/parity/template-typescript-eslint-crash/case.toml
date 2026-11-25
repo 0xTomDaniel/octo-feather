@@ -1,0 +1,12 @@
+# The parity lever's case for test_eslint_crash, its crash moved from a stand-in eslint CLI to a crashing eslint.config.js,
+# as eslint-files now asks eslint's Node API for its file list (#1294; tests/parity/lever.py --help).
+old = "tests/gate/kit/test_template_typescript_tools.py::test_eslint_crash"
+old_at = "32130e87"
+# The old item's scenario file and the kit test file it imports (no_tsc); the testkit stays the head's, a superset.
+needs = ["tests/gate/kit/template_typescript_tools.py", "tests/gate/kit/check_languages.py"]
+new = "tests/gate/kit/test_template_typescript_tools.py::test_eslint_crash"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): run: the justfile is no program: just
+# reads it to run the recipe; coverage.py cannot see it.
+[ran]
+"templates/typescript/justfile" = "run just eslint-files"
