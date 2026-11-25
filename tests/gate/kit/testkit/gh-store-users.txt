@@ -3,7 +3,6 @@ tests/gate/kit/test_herdr_messaging.py::test_post_merge_busy
 tests/gate/kit/test_herdr_messaging.py::test_post_merge_tell_failed
 tests/gate/kit/test_herdr_messaging.py::test_post_merge_tell_gone
 tests/gate/kit/test_herdr_messaging.py::test_post_merge_tell_kit
-tests/gate/kit/test_herdr_messaging.py::test_post_merge_tell_supervisors
 tests/gate/kit/test_lane_archive_teardown.py::test_lane_archive_director_unread
 tests/gate/kit/test_lane_archive_teardown.py::test_lane_archive_red_main
 tests/gate/kit/test_lane_archive_teardown.py::test_lane_archive_shared_supervisor_kept
@@ -11,7 +10,6 @@ tests/gate/kit/test_lane_archive_teardown.py::test_lane_archive_teardown_no_mana
 tests/gate/kit/test_lane_archive_teardown.py::test_lane_archive_teardown_unit_fails
 tests/gate/kit/test_lane_archive_teardown.py::test_lane_archive_teardown_unit_killed
 tests/gate/kit/test_lane_archive_teardown.py::test_lane_archive_teardown_unit_start_fails
-tests/gate/kit/test_lane_archive_teardown.py::test_lane_archive_tears_down
 tests/gate/kit/test_lane_archive_teardown.py::test_lane_archive_waits
 tests/gate/kit/test_lane_archive_teardown.py::test_lane_archive_watch_gh_gone
 tests/gate/kit/test_lane_correction.py::test_lane_correction_reflect
@@ -45,7 +43,6 @@ tests/gate/kit/test_lane_live_run.py::test_lane_live_run_refresh_waits
 tests/gate/kit/test_lane_live_run.py::test_lane_live_run_teardown_waits
 tests/gate/kit/test_lane_merge.py::test_lane_merge_refused
 tests/gate/kit/test_lane_merge.py::test_lane_merge_resume
-tests/gate/kit/test_lane_merge.py::test_lane_merge_starts_routine
 tests/gate/kit/test_lane_merge_ask.py::test_merge_ask_ci_status_only
 tests/gate/kit/test_lane_merge_ask.py::test_merge_ask_current_head_checks
 tests/gate/kit/test_lane_merge_ask.py::test_merge_ask_current_head_identity

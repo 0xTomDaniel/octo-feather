@@ -1,6 +1,6 @@
 {
   "spec": "skills.spec.html",
-  "accepted_commit": "72636f5e8216814e54a8be28495a1099e81e99d8",
+  "accepted_commit": "d08cd606cc897be8a132accd612449f2f92047b0",
   "criteria": {
     "acceptance-patch-only": {
       "status": "built",
@@ -20,13 +20,24 @@
       "commit": "709ef5032b0adecd0ae679e2a7a791063fca1680",
       "tests": []
     },
+    "acceptance-launch-refuses-unloaded": {
+      "status": "built",
+      "pr": 570,
+      "record": "20261105T190238Z-bdeb08ce",
+      "commit": "709ef5032b0adecd0ae679e2a7a791063fca1680",
+      "tests": []
+    },
     "acceptance-external-skill": {
       "status": "planned",
       "pr": null
     },
-    "acceptance-notice": {
+    "acceptance-repo-skill-roles": {
       "status": "built",
-      "pr": 16
+      "pr": 181
+    },
+    "acceptance-verification-pi": {
+      "status": "built",
+      "pr": 181
     },
     "acceptance-tracker-linear": {
       "status": "built",
@@ -44,24 +55,13 @@
       "status": "built",
       "pr": 103
     },
-    "acceptance-repo-skill-roles": {
-      "status": "built",
-      "pr": 181
-    },
-    "acceptance-verification-pi": {
-      "status": "built",
-      "pr": 181
-    },
     "acceptance-browser": {
       "status": "planned",
       "pr": null
     },
-    "acceptance-launch-refuses-unloaded": {
+    "acceptance-notice": {
       "status": "built",
-      "pr": 570,
-      "record": "20261105T190238Z-bdeb08ce",
-      "commit": "709ef5032b0adecd0ae679e2a7a791063fca1680",
-      "tests": []
+      "pr": 16
     }
   }
 }
