@@ -1,0 +1,13 @@
+# The parity lever's case for tests/gate-trend-tier.sh, one run under xdist where it had three, each line read at the
+# end (#1293; tests/parity/lever.py --help).
+old = "tests/gate-trend-tier.sh"
+old_at = "32130e87"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none.
+needs = []
+# The same script, as its gate item: `just test` collects no .sh path.
+new = "tests/gate/test_gate.py::test_script[tests/gate-trend-tier.sh]"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): open: the test copies
+# tests/gate/conftest.py into its throwaway suite, whose pytest runs that copy.
+[ran]
+"tests/gate/conftest.py" = "open tests/gate/conftest.py"
