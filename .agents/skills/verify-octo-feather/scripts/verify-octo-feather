@@ -22,6 +22,7 @@ import shutil
 import statistics
 import subprocess
 import sys
+import tempfile
 import traceback
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
@@ -33,7 +34,7 @@ import tomllib
 
 ME = "verify-octo-feather"
 FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-eval-verdict", "qc-stale", "spec-revision-init", "gate-tiers", "kit-hook", "merge-ask-proof", "pilot-pr", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "template-edge", "qa-runs", "qa-baseline", "qa-analyst", "qa-evidence", "qa-review", "qa-history", "run-slots", "queued-completion",
-            "parent-resumed", "result-file", "result-missing", "lane-start")
+            "parent-resumed", "result-file", "result-missing", "lane-start", "director-relaunch")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -4009,6 +4010,194 @@ def lane_start_sub_issue(f: Feature, w: CommsWorld, store: Path, checkout: Path)
             and c.o["made"] == "")
 
 
+
+DEAD_MODEL = """import socket, sys
+s = socket.socket(); s.bind(("127.0.0.1", 0)); s.listen(64)
+open(sys.argv[1], "w").write(str(s.getsockname()[1]))
+held = []
+while True:
+    held.append(s.accept()[0])  # never answers: a model turn stays busy until aborted
+"""
+
+
+def drive_director_relaunch(f: Feature) -> None:
+    """comms#acceptance-director-relaunch-busy, -own-scope, -same-session: a real scratch Herdr server (its own
+    XDG_CONFIG_HOME and session, never the box's), a real Pi director started by `octo-feather-start --director`, its
+    model a local socket that never answers (a turn stays busy), its agent scope the box's real systemd user manager's.
+    The refusals, each leaving the director's pane and director.toml as they were, then the relaunch: a new pane= that
+    `herdr agent get director` and director.toml name, one Pi on the session, one message naming the old pane. The
+    server and the dead model stopped through their pid files. Cases: features/director-relaunch.md."""
+    pi_bin = shutil.which("pi") or str(Path.home() / ".local" / "pi" / "pi")
+    need = [n for n, ok in (("herdr", shutil.which("herdr")), ("pi", Path(pi_bin).exists()),
+                            ("a systemd user manager", output(["systemctl", "--user", "is-system-running"])[1].strip()
+                             in ("running", "degraded"))) if not ok]
+    models = Path.home() / ".pi" / "agent" / "models.json"
+    if need or not models.is_file():
+        f.unreachable_step("director-relaunch", f"needs {', '.join(need) or str(models)} on this box; no case ran")
+        return
+    sc = RUN_DIR / "scratch" / "director-relaunch"
+    shutil.rmtree(sc, ignore_errors=True)
+    for d in ("state", "pi-agent", "pids", "tmp", "steps", "logs"):
+        (sc / d).mkdir(parents=True)
+    # Herdr's config dir holds its socket, whose path must fit sun_path (108 bytes): a short dir of its own under
+    # /tmp, removed at the end, linked from the scratch as xdg-config.
+    xdg = Path(tempfile.mkdtemp(prefix="vof-", dir="/tmp"))
+    (xdg / "herdr").mkdir()
+    (sc / "xdg-config").symlink_to(xdg)
+    session = "verify-relaunch"
+    sock = xdg / "herdr" / "sessions" / session / "herdr.sock"
+    kit = Path(f.s.repo)
+    base = {"XDG_CONFIG_HOME": str(xdg), "XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": session,
+            "HERDR_SOCKET_PATH": str(sock), "PI_CODING_AGENT_DIR": str(sc / "pi-agent"), "PI_OFFLINE": "1",
+            "PI_SKIP_VERSION_CHECK": "1", "PI_TELEMETRY": "0", "TMPDIR": str(sc / "tmp")}
+    env = case_env(base)
+
+    def h(*args: str) -> str:
+        return subprocess.run(["herdr", *args], env=env, capture_output=True, text=True, check=False).stdout
+
+    def bg(name: str, *argv: str) -> None:  # setsid, its pid file in sc/pids, stopped in the finally below
+        subprocess.Popen(["setsid", "sh", "-c", f'echo $$ > "{sc / "pids" / name}"; exec "$@"', "_", *argv], env=env,
+                         stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+    def until(test: Callable[[], bool], secs: float) -> bool:
+        end = datetime.now(UTC).timestamp() + secs
+        while not test():
+            if datetime.now(UTC).timestamp() > end:
+                return False
+            subprocess.run(["sleep", "0.5"], check=False)
+        return True
+
+    def status(pane: str) -> str:
+        try:
+            return str(json.loads(h("agent", "get", pane))["result"]["agent"]["agent_status"])
+        except (ValueError, KeyError):
+            return ""
+
+    toml = sc / "state" / "octo-feather" / "sessions" / session / "director.toml"
+
+    def director_now(name: str) -> None:  # the director as Herdr and director.toml name it, after case NAME
+        try:
+            pane = str(json.loads(h("agent", "get", "director"))["result"]["agent"]["pane_id"])
+        except (ValueError, KeyError):
+            pane = ""
+        f.obs(name, "director", pane)
+        f.obs(name, "toml", toml.read_text() if toml.is_file() else "")
+
+    def typed(pane: str, name: str, script: str) -> None:  # a `!!bash` step typed into the Pi at PANE (no model turn)
+        (sc / "steps" / f"{name}.sh").write_text(script)
+        h("pane", "run", pane, f"!!bash {sc / 'steps' / f'{name}.sh'}")
+
+    try:
+        port = sc / "dead-model.port"
+        bg("dead-model", sys.executable, "-c", DEAD_MODEL, str(port))
+        if not until(lambda: port.is_file() and port.read_text().strip() != "", 10):
+            msg = "the dead model socket did not start"
+            raise RuntimeError(msg)
+        m = json.loads(models.read_text())
+        for p in m.get("providers", {}).values():
+            p["baseUrl"], p["apiKey"] = f"http://127.0.0.1:{port.read_text().strip()}", "invalid-verify"
+        (sc / "pi-agent" / "models.json").write_text(json.dumps(m))
+        user = models.parent / "settings.json"
+        own = cast("dict[str, object]", json.loads(user.read_text()) if user.is_file() else {})
+        settings: dict[str, object] = {k: own[k] for k in ("defaultProvider", "defaultModel", "enabledModels") if k in own}
+        (sc / "pi-agent" / "settings.json").write_text(json.dumps(settings | {"retry": {"enabled": False}}))
+        (sc / "pi-agent" / "auth.json").write_text("{}")
+        (xdg / "herdr" / "config.toml").write_text(
+            "[update]\nversion_check = false\nmanifest_check = false\n[session]\nresume_agents_on_restore = false\n")
+        bg("herdr-server", "herdr", "--session", session, "server")
+        if not until(lambda: sock.exists() and '"workspaces"' in h("workspace", "list"), 15):
+            msg = "the scratch Herdr server did not answer"
+            raise RuntimeError(msg)
+        say(f"scratch Herdr session {session}: socket {sock}")
+        target = sc / "target"
+        name = output(["git", "-C", str(kit), "config", "user.name"])[1].strip() or "verify"
+        email = output(["git", "-C", str(kit), "config", "user.email"])[1].strip() or "verify@invalid"
+        for argv in (["git", "init", "-q", "-b", "main", str(target)], [str(kit / "scripts" / "pi-role"), "--set-identity", name, email]):
+            subprocess.run(argv, env=env, check=True, capture_output=True)
+        toml.parent.mkdir(parents=True, exist_ok=True)
+        # A reflection just ran: an octo-feather-start runs none in the background (scripts/octo-feather-start).
+        toml.with_name("director.handoffs.jsonl").write_text(json.dumps({"at": now(), "kind": "reflection"}) + "\n")
+        f.env = base
+        start = ["octo-feather-start", "--director", "--cwd", str(target)]
+        f.run("start", *start)
+        out = (f.d / "start.stdout").read_text()
+        old = next((x[5:] for x in out.split() if x.startswith("pane=")), "")
+        sid = next((x[20:] for x in out.split() if x.startswith("provider_session_id=")), "")
+        typed(old, "director-toml", 'printf \'pane = "%s"\\n\' "$HERDR_PANE_ID" > "$(octo-feather-state)/director.toml"\n')
+        until(toml.is_file, 20)
+        director_now("start")
+        say(f"start: director {old} session {sid}; director.toml {toml.read_text().strip() if toml.is_file() else '(none)'}")
+        f.check("start", lambda c: c.code == 0 and old and sid and c.o["director"] == old
+                and c.o["toml"] == f'pane = "{old}"\n')
+        unchanged = f'pane = "{old}"\n'
+
+        def held(c: Case) -> bool:
+            return c.o["director"] == old and c.o["toml"] == unchanged
+
+        subprocess.run([str(kit / ".agents/skills/herdr-comms/assets/herdr-say"), old, "verify: a turn the model never answers"],
+                       env=env, capture_output=True, check=False)
+        until(lambda: status(old) == "working", 20)
+        f.run("busy", *start[:2], "--relaunch", "--wait", "20", *start[2:])
+        director_now("busy")
+        f.obs("busy", "status", status(old))
+        f.check("busy", lambda c: c.code == 75 and "busy" in c.err and old in c.err and held(c) and c.o["status"] == "working")
+        h("pane", "send-keys", old, "Escape")
+        until(lambda: status(old) in ("idle", "done"), 20)
+        job = sc / "logs" / "own-scope.log"
+        relaunch = f"octo-feather-start --director --relaunch --wait 20 --cwd {target}"
+        typed(old, "own-scope", f"(env -u HERDR_PANE_ID setsid sh -c 'cat /proc/self/cgroup; {relaunch}; echo rc=$?' "
+                                f"> {job} 2>&1 </dev/null &)\n")
+        f.run("own-scope", "cat", str(sc / "steps" / "own-scope.sh"))
+        until(lambda: job.is_file() and "rc=" in job.read_text(), 60)
+        f.obs("own-scope", "job", job.read_text() if job.is_file() else "")
+        director_now("own-scope")
+        say(f"own-scope: the job typed into {old}'s Pi printed: {f.d / 'own-scope.obs.job'}")
+        f.check("own-scope", lambda c: "rc=64" in c.o["job"] and f"octo-feather-agent-{old}-" in c.o["job"]
+                and f"director pane {old}'s agent scope" in c.o["job"] and held(c))
+        f.run("own-pane", "env", f"HERDR_PANE_ID={old}", *start[:2], "--relaunch", "--wait", "20", *start[2:])
+        director_now("own-pane")
+        f.check("own-pane", lambda c: c.code == 64 and f"HERDR_PANE_ID is the director's pane {old}" in c.err and held(c))
+        f.run("same-session", *start[:2], "--resume", sid, *start[2:])
+        director_now("same-session")
+        f.check("same-session", lambda c: c.code == 73 and old in c.err and sid in c.err and held(c))
+        f.run("bare", *start)
+        director_now("bare")
+        f.check("bare", lambda c: c.code == 73 and "--relaunch" in c.err and "--replace" in c.err and held(c))
+        pid = sc / "logs" / "bg-job.pid"
+        typed(old, "bg-job", f"(setsid sleep 600 </dev/null >/dev/null 2>&1 & echo $! > {pid})\n")
+        until(lambda: pid.is_file() and pid.read_text().strip() != "", 20)
+        f.run("park-refused", *start[:2], "--relaunch", "--wait", "90", *start[2:])
+        director_now("park-refused")
+        f.check("park-refused", lambda c: c.code == 75 and f"{old} not parked" in c.err and "no plain close" in c.err
+                and held(c))
+        subprocess.run(["kill", pid.read_text().strip()], check=False)
+        f.run("relaunch", *start[:2], "--relaunch", "--wait", "120", *start[2:])
+        out = (f.d / "relaunch.stdout").read_text()
+        new = next((x[5:] for x in out.split() if x.startswith("pane=")), "")
+        director_now("relaunch")
+        f.obs("relaunch", "pi", str(len(output(["pgrep", "-f", "--", f"--session-id {sid}"])[1].split())))
+        # What the new pane received, from Pi's own session file (the pane wraps long lines).
+        kept = "".join(p.read_text() for p in (sc / "pi-agent" / "sessions").glob(f"*/*_{sid}.jsonl"))
+        f.obs("relaunch", "received", "\n".join(re.findall(r'Relaunched \([^"]*', kept)))
+        say(f"relaunch: new pane {new}; agent get director, director.toml and the message: {f.d}")
+        f.check("relaunch", lambda c: c.code == 0 and new not in ("", old) and c.o["director"] == new
+                and c.o["toml"] == f'pane = "{new}"\n' and c.o["pi"] == "1" and len(c.o["received"].splitlines()) == 1
+                and f"replacing pane {old}, session {sid}" in c.o["received"] and "director.handoffs.jsonl" in c.o["received"])
+    finally:
+        f.env = {}
+        if sock.exists():
+            for w in [x.get("workspace_id", "") for x in json.loads(h("workspace", "list") or "{}").get("result", {}).get("workspaces", [])]:
+                subprocess.run([str(kit / ".agents/skills/herdr-comms/assets/herdr-close"), w], env=env,
+                               capture_output=True, check=False)
+            h("server", "stop")
+        for p in sorted((sc / "pids").glob("*")) if (sc / "pids").is_dir() else []:
+            if p.read_text().strip():
+                subprocess.run(["kill", "--", f"-{p.read_text().strip()}"], capture_output=True, check=False)
+            p.unlink()
+        shutil.rmtree(xdg, ignore_errors=True)
+        say(f"director-relaunch: scratch Herdr {session} and the dead model stopped; evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
@@ -4053,6 +4242,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "result-file": drive_result_file,
     "result-missing": drive_result_missing,
     "lane-start": drive_lane_start,
+    "director-relaunch": drive_director_relaunch,
 }
 
 
