@@ -30,7 +30,8 @@
 # A target Herdr does not find may be parked (comms spec #roles-park): its line
 # comes from `octo-feather-handoff parked` (that command's docstring owns which
 # line counts). A live agent under the line's name gets the message; otherwise
-# the agent is resumed first, with the line's role, session and parent: a
+# the agent is resumed first, with the line's role and session and the parent
+# `octo-feather-handoff resume-workspace --parent` resolves now (never the line's): a
 # supervisor through octo-feather-start (which owns its workspace), a worker
 # through herdr-spawn in the workspace `octo-feather-handoff resume-workspace` names.
 # Its new pane= is printed, and the message it receives starts
@@ -138,7 +139,7 @@ if [[ "$rc" != 0 && "$(code)" == agent_not_found && -z "$gone" && "$lrc" == 0 ]]
   name="$(jq -r .name <<<"$line")"
   if ! herdr agent get "$name" >/dev/null 2>&1; then
     resume=(--cwd "$(jq -r .cwd <<<"$line")" --name "$name" --resume "$(jq -r .session <<<"$line")"
-      --parent "$(jq -r '.parent // empty' <<<"$line")")
+      --parent "$("$here/../../../../scripts/octo-feather-handoff" resume-workspace --parent <<<"$line")")
     if [[ "$name" == "$(jq -r .lane <<<"$line")" ]]; then
       started="$("$here/../../../../scripts/octo-feather-start" "${resume[@]}")"
     else
