@@ -17,7 +17,7 @@ unit inherits it. Space ids `zt*`, which no real Herdr gives.
 The demo's commands and output are printed: the merge, the archive, the teardown unit's lines
 and the director's one message, `post-merge --lane gh7`.
 
-archive_tears_down runs instead in gh1249's real case (RealCase, herdr_messaging.py): lane A's
+archive_tears_down runs instead in gh1249's real case (testkit.realcase): lane A's
 merge then its `archive gh10`, gh answering only from their recorded tapes (testkit/recordings/
 lane-merge-realcase.json, then lane-archive-realcase.json), lane A's worktree on its branch gh10 at
 the PR's recorded head, the systemd stand-in as above; every expected value the tapes' recorded
@@ -33,19 +33,11 @@ import sys
 import time
 from typing import TYPE_CHECKING
 
-from herdr_messaging import (
-    ASSETS,
-    REALCASE,
-    REALCASE_TAPES,
-    RealCase,
-    agent,
-    lines,
-    recorded,
-    recordings,
-)
+from herdr_messaging import ASSETS, agent, lines
 from lane_merge import DIRECTOR, STEPS, SUPERVISOR, H, World
 from lane_post_merge import run1
 from testkit import HERE, Scratch, kit, main, reflector
+from testkit.realcase import REALCASE, REALCASE_TAPES, RealCase, recorded, recordings
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -243,7 +235,7 @@ def torn_down(lane: Lane, how: str) -> None:
 
 def archive_tears_down(s: Scratch) -> None:
     """issue-lifecycle#acceptance-archive-tears-down, comms#acceptance-close-message (the ticket's
-    demo) on gh1249's real case (RealCase, herdr_messaging.py, both tapes): after supervisor A's
+    demo) on gh1249's real case (testkit.realcase, both tapes): after supervisor A's
     `merge 14 7d7155984818 --repo REALCASE` (steps 1-6 ok), its `archive gh10` from its worktree
     asks gh exactly the recorded archive's calls, in its order (its ticket read of parent 10,
     the tracker key of lane key gh10, and its sub-issue; the teardown unit's PR list last),
