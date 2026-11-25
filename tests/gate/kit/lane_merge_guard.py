@@ -75,7 +75,7 @@ class World:
         lanes = self.st / "lanes"
         lanes.mkdir(parents=True)
         (lanes / f"{self.lane}.toml").write_text(
-            f'supervisor = "{SUP}"\nrepository = "{REPO}"\nissue = {issue}\npr = {pr}\n'
+            f'supervisor = "{SUP}"\nrepository = "{REPO}"\nissue = "gh{issue}"\npr = {pr}\n'
             'goal = "g"\nstarted_at = "2026-11-24T00:00:00Z"\n'
         )
         (self.st / "director.toml").write_text(f'pane = "{DIRECTOR}"\n')
