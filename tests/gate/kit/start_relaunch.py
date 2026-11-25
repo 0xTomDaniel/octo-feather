@@ -121,7 +121,7 @@ def relaunch_short_wait(s: Scratch) -> None:
 
 
 AGENT_SCOPE = re.compile(
-    r"/user@\d+\.service/.*/octo-feather-agent-(w[^/]*:p[^/]*)-[0-9a-f]{8}\.scope"
+    r"/user@\d+\.service/(?:.*/)?octo-feather-agent-(w[^/]*:p[^/]*)-[0-9a-f]{8}\.scope$"
 )
 
 
@@ -135,7 +135,7 @@ def own_agent_scope() -> str:
     """The pane whose kit agent scope this process already runs in, from /proc/self/cgroup;
     '' when none."""
     cg = next(x[3:] for x in Path("/proc/self/cgroup").read_text().splitlines() if x[:3] == "0::")
-    m = AGENT_SCOPE.fullmatch(cg)
+    m = AGENT_SCOPE.search(cg)
     return m.group(1) if m else ""
 
 
