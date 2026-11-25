@@ -9,9 +9,14 @@ and the body appended to Pi's system prompt. Pi still loads the target repo's
 AGENTS.md from the working directory, so roles never read it by hand.
 
 Pane:      herdr-spawn --role <role> (calls `pi-role --json` and hands the args
-           to `herdr agent start`, and "path", the caller's PATH with mise's
-           shims placed before its system dirs when the working directory's
-           repo has a mise.toml, as the tab's PATH).
+           to `herdr agent start`, and "path", the caller's PATH with the
+           stash guard placed, and mise's shims placed before its system dirs
+           when the working directory's repo has a mise.toml, as the tab's PATH).
+Stash guard (spec roles#launch-stash-guard): every launch, pane and headless,
+           puts the kit's scripts/stash-guard/ on PATH before the first dir that
+           holds a git or is a system dir, so the agent's git runs through it
+           (what it refuses: scripts/stash_guard.py). Every dir the caller put
+           earlier still wins; a git in one of them runs behind the guard.
 Headless:  pi-role agents/<role>.md -p "<brief>" in the worktree; the final
            message is on stdout. A -p (--print) run has no route to any pane:
            its child gets no OCTO_FEATHER_PARENT, HERDR_PANE_ID, HERDR_TAB_ID
@@ -476,16 +481,25 @@ def with_mise(path: str, mise_dir: str) -> str:
     return os.pathsep.join([*dirs[:at], mise_dir, *dirs[at:]])
 
 
+def with_guard(path: str) -> str:
+    """PATH with the stash guard's dir (pi-role --help, Stash guard; its `git` file runs the next git on PATH after
+    itself) once, before its first dir that holds a git or is a system dir (at the end with none)."""
+    guard = os.path.join(os.path.dirname(os.path.realpath(__file__)), "stash-guard")
+    dirs = [d for d in path.split(os.pathsep) if d and d != guard]
+    at = next((i for i, d in enumerate(dirs)
+               if d.rstrip("/") in SYSTEM_DIRS or os.access(os.path.join(d, "git"), os.X_OK)), len(dirs))
+    return os.pathsep.join([*dirs[:at], guard, *dirs[at:]])
+
+
 def mise_path():
-    """The caller's PATH with mise's shims placed (with_mise), or None when there are no shims to place."""
+    """The caller's PATH with the stash guard placed (with_guard), then mise's shims (with_mise) when there are any."""
     shims = mise_shims()
-    return with_mise(os.environ.get("PATH", ""), shims) if shims else None
+    path = with_guard(os.environ.get("PATH", ""))
+    return with_mise(path, shims) if shims else path
 
 
 def mise_shims_first():
-    path = mise_path()
-    if path:
-        os.environ["PATH"] = path
+    os.environ["PATH"] = mise_path()
 
 
 def main(argv: list[str]):
@@ -518,7 +532,7 @@ def main(argv: list[str]):
     args = launch(argv[0], to_file=as_json) + argv[1:]
     if as_json:
         path = mise_path()
-        print(json.dumps({"args": args, **({"path": path} if path else {})}))
+        print(json.dumps({"args": args, "path": path}))
         return
     os.environ.update(launch_env(argv[0]))
     flags = argv[1:argv.index("--")] if "--" in argv else argv[1:]
