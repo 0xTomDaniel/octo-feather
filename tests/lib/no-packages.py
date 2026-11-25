@@ -2,14 +2,14 @@
 """no-packages.py: a kit copy's JavaScript packages left out, for a nested gate that needs none.
 
 A test helper run as a command (tests/check-refs.sh, tests/check-decision-log.sh,
-tests/gate/kit/gate_untouched.py); in tests/lib/ so the gate's tests/*.sh glob does not collect it.
+tests/gate/kit/gate_untouched.py and gate_recipes_first.py); in tests/lib/ so the gate's tests/*.sh
+glob does not collect it.
 
   no-packages.py DIR
       DIR's package.json without its devDependencies and its pnpm-lock.yaml one with no packages
-      (NO_DEPS, the same lockfile as tests/gate/kit/gate_recipes_first.py's copy, kept here so
-      this command imports no test module): the nested gate's
-      check-tests prelude (`pnpm install --offline --frozen-lockfile`, the justfile) then installs
-      nothing, ~2 s CPU less than installing the kit's packages from its store into a fresh copy.
+      (NO_DEPS): the nested gate's check-tests prelude (`pnpm install --offline
+      --frozen-lockfile`, the justfile) then installs nothing, ~2 s CPU less than installing the
+      kit's packages from its store into a fresh copy.
 """
 
 import json
