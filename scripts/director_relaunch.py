@@ -170,21 +170,29 @@ def relaunch(args: argparse.Namespace) -> int:
     return after(args, toml, live, session, cwd)
 
 
-def prepare(args: argparse.Namespace, toml: Path) -> tuple[str, str, str]:
-    """Steps 1 to 5 (module docstring): the parked director's pane ('' for none), the session
-    and the cwd to resume in."""
-    old = recorded_pane(toml)
+def outside(old: str) -> Any:  # noqa: ANN401 (herdr_scope.ProcessInfo, loaded by path)
+    """Step 1 (module docstring): OLD's process info, None with no OLD or once Herdr knows no
+    such pane; refused 64 when this run sits in OLD's pane or its agent scope."""
     outside = "run it from outside the director's pane: the owner's shell, or another agent's pane"
     if old and os.environ.get("HERDR_PANE_ID") == old:
         raise RefusedError(64, f"this run's HERDR_PANE_ID is the director's pane {old}; {outside}")
     info = process_info(old) if old else None
-    session, cwd = cast("str", args.resume or ""), cast("str", args.cwd)
     if info is not None:
         own = scope.scope_of(info.shell_pid, old) if info.shell_pid is not None else None
         if own and scope.scope_of(os.getpid(), old) == own:
             unit = own.rsplit("/", 1)[-1]
             why = f"this run sits in the director pane {old}'s agent scope {unit}, so it would end"
             raise RefusedError(64, f"{why} with the pane it replaces; {outside}")
+    return info
+
+
+def prepare(args: argparse.Namespace, toml: Path) -> tuple[str, str, str]:
+    """Steps 1 to 5 (module docstring): the parked director's pane ('' for none), the session
+    and the cwd to resume in."""
+    old = recorded_pane(toml)
+    info = outside(old)
+    session, cwd = cast("str", args.resume or ""), cast("str", args.cwd)
+    if info is not None:
         got = scope.pi_session(info)
         if got is None or scope.environ(got[0].pid).get("OCTO_FEATHER_SESSION_ID") != got[1]:
             raise RefusedError(65, f"no herdr-spawn Pi session in the director's pane {old}")
