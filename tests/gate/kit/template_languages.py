@@ -5,8 +5,8 @@ command (testkit.main): the Python template's repo, made by `just new-repo pytho
 Its own check-languages (#362, owner rulings #225, #261): each rule, broken once, fails it naming
 the file and the fix: a tracked unknown file, a Go file (unmapped), a file a tool's own list
 misses (an unattributed bash script, an extensionless Python script), an `env -S` shebang scc
-cannot read, and ShellCheck's recipe out of the gate; one run, as each run analyses the repo
-with basedpyright (its file list), the cost floor. Its two tiers (templates spec
+cannot read, and ShellCheck's recipe out of the gate; one run, as each run asks ruff and
+basedpyright for their file lists, the cost floor. Its two tiers (templates spec
 #acceptance-fresh-fast, #acceptance-test-kinds, #acceptance-shared-fixture) and its starter
 acceptance test (templates spec #acceptance-starter-acceptance-test), each with the gate's
 static steps cut to ShellCheck's (Repo.gate_recipes); every real static step runs once, in
@@ -104,11 +104,12 @@ CHANGES: dict[str, tuple[Callable[[Repo], None], str | None]] = {
 def fast(s: Scratch, which: str) -> None:
     """After one full tier (its coverage recorded), just fast after a one-file change runs only
     that module's test; after a justfile change (on its shared-machinery.txt), or one to only its
-    selector script (listed too), every integration test, naming it; never an e2e test."""
+    selector script (listed too), every integration test, naming it; never an e2e test. One
+    process (-n 0): the selection is pytest-testmon's, the workers' shared fixture claims_gate's."""
     r = Repo(s, "python", ran=True)
     change, why = CHANGES[which]
     change(r)
-    out = r.run("just", "fast", "--color=no").out
+    out = r.run("just", "fast", "--color=no", env={"GATE_WORKERS": "0"}).out
     if why is None:
         assert INTEG not in out, f"a one-file change ran more than its test: {out}"
     else:
