@@ -10,6 +10,7 @@ from herdr_messaging import (
     director_worker_resume,
     fresh_worker_session,
     herdr_malformed,
+    lane_worker_resume,
     parent_gone,
     parent_resumed,
     parked_resumed,
@@ -111,6 +112,14 @@ def test_parent_gone(case: Case) -> None:
 )
 def test_director_worker_resume(case: Case) -> None:
     case(director_worker_resume)
+
+
+@pytest.mark.criterion(
+    "comms#acceptance-director-worker-resume", source="tests/gate/kit/herdr_messaging.py"
+)
+@pytest.mark.parametrize("caller", ["w1:p1", "w0:p1"])
+def test_lane_worker_resume(case: Case, caller: str) -> None:
+    case(lane_worker_resume, caller)
 
 
 @pytest.mark.criterion(

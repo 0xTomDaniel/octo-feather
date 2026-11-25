@@ -444,9 +444,9 @@ def director_worker_resume(s: Scratch) -> None:
     general-worker-a1 into the director log (director_parks); `herdr-say --parked
     general-worker-a1` prints that line; the director's `herdr-say general-worker-a1 MSG` prints
     the resumed pane=, in w0, with the recorded role, session and parent, and the worker receives
-    "Resumed from park as pane=..."; its `--parent RESULT` reaches the director. A parked lane
-    worker still resumes in its supervisor's workspace w1, by its supervisor or by the director.
-    Each observation printed, for the qc demo."""
+    "Resumed from park as pane=..."; its `--parent RESULT` reaches the director. Each observation
+    printed, for the qc demo. A parked lane worker still resumes in its supervisor's workspace:
+    lane_worker_resume, its own item."""
     d, _ = worker_world(s)
     s.env["HERDR_SESSION"] = f"park-{os.getpid()}"  # only this scenario's processes count
     line = director_parks(s, d)
@@ -463,8 +463,12 @@ def director_worker_resume(s: Scratch) -> None:
     s.run([SAY, "--parent", RESULT], env=back | {"HERDR_PANE_ID": new, "HERDR_WORKSPACE_ID": "w0"})
     assert to(d, "w0:p1") == [RESULT], lines(d / "prompts")
     show(f"resumed worker --parent: director w0:p1 received: {to(d, 'w0:p1')}")
-    for caller, who in (("w1:p1", "its supervisor"), ("w0:p1", "the director")):
-        lane_worker_resumes(sub(s, caller.replace(":", "-")), caller, who)
+
+
+def lane_worker_resume(s: Scratch, caller: str) -> None:
+    """A parked lane worker still resumes in its supervisor's workspace w1, by CALLER: its
+    supervisor w1:p1 or the director w0:p1 (lane_worker_resumes)."""
+    lane_worker_resumes(s, caller, "its supervisor" if caller == "w1:p1" else "the director")
 
 
 def tab_env(d: Path, pane: str) -> dict[str, str]:
@@ -1015,6 +1019,7 @@ def post_merge_busy(s: Scratch) -> None:
 TELL_JUSTFILE = "vendored-fetch:\n    @true\n\ninstall-check target:\n    @true\n"
 RULED = ".agents/skills/foo/SKILL.md, agents/supervisor.md"
 REREAD = "re-read the changed ones before your next step."
+SENDER = "(from the post-merge routine of lane gh7)"  # step 7's sender, its line and prod line
 
 
 def build_tell(p: Scratch) -> None:
@@ -1169,7 +1174,7 @@ def told_live(t: Tell) -> None:
     t.dlog.write_text(earlier + "\n")
     tell, last = t.run(3, 7, "--lane", "gh7", "--repo", "o/r")
     assert t.said() == ["zt1:p1"], t.said()
-    want = f"main moved to {t.m[:12]} (#7 Add foo); rule files changed: {RULED}; {REREAD}"
+    want = f"main moved to {t.m[:12]} (#7 Add foo); rule files changed: {RULED}; {REREAD} {SENDER}"
     assert t.told() == [want], t.told()
     assert "told: live1 zt1:p1" in tell, tell
     gone = "gone: director to resume or archive: none"
@@ -1178,7 +1183,7 @@ def told_live(t: Tell) -> None:
     assert "agent get zt3:p1" not in lines(t.d / "log"), lines(t.d / "log")
     prods = t.prods()
     assert len(prods) == 2, prods
-    note = f"post-merge {t.m} #7: main moved, told live1 to re-read {RULED}"
+    note = f"post-merge {t.m} #7: main moved, told live1 to re-read {RULED} {SENDER}"
     p = prods[1]
     assert sorted(p) == ["at", "issue", "kind", "note"], p
     assert (p["kind"], p["issue"], p["note"]) == ("prod", 11, note), p
@@ -1189,9 +1194,12 @@ def told_live(t: Tell) -> None:
     assert "already told: live1" in tell, tell
     assert "not woken: parked zt2:p1" in tell, tell
     t.run(3, 8, "--lane", "gh7", "--repo", "o/r")
-    none = f"main moved to {t.m2[:12]} (#8 Notes); rule files changed: none; {REREAD}"
+    none = f"main moved to {t.m2[:12]} (#8 Notes); rule files changed: none; {REREAD} {SENDER}"
     assert t.told()[-1] == none, t.told()
-    assert t.prods()[-1]["note"] == f"post-merge {t.m2} #8: main moved, told live1 to re-read none"
+    assert (
+        t.prods()[-1]["note"]
+        == f"post-merge {t.m2} #8: main moved, told live1 to re-read none {SENDER}"
+    )
 
 
 def told_kit(t: Tell) -> None:
@@ -1406,6 +1414,7 @@ if __name__ == "__main__":
         worker_route,
         parent_gone,
         director_worker_resume,
+        lane_worker_resume,
         queued_completion,
         fresh_worker_session,
         parent_resumed,

@@ -33,9 +33,9 @@ from __future__ import annotations
 
 import datetime as dt
 import fcntl
-import hashlib
 import json
 import os
+import re
 import sys
 import time
 
@@ -69,6 +69,7 @@ STEP5 = (
     "step 5 coverage map: ok: coverage map: started: unit {unit} (systemd-run --user, limit 3600s,"
     " its lines in {maps}/build.log) builds the map for {m}; the routine goes on without it"
 )
+UNIT = "octo-feather-fast-map-"  # the job unit's name, its clone id after it (--help, step 5)
 GREEN = (
     "post-merge {lane} PR #{pr}: step 1 merged ok; step 2 main CI ok; step 3 kit refresh ok; "
     "step 4 checkout ok; step 5 coverage map ok; step 6 stale agents ok; step 7 tell supervisors "
@@ -116,8 +117,7 @@ class World:
         full = {"merge": self.b, "at": at.isoformat(timespec="seconds")}
         record = {"running": None, "queued": None, "last": None, "full": full}
         (self.maps / "build.json").write_text(json.dumps(record))
-        clone = os.path.realpath(self.t / ".git")
-        self.unit = f"octo-feather-fast-map-{hashlib.sha256(clone.encode()).hexdigest()[:12]}"
+        self.unit = ""  # the job's unit, as the first started line names it (started)
         s.gh.store("repo.json", {"nameWithOwner": "o/r"})
         s.gh.store("api/repos/o/kit.json", {"nameWithOwner": "o/kit"})
         for n, m in zip((7, 8, 9), self.m, strict=True):
@@ -216,8 +216,16 @@ class Turns:
             f.close()
 
 
-def started(w: World, m: str) -> str:
-    return STEP5.format(unit=w.unit, maps=w.maps, m=m[:12])
+def started(w: World, r: Ran, m: str) -> None:
+    """R's step 5 line says the clone's job started for M: its unit, the first such line's, is
+    w.unit from then on, and every later one names that same unit."""
+    line = w.step5(r)
+    pattern = re.escape(STEP5).replace(re.escape("{unit}"), f"({re.escape(UNIT)}\\S+)")
+    pattern = pattern.replace(re.escape("{maps}"), re.escape(str(w.maps)))
+    got = re.fullmatch(pattern.replace(re.escape("{m}"), m[:12]), line)
+    assert got, f"want the job started for {m[:12]}: {r.out}"
+    w.unit = w.unit or got[1]
+    assert got[1] == w.unit, f"another unit than {w.unit}: {line}"
 
 
 def after_merge(s: Scratch) -> None:
@@ -225,8 +233,7 @@ def after_merge(s: Scratch) -> None:
     m1, m2, m3 = w.m
     turns = Turns(w)
     try:
-        r = w.post_merge(7)
-        assert w.step5(r) == started(w, m1), r.out
+        started(w, w.post_merge(7), m1)
         assert not (w.maps / f"{m1}.json").exists(), "the routine waited for the map"
         r = w.post_merge(8)
         want = f"step 5 coverage map: ok: coverage map: queued: {m2[:12]}, after unit {w.unit}'s"
@@ -260,11 +267,9 @@ def after_merge(s: Scratch) -> None:
 def full_daily(s: Scratch) -> None:
     w = World(s, age=25 * 3600)
     m1, m2, _ = w.m
-    r = w.post_merge(7)
-    assert w.step5(r) == started(w, m1), r.out
+    started(w, w.post_merge(7), m1)
     w.ended(1)
-    r = w.post_merge(8)
-    assert w.step5(r) == started(w, m2), r.out
+    started(w, w.post_merge(8), m2)
     w.ended(2)
     calls = w.calls()
     assert [(c["head"], c["args"]) for c in calls] == [(m1, []), (m2, ["--since-newest"])], calls
@@ -277,10 +282,10 @@ def build_failed(s: Scratch) -> None:
     m1, m2, _ = w.m
     before = sorted(p.name for p in w.maps.iterdir())
     (w.log.parent / (w.log.name + ".fail")).touch()
-    w.post_merge(7)
+    started(w, w.post_merge(7), m1)
     w.ended(1)
     assert [c["head"] for c in w.calls()] == [m1], w.calls()
-    w.post_merge(8, FAKE_SYSTEMD_KILLED="1")  # killed at its limit: its build never ends
+    started(w, w.post_merge(8, FAKE_SYSTEMD_KILLED="1"), m2)  # killed at its limit
     w.ended(2)
     maps = sorted(p.name for p in w.maps.iterdir() if p.suffix == ".json")
     assert set(maps) == {f"{w.b}.json", "build.json"}, f"maps changed: {before} -> {maps}"

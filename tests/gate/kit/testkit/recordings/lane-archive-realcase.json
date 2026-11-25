@@ -1,0 +1,80 @@
+[
+ {
+  "request": "pr view 14 --json state,isDraft,headRefOid,statusCheckRollup,commits -R 0xTomDaniel/octo-feather-realcase",
+  "out": "{\"commits\":[{\"authoredDate\":\"2026-11-24T21:45:50Z\",\"authors\":[{\"email\":\"tom@hamiltonspice.com\",\"id\":\"\",\"login\":\"\",\"name\":\"Tom Daniel\"}],\"committedDate\":\"2026-11-24T21:45:50Z\",\"messageBody\":\"\",\"messageHeadline\":\"[gh1249] realcase after: lane A's change (#1256)\",\"oid\":\"5677716f0632cc96f26a20f2f88554d807d4e642\"},{\"authoredDate\":\"2026-11-24T21:45:50Z\",\"authors\":[{\"email\":\"tom@hamiltonspice.com\",\"id\":\"\",\"login\":\"\",\"name\":\"Tom Daniel\"}],\"committedDate\":\"2026-11-24T21:45:50Z\",\"messageBody\":\"…s (#1256)\",\"messageHeadline\":\"[gh1249] CI: one cheap check workflow, so lanes read real green check…\",\"oid\":\"5da1f0dd40b612006fef09408703675a8fbc2410\"},{\"authoredDate\":\"2026-11-24T21:46:57Z\",\"authors\":[{\"email\":\"tom@hamiltonspice.com\",\"id\":\"\",\"login\":\"\",\"name\":\"Tom Daniel\"}],\"committedDate\":\"2026-11-24T21:46:57Z\",\"messageBody\":\"…tent (#1256)\",\"messageHeadline\":\"[gh1249] README: the repo is public and holds only throwaway test con…\",\"oid\":\"7d7155984818c5a34a76e1dc1d7b6ab8b8793331\"}],\"headRefOid\":\"7d7155984818c5a34a76e1dc1d7b6ab8b8793331\",\"isDraft\":false,\"state\":\"MERGED\",\"statusCheckRollup\":[{\"__typename\":\"CheckRun\",\"completedAt\":\"2026-11-24T21:47:14Z\",\"conclusion\":\"SUCCESS\",\"detailsUrl\":\"https://github.com/0xTomDaniel/octo-feather-realcase/actions/runs/45494552342/job/138801442976\",\"name\":\"check\",\"startedAt\":\"2026-11-24T21:47:08Z\",\"status\":\"COMPLETED\",\"workflowName\":\"check\"}]}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr view 14 --json state,isDraft,headRefOid,statusCheckRollup,commits -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-24",
+   "caller": "supervisor A's pane w2:p2, 2026-11-24T21:48:14.813936+00:00"
+  }
+ },
+ {
+  "request": "pr view 14 --json state,isDraft,headRefOid,statusCheckRollup,commits -R 0xTomDaniel/octo-feather-realcase",
+  "out": "{\"commits\":[{\"authoredDate\":\"2026-11-24T21:45:50Z\",\"authors\":[{\"email\":\"tom@hamiltonspice.com\",\"id\":\"\",\"login\":\"\",\"name\":\"Tom Daniel\"}],\"committedDate\":\"2026-11-24T21:45:50Z\",\"messageBody\":\"\",\"messageHeadline\":\"[gh1249] realcase after: lane A's change (#1256)\",\"oid\":\"5677716f0632cc96f26a20f2f88554d807d4e642\"},{\"authoredDate\":\"2026-11-24T21:45:50Z\",\"authors\":[{\"email\":\"tom@hamiltonspice.com\",\"id\":\"\",\"login\":\"\",\"name\":\"Tom Daniel\"}],\"committedDate\":\"2026-11-24T21:45:50Z\",\"messageBody\":\"…s (#1256)\",\"messageHeadline\":\"[gh1249] CI: one cheap check workflow, so lanes read real green check…\",\"oid\":\"5da1f0dd40b612006fef09408703675a8fbc2410\"},{\"authoredDate\":\"2026-11-24T21:46:57Z\",\"authors\":[{\"email\":\"tom@hamiltonspice.com\",\"id\":\"\",\"login\":\"\",\"name\":\"Tom Daniel\"}],\"committedDate\":\"2026-11-24T21:46:57Z\",\"messageBody\":\"…tent (#1256)\",\"messageHeadline\":\"[gh1249] README: the repo is public and holds only throwaway test con…\",\"oid\":\"7d7155984818c5a34a76e1dc1d7b6ab8b8793331\"}],\"headRefOid\":\"7d7155984818c5a34a76e1dc1d7b6ab8b8793331\",\"isDraft\":false,\"state\":\"MERGED\",\"statusCheckRollup\":[{\"__typename\":\"CheckRun\",\"completedAt\":\"2026-11-24T21:47:14Z\",\"conclusion\":\"SUCCESS\",\"detailsUrl\":\"https://github.com/0xTomDaniel/octo-feather-realcase/actions/runs/45494552342/job/138801442976\",\"name\":\"check\",\"startedAt\":\"2026-11-24T21:47:08Z\",\"status\":\"COMPLETED\",\"workflowName\":\"check\"}]}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr view 14 --json state,isDraft,headRefOid,statusCheckRollup,commits -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-24",
+   "caller": "supervisor A's pane w2:p2, 2026-11-24T21:48:15.910401+00:00"
+  }
+ },
+ {
+  "request": "issue view 10 --json number,title,body,state,url,parent,subIssues,blockedBy",
+  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Real-case run of octo-feather #1256 (lane gh1249, fix #1254), world `after`: lane A's parent ticket. Opened and closed by that run; no work here.\\n\",\"number\":10,\"parent\":null,\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[{\"id\":\"I_kwDOV6oJUc8AAAABiOpnpw\",\"number\":11,\"state\":\"CLOSED\",\"title\":\"[gh1249] realcase after: lane A sub-issue\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/11\"}],\"totalCount\":1},\"title\":\"[gh1249] realcase after: lane A parent\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/10\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh issue view 10 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "date": "2026-11-24",
+   "caller": "supervisor A's pane w2:p2, 2026-11-24T21:48:17.656014+00:00"
+  }
+ },
+ {
+  "request": "issue view 11 --json number,title,body,state,url,parent,subIssues,blockedBy",
+  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Real-case run of octo-feather #1256 (lane gh1249, fix #1254), world `after`: lane A's sub-issue. Opened and closed by that run; no work here.\\n\",\"number\":11,\"parent\":{\"id\":\"I_kwDOV6oJUc8AAAABiOplDA\",\"number\":10,\"state\":\"CLOSED\",\"title\":\"[gh1249] realcase after: lane A parent\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/10\"},\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"[gh1249] realcase after: lane A sub-issue\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/11\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh issue view 11 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "date": "2026-11-24",
+   "caller": "supervisor A's pane w2:p2, 2026-11-24T21:48:18.706623+00:00"
+  }
+ },
+ {
+  "request": "pr list --base gh10 --state open --json number,url -R 0xTomDaniel/octo-feather-realcase",
+  "out": "[]\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr list --base gh10 --state open --json number,url -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-24",
+   "caller": "supervisor A's pane w2:p2, 2026-11-24T21:48:20.117866+00:00"
+  }
+ },
+ {
+  "request": "pr list --base gh10 --state open --json number -R 0xTomDaniel/octo-feather-realcase",
+  "out": "[]\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr list --base gh10 --state open --json number -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-24",
+   "caller": "the teardown unit (systemd-run, the routine's teardown step), 2026-11-24T21:48:22.128557+00:00"
+  }
+ }
+]

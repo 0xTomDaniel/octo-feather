@@ -1,0 +1,15 @@
+[
+ {
+  "request": "issue-view gh4",
+  "out": "",
+  "err": "issue-view: gh4 is not a GitHub issue key\n",
+  "exit": 1,
+  "source": {
+   "script": ".agents/skills/github-issues/scripts/issue-view (kit 7f1c2bf5, main)",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "octo-feather-lane merge 9 a8d531d6e9ec --repo 0xTomDaniel/octo-feather-realcase: its done step, issue-view of the lane record's issue gh4",
+   "where": "tracker_calls.issue_view -> tracker('issue-view', 'gh4'): the script's key check refuses before gh runs (no gh call recorded); the archive's ticket read gave the same, its close recording 'tickets unread'",
+   "date": "2026-11-24"
+  }
+ }
+]
