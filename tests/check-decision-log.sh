@@ -41,7 +41,11 @@ set +e; out="$(cd "$t" && PATH="$t.bin" "$python" scripts/check-decision-log 2>&
 # FILE:LINE. The copy keeps only this test of tests/*.sh, so the gate there starts no other test, and the guard
 # above stops this one if the planted log ever got past check-decision-log.
 # It selects only its own recipe item (PYTEST_ADDOPTS -k, pytest's own selection, #507), so no recipe before it runs.
-find "$t/tests" -maxdepth 1 -name '*.sh' ! -name check-decision-log.sh -delete; g add -A
+find "$t/tests" -maxdepth 1 -name '*.sh' ! -name check-decision-log.sh -delete
+# Nor any kit test module (its collection alone costs the nested pytest ~2 s CPU), nor the kit's packages: none
+# is needed there, so check-tests' pnpm install installs nothing (tests/lib/no-packages.py).
+find "$t/tests/gate" -name 'test_*.py' ! -path "$t/tests/gate/test_gate.py" -delete
+"$kit/tests/lib/no-packages.py" "$t"; g add -A
 head='"ts":"2026-10-19T00:00:00Z","agent":"implementer","phase":"handoff","decision":"ready"'
 tail='"evidence":"just check","result":"pending"'
 N=docs/gate/decisions.jsonl
