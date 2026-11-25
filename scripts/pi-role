@@ -482,8 +482,7 @@ def with_mise(path: str, mise_dir: str) -> str:
 
 
 def with_guard(path: str) -> str:
-    """PATH with the stash guard's dir (pi-role --help, Stash guard; its `git` file runs the next git on PATH after
-    itself) once, before its first dir that holds a git or is a system dir (at the end with none)."""
+    """PATH with the stash guard's dir placed once (where: pi-role --help, Stash guard)."""
     guard = os.path.join(os.path.dirname(os.path.realpath(__file__)), "stash-guard")
     dirs = [d for d in path.split(os.pathsep) if d and d != guard]
     at = next((i for i, d in enumerate(dirs)

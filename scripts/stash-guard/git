@@ -1,8 +1,7 @@
 #!/bin/sh
-# The kit's stash guard (spec roles#launch-stash-guard): pi-role puts this dir on the PATH of every agent it launches
-# (scripts/pi-role, with_guard), so an agent's `git` lands here first. An argv with no `stash` word execs the next git
-# on PATH after this one at once: no Python start, output, exit code and stdin git's own. One with it goes to
-# scripts/stash_guard.py, which refuses a stash write in a repository with 2+ worktrees and execs git otherwise.
+# The kit's stash guard (spec roles#launch-stash-guard; placement: pi-role --help, Stash guard; what it refuses:
+# scripts/stash_guard.py). This file is its fast path: an argv with no `stash` word execs the next git on PATH after
+# this one, no Python start; one with it goes to scripts/stash_guard.py.
 # Not reached: a process calling git by absolute path (/usr/bin/git), the owner's own shell, a git alias for stash.
 set -f   # PATH split on : below, never globbed
 me="$0"
