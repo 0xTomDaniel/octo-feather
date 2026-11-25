@@ -47,6 +47,11 @@ line N: X: No such file or directory" or "... command not found" from the old te
 file it sources (a failed `source` lets a test carry on without its library, print its pass
 line and exit 0).
 
+Re-anchoring (#1154): when scripts/check-parity names a case's patch, the change that moved its
+code remakes that patch against the code as it now is, seeding the same defect (and points the
+case's `ran` at the file it now patches), then runs `tests/parity/lever.py CASE` to exit 0; a
+case whose target behaviour is gone is deleted in the same change.
+
 The caller's GATE_WORKERS reaches each run. The copy: under the git common dir's
 octo-feather/, removed after, as is the runs' own mise state dir (the caller's is never
 written); each run's output: in the log dir printed last, kept.

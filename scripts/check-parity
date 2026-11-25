@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+"""check-parity: every parity case patch still applies (#1273, owner ruling 2026-11-23 #1154).
+
+  check-parity
+
+Run anywhere inside a git repo, it checks that repo's top level: each tests/parity/*/*.patch with
+`git apply --check`, the very command the parity lever applies a patch with (tests/parity/lever.py
+apply(): plain `git apply`, so a line offset applies and no fuzz is tried), in parallel. Each
+patch that no longer applies is named with git's own error on stdout; the line on stderr says what
+to do, pointing at lever.py --help. Exit 0 when every patch applies, or the repo has no
+tests/parity; 1 when one does not; 2 on git or an internal error (fails closed, never ok).
+"""
+
+import os
+import subprocess
+import sys
+from concurrent.futures import ThreadPoolExecutor
+from functools import partial
+from pathlib import Path
+
+FIX = (
+    "check-parity: {} of {} parity patches no longer apply (above); re-anchor each as "
+    "`tests/parity/lever.py --help` says (its Re-anchoring paragraph)"
+)
+
+
+def check(top: Path, patch: Path) -> tuple[Path, int, str]:
+    p = subprocess.run(
+        ["git", "apply", "--check", str(patch)],  # noqa: S607
+        cwd=top,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return patch, p.returncode, p.stderr.strip()
+
+
+def main() -> int:
+    if sys.argv[1:]:
+        sys.stdout.write(__doc__ or "")
+        return 0 if sys.argv[1:] in (["-h"], ["--help"]) else 2
+    git = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"],  # noqa: S607
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if git.returncode != 0:
+        sys.stderr.write(git.stderr)
+        sys.stderr.write(f"check-parity: git rev-parse exited {git.returncode}: no git repo here\n")
+        return 2
+    top = Path(git.stdout.strip())
+    patches = sorted((top / "tests" / "parity").glob("*/*.patch"))
+    with ThreadPoolExecutor(max_workers=os.cpu_count() or 4) as pool:
+        results = list(pool.map(partial(check, top), patches))
+    stale = [(p, err) for p, rc, err in results if rc != 0]
+    for p, err in stale:
+        sys.stdout.write(f"{p.relative_to(top)}: does not apply\n")
+        sys.stdout.writelines(f"  {line}\n" for line in err.splitlines())
+    if stale:
+        sys.stdout.flush()
+        sys.stderr.write(FIX.format(len(stale), len(patches)) + "\n")
+        return 1
+    sys.stdout.write(f"parity: ok ({len(patches)} patches)\n")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as e:  # noqa: BLE001  fail closed: an internal error is never ok
+        sys.stderr.write(f"check-parity: error: {type(e).__name__}: {e}\n")
+        sys.exit(2)
