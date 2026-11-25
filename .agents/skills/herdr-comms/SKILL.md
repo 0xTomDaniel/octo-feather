@@ -270,8 +270,9 @@ parked line counts, `octo-feather-handoff --help` (parked); where the agent
 resumes, `herdr-say`'s header. A resumed agent gets the message prefixed
 `Resumed from park as pane=PANE. `, and `herdr-say` prints its new `pane=`.
 `herdr-say --parked TARGET` prints that line, or exits 1.
-`herdr-say --parent` finds the parent by identity at each send, not by the pane
-frozen at spawn: `octo-feather-handoff --help`, parent.
+`herdr-say` finds a kit agent's parent by identity at each send, not by the pane
+frozen at spawn: what uses it, `herdr-say`'s header (up-chain guard); how it is
+found, `octo-feather-handoff --help`, parent.
 A worker's `herdr-say --parent` report goes to a result file, and the parent
 gets a notice naming it: `octo-feather-handoff --help`, report. The parent's
 listing of its workers and their result files: `octo-feather-handoff results`, put
