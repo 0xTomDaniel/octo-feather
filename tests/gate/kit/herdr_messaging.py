@@ -22,7 +22,9 @@ post-merge step 6 (owner ruling on issue 206; issues 398, 458): live supervisors
 title and rule files, one prod line each, a rerun telling nothing new; parked and gone lanes
 listed, never sent to; a failed send named, no prod line, exit 1; any other herdr failure stops
 the step; step 7 reached, the kit's own herdr-close run and Herdr's workspace_not_found read as
-already closed. Space ids `zt*`, which no real Herdr gives."""
+already closed. Space ids `zt*`, which no real Herdr gives. tell_supervisors runs step 6 in
+gh1249's real case instead (RealCase): gh answers only from its recorded tape
+(testkit/recordings/lane-merge-realcase.json), every expected value its recorded answer (#1267)."""
 
 from __future__ import annotations
 
@@ -38,7 +40,7 @@ import time
 from pathlib import Path
 
 import tomllib
-from testkit import HERE, ROOT, Scratch, kit, main
+from testkit import HERE, ROOT, MissingFixtureError, Ran, Scratch, kit, main, reflector
 
 ASSETS = ROOT / ".agents" / "skills" / "herdr-comms" / "assets"
 TELL_BOUND = 20  # post-merge step 6's bound on one send, seconds (octo-feather-lane --help)
@@ -83,6 +85,103 @@ SUPERVISOR = {
 
 def lines(p: Path) -> list[str]:
     return p.read_text().splitlines() if p.exists() else []
+
+
+# Supervisor A's environment in its own pane (RealCase), as octo-feather-start and Herdr give it:
+# its role, the director's pane (testkit.reflector's w9:p99) its parent, its own pane and
+# workspace; so herdr-say's up-chain guard (docs/adr/0015) is active as in that pane (#1249).
+REALCASE_SUPERVISOR = {
+    "OCTO_FEATHER_ROLE": "supervisor",
+    "OCTO_FEATHER_PARENT": "w9:p99",
+    "HERDR_PANE_ID": "zt1:p1",
+    "HERDR_WORKSPACE_ID": "zt1",
+}
+RECORDINGS = HERE / "recordings"  # testkit's
+# gh1249's real case (#1256, commit 59140bba's message; the run's report: #1256's last comment):
+# supervisor A of lane gh10 (parent issue 10, sub-issue 11) merging PR #14 of this repo, then
+# archiving gh10, with lane B (gh12) live; every gh call recorded, unmodified.
+REALCASE = "0xTomDaniel/octo-feather-realcase"
+REALCASE_TAPES = ("lane-merge-realcase", "lane-archive-realcase")  # in the run's call order
+
+
+def recordings(name: str) -> list[dict[str, object]]:
+    """testkit/recordings/NAME.json's recordings, as recorded; a missing one fails naming it."""
+    p = RECORDINGS / f"{name}.json"
+    if not p.is_file():
+        msg = f"testkit: recording {name} is missing: no file {p}"
+        raise MissingFixtureError(msg)
+    return json.loads(p.read_text())
+
+
+def recorded(name: str, request: str) -> str:
+    """The stdout real gh gave REQUEST's first recording in recordings NAME."""
+    return next(str(r["out"]) for r in recordings(name) if r["request"] == request)
+
+
+class RealCase:
+    """S as gh1249's real case stood at lane A's merge: gh answers only from the recordings of
+    TAPES, one tape.json in the run's call order (testkit/gh.py's header, tape mode); origin.git
+    the realcase repo from its bundle (recordings/realcase-gh1249.bundle, unmodified, its SHAs
+    the tapes'); the director's checkout `director`, a clone of it on main at the merge commit's
+    first parent (the run's step 4 fast-forwarded it); the kit install `kit`, a repo whose
+    origin is the kit's GitHub URL (the one step 3 asked gh about), never fetched as the PR is
+    not the kit's; testkit.reflector's state dir and Herdr world (the director w9:p99), lane A's
+    record gh10 (`issue = "gh10"` and `pr = 14`, as lane start and supervisor A wrote it) and
+    lane B's gh12, both of the realcase repo; Herdr's agents the director, A's supervisor zt1:p1
+    and B's zt2:p1, each idle; every command run in A's supervisor's environment
+    (REALCASE_SUPERVISOR), the kit's herdr-say first on PATH."""
+
+    # Step 1's read of the merged PR (lane-merge-realcase's): its merge commit and base.
+    MERGED = f"pr view 14 --json state,headRefOid,mergeCommit,baseRefName,headRefName -R {REALCASE}"
+
+    def __init__(self, s: Scratch, *tapes: str) -> None:
+        self.s = s
+        s.gh.store("tape.json", [r for t in tapes for r in recordings(t)])
+        self.origin, self.checkout, self.kit = (
+            s.root / n for n in ("origin.git", "director", "kit")
+        )
+        bundle = RECORDINGS / "realcase-gh1249.bundle"
+        s.run(["git", "clone", "-q", "--bare", str(bundle), str(self.origin)])
+        s.run(["git", "clone", "-q", str(self.origin), str(self.checkout)])
+        merged = json.loads(recorded("lane-merge-realcase", self.MERGED))
+        self.merge, self.base = merged["mergeCommit"]["oid"], merged["baseRefName"]
+        s.git(self.checkout, "checkout", "-q", "-B", self.base, f"{self.merge}^1")
+        s.git(s.root, "init", "-q", str(self.kit))
+        s.git(self.kit, "remote", "add", "origin", "https://github.com/0xTomDaniel/octo-feather")
+        self.top = reflector(s)
+        self.lanes = self.top / "lanes"
+        self.lanes.mkdir()
+        for name, pane in (("gh10", "zt1:p1"), ("gh12", "zt2:p1")):
+            (self.lanes / f"{name}.toml").write_text(
+                f'supervisor = "{pane}"\nrepository = "{REALCASE}"\nissue = "{name}"\n'
+                'goal = "g"\nstarted_at = "2026-11-24T21:37:22Z"\nwaiting_on = ""\n'
+                + ("pr = 14\n" if name == "gh10" else "")
+            )
+        self.herdr = s.root / "herdr"
+        world = json.loads((self.herdr / "agents.json").read_text())
+        world["w9:p99"]["agent_status"] = "idle"
+        world |= {p: agent(p, n, "idle") for n, p in (("gh10", "zt1:p1"), ("gh12", "zt2:p1"))}
+        (self.herdr / "agents.json").write_text(json.dumps(world))
+        s.env.pop("GH_REPO", None)
+        s.env |= REALCASE_SUPERVISOR | {"OCTO_FEATHER_KIT_INSTALL": str(self.kit)}
+        s.env["PATH"] = f"{ASSETS}{os.pathsep}{s.env['PATH']}"
+
+    def lane(self, *args: str, want: int = 0, cwd: Path | None = None) -> Ran:
+        """`octo-feather-lane ARGS` from the director's checkout (or CWD), exit WANT; the command
+        and its output printed (the demo's)."""
+        r = self.s.run([kit("octo-feather-lane"), *args], want=want, cwd=cwd or self.checkout)
+        said = f"$ octo-feather-lane {' '.join(args)}  # exit {r.rc}\n{r.out}\n{r.err}"
+        sys.stdout.write(said.rstrip() + "\n")
+        return r
+
+    def told(self) -> list[str]:
+        """Each prompt Herdr delivered, `<pane>\\t<text>`."""
+        return lines(self.herdr / "prompts")
+
+    def prods(self) -> list[dict[str, object]]:
+        """The director log's prod lines."""
+        logged = [json.loads(x) for x in lines(self.top / "director.handoffs.jsonl")]
+        return [x for x in logged if x.get("kind") == "prod"]
 
 
 def spawn_ready_late(s: Scratch) -> None:
@@ -1164,7 +1263,7 @@ def tell_lanes(t: Tell) -> None:
 
 
 def told_live(t: Tell) -> None:
-    """tell_supervisors on tell_lanes: the sends; a rerun; a merge with no rule file."""
+    """tell_kit's first phase, on tell_lanes: the sends; a rerun; a merge with no rule file."""
     tell_lanes(t)
     earlier = '{"at": "2026-10-29T00:00:00+00:00", "kind": "prod", "issue": 11, "note": "earlier"}'
     t.dlog.write_text(earlier + "\n")
@@ -1280,22 +1379,58 @@ def told_gone(t: Tell) -> None:
 
 
 def tell_supervisors(s: Scratch) -> None:
-    """Only a live supervisor of the PR's repo gets one message naming the merge commit, PR,
-    title and changed rule files, by the kit's herdr-say bounded by post-merge's bound; the --lane
-    lane, a parked one (its latest parked line names its pane) and another repo's lane (never
-    looked up) none; one canonical prod line per lane told, after the director's own; step 6 ok,
-    step 7 pending, exit 3. A rerun sends and logs nothing new (already told). A merge touching no
-    rule file says none, and is told again. The old test's other phases, each its own world:
-    tell_kit, tell_failed, tell_gone."""
-    told_live(Tell(s))
+    """post-merge step 6 as gh1249's real case ran it (RealCase, the merge tape):
+    supervisor A of lane gh10, in its own environment (its role, the director its parent:
+    herdr-say's up-chain guard active), runs the routine its merge starts, `post-merge 14
+    7d7155984818 --lane gh10 --repo REALCASE`, which asks gh exactly the recorded routine's calls
+    (the tape's from step 1's PR read on), in its order. Lane gh12's live supervisor alone gets
+    one message, by the kit's herdr-say bounded by post-merge's bound, naming the recorded merge
+    commit, PR title and the rule files the merge changed (none) and, as sender, the post-merge
+    routine of lane gh10; the merging supervisor's own pane none; one prod line, for gh12, naming
+    the same sender; step 6 ok, step 7 pending, exit 3. The phases this run did not have (a
+    parked lane, another repo's lane never looked up, rule files listed, a rerun already told):
+    told_live, run by tell_kit."""
+    tape = "lane-merge-realcase"
+    w = RealCase(s, tape)
+    calls = [str(x["request"]) for x in recordings(tape)]
+    head = json.loads(recorded(tape, f"pr view 14 --json state,headRefOid -R {REALCASE}"))
+    title = json.loads(recorded(tape, f"pr view 14 --json title,url -R {REALCASE}"))["title"]
+    m = w.merge
+    r = w.lane("post-merge", "14", head["headRefOid"][:12], "--lane", "gh10", "--repo", REALCASE,
+               want=3)  # fmt: skip
+    routine = calls[calls.index(RealCase.MERGED) :]
+    assert s.gh.log() == routine, f"gh calls, want the recorded routine's: {s.gh.log()}"
+    out = r.out.split("\n")
+    tell = (
+        f"step 6 tell supervisors: ok: merge {m[:12]} of {REALCASE}, rule files: none; NOT told: "
+        "none; told: gh12 zt2:p1; already told: none; not woken: none; gone: director to resume "
+        "or archive: none"
+    )
+    assert tell in out, r.out
+    assert out[-1].endswith("tell supervisors ok; step 7 teardown pending"), r.out
+    sends = [x for x in lines(w.herdr / "log") if x.startswith("agent prompt ")]
+    assert [x.split()[2] for x in sends] == ["zt2:p1"], sends
+    assert sends[0].endswith(f" --timeout {TELL_BOUND * 1000}"), sends
+    sender = "(from the post-merge routine of lane gh10)"
+    want = f"main moved to {m[:12]} (#14 {title}); rule files changed: none; {REREAD} {sender}"
+    assert w.told() == [f"zt2:p1\t{want}"], w.told()
+    note = f"post-merge {m} #14: main moved, told gh12 to re-read none {sender}"
+    assert [(x["issue"], x["note"]) for x in w.prods()] == [("gh12", note)], w.prods()
 
 
 def tell_kit(s: Scratch) -> None:
-    """post-merge step 6 on a kit PR (o/kit, the install's own repo): every lane runs kit roles,
-    so another repo's live lane is told too, one prod line each (step 3 refreshes the install
-    first: its recipes no-ops by the real just, uv and pnpm argv_recorder.sh)."""
+    """post-merge step 6 on tell_lanes (told_live, on an o/r PR, then told_kit): only a live
+    supervisor of the PR's repo gets one message naming the merge commit, PR, title and changed
+    rule files, by the kit's herdr-say bounded by post-merge's bound; the --lane lane, a parked
+    one (its latest parked line names its pane) and another repo's lane (never looked up) none;
+    one canonical prod line per lane told, after the director's own; step 6 ok, step 7 pending,
+    exit 3. A rerun sends and logs nothing new (already told). A merge touching no rule file says
+    none, and is told again. Then a kit PR (o/kit, the install's own repo): every lane runs kit
+    roles, so another repo's live lane is told too, one prod line each (step 3 refreshes the
+    install first: its recipes no-ops by the real just, uv and pnpm argv_recorder.sh)."""
     t = Tell(s)
     tell_lanes(t)
+    told_live(t)
     told_kit(t)
 
 
