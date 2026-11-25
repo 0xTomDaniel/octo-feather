@@ -78,9 +78,8 @@ def pane(s: Scratch, cwd: Path, caller: str) -> str:
 
 
 def refused(s: Scratch) -> None:
-    """The criterion's scenario: stash writes from an agent in the second worktree (headless, then
-    a pane's PATH), each refused naming the WIP commit, with the first's entry and the second's
-    changes kept; the caller's earlier PATH dirs (stub pi, its own git) still win."""
+    """The criterion's scenario for the calls below, from the second worktree, headless then a
+    pane's PATH (which calls: scripts/stash_guard.py; placement: pi-role --help, Stash guard)."""
     first, second = two_worktrees(s)
     entry = s.git(first, "stash", "list")
     assert "first wip" in entry, entry
@@ -97,6 +96,10 @@ def refused(s: Scratch) -> None:
         "git stash -m --help",
         "git stash -m -h",
         "git stash push -qm --help",
+        "git stash push --mes --help",
+        "git stash save --end-of-options --help",
+        "git stash -mspam --help",
+        "git stash push -q --help",
     ):
         ran = agent(s, second, push, want=1)
         assert WIP in ran.err, (push, ran.err)
@@ -120,8 +123,8 @@ def refused(s: Scratch) -> None:
 
 
 def unchanged(s: Scratch) -> None:
-    """What the guard must leave to git, each compared with real git's own run: the calls below in
-    a two-worktree repo, and a stash push and pop in a one-worktree repo."""
+    """The calls below against real git's own run, in a two-worktree repo then a one-worktree repo
+    (which calls run unchanged: scripts/stash_guard.py)."""
     first, second = two_worktrees(s)
     for cmd, want in (
         ("git rev-parse --verify nosuch", 128),
@@ -130,7 +133,10 @@ def unchanged(s: Scratch) -> None:
         ("git -C ../first stash show --stat", 0),
         ("git --version stash", 0),
         ("git -h stash", 0),
-        ("git stash push -q --help", 129),
+        ("git stash -h", 129),
+        ("git stash --help", 0),
+        ("git stash push --help", 129),
+        ("git stash drop -h", 129),
     ):
         got = agent(s, second, cmd, want=want)
         real = s.run(["sh", "-c", cmd], want=want, cwd=second)

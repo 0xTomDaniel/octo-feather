@@ -6,11 +6,13 @@ A repository's stash is one ref, refs/stash, shared by every worktree of it, and
 stash of a worktree's own (#1185 issuecomment-7168239371), so in a repository whose
 `git worktree list --porcelain` shows more than one worktree a `git stash` that adds, removes or
 replaces an entry (bare, its push options, push, save, pop, drop, clear, store, branch) is
-refused, exit 1, writing nothing, naming a work-in-progress commit instead. Reading the stash
-(list, show), create, apply, help, every other git command, and any stash in a one-worktree
-repository exec REAL_GIT unchanged. Global options before the subcommand (-C, -c, --git-dir,
---work-tree, ...) are honoured: the worktree count asks git with the same ones, so the check
-reads the repository the call acts on. Stdlib only (AGENTS.md, kit scripts).
+refused whatever its other arguments, exit 1, writing nothing, naming a work-in-progress commit
+instead; of such a subcommand only its help (-h or --help as its one argument) runs. Its option
+grammar is not parsed. Reading the stash (list, show), create, apply, every other git command, and
+any stash in a one-worktree repository exec REAL_GIT unchanged. Global options before the
+subcommand (-C, -c, --git-dir, --work-tree, ...) are honoured: the worktree count asks git with
+the same ones, so the check reads the repository the call acts on. Stdlib only (AGENTS.md, kit
+scripts).
 """
 
 import os
@@ -32,7 +34,8 @@ VALUED = {
 # Global options that tell git which repository or config to read: passed to the count as given.
 REPO_OPTS = {"-C", "-c", "--git-dir", "--work-tree", "--config-env", "--bare"}
 WRITES = {"push", "save", "pop", "drop", "clear", "store", "branch"}
-HELP = {"-h", "--help"}
+# A write subcommand's help: -h or --help as its one argument (spec roles#launch-stash-guard).
+HELP_ONLY = (["-h"], ["--help"])
 # git's global options that are its command, not a setting (git.c handle_options: -h, --help,
 # -v, --version end the options; the path options print and exit).
 ACTIONS = {
@@ -45,8 +48,6 @@ ACTIONS = {
     "--man-path",
     "--info-path",
 }
-# Stash options whose value is the next word (git-stash(1)): a value is never an option.
-VALUE_OPTS = {"--message", "--pathspec-from-file"}
 REFUSAL = (
     "git stash refused (kit stash guard, spec roles#launch-stash-guard): this repository has {n} "
     "worktrees, and its stash is one list every worktree shares, so a stash here can take or drop "
@@ -75,32 +76,15 @@ def split(args: list[str]) -> tuple[list[str], list[str]]:
     return repo, []
 
 
-def asks_help(opts: list[str]) -> bool:
-    """Whether stash options OPTS hold -h or --help as an option, not as another option's value
-    (`git stash -m --help` pushes with the message --help); options end at `--`."""
-    i = 0
-    while i < len(opts):
-        a = opts[i]
-        if a == "--":
-            return False
-        if a in HELP:
-            return True
-        if a in VALUE_OPTS or (a.startswith("-") and not a.startswith("--") and a.endswith("m")):
-            i += 1  # the next word is that option's value (a short cluster ending in m: -qm MSG)
-        i += 1
-    return False
-
-
 def writes_stash(sub: list[str]) -> bool:
-    """Whether the git subcommand and args SUB are a stash that writes refs/stash."""
+    """Whether the git subcommand and args SUB are a stash whose subcommand writes refs/stash,
+    whatever its other arguments; its help alone (-h or --help as its one argument) is not."""
     if sub[:1] != ["stash"]:
         return False
     rest = sub[1:]
-    if not rest:
-        return True  # bare `git stash`: push
-    if rest[0].startswith("-"):  # push's options, unless asking for help
-        return not asks_help(rest)
-    return rest[0] in WRITES and not asks_help(rest[1:])
+    if rest[:1] and not rest[0].startswith("-"):  # an explicit subcommand
+        return rest[0] in WRITES and rest[1:] not in HELP_ONLY
+    return rest not in HELP_ONLY  # bare `git stash` and its options: push
 
 
 def worktrees(git: str, repo: list[str]) -> int:
