@@ -281,14 +281,19 @@
       "pr": null
     },
     "acceptance-director-replace-outgoing": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1313,
+      "record": "20261125T230756Z-3db3e74e",
+      "commit": "76f50dbdd3d2b4e8a28daf02e8bbe3102860de23",
+      "tests": [
+        "tests/gate/kit/test_start_relaunch.py"
+      ]
     },
     "acceptance-director-relaunch-busy": {
       "status": "built",
       "pr": 1313,
-      "record": "20261125T222723Z-69b74880",
-      "commit": "2205d977b65436f35d84eae41879e810c6294a57",
+      "record": "20261125T230756Z-1dfdcb24",
+      "commit": "76f50dbdd3d2b4e8a28daf02e8bbe3102860de23",
       "tests": [
         "tests/gate/kit/test_start_relaunch.py"
       ]
@@ -296,8 +301,8 @@
     "acceptance-director-relaunch-own-scope": {
       "status": "built",
       "pr": 1313,
-      "record": "20261125T222723Z-5e507e30",
-      "commit": "2205d977b65436f35d84eae41879e810c6294a57",
+      "record": "20261125T230756Z-a7fe1530",
+      "commit": "76f50dbdd3d2b4e8a28daf02e8bbe3102860de23",
       "tests": [
         "tests/gate/kit/test_start_relaunch.py"
       ]
@@ -305,8 +310,8 @@
     "acceptance-director-relaunch-same-session": {
       "status": "built",
       "pr": 1313,
-      "record": "20261125T222723Z-f8e79e67",
-      "commit": "2205d977b65436f35d84eae41879e810c6294a57",
+      "record": "20261125T230756Z-14cbf093",
+      "commit": "76f50dbdd3d2b4e8a28daf02e8bbe3102860de23",
       "tests": [
         "tests/gate/kit/test_start_relaunch.py"
       ]
