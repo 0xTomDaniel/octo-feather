@@ -185,29 +185,33 @@ def name(kind: str, anchor: str) -> str:
 
 
 def tier_clarify(s: Scratch) -> None:
-    """Realcase PR #21, one clarifying call and nothing else: tier 2 naming it, waiting for
-    nobody; the base's earlier call is no call of this lane."""
+    """Realcase PR #21, one clarifying call and nothing else, the base holding an earlier lane's
+    call: issue-lifecycle#acceptance-tier-clarify (the reason's form: octo-feather-lane --help,
+    merge-ask)."""
     out = RealCase(s).ask("tier_clarify", "clarify").out
     assert block(out) == ["Tier: 2", name("clarifies", "acceptance-a"), "Waits for: nobody"], out
 
 
 def tier_adds(s: Scratch) -> None:
-    """Realcase PR #22, an adds call linking no ruling: tier 3 naming it, waiting for the owner."""
+    """Realcase PR #22, an adds call linking no ruling: issue-lifecycle#acceptance-tier-adds
+    (the reason's form: octo-feather-lane --help, merge-ask)."""
     out = RealCase(s).ask("tier_adds", "adds").out
     want = f"{name('adds', 'acceptance-d')}: no ruling linked"
     assert block(out) == ["Tier: 3", want, "Waits for: the owner"], out
 
 
 def tier_weakens(s: Scratch) -> None:
-    """Realcase PR #23, a weakens call linking no ruling: tier 3 naming it."""
+    """Realcase PR #23, a weakens call linking no ruling: issue-lifecycle#acceptance-tier-weakens
+    (the reason's form: octo-feather-lane --help, merge-ask)."""
     out = RealCase(s).ask("tier_weakens", "weakens").out
     want = f"{name('weakens', 'acceptance-c')}: no ruling linked"
     assert block(out) == ["Tier: 3", want, "Waits for: the owner"], out
 
 
 def tier_ruled(s: Scratch) -> None:
-    """Realcase PR #24, an adds call linking the owner's ruling made before it, the verdict
-    carrying `Ruling covers:` it: tier 2 naming the call and the ruling."""
+    """Realcase PR #24, an adds call linking the owner's ruling made before it, the verdict carrying
+    `Ruling covers:` it: issue-lifecycle#acceptance-tier-ruled (the reason's form: octo-feather-lane
+    --help, merge-ask)."""
     out = RealCase(s).ask("tier_ruled", "ruled").out
     want = (
         f"{name('adds', 'acceptance-d')}: ruled by {RULING} ({RULED_AT}), the review verdict "
@@ -217,7 +221,9 @@ def tier_ruled(s: Scratch) -> None:
 
 
 def tier_ruling_unconfirmed(s: Scratch) -> None:
-    """Realcase PR #25, the same call, the verdict silent on the ruling: tier 3 naming the call."""
+    """Realcase PR #25, the same call, the verdict silent on the ruling:
+    issue-lifecycle#acceptance-tier-ruling-unconfirmed (the reason's form: octo-feather-lane --help,
+    merge-ask)."""
     out = RealCase(s).ask("tier_ruling_unconfirmed", "unconfirmed").out
     got = block(out)
     assert got[0] == "Tier: 3", out
@@ -228,15 +234,17 @@ def tier_ruling_unconfirmed(s: Scratch) -> None:
 
 
 def tier_denied(s: Scratch) -> None:
-    """Realcase PR #26, an adds call the owner denied: tier 2, listed with its denial."""
+    """Realcase PR #26, an adds call the owner denied (the reason's form: octo-feather-lane --help,
+    merge-ask)."""
     out = RealCase(s).ask("tier_denied", "denied").out
     want = f"{name('adds', 'acceptance-e')}: denied 2026-11-24T22:36:42Z"
     assert block(out) == ["Tier: 2", want, "Waits for: nobody"], out
 
 
 def tier_highest(s: Scratch) -> None:
-    """Realcase PR #21's clarifying call with `Failed:` listing demo#acceptance-c: tier 3, the
-    highest, naming both."""
+    """Realcase PR #21's clarifying call with `Failed:` listing demo#acceptance-c:
+    issue-lifecycle#acceptance-tier-highest (the reason's form: octo-feather-lane --help,
+    merge-ask)."""
     out = RealCase(s).ask("tier_highest", "clarify").out
     want = ["Tier: 3", FAILED, name("clarifies", "acceptance-a"), "Waits for: the owner"]
     assert block(out) == want, out

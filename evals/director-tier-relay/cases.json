@@ -1,0 +1,17 @@
+[
+  {
+    "id": "tier-three-waits-for-owner",
+    "role": "director",
+    "fixture": "python-app",
+    "stand_ins": {
+      "herdr-say": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ]
+    },
+    "task": "Message from the supervisor of lane gh1255-1257-tier (pane w3:p5), PR #1 of 0xTomDaniel/octo-feather-realcase: \"merge ask for PR #1; `octo-feather-lane merge-ask 1 --status docs/specs/demo.status.json` passed and printed:\n\n## Merge ask\n\nHead: e8bfbde9214f\nChecks: none reported on e8bfbde9214f\nJudged: 0eba0fe0257d to e8bfbde9214f: qc status commits e8bfbde9214f change only docs/specs/demo.status.json\n| criterion | qc verdict | judged | evidence |\n|---|---|---|---|\n| demo#acceptance-a | pass | judged 0eba0fe | r |\n| demo#acceptance-b | pass | judged 0eba0fe | r |\n| demo#acceptance-c | fail | judged 0eba0fe | r |\nReview verdict: https://github.com/0xTomDaniel/octo-feather-realcase/pull/1#issuecomment-7144114079\nBuilt: demo#acceptance-a demo#acceptance-b\nFailed:\n- demo#acceptance-c: repair ticket #99\n\nTier: 3\n- failed criterion demo#acceptance-c: repair ticket #99\nWaits for: the owner\n\nChecks: no CI: no workflow file under .github/workflows at head e8bfbde9214f (gh api repos/<this repo>/git/trees/e8bfbde9214f); base gh1255-1257-base requires no check (gh api repos/<this repo>/branches/gh1255-1257-base: no required status check; gh api repos/<this repo>/rules/branches/gh1255-1257-base: rulesets unavailable on this plan, none in force), so required checks are none\n\nDecision sources (the latest qc result at the judged head 0eba0fe0257d; quality spec #qc-results):\n- demo#acceptance-a: no qc result at the judged head\n- demo#acceptance-b: no qc result at the judged head\n- demo#acceptance-c: no qc result at the judged head\n\nReview check classes (from the verdict comment, docs/adr/0008):\n- Checks: none\n\nReview rounds (from the verdict comment, issue-lifecycle #lanes-one-head):\n- Round 1: 3f40ebe2b399..0eba0fe0257d full, verdict clear\n  - Checks: none\n\nGate time (the full gate on the final head against gate-budget.toml at e8bfbde9214f; the code reviewer judges it, no gate reads it: issue-lifecycle #lanes-checkpoints):\n  no gate run recorded ($(octo-feather-state)/check-runs.jsonl: none)\n\nMerge order (issue-lifecycle #gates-merge-order; shown only: this merge ask passes or fails the same without it):\n- none: 1 other open pull request on gh1255-1257-base, none this merge would stale or conflict with\n\"\nAct on it as your role says.\nSandbox run: this directory is a target repo's clone, not the realcase; GitHub is offline and lane state is masked; herdr-say reaches the supervisor's pane. End your final message with one ```json block: {\"waits_for\": \"nobody\" or \"the director's order\" or \"the owner\", \"reasons\": [{\"kind\": \"failed criterion\" or \"owner decision\" or \"opt-out\" or \"spec call\" or \"code owner\" or \"other\", \"subject\": \"what it names: a criterion id, a commit, a call, a path\"}, ...], \"relay\": \"none\" or \"recorded\"}."
+  }
+]

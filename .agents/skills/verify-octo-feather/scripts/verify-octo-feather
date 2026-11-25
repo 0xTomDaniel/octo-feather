@@ -32,7 +32,7 @@ from typing import Any, NoReturn, cast
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-eval-verdict", "qc-stale", "spec-revision-init", "gate-tiers", "kit-hook", "merge-ask-proof", "pilot-pr", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "template-edge", "qa-runs", "qa-baseline", "qa-analyst", "qa-evidence", "qa-review", "qa-history", "run-slots", "queued-completion",
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-eval-verdict", "qc-stale", "spec-revision-init", "gate-tiers", "kit-hook", "merge-ask-proof", "merge-tiers", "pilot-pr", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "template-edge", "qa-runs", "qa-baseline", "qa-analyst", "qa-evidence", "qa-review", "qa-history", "run-slots", "queued-completion",
             "parent-resumed", "result-file", "result-missing", "lane-start")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
@@ -2893,6 +2893,354 @@ def drive_merge_ask_proof(f: Feature) -> None:
     say(f"merge-ask-proof evidence: {f.d}")
 
 
+# The merge-tiers drive's realcase (0xTomDaniel/octo-feather-realcase, public): its commits as pushed, in the kit's
+# recordings (realcase-tiers.bundle: the gh1255-1257 to -1260 branches; realcase-1266.bundle), and real gh's answers
+# to each recorded run (merge-tier-*.json, merge-guard-1266.json), replayed by the testkit's gh. The worlds each
+# recording ran in: tests/gate/kit/lane_merge_tier.py, lane_merge_calls.py, lane_merge_optout.py,
+# lane_merge_code_owner.py, lane_merge_guard.py (their docstrings).
+REALCASE = "0xTomDaniel/octo-feather-realcase"
+# Tier cases: (case, tape file, scenario, branch checked out, merge-ask args, exit, tier, reason prefixes, waits for).
+# Each reason line is checked by its kind's prefix, the tier and Waits for in full: the block's form is merge-ask's
+# (octo-feather-lane --help, merge-ask), never this list's.
+TIER_CASES: tuple[tuple[str, str, str, str, tuple[str, ...], int, int, tuple[str, ...], str], ...] = (
+    ("tier-one", "merge-tier-1257", "tier_one", "gh1255-1257-tier", ("1", "--status", "docs/specs/demo.status.json"), 0, 1,
+     (), "nobody"),
+    ("tier-spec-pr", "merge-tier-1257", "spec_pr", "gh1255-1257-tier", ("2",), 0, 1, (), "nobody"),
+    ("tier-failed", "merge-tier-1257", "tier_failed", "gh1255-1257-tier", ("1", "--status", "docs/specs/demo.status.json"),
+     0, 3, ("- failed criterion demo#acceptance-c: ",), "the owner"),
+    ("tier-order-waits", "merge-tier-1257", "order_waits", "gh1255-1257-tier",
+     ("1", "--status", "docs/specs/demo.status.json"), 0, 1, (), "the director's order (PR #3: "),
+    ("incomplete", "merge-tier-1257", "failing_ask", "gh1255-1257-tier", ("1", "--status", "docs/specs/demo.status.json"),
+     1, 3, ("- failed criterion demo#acceptance-c: ",), "the owner"),
+    ("tier-clarify", "merge-tier-1258", "tier_clarify", "gh1255-1258-clarify", ("21", "--status", "docs/specs/demo.status.json"),
+     0, 2, ("- spec call demo 2026-11-24T22:35:47Z clarifies acceptance-a",), "nobody"),
+    ("tier-adds", "merge-tier-1258", "tier_adds", "gh1255-1258-adds", ("22", "--status", "docs/specs/demo.status.json"),
+     0, 3, ("- spec call demo 2026-11-24T22:35:47Z adds acceptance-d: no ruling linked",), "the owner"),
+    ("tier-weakens", "merge-tier-1258", "tier_weakens", "gh1255-1258-weakens", ("23", "--status", "docs/specs/demo.status.json"),
+     0, 3, ("- spec call demo 2026-11-24T22:35:47Z weakens acceptance-c: no ruling linked",), "the owner"),
+    ("tier-ruled", "merge-tier-1258", "tier_ruled", "gh1255-1258-ruled", ("24", "--status", "docs/specs/demo.status.json"),
+     0, 2, ("- spec call demo 2026-11-24T22:35:47Z adds acceptance-d: ruled by ",), "nobody"),
+    ("tier-ruling-unconfirmed", "merge-tier-1258", "tier_ruling_unconfirmed", "gh1255-1258-unconfirmed",
+     ("25", "--status", "docs/specs/demo.status.json"), 0, 3, ("- spec call demo 2026-11-24T22:35:47Z adds acceptance-d: ruling ",),
+     "the owner"),
+    ("tier-denied", "merge-tier-1258", "tier_denied", "gh1255-1258-denied", ("26", "--status", "docs/specs/demo.status.json"),
+     0, 2, ("- spec call demo 2026-11-24T22:35:47Z adds acceptance-e: denied ",), "nobody"),
+    ("tier-highest", "merge-tier-1258", "tier_highest", "gh1255-1258-clarify", ("21", "--status", "docs/specs/demo.status.json"),
+     0, 3, ("- failed criterion demo#acceptance-c: ", "- spec call demo 2026-11-24T22:35:47Z clarifies acceptance-a"), "the owner"),
+    ("tier-optout-cleared", "merge-tier-1259", "optout_cleared", "gh1255-1259-cleared", ("16",), 0, 2,
+     ("- opt-out 6195f3b cleared by the review verdict: ",), "nobody"),
+    ("tier-optout-uncleared", "merge-tier-1259", "optout_uncleared", "gh1255-1259-uncleared", ("17",), 0, 3,
+     ("- opt-out eac74d9 not cleared by the review verdict: ",), "the owner"),
+    ("tier-owner-decision-verdict", "merge-tier-1259", "owner_decision_verdict", "gh1255-1259-decision", ("18",), 0, 3,
+     ("- Owner decision: ",), "the owner"),
+    ("tier-code-owner", "merge-tier-1260", "owner_path", "gh1255-1260-owner", ("27", "--repo", REALCASE), 0, 3,
+     ("- code owner: app.py is @0xTomDaniel's (.github/CODEOWNERS line 2: ",), "the owner"),
+    ("tier-code-owner-base", "merge-tier-1260", "dropped_line", "gh1255-1260-drop", ("42", "--repo", REALCASE), 0, 3,
+     ("- code owner: app.py is @0xTomDaniel's (.github/CODEOWNERS at the merge base ",), "the owner"),
+    ("code-owners-refused", "merge-tier-1260", "refused", "gh1255-1260-refuse", ("29", "--repo", REALCASE), 1, 1, (),
+     "the director's order (PR #27: "),
+)
+# The heads each recording found a full gate pass at (the worlds above record it there, as the recording did).
+TIER_PASSES = ("0eba0fe0257ddb91c247f48729ae089b4429be31", "cb18ec8681b3161c6506d0c50182a9f3fbe0f13f",
+               "fc7089e7b532889b078f801deacfec4394bb5963", "2672059cb1f2bd8a3d04719480a4d4ffa9c16348",
+               "a4a1e560d42a4b4f45cc2bfc262b0a7983389d24", "dd7c79c40a3a31468b053b91e821882be34bc6f9",
+               "25df3ae49ffe18411eb99ec4d3abb8a2a9b4aa61", "6195f3b615ad1ce1b12fd9c4d2815d24acc1640d",
+               "eac74d94c741e5e83829dbde56536d3ae22ada09", "da6fc7a9ec7d841543d712ad3cc50710c3380991",
+               "8c83e8866d3f9f5e41c2becb2ee02a9d872c04ed", "e8b0dcdec942dece07f9e48244cb5ed2d4e56779",
+               "b7ec8646c914bcec34a977dec3fd074a8b0bba82")
+INCOMPLETE_MARK = "Incomplete merge ask (it fails below; never send this tier):"
+
+
+def tier_block(text: str) -> list[str]:
+    """TEXT's one tier block, `Tier:` to its `Waits for:` line; [] when not exactly one."""
+    lines = text.splitlines()
+    starts = [i for i, ln in enumerate(lines) if ln.startswith("Tier: ")]
+    if len(starts) != 1:
+        return []
+    ends = [k for k in range(starts[0], len(lines)) if lines[k].startswith("Waits for: ")]
+    return lines[starts[0]:ends[0] + 1] if ends else []
+
+
+def tier_holds(c: Case, code: int, tier: int, reasons: tuple[str, ...], waits: str) -> bool:
+    """A passing ask: its block on stdout after the section; a failing one: stdout empty, the block on stderr right
+    after the incomplete mark and before the items. The block: TIER, one line per reason, each starting with its
+    REASONS prefix in order, then Waits for WAITS (a prefix when it ends in `: `)."""
+    if c.code != code:
+        return False
+    if code == 0:
+        b = tier_block(c.out)
+        placed = c.out.startswith("## Merge ask\n") and INCOMPLETE_MARK not in c.err and "Tier: " not in c.err
+    else:
+        b = tier_block(c.err)
+        err = c.err.splitlines()
+        placed = (c.out == "" and INCOMPLETE_MARK in err and err[err.index(INCOMPLETE_MARK) + 1] == f"Tier: {tier}"
+                  and "merge ask incomplete" in c.err.split(INCOMPLETE_MARK, 1)[1])
+    want = f"Waits for: {waits}"
+    return (placed and len(b) == len(reasons) + 2 and b[0] == f"Tier: {tier}"
+            and all(ln.startswith(p) for ln, p in zip(b[1:-1], reasons, strict=True))
+            and (b[-1].startswith(want) if waits.endswith(": ") else b[-1] == want))
+
+
+def drive_merge_tiers(f: Feature) -> None:
+    """Merge tiers and the merge guard as a supervisor and the director use them, on the realcase's recorded runs,
+    offline: the testkit's gh (tests/gate/kit/testkit/gh.py) first on PATH answers only real gh's recordings (one
+    scenario's tape per case, its call log reset with it), Herdr the testkit's (herdr.py). merge-ask's tier block
+    (each reason kind, Waits for, the incomplete block), relay refused outside the director's pane, merge refusing or
+    merging by tier and relay, then the director's reply to the recorded tier 3 ask (its real model). Cases:
+    features/merge-tiers.md."""
+    kit = Path(f.s.repo)
+    rec = kit / "tests" / "gate" / "kit" / "testkit" / "recordings"
+    sc = RUN_DIR / "scratch" / "merge-tiers"
+    shutil.rmtree(sc, ignore_errors=True)
+    (sc / "bin").mkdir(parents=True)
+    for name, fake in (("gh", "gh.py"), ("herdr", "herdr.py")):
+        (sc / "bin" / name).symlink_to(kit / "tests" / "gate" / "kit" / "testkit" / fake)
+    store = sc / "gh"
+    store.mkdir()
+    ident = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com", "GIT_COMMITTER_NAME": "t",
+             "GIT_COMMITTER_EMAIL": "t@example.com"}
+    base = {**ident, "PATH": f"{sc / 'bin'}:{os.environ.get('PATH', '')}", "FAKE_GH": str(store),
+            "GH_TOKEN": "verify-token", "GIT_CONFIG_COUNT": "2", "GIT_CONFIG_KEY_0": "maintenance.auto",
+            "GIT_CONFIG_VALUE_0": "false", "GIT_CONFIG_KEY_1": "commit.gpgsign", "GIT_CONFIG_VALUE_1": "false"}
+
+    def git(at: Path, *args: str) -> str:
+        return subprocess.run(["git", "-C", str(at), *args], check=True, capture_output=True, text=True,
+                              env=case_env(base)).stdout.strip()
+
+    def tape(file: str, scenario: str) -> None:
+        """The testkit's gh answering only SCENARIO's recordings, its call log fresh."""
+        (store / "tape.json").write_text(json.dumps(json.loads((rec / f"{file}.json").read_text())[scenario]))
+        (store / "log").write_text("")
+
+    def gate_pass(r: Path, env: dict[str, str]) -> None:
+        """A full gate pass recorded at R's HEAD, as each recording had one (octo-feather-gate record)."""
+        subprocess.run([f.s.kit, "octo-feather-gate", "record", "--reason", "recording", "--seconds", "1"], cwd=r,
+                       env=case_env(env), check=True, capture_output=True)
+
+    # The tier asks: one clone of the realcase's gh1255-1257 to -1260 branches, each lane's base on origin as recorded.
+    tiers = base | {"XDG_STATE_HOME": str(sc / "xdg"), "OCTO_FEATHER_QC_DIR": str(sc / "qc")}
+    r = sc / "repo"
+    subprocess.run(["git", "clone", "-q", "--no-checkout", str(rec / "realcase-tiers.bundle"), str(r)], check=True,
+                   capture_output=True, env=case_env(base))
+    for lane in ("clarify", "weakens", "ruled", "unconfirmed", "denied"):
+        git(r, "update-ref", f"refs/remotes/origin/gh1255-1258-base-{lane}", "origin/gh1255-1258-base-adds")
+    for sha in TIER_PASSES:
+        git(r, "checkout", "-q", "--detach", sha)
+        gate_pass(r, tiers)
+    f.env = tiers
+    f.pre = ["env", "-C", str(r)]   # each ask runs in the lane's checkout, as a supervisor runs it
+    for name, file, scenario, branch, args, code, tier, reasons, waits in TIER_CASES:
+        git(r, "checkout", "-q", "-B", branch, f"origin/{branch}")
+        tape(file, scenario)
+        f.run(name, "octo-feather-lane", "merge-ask", *args)
+        f.obs(name, "gh-calls", (store / "log").read_text())
+        # The refused code owners file: each line git reads otherwise than GitHub named as an item (no path sorted).
+        named = [f"  - code owners: .github/CODEOWNERS line {n} " for n in (2, 3, 4)] if name == "code-owners-refused" else []
+        f.check(name, lambda c, a=(code, tier, reasons, waits), n=named: tier_holds(c, *a) and all(x in c.err for x in n))
+
+    # The owner decision line of a merge ask's own section: kit PR #1184, replayed at its merged head from a scratch
+    # repo borrowing the kit's objects, its base the merge commit's first parent.
+    h = sc / "history"
+    common = output(["git", "-C", str(kit), "rev-parse", "--path-format=absolute", "--git-common-dir"])[1].strip()
+    subprocess.run(["git", "init", "-q", "-b", "lane", str(h)], check=True, capture_output=True)
+    (h / ".git" / "objects" / "info" / "alternates").write_text(common + "/objects\n")
+    head1184 = "e43afc656d1117c7cce58b57f259f42566e9a707"
+    if output(["git", "-C", str(h), "cat-file", "-e", f"{head1184}^{{commit}}"])[0]:
+        f.unreachable_step("tier-owner-decision-section", f"the kit checkout lacks PR #1184's head {head1184[:12]} "
+                           "(git fetch origin main in the kit)")
+    else:
+        git(h, "update-ref", "refs/remotes/origin/main", "6adc851386f7a846346c37f28c87264e30a3dd3a")
+        git(h, "reset", "-q", "--hard", head1184)
+        gate_pass(h, tiers)
+        tape("merge-tier-1257", "history_1184")
+        status = [x for p in sorted((h / "docs" / "specs").glob("*.status.json")) for x in ("--status", str(p.relative_to(h)))]
+        f.pre = ["env", "-C", str(h)]
+        f.run("tier-owner-decision-section", "octo-feather-lane", "merge-ask", "1184", *status)
+        f.check("tier-owner-decision-section", lambda c: tier_holds(
+            c, 0, 3, ("- Owner decision 1 (", "- Owner decision 2 (optional): "), "the owner"))
+    f.pre = []
+
+    # The merge guard: one world per recorded run (lane_merge_guard.py's World): the realcase-1266 clone, its base at the
+    # base as recorded, the lane worktree at the head, a scratch state dir with the lane record and director.toml, a
+    # scratch kit install (another repo's PR: post-merge step 3 leaves it), Herdr's stand-in with the supervisor idle.
+    sup, director = "zs1:p1", "zd1:p1"
+
+    def world(key: str, lane: str, pr: int, issue: int, head: str, base_at: str  # noqa: PLR0913, PLR0917  the run's facts
+              ) -> tuple[Path, Path, dict[str, str]]:
+        w = sc / f"world-{key}"
+        st = w / "state" / "octo-feather"
+        (st / "lanes").mkdir(parents=True)
+        (st / "lanes" / f"gh1255-1266-{lane}.toml").write_text(
+            f'supervisor = "{sup}"\nrepository = "{REALCASE}"\nissue = "gh{issue}"\npr = {pr}\n'
+            'goal = "g"\nstarted_at = "2026-11-24T00:00:00Z"\n')
+        (st / "director.toml").write_text(f'pane = "{director}"\n')
+        (w / "herdr").mkdir()
+        (w / "herdr" / "agents.json").write_text(json.dumps({sup: {
+            "name": f"gh1255-1266-{lane}", "pane_id": sup, "workspace_id": "zs1", "tab_id": "zs1:t1",
+            "agent_status": "idle", "ready_at": 0}}))
+        ki = w / "kit"
+        for argv in (["git", "init", "-q", "-b", "main", str(ki)],
+                     ["git", "-C", str(ki), "remote", "add", "origin", "https://github.com/0xTomDaniel/octo-feather.git"],
+                     ["git", "-C", str(ki), "commit", "-q", "--allow-empty", "-m", "kit"],
+                     ["git", "clone", "-q", "--no-checkout", str(rec / "realcase-1266.bundle"), str(w / "repo")]):
+            subprocess.run(argv, check=True, capture_output=True, env=case_env(base))
+        git(w / "repo", "checkout", "-q", "-B", "gh1255-1266-base", base_at)
+        git(w / "repo", "update-ref", "refs/remotes/origin/gh1255-1266-base", base_at)
+        git(w / "repo", "worktree", "add", "-q", "-B", f"gh1255-1266-{lane}", str(w / "wt"), head)
+        env = base | {"XDG_STATE_HOME": str(w / "state"), "OCTO_FEATHER_QC_DIR": str(w / "qc"),
+                      "OCTO_FEATHER_KIT_INSTALL": str(ki), "FAKE_HERDR": str(w / "herdr")}
+        return w / "wt", st, env
+
+    def lane_cmd(name: str, wt: Path, env: dict[str, str], pane: str, *args: str) -> None:
+        """octo-feather-lane ARGS in the lane worktree from PANE (HERDR_PANE_ID), as the supervisor or director runs it."""
+        f.env = env | {"HERDR_PANE_ID": pane}
+        f.pre = ["env", "-C", str(wt)]
+        f.run(name, "octo-feather-lane", *args)
+        f.pre = []
+        f.obs(name, "gh-merges", "".join(x + "\n" for x in (store / "log").read_text().splitlines() if x.startswith("pr merge")))
+
+    def relays(st: Path) -> str:
+        log = st / "director.handoffs.jsonl"
+        return "".join(ln + "\n" for ln in (log.read_text().splitlines() if log.is_file() else []) if '"relay"' in ln)
+
+    def stays_open(c: Case, pr: int) -> bool:
+        return c.code == 1 and c.o["gh-merges"] == "" and f"nothing merged, PR #{pr} stays open" in c.err
+
+    def went(c: Case, pr: int, head: str, lane: str) -> bool:
+        return (c.code == 0 and c.o["gh-merges"] == f"pr merge {pr} --merge --match-head-commit {head} -R {REALCASE}\n"
+                and f"merged: PR #{pr} at head {head[:12]} (lane gh1255-1266-{lane})" in c.out.splitlines()
+                and any(x.startswith("step 1 merged: ok: ") for x in c.out.splitlines()))
+
+    r36, b0 = "d44992873d6361b0a58179e352005b908edef91e", "f0885dccda3fd182fdd221122e8659b0b8106d1c"
+    wt, st, env = world("owner", "owner", 36, 32, r36, b0)
+    tape("merge-guard-1266", "owner")
+    lane_cmd("merge-owner", wt, env, sup, "merge", "36", r36, "--repo", REALCASE)
+    f.check("merge-owner", lambda c: stays_open(c, 36) and "its merge waits for the owner, and no relay of its merge is "
+            "on record" in c.err and "(Tier: 3; - failed criterion demo#acceptance-c: " in c.err)
+    (store / "log").write_text("")
+    lane_cmd("relay-not-director", wt, env, sup, "relay", "36", r36)
+    f.obs("relay-not-director", "relays", relays(st))
+    f.obs("relay-not-director", "gh-calls", (store / "log").read_text())
+    f.check("relay-not-director", lambda c: c.code == 1 and "only the director relays a merge" in c.err
+            and "nothing recorded" in c.err and c.o["relays"] == "" and c.o["gh-calls"] == "")
+    tape("merge-guard-1266", "owner")
+    lane_cmd("merge-owner-after", wt, env, sup, "merge", "36", r36, "--repo", REALCASE)
+    f.check("merge-owner-after", lambda c: stays_open(c, 36) and "its merge waits for the owner" in c.err)
+
+    wt, st, env = world("order", "order", 34, 31, "9bc1520502a9731ef9d417cceb64110c16e55893", b0)
+    tape("merge-guard-1266", "order")
+    lane_cmd("merge-order", wt, env, sup, "merge", "34", "9bc1520502a9731ef9d417cceb64110c16e55893", "--repo", REALCASE)
+    f.check("merge-order", lambda c: stays_open(c, 34) and "its merge waits for the director's order (PR #35: its head "
+            "conflicts with this head in app.py), and no relay of its merge is on record" in c.err and "(Tier: 1; Waits for: " in c.err)
+
+    e, b3 = "7c8fd62a66adf15c5f0f074565989da29125a9a2", "d96a6756a9adfd27ebb6048f47bafa47ec4218d9"
+    wt, st, env = world("self", "self2", 39, 37, e, b3)
+    tape("merge-guard-1266", "self")
+    lane_cmd("merge-self", wt, env, sup, "merge", "39", e, "--repo", REALCASE)
+    f.obs("merge-self", "relays", relays(st))
+    f.check("merge-self", lambda c: went(c, 39, e, "self2") and c.o["relays"] == "" and any(
+        x.startswith(f"allowed: PR #39 at {e[:12]}, its merge ask (Tier: 2; - spec call ") and x.endswith("; Waits for: nobody)")
+        for x in c.err.splitlines()))
+
+    g, b4 = "bd4fccb637aa804ac5b053e27e23287519920efa", "4808a098fb1c06a2aeb3e10528ad83ecec073add"
+    wt, st, env = world("relayed", "order2", 40, 38, g, b4)
+    tape("merge-guard-1266", "relayed")   # one recorded run: merge refused, the relay, merge again
+    lane_cmd("relayed-refused", wt, env, sup, "merge", "40", g, "--repo", REALCASE)
+    f.check("relayed-refused", lambda c: stays_open(c, 40) and "its merge waits for the director's order (PR #41: " in c.err
+            and "(Tier: 2; - spec call " in c.err)
+    lane_cmd("relay", wt, env, director, "relay", "40", g)
+    f.obs("relay", "relays", relays(st))
+    f.check("relay", lambda c: c.code == 0 and c.out.startswith(f"relayed: PR #40 at head {g[:12]} (lane gh1255-1266-order2); "
+            "recorded in ") and [(x["lane"], x["pr"], x["head"]) for x in map(json.loads, c.o["relays"].splitlines())]
+            == [("gh1255-1266-order2", 40, g)])
+    lane_cmd("relayed-merge", wt, env, sup, "merge", "40", g, "--repo", REALCASE)
+    f.check("relayed-merge", lambda c: went(c, 40, g, "order2") and any(
+        x.startswith(f"allowed: PR #40 at {g[:12]} on the director's relay of that head, its merge ask (Tier: 2; ")
+        for x in c.err.splitlines()))
+
+    fix, b2 = "7f7e09c5147b71f4e26d7f18c9fd1a901ffcb208", "a2bea8864634735a84ac298c75a3a500cc90fc17"
+    wt, st, env = world("head", "owner", 36, 32, fix, b2)
+    tape("merge-guard-1266", "head")
+    lane_cmd("relay-head", wt, env, director, "relay", "36", r36)
+    f.check("relay-head", lambda c: c.code == 0 and c.out.startswith(f"relayed: PR #36 at head {r36[:12]} "))
+    lane_cmd("merge-head", wt, env, sup, "merge", "36", fix, "--repo", REALCASE)
+    f.check("merge-head", lambda c: stays_open(c, 36) and f"the director's relay on record allows head {r36[:12]}, the merge "
+            f"was given head {fix[:12]}" in c.err)
+
+    m2 = "16dc9236b3d097aa39d0c67b437855adcb9c84cb"
+    wt, st, env = world("carry", "owner", 36, 32, m2, b2)
+    tape("merge-guard-1266", "carry")
+    lane_cmd("relay-carry", wt, env, director, "relay", "36", fix)
+    f.check("relay-carry", lambda c: c.code == 0 and c.out.startswith(f"relayed: PR #36 at head {fix[:12]} "))
+    lane_cmd("merge-carry", wt, env, sup, "merge", "36", m2, "--repo", REALCASE)
+    f.check("merge-carry", lambda c: went(c, 36, m2, "owner") and any(
+        x.startswith(f"relay carried: the director's relay of PR #36 at {fix[:12]} carries to {m2[:12]}: ")
+        and f"clean merge of main {m2[:12]}: lane hunks identical" in x for x in c.out.splitlines()))
+
+    drive_director_reply(f, sc, base)
+    f.env, f.pre = {}, []
+    say(f"merge-tiers evidence: {f.d}")
+
+
+def drive_director_reply(f: Feature, sc: Path, base: dict[str, str]) -> None:
+    """issue-lifecycle#acceptance-tier-three-waits: a headless director (pi-role agents/director.md -p, its real model:
+    SKILL.md's one exception to offline) handed the tier-failed case's recorded tier 3 merge ask (realcase PR #1, its
+    stdout as merge-ask printed it), as the supervisor of lane gh1255-1257-tier sends it up. Its world: a scratch state
+    (that lane's record, director.toml), the director's checkout the tier asks' clone at the lane, gh the testkit's with
+    no recording (any call refused, exit 2), Herdr the stand-in, no MCP tool. Its reply names the owner and the ask's
+    reason; no relay is on record and its session holds no relay run."""
+    name = "director-reply"
+    if not shutil.which("pi", path=case_env(base)["PATH"]):
+        f.unreachable_step(name, "needs Pi and its model route (no pi on PATH; the qc sandbox runs none): "
+                           "run the drive on the box, `verify-octo-feather drive merge-tiers`")
+        return
+    w = sc / "director"
+    st = w / "state" / "octo-feather"
+    (st / "lanes").mkdir(parents=True)
+    (st / "lanes" / "gh1255-1257-tier.toml").write_text(
+        f'supervisor = "zs1:p1"\nrepository = "{REALCASE}"\nissue = "gh1255"\npr = 1\ngoal = "g"\n'
+        'started_at = "2026-11-24T00:00:00Z"\n')
+    (st / "director.toml").write_text('pane = "zd1:p1"\n')
+    (w / "herdr").mkdir()
+    (w / "herdr" / "agents.json").write_text("{}\n")
+    (sc / "gh" / "tape.json").write_text("[]\n")
+    (sc / "gh" / "log").write_text("")
+    sessions = w / "sessions"
+    sessions.mkdir()
+    r = sc / "repo"
+    subprocess.run(["git", "-C", str(r), "checkout", "-q", "gh1255-1257-tier"], check=True, capture_output=True,
+                   env=case_env(base))
+    env = base | {"XDG_STATE_HOME": str(w / "state"), "FAKE_HERDR": str(w / "herdr"), "OCTO_FEATHER_ROLE": "director"}
+    subprocess.run([f.s.kit, "pi-role", "--set-identity", "t", "t@example.com"], env=case_env(env), check=True,
+                   capture_output=True)
+    ask = (f.d / "tier-failed.stdout").read_text()
+    brief = ("The supervisor of lane gh1255-1257-tier (pane zs1:p1), PR #1 of 0xTomDaniel/octo-feather-realcase, sent "
+             f"you its merge ask, as `octo-feather-lane merge-ask 1` printed it:\n\n{ask}\n"
+             "Act on it as your role says. This headless run has no route to any pane: do not send anything; your final "
+             "message is the exact reply you would send the supervisor.")
+    (f.d / f"{name}.brief").write_text(brief)
+    f.env = env
+    f.pre = ["env", "-C", str(r)]   # the director's checkout of the target
+    f.run(name, "pi-role", str(Path(f.s.repo) / "agents" / "director.md"), "--session-dir", str(sessions),
+          "--exclude-tools", "mcp__*", "-p", brief)
+    f.pre = []
+    calls: list[str] = []   # each tool call's arguments in the director's Pi session (its JSON lines)
+    for p in sorted(sessions.rglob("*.jsonl")):
+        for ln in p.read_text().splitlines():
+            msg = cast("dict[str, Any]", cast("dict[str, Any]", json.loads(ln)).get("message") or {})
+            content: object = msg.get("content")   # a system message's is text, the others' blocks
+            parts = cast("list[dict[str, Any]]", content) if isinstance(content, list) else []
+            calls += [json.dumps(x.get("arguments")) for x in parts if x.get("type") == "toolCall"]
+    f.obs(name, "tool-calls", "".join(x + "\n" for x in calls))
+    f.obs(name, "sessions", f"{len(list(sessions.rglob('*.jsonl')))}\n")
+    log = st / "director.handoffs.jsonl"
+    f.obs(name, "relays", "".join(ln + "\n" for ln in (log.read_text().splitlines() if log.is_file() else [])
+                                  if '"relay"' in ln))
+    f.check(name, lambda c: c.code == 0 and re.search(r"\bwait", c.out, re.IGNORECASE) is not None
+            and "owner" in c.out.lower() and "acceptance-c" in c.out and c.o["sessions"] == "1\n"
+            and c.o["relays"] == "" and not re.search(r"octo-feather-lane[^\n]*\brelay\b", c.o["tool-calls"]))
+
+
 def drive_pilot_pr(f: Feature) -> None:
     """A lane's pilot recorded on its draft PR, on a scratch target with a bare origin and GitHub faked (the kit's offline
     gh, tests/fixtures/tracker-gh): octo-feather-integrate lands the pilot on lane gh12 (J), the lane pushed, `gh pr
@@ -4035,6 +4383,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "gate-tiers": drive_gate_tiers,
     "kit-hook": drive_kit_hook,
     "merge-ask-proof": drive_merge_ask_proof,
+    "merge-tiers": drive_merge_tiers,
     "pilot-pr": drive_pilot_pr,
     "template-tiers": drive_template_tiers,
     "one-execution": drive_one_execution,

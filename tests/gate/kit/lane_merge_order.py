@@ -124,9 +124,9 @@ def states(s: Scratch, state: str) -> None:
 def siblings(s: Scratch) -> None:
     """Passing, the ask prints #12 with its pinned run and the changed skill file, #13 with the
     conflicting file, #14 not read and #15 not read with the contract's problem; with #16's head
-    unanswered, the open PRs not read; with those PRs closed it prints the same section (its
-    `Waits for:` line aside) and passes alike. Failing on a gap, the same items with and without
-    them."""
+    unanswered, the open PRs not read; with those PRs closed it prints the same section (the line
+    the merge order moves aside: asked) and passes alike. Failing on a gap, the same items with and
+    without them."""
     ln, d, _, s15 = lane(s)
     edits, lines = ln.at(d, "feat: skill")
     ln.setpr(*edits, **lines)
