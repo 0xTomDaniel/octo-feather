@@ -4245,6 +4245,39 @@ def drive_director_relaunch(f: Feature) -> None:
         f.check("start", lambda c: c.code == 0 and old and sid and c.o["director"] == old
                 and c.o["toml"] == f'pane = "{old}"\n')
         unchanged = f'pane = "{old}"\n'
+        # A supervisor the director starts: the launch `octo-feather-lane start` runs (`octo-feather-start --issue`),
+        # typed into the director's Pi; its later `herdr-say --parent` is the report the relaunch and replace must route.
+        lane = sc / "logs" / "supervisor.log"
+        typed(old, "supervisor", f"octo-feather-start --issue 7 --cwd {target} > {lane} 2>&1; echo rc=$? >> {lane}\n")
+        until(lambda: lane.is_file() and "rc=" in lane.read_text(), 120)
+        f.run("supervisor", "cat", str(lane))
+        sup = next((x[5:] for x in (f.d / "supervisor.stdout").read_text().split() if x.startswith("pane=")), "")
+        until(lambda: bool(sup) and status(sup) in ("idle", "done"), 60)
+        f.obs("supervisor", "name", agent(sup, "name") if sup else "")
+        director_now("supervisor")
+        say(f"supervisor: {sup} started from {old}'s Pi")
+        f.check("supervisor", lambda c: "rc=0" in c.out and sup and c.o["name"] == "gh7" and c.o["director"] == old
+                and c.o["toml"] == unchanged)
+
+        def settle(pane: str) -> None:  # PANE's never-answered turn ended: each Escape ends one
+            for _ in range(3):
+                h("pane", "send-keys", pane, "Escape")
+                if until(lambda: status(pane) in ("idle", "done"), 10):
+                    break
+
+        def hellos(session: str) -> int:  # the user messages `hello` in SESSION's Pi session file
+            return sum(t == "hello" for p in (sc / "pi-agent" / "sessions").glob(f"*/*_{session}.jsonl")
+                       for t in pi_user_texts(p))
+
+        def report(name: str, to: str, session: str) -> None:  # the supervisor's `herdr-say --parent hello`, typed
+            said = sc / "logs" / f"{name}.log"
+            typed(sup, name, f"herdr-say --parent hello > {said} 2>&1; echo rc=$? >> {said}\n")
+            until(lambda: said.is_file() and "rc=" in said.read_text(), 90)
+            until(lambda: hellos(session) > 0, 20)
+            f.run(name, "cat", str(said))
+            director_now(name)
+            f.obs(name, "hello", str(hellos(session)))
+            f.obs(name, "screen", h("pane", "read", to, "--source", "recent-unwrapped", "--format", "text", "--lines", "30"))
 
         def held(c: Case) -> bool:
             return c.o["director"] == old and c.o["toml"] == unchanged
@@ -4298,6 +4331,11 @@ def drive_director_relaunch(f: Feature) -> None:
         f.check("relaunch", lambda c: c.code == 0 and new not in ("", old) and c.o["director"] == new
                 and c.o["toml"] == f'pane = "{new}"\n' and c.o["pi"] == "1" and len(c.o["received"].splitlines()) == 1
                 and f"replacing pane {old}, session {sid}" in c.o["received"] and "director.handoffs.jsonl" in c.o["received"])
+        # The supervisor report after the relaunch (comms#acceptance-director-relaunch): nothing else run between, it reaches NEW.
+        settle(new)
+        report("relaunch-report", new, sid)
+        say(f"relaunch-report: supervisor {sup}'s herdr-say --parent hello; {new}'s session and screen: {f.d}")
+        f.check("relaunch-report", lambda c: "rc=0" in c.out and c.o["director"] == new and c.o["hello"] == "1")
         # The replace (comms#acceptance-director-replace-outgoing) of the relaunched director NEW: its refusals, then it.
         cur = f'pane = "{new}"\n'
 
@@ -4351,6 +4389,14 @@ def drive_director_relaunch(f: Feature) -> None:
                 and len(c.o["bye"].splitlines()) == 1 and "you are no longer the director" in c.o["bye"]
                 and len(c.o["received"].splitlines()) == 1 and f"replacing pane {new}, session {sid}" in c.o["received"]
                 and "director.handoffs.jsonl" in c.o["received"])
+        # The supervisor report after the replace (comms#acceptance-director-replace): it reaches FRESH; the outgoing NEW keeps
+        # its one hello, from before the replace.
+        settle(fresh)
+        report("replace-report", fresh, fsid)
+        f.obs("replace-report", "outgoing", str(hellos(sid)))
+        say(f"replace-report: supervisor {sup}'s herdr-say --parent hello; {fresh}'s session and screen: {f.d}")
+        f.check("replace-report", lambda c: "rc=0" in c.out and c.o["director"] == fresh and c.o["hello"] == "1"
+                and c.o["outgoing"] == "1")
     finally:
         f.env = {}
         try:
