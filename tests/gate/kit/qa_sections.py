@@ -1653,8 +1653,7 @@ def ran(s: Scratch) -> None:
         ({"program": "herdr-say", "args": ["--parent", "hi there"], "count": 1}, "pass", r"^ran herdr-say --parent hi there count 1: 1 matching runs: herdr-say --parent hi there \(exit 0\)"),
         # exit: only the run that exited 64 counts, not the --parent run that exited 0.
         ({"program": "herdr-say", "args": ["--parent"], "exit": 64, "count": 1}, "pass", r"^ran herdr-say --parent exit 64 count 1: 1 matching runs: herdr-say --parent \(exit 64\)"),
-        # herdr-say read as its parser reads it (schema.md, Run record): its target after an option and
-        # that option's value, never the value itself; its options anywhere.
+        # herdr-say read as its parser reads it (rule: schema.md, Run record).
         ({"program": "herdr-say", "args": ["w3:p5"]}, "pass", r"^ran herdr-say w3:p5: recorded run herdr-say --timeout 20 w3:p5 it waits \(exit 0\)$"),
         ({"program": "herdr-say", "args": ["20"], "count": 0}, "pass", r"^ran herdr-say 20 count 0: 0 matching runs \("),
         ({"program": "herdr-say", "args": ["w3:p5", "--timeout", "20"], "count": 1}, "pass", r"^ran herdr-say w3:p5 --timeout 20 count 1: 1 matching runs: "),
