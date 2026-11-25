@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import contextlib
 import fcntl
+import fnmatch
 import hashlib
 import json
 import os
@@ -164,13 +165,18 @@ class Scratch:
             (self.bin / name).unlink(missing_ok=True)
             (self.bin / name).symlink_to(kit_dir / src.relative_to(ROOT))
 
-    def prepare(self, name: str, build: Callable[[Scratch], None]) -> None:
+    def prepare(
+        self, name: str, build: Callable[[Scratch], None], *, linked: Sequence[str] = ()
+    ) -> None:
         """This scratch filled with prepared NAME: a scratch BUILD fills once per gate run under
         GATE_RUN_DIR (the run's shared dir: tests/gate/test_gate.py), the first caller under an
         exclusive lock, every later one waiting on it, as tests/lib/prepared.py prepares template
         installs; read-only by contract, copied here (its bin and tmp aside); BUILD's CPU billed to
-        its own line, shared-NAME (GATE_SHARED_CPU: tests/gate/conftest.py). Outside a gate run,
-        BUILD fills this scratch itself."""
+        its own line, shared-NAME (GATE_SHARED_CPU: tests/gate/conftest.py); each file whose path
+        (relative to the scratch) matches a LINKED glob (fnmatch: `*` crosses `/`) hard-linked, not
+        copied, where one filesystem holds both: files no case and no tool writes, as pnpm links
+        its store's package files into node_modules. Outside a gate run, BUILD fills this scratch
+        itself."""
         run = os.environ.get("GATE_RUN_DIR")
         if not run:
             build(self)
@@ -189,7 +195,16 @@ class Scratch:
         def own(d: str, names: list[str]) -> set[str]:
             return {"bin", "tmp"} & set(names) if Path(d) == tree else set()
 
-        shutil.copytree(tree, self.root, symlinks=True, dirs_exist_ok=True, ignore=own)
+        def copy(src: str, dst: str) -> object:
+            if any(fnmatch.fnmatchcase(os.path.relpath(src, tree), g) for g in linked):
+                with contextlib.suppress(OSError):  # another filesystem: copied
+                    os.link(src, dst)
+                    return dst
+            return shutil.copy2(src, dst)
+
+        shutil.copytree(
+            tree, self.root, symlinks=True, dirs_exist_ok=True, ignore=own, copy_function=copy
+        )
 
     def run(
         self,
@@ -316,6 +331,46 @@ def pnpm_store() -> str:
     asked; one store for the kit and its test copies, owner ruling #422), for
     npm_config_store_dir."""
     return asked("pnpm", "store", "path")
+
+
+def tracked(dest: Path) -> None:
+    """DEST, a new dir, holding a copy of the kit's tracked files (a tracked file deleted in the
+    worktree skipped)."""
+    dest.mkdir()
+    git, tar = shutil.which("git") or "git", shutil.which("tar") or "tar"
+    files = subprocess.run(
+        [git, "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True
+    ).stdout
+    tar_ = subprocess.run(
+        [tar, "-cf", "-", "--null", "--ignore-failed-read", "-T", "-"],
+        cwd=ROOT,
+        input=files,
+        capture_output=True,
+        check=False,
+    ).stdout
+    subprocess.run([tar, "-xf", "-"], cwd=dest, input=tar_, check=True)
+
+
+def installed_kit(s: Scratch) -> Path:
+    """S/kit: the kit's tracked files (tracked) with its JavaScript packages installed, `pnpm
+    install --offline --frozen-lockfile` from the kit's pnpm store (pnpm_store), shared set-up
+    prepared once per gate run (Scratch.prepare, line shared-kit-copy; the package files in its
+    node_modules linked, as pnpm links them from its store, pnpm's own state files copied); S's
+    env names the tools' homes (tool_homes) and that store, as the copy's recipes need them. A
+    case whose proof is the install itself (an empty store, another filesystem) copies with
+    tracked and installs its own."""
+
+    def build(p: Scratch) -> None:
+        store = pnpm_store()  # the caller's HOME finds it, never the scratch HOME
+        p.env |= tool_homes() | {"npm_config_store_dir": store}
+        tracked(p.root / "kit")
+        pnpm = shutil.which("pnpm") or "pnpm"
+        p.run([pnpm, "install", "--offline", "--frozen-lockfile"], cwd=p.root / "kit")
+        (p.root / "pnpm-store").write_text(store)
+
+    s.prepare("kit-copy", build, linked=["kit/node_modules/.pnpm/*/node_modules/*"])
+    s.env |= tool_homes() | {"npm_config_store_dir": (s.root / "pnpm-store").read_text()}
+    return s.root / "kit"
 
 
 def main(*scenarios: Callable[..., None]) -> None:
