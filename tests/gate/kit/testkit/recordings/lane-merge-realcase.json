@@ -1,0 +1,184 @@
+[
+ {
+  "request": "pr view 14 --json state,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+  "out": "{\"headRefOid\":\"7d7155984818c5a34a76e1dc1d7b6ab8b8793331\",\"state\":\"OPEN\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr view 14 --json state,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-24",
+   "caller": "supervisor A's pane w2:p2, 2026-11-24T21:47:38.648898+00:00"
+  }
+ },
+ {
+  "request": "pr merge 14 --merge --match-head-commit 7d7155984818c5a34a76e1dc1d7b6ab8b8793331 -R 0xTomDaniel/octo-feather-realcase",
+  "out": "",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr merge 14 --merge --match-head-commit 7d7155984818c5a34a76e1dc1d7b6ab8b8793331 -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-24",
+   "caller": "supervisor A's pane w2:p2, 2026-11-24T21:47:39.283719+00:00"
+  }
+ },
+ {
+  "request": "issue view 10 --json number,title,body,state,url,parent,subIssues,blockedBy",
+  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Real-case run of octo-feather #1256 (lane gh1249, fix #1254), world `after`: lane A's parent ticket. Opened and closed by that run; no work here.\\n\",\"number\":10,\"parent\":null,\"state\":\"OPEN\",\"subIssues\":{\"nodes\":[{\"id\":\"I_kwDOV6oJUc8AAAABiOpnpw\",\"number\":11,\"state\":\"OPEN\",\"title\":\"[gh1249] realcase after: lane A sub-issue\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/11\"}],\"totalCount\":1},\"title\":\"[gh1249] realcase after: lane A parent\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/10\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh issue view 10 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "date": "2026-11-24",
+   "caller": "supervisor A's pane w2:p2, 2026-11-24T21:47:43.634302+00:00"
+  }
+ },
+ {
+  "request": "issue close 11",
+  "out": "",
+  "err": "✓ Closed issue 0xTomDaniel/octo-feather-realcase#11 ([gh1249] realcase after: lane A sub-issue)\n",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh issue close 11",
+   "date": "2026-11-24",
+   "caller": "supervisor A's pane w2:p2, 2026-11-24T21:47:44.624844+00:00"
+  }
+ },
+ {
+  "request": "issue view 11 --json number,title,body,state,url,parent,subIssues,blockedBy",
+  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Real-case run of octo-feather #1256 (lane gh1249, fix #1254), world `after`: lane A's sub-issue. Opened and closed by that run; no work here.\\n\",\"number\":11,\"parent\":{\"id\":\"I_kwDOV6oJUc8AAAABiOplDA\",\"number\":10,\"state\":\"OPEN\",\"title\":\"[gh1249] realcase after: lane A parent\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/10\"},\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"[gh1249] realcase after: lane A sub-issue\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/11\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh issue view 11 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "date": "2026-11-24",
+   "caller": "supervisor A's pane w2:p2, 2026-11-24T21:47:46.863416+00:00"
+  }
+ },
+ {
+  "request": "issue close 10",
+  "out": "",
+  "err": "✓ Closed issue 0xTomDaniel/octo-feather-realcase#10 ([gh1249] realcase after: lane A parent)\n",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh issue close 10",
+   "date": "2026-11-24",
+   "caller": "supervisor A's pane w2:p2, 2026-11-24T21:47:47.790190+00:00"
+  }
+ },
+ {
+  "request": "issue view 10 --json number,title,body,state,url,parent,subIssues,blockedBy",
+  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Real-case run of octo-feather #1256 (lane gh1249, fix #1254), world `after`: lane A's parent ticket. Opened and closed by that run; no work here.\\n\",\"number\":10,\"parent\":null,\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[{\"id\":\"I_kwDOV6oJUc8AAAABiOpnpw\",\"number\":11,\"state\":\"CLOSED\",\"title\":\"[gh1249] realcase after: lane A sub-issue\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/11\"}],\"totalCount\":1},\"title\":\"[gh1249] realcase after: lane A parent\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/10\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh issue view 10 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "date": "2026-11-24",
+   "caller": "supervisor A's pane w2:p2, 2026-11-24T21:47:49.900205+00:00"
+  }
+ },
+ {
+  "request": "pr view 14 --json state,headRefOid,mergeCommit,baseRefName,headRefName -R 0xTomDaniel/octo-feather-realcase",
+  "out": "{\"baseRefName\":\"main\",\"headRefName\":\"gh1249-after-a-ci\",\"headRefOid\":\"7d7155984818c5a34a76e1dc1d7b6ab8b8793331\",\"mergeCommit\":{\"oid\":\"5b0274b8b2c4cd896a4d34de47ab76119cffb7fa\"},\"state\":\"MERGED\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr view 14 --json state,headRefOid,mergeCommit,baseRefName,headRefName -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-24",
+   "caller": "supervisor A's pane w2:p2, 2026-11-24T21:47:50.866744+00:00"
+  }
+ },
+ {
+  "request": "run list --commit 5b0274b8b2c4cd896a4d34de47ab76119cffb7fa --event push --json databaseId,status,conclusion,workflowName,url -R 0xTomDaniel/octo-feather-realcase",
+  "out": "[{\"conclusion\":\"\",\"databaseId\":45494659057,\"status\":\"in_progress\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/actions/runs/45494659057\",\"workflowName\":\"check\"}]\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh run list --commit 5b0274b8b2c4cd896a4d34de47ab76119cffb7fa --event push --json databaseId,status,conclusion,workflowName,url -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-24",
+   "caller": "supervisor A's pane w2:p2, 2026-11-24T21:47:51.456310+00:00"
+  }
+ },
+ {
+  "request": "run watch 45494659057 --exit-status -R 0xTomDaniel/octo-feather-realcase",
+  "out": "Refreshing run status every 3 seconds. Press Ctrl+C to quit.\n\n* main check · 45494659057\nTriggered via push less than a minute ago\n\nJOBS\n✓ check in 4s (ID 138801817825)\n  ✓ Set up job\n  ✓ Run echo ok\n  ✓ Complete job\n✓ main check · 45494659057\nTriggered via push less than a minute ago\n\nJOBS\n✓ check in 4s (ID 138801817825)\n  ✓ Set up job\n  ✓ Run echo ok\n  ✓ Complete job\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh run watch 45494659057 --exit-status -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-24",
+   "caller": "supervisor A's pane w2:p2, 2026-11-24T21:47:52.110565+00:00"
+  }
+ },
+ {
+  "request": "run list --commit 5b0274b8b2c4cd896a4d34de47ab76119cffb7fa --event push --json databaseId,status,conclusion,workflowName,url -R 0xTomDaniel/octo-feather-realcase",
+  "out": "[{\"conclusion\":\"success\",\"databaseId\":45494659057,\"status\":\"completed\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/actions/runs/45494659057\",\"workflowName\":\"check\"}]\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh run list --commit 5b0274b8b2c4cd896a4d34de47ab76119cffb7fa --event push --json databaseId,status,conclusion,workflowName,url -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-24",
+   "caller": "supervisor A's pane w2:p2, 2026-11-24T21:47:59.368182+00:00"
+  }
+ },
+ {
+  "request": "repo view 0xTomDaniel/octo-feather-realcase --json nameWithOwner",
+  "out": "{\"nameWithOwner\":\"0xTomDaniel/octo-feather-realcase\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh repo view 0xTomDaniel/octo-feather-realcase --json nameWithOwner",
+   "date": "2026-11-24",
+   "caller": "supervisor A's pane w2:p2, 2026-11-24T21:48:00.213449+00:00"
+  }
+ },
+ {
+  "request": "repo view https://github.com/0xTomDaniel/octo-feather --json nameWithOwner",
+  "out": "{\"nameWithOwner\":\"0xTomDaniel/octo-feather\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh repo view https://github.com/0xTomDaniel/octo-feather --json nameWithOwner",
+   "date": "2026-11-24",
+   "caller": "supervisor A's pane w2:p2, 2026-11-24T21:48:00.862359+00:00"
+  }
+ },
+ {
+  "request": "pr view 14 --json title,url -R 0xTomDaniel/octo-feather-realcase",
+  "out": "{\"title\":\"[gh1249] realcase after: lane A (gh10), ci\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/14\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr view 14 --json title,url -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-24",
+   "caller": "supervisor A's pane w2:p2, 2026-11-24T21:48:02.663892+00:00"
+  }
+ }
+]
