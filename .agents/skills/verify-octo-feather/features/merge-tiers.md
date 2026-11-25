@@ -24,7 +24,9 @@ Criteria:
 - [issue-lifecycle#acceptance-merge-guard-head](../../../../docs/specs/issue-lifecycle.spec.html#acceptance-merge-guard-head)
 - [issue-lifecycle#acceptance-merge-relay-director-only](../../../../docs/specs/issue-lifecycle.spec.html#acceptance-merge-relay-director-only)
 
-Drive criterion: `issue-lifecycle#acceptance-tier-three-waits`
+Drive criterion: `issue-lifecycle#acceptance-merge-guard-owner`
+
+The director's reply to a tier 3 ask (issue-lifecycle#acceptance-tier-three-waits) is no case here: qc.toml's demo for it, a pinned eval run (evals/director-tier-relay), is its proof.
 
 The rules: [issue-lifecycle#gates-tiers](../../../../docs/specs/issue-lifecycle.spec.html#gates-tiers), [#gates-tier-relay](../../../../docs/specs/issue-lifecycle.spec.html#gates-tier-relay), [#gates-merge-guard](../../../../docs/specs/issue-lifecycle.spec.html#gates-merge-guard). The tier block's form, each reason, Waits for, the incomplete block, merge's refusals and relay: `octo-feather-lane --help` (merge-ask, merge, relay).
 
@@ -36,7 +38,6 @@ Each case replays one recorded run of the realcase (0xTomDaniel/octo-feather-rea
 - **incomplete block**: `incomplete` (#1, its Head stale) and `code-owners-refused` (#29, three lines git reads otherwise than GitHub): exit 1, stdout empty, the block on stderr after the incomplete mark, before the items.
 - **relay, director only**: `relay-not-director` (#36, from the supervisor's pane): refused, nothing recorded, no gh call; `relay`, `relay-head`, `relay-carry` from the director's pane: one relay line on record.
 - **merge by tier and relay**: `merge-owner`, `merge-owner-after` (#36, tier 3, no relay: waits for the owner), `merge-order` (#34, tier 1, #35 conflicting: waits for the director's order), `merge-self` (#39, tier 2, nobody: merges, no relay), `relayed-refused` then `relayed-merge` (#40: refused, then merged on the director's relay), `merge-head` (#36 at a fix past the relayed head: refused naming both), `merge-carry` (#36, the relay carried over a clean merge of the base: merges).
-- **the director's reply to a tier 3 ask**: `director-reply`: a headless director (`pi-role agents/director.md -p`, its real model) handed `tier-failed`'s stdout as the supervisor of lane gh1255-1257-tier sends it up; its final message is its reply. Checked: it says the ask waits for the owner, names the failed criterion, no relay line is on record and its Pi session ran no `octo-feather-lane relay`.
 
 ## How to get to it (user POV)
 
@@ -45,11 +46,11 @@ Each case replays one recorded run of the realcase (0xTomDaniel/octo-feather-rea
 
 ## Driving it with verify-octo-feather
 
-Preconditions: `verify-octo-feather launch` printed `ready`; `verify-octo-feather doctor` exits 0; Pi and its model route for `director-reply` (else that step is `UNREACHABLE`).
+Preconditions: `verify-octo-feather launch` printed `ready`; `verify-octo-feather doctor` exits 0.
 
-Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive merge-tiers`. Evidence: `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/merge-tiers/` (the director's brief as `director-reply.brief`).
+Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive merge-tiers`. Evidence: `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/merge-tiers/`.
 
-- **GitHub.** The testkit's gh (`tests/gate/kit/testkit/gh.py`) first on PATH, its `tape.json` one scenario of `tests/gate/kit/testkit/recordings/merge-tier-*.json` or `merge-guard-1266.json` (real gh's answers), its call log reset with each tape; `director-reply` gets an empty tape, so any gh call it makes is refused.
+- **GitHub.** The testkit's gh (`tests/gate/kit/testkit/gh.py`) first on PATH, its `tape.json` one scenario of `tests/gate/kit/testkit/recordings/merge-tier-*.json` or `merge-guard-1266.json` (real gh's answers), its call log reset with each tape.
 - **Repos.** Tier cases: one clone of `recordings/realcase-tiers.bundle` (the realcase's gh1255-1257 to -1260 branches as pushed), each case's lane branch checked out, a full gate pass recorded (`octo-feather-gate record`) at each head the recordings had one. `tier-owner-decision-section`: a scratch repo borrowing the kit checkout's objects at PR #1184's merged head. Merge cases: one world per recorded run, as `tests/gate/kit/lane_merge_guard.py`'s World builds it (a clone of `recordings/realcase-1266.bundle`, the lane worktree, a scratch state dir with the lane record and director.toml, a scratch kit install, the testkit Herdr).
 - **Panes.** The supervisor is `HERDR_PANE_ID=zs1:p1`, the director `zd1:p1` (director.toml).
 - **Side effects.** Every cwd stays empty and the kit's `git status` unchanged; merges happen only on the fake gh.
@@ -57,5 +58,4 @@ Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather d
 ## Gotchas
 
 - `tier-owner-decision-section` needs PR #1184's head in the kit checkout: missing, it is `UNREACHABLE` (fix: `git fetch origin main` in the kit).
-- `director-reply` runs with `--exclude-tools mcp__*` (no web search) and a scratch `XDG_STATE_HOME` whose commit identity the drive sets; it costs one director model run. It is a drive, not the criterion's proof: that is the pinned eval run qc.toml names (evals/director-tier-relay); the qc sandbox has no Pi.
 - The tapes replay calls in order: a merge-ask change that asks gh something new fails the case with `fake gh: no recording for call ...` on stderr; record the scenario again (the recording test's docstring names its world).

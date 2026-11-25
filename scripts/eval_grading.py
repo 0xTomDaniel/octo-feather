@@ -626,9 +626,8 @@ def arg_matches(want: str, got: str, head: str | None) -> bool:
     return m is not None and all(head.startswith(g) for g in m.groups())
 
 
-# Each kit command whose ran facts read its arguments as its own parser does (rule: schema, Run
-# record), its options and their values by the usage line its --help prints (`[--opt VALUE]`).
-# herdr-say: .agents/skills/herdr-comms/assets/herdr-say, its usage().
+# The programs a ran fact reads as their own parser does (rule: schema, Run record), each asked
+# through its --help usage line. herdr-say: .agents/skills/herdr-comms/assets/herdr-say.
 PARSED = {"herdr-say": KIT / ".agents" / "skills" / "herdr-comms" / "assets" / "herdr-say"}
 _VALUED: dict[str, frozenset[str]] = {}
 
@@ -647,8 +646,8 @@ def valued_options(program: str) -> frozenset[str] | None:
 
 
 def operands(program: str | None, got: list[str]) -> list[str]:
-    """GOT's operands as PROGRAM parses them: its options (each valued one with the argument after
-    it) dropped wherever they stand, all after `--` kept; GOT itself for a program not PARSED."""
+    """GOT's operands as PROGRAM parses them (rule: schema, Run record); GOT itself for a program
+    not PARSED."""
     valued = valued_options(program) if program else None
     if valued is None:
         return got

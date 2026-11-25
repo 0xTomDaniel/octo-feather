@@ -2986,7 +2986,7 @@ def drive_merge_tiers(f: Feature) -> None:
     offline: the testkit's gh (tests/gate/kit/testkit/gh.py) first on PATH answers only real gh's recordings (one
     scenario's tape per case, its call log reset with it), Herdr the testkit's (herdr.py). merge-ask's tier block
     (each reason kind, Waits for, the incomplete block), relay refused outside the director's pane, merge refusing or
-    merging by tier and relay, then the director's reply to the recorded tier 3 ask (its real model). Cases:
+    merging by tier and relay. Cases:
     features/merge-tiers.md."""
     kit = Path(f.s.repo)
     rec = kit / "tests" / "gate" / "kit" / "testkit" / "recordings"
@@ -3177,68 +3177,8 @@ def drive_merge_tiers(f: Feature) -> None:
         x.startswith(f"relay carried: the director's relay of PR #36 at {fix[:12]} carries to {m2[:12]}: ")
         and f"clean merge of main {m2[:12]}: lane hunks identical" in x for x in c.out.splitlines()))
 
-    drive_director_reply(f, sc, base)
     f.env, f.pre = {}, []
     say(f"merge-tiers evidence: {f.d}")
-
-
-def drive_director_reply(f: Feature, sc: Path, base: dict[str, str]) -> None:
-    """issue-lifecycle#acceptance-tier-three-waits: a headless director (pi-role agents/director.md -p, its real model:
-    SKILL.md's one exception to offline) handed the tier-failed case's recorded tier 3 merge ask (realcase PR #1, its
-    stdout as merge-ask printed it), as the supervisor of lane gh1255-1257-tier sends it up. Its world: a scratch state
-    (that lane's record, director.toml), the director's checkout the tier asks' clone at the lane, gh the testkit's with
-    no recording (any call refused, exit 2), Herdr the stand-in, no MCP tool. Its reply names the owner and the ask's
-    reason; no relay is on record and its session holds no relay run."""
-    name = "director-reply"
-    if not shutil.which("pi", path=case_env(base)["PATH"]):
-        f.unreachable_step(name, "needs Pi and its model route (no pi on PATH; the qc sandbox runs none): "
-                           "run the drive on the box, `verify-octo-feather drive merge-tiers`")
-        return
-    w = sc / "director"
-    st = w / "state" / "octo-feather"
-    (st / "lanes").mkdir(parents=True)
-    (st / "lanes" / "gh1255-1257-tier.toml").write_text(
-        f'supervisor = "zs1:p1"\nrepository = "{REALCASE}"\nissue = "gh1255"\npr = 1\ngoal = "g"\n'
-        'started_at = "2026-11-24T00:00:00Z"\n')
-    (st / "director.toml").write_text('pane = "zd1:p1"\n')
-    (w / "herdr").mkdir()
-    (w / "herdr" / "agents.json").write_text("{}\n")
-    (sc / "gh" / "tape.json").write_text("[]\n")
-    (sc / "gh" / "log").write_text("")
-    sessions = w / "sessions"
-    sessions.mkdir()
-    r = sc / "repo"
-    subprocess.run(["git", "-C", str(r), "checkout", "-q", "gh1255-1257-tier"], check=True, capture_output=True,
-                   env=case_env(base))
-    env = base | {"XDG_STATE_HOME": str(w / "state"), "FAKE_HERDR": str(w / "herdr"), "OCTO_FEATHER_ROLE": "director"}
-    subprocess.run([f.s.kit, "pi-role", "--set-identity", "t", "t@example.com"], env=case_env(env), check=True,
-                   capture_output=True)
-    ask = (f.d / "tier-failed.stdout").read_text()
-    brief = ("The supervisor of lane gh1255-1257-tier (pane zs1:p1), PR #1 of 0xTomDaniel/octo-feather-realcase, sent "
-             f"you its merge ask, as `octo-feather-lane merge-ask 1` printed it:\n\n{ask}\n"
-             "Act on it as your role says. This headless run has no route to any pane: do not send anything; your final "
-             "message is the exact reply you would send the supervisor.")
-    (f.d / f"{name}.brief").write_text(brief)
-    f.env = env
-    f.pre = ["env", "-C", str(r)]   # the director's checkout of the target
-    f.run(name, "pi-role", str(Path(f.s.repo) / "agents" / "director.md"), "--session-dir", str(sessions),
-          "--exclude-tools", "mcp__*", "-p", brief)
-    f.pre = []
-    calls: list[str] = []   # each tool call's arguments in the director's Pi session (its JSON lines)
-    for p in sorted(sessions.rglob("*.jsonl")):
-        for ln in p.read_text().splitlines():
-            msg = cast("dict[str, Any]", cast("dict[str, Any]", json.loads(ln)).get("message") or {})
-            content: object = msg.get("content")   # a system message's is text, the others' blocks
-            parts = cast("list[dict[str, Any]]", content) if isinstance(content, list) else []
-            calls += [json.dumps(x.get("arguments")) for x in parts if x.get("type") == "toolCall"]
-    f.obs(name, "tool-calls", "".join(x + "\n" for x in calls))
-    f.obs(name, "sessions", f"{len(list(sessions.rglob('*.jsonl')))}\n")
-    log = st / "director.handoffs.jsonl"
-    f.obs(name, "relays", "".join(ln + "\n" for ln in (log.read_text().splitlines() if log.is_file() else [])
-                                  if '"relay"' in ln))
-    f.check(name, lambda c: c.code == 0 and re.search(r"\bwait", c.out, re.IGNORECASE) is not None
-            and "owner" in c.out.lower() and "acceptance-c" in c.out and c.o["sessions"] == "1\n"
-            and c.o["relays"] == "" and not re.search(r"octo-feather-lane[^\n]*\brelay\b", c.o["tool-calls"]))
 
 
 def drive_pilot_pr(f: Feature) -> None:
