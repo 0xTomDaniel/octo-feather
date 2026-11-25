@@ -74,9 +74,9 @@ while (($#)); do
   esac
 done
 # The caller's parent, resolved once (header): a kit agent's, or the one --parent asks for.
-parent="${OCTO_FEATHER_PARENT:-}"
+parent="${OCTO_FEATHER_PARENT:-}" kit=""
 case "${OCTO_FEATHER_ROLE:-}" in implementer|code-reviewer|corrector|general-worker|supervisor) kit=1 ;; esac
-if [[ -n "${kit:-}${to_parent:-}" ]]; then
+if [[ -n "$kit${to_parent:-}" ]]; then
   parent="$("$here/../../../../scripts/octo-feather-handoff" parent "$parent")" || parent="${OCTO_FEATHER_PARENT:-}"
 fi
 if [[ -n "${to_parent:-}" ]]; then
@@ -96,7 +96,7 @@ fi
 allowed() {
   local role="${OCTO_FEATHER_ROLE:-}" info pane space director line lane
   looked=""
-  case "$role" in implementer|code-reviewer|corrector|general-worker|supervisor) ;; *) return 0 ;; esac
+  [[ -n "$kit" ]] || return 0
   [[ -n "$parent" && "$target" == "$parent" ]] && return 0
   info="$(herdr agent get "$target" 2>&1)" && looked="" || looked="$(tail -1 <<<"$info")"
   pane="$(jq -r '.result.agent.pane_id // empty' <<<"$info" 2>/dev/null || true)"
