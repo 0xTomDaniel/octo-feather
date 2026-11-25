@@ -85,6 +85,8 @@ class World:
         ki = s.root / "kit"
         s.run(["git", "init", "-q", "-b", "main", str(ki)])
         s.git(ki, "remote", "add", "origin", "https://github.com/0xTomDaniel/octo-feather.git")
+        for k, v in (("user.email", "t@example.com"), ("user.name", "t")):  # no global identity
+            s.git(ki, "config", k, v)
         s.run(["git", "-C", str(ki), "commit", "-q", "--allow-empty", "-m", "kit"])
         s.env |= {
             "XDG_STATE_HOME": str(st),
