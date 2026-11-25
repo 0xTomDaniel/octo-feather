@@ -4076,6 +4076,44 @@ def pi_user_texts(path: Path) -> list[str]:
     return out
 
 
+# Herdr 0.9.5 WorkspaceInfo (`herdr api schema --json`, protocol 22): its fields, and the required ones.
+WORKSPACE_FIELDS = {"active_tab_id", "agent_status", "focused", "label", "number", "pane_count", "tab_count", "tokens",
+                    "workspace_id", "worktree"}
+WORKSPACE_REQUIRED = {"workspace_id", "number", "label", "focused", "pane_count", "tab_count", "active_tab_id",
+                      "agent_status"}
+
+
+def pi_provider_names(path: Path) -> list[str]:
+    """The provider names of Pi's models.json at PATH: a JSON object whose `providers` (absent: none) is an object of
+    objects. TypeError (ValueError: not JSON) naming the field; no other field is read."""
+    doc = json_object(json.loads(path.read_text()), str(path))
+    providers = json_object(doc.get("providers", {}), f"{path}: providers")
+    for k, v in providers.items():
+        json_object(v, f"{path}: providers.{k}")
+    return list(providers)
+
+
+def pi_model_settings(path: Path) -> dict[str, object]:
+    """Of Pi's settings.json at PATH, a JSON object, only the model choice: defaultProvider and defaultModel (strings)
+    and enabledModels (a list of strings), each when present. TypeError (ValueError: not JSON) naming the field."""
+    doc = json_object(json.loads(path.read_text()), str(path))
+    out: dict[str, object] = {}
+    for k in ("defaultProvider", "defaultModel"):
+        if k in doc:
+            if not isinstance(doc[k], str):
+                msg = f"{path}: {k}: not a string"
+                raise TypeError(msg)
+            out[k] = doc[k]
+    if "enabledModels" in doc:
+        got = doc["enabledModels"]
+        items = cast("list[object]", got) if isinstance(got, list) else None
+        if items is None or not all(isinstance(x, str) for x in items):
+            msg = f"{path}: enabledModels: not a list of strings"
+            raise TypeError(msg)
+        out["enabledModels"] = items
+    return out
+
+
 def drive_director_relaunch(f: Feature) -> None:
     """comms#acceptance-director-relaunch-busy, -own-scope, -same-session: a real scratch Herdr server (its own
     XDG_CONFIG_HOME and session, never the box's), a real Pi director started by `octo-feather-start --director`, its
@@ -4142,8 +4180,8 @@ def drive_director_relaunch(f: Feature) -> None:
             msg = f"{where}: result.workspaces not a list"
             raise scope.BadAnswerError(msg)
         items = cast("list[object]", got)
-        return [scope.text(json_object(v, f"{where}: result.workspaces[{i}]"), "workspace_id",
-                           f"{where}: result.workspaces[{i}]") for i, v in enumerate(items)]
+        return [scope.text(scope.record(v, f"{where}: result.workspaces[{i}]", WORKSPACE_FIELDS, WORKSPACE_REQUIRED),
+                           "workspace_id", f"{where}: result.workspaces[{i}]") for i, v in enumerate(items)]
 
     def answers() -> bool:
         try:
@@ -4170,15 +4208,12 @@ def drive_director_relaunch(f: Feature) -> None:
         if not until(lambda: port.is_file() and port.read_text().strip() != "", 10):
             msg = "the dead model socket did not start"
             raise RuntimeError(msg)
-        m = json_object(json.loads(models.read_text()), str(models))
-        providers = json_object(m.get("providers", {}), f"{models}: providers")
-        for k, v in providers.items():
-            p = json_object(v, f"{models}: providers.{k}")
-            p["baseUrl"], p["apiKey"] = f"http://127.0.0.1:{port.read_text().strip()}", "invalid-verify"
-        (sc / "pi-agent" / "models.json").write_text(json.dumps(m))
+        # Only the box's provider names carry over, each pointed at the dead socket: nothing else of its models.json.
+        dead = {"baseUrl": f"http://127.0.0.1:{port.read_text().strip()}", "apiKey": "invalid-verify"}
+        names = pi_provider_names(models)
+        (sc / "pi-agent" / "models.json").write_text(json.dumps({"providers": dict.fromkeys(names, dead)}))
         user = models.parent / "settings.json"
-        own = json_object(json.loads(user.read_text()), str(user)) if user.is_file() else {}
-        settings: dict[str, object] = {k: own[k] for k in ("defaultProvider", "defaultModel", "enabledModels") if k in own}
+        settings = pi_model_settings(user) if user.is_file() else {}
         (sc / "pi-agent" / "settings.json").write_text(json.dumps(settings | {"retry": {"enabled": False}}))
         (sc / "pi-agent" / "auth.json").write_text("{}")
         (xdg / "herdr" / "config.toml").write_text(

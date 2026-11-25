@@ -429,7 +429,7 @@ covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/tracker
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
 covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
 
-# Proven by their tagged tests (tests/gate/kit/test_start_relaunch.py) and these demos: octo-feather-start --director
+# Proven by their tagged tests (tests/gate/kit/test_start_relaunch.py): octo-feather-start --director
 # --relaunch / --resume against the testkit's Herdr stand-in, real processes as the director's shell and Pi. Busy: a
 # working director and --wait 1, then an idle one and --wait 31 (no full gap for the fourth read): exit 75, nothing
 # changed. Own scope: a detached job in the director's real agent scope (a new one where a user manager answers, else
@@ -437,13 +437,10 @@ covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "tests/gate/kit/
 # pane: exit 64, nothing changed. Same session: --director --resume beside the live director on it: exit 73. The verify
 # drive (features/director-relaunch.md) drives all of it on a real scratch Herdr session.
 [demo."comms#acceptance-director-relaunch-busy"]
-command = "python3 tests/gate/kit/start_relaunch.py relaunch_busy && python3 tests/gate/kit/start_relaunch.py relaunch_short_wait"
 covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/test_start_relaunch.py", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/director-relaunch.md"]
 
 [demo."comms#acceptance-director-relaunch-own-scope"]
-command = "python3 tests/gate/kit/start_relaunch.py relaunch_own_scope"
 covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/test_start_relaunch.py", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/director-relaunch.md"]
 
 [demo."comms#acceptance-director-relaunch-same-session"]
-command = "python3 tests/gate/kit/start_relaunch.py resume_same_session"
 covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/test_start_relaunch.py", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/director-relaunch.md"]
