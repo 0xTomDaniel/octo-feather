@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 from pathlib import Path
 
 from testkit import ROOT, Ran, Scratch, kit, main
@@ -100,6 +101,7 @@ def refused(s: Scratch) -> None:
         "git stash save --end-of-options --help",
         "git stash -mspam --help",
         "git stash push -q --help",
+        "git stash import HEAD",
     ):
         ran = agent(s, second, push, want=1)
         assert WIP in ran.err, (push, ran.err)
@@ -126,21 +128,31 @@ def unchanged(s: Scratch) -> None:
     """The calls below against real git's own run, in a two-worktree repo then a one-worktree repo
     (which calls run unchanged: scripts/stash_guard.py)."""
     first, second = two_worktrees(s)
-    for cmd, want in (
-        ("git rev-parse --verify nosuch", 128),
-        ("git log -1 --format=%s", 0),
-        ("echo hi | git hash-object --stdin", 0),
-        ("git -C ../first stash show --stat", 0),
-        ("git --version stash", 0),
-        ("git -h stash", 0),
-        ("git stash -h", 129),
-        ("git stash --help", 0),
-        ("git stash push --help", 129),
-        ("git stash drop -h", 129),
+    for cmd in (
+        "git rev-parse --verify nosuch",
+        "git log -1 --format=%s",
+        "echo hi | git hash-object --stdin",
+        "git -C ../first stash show --stat",
+        "git --version stash",
+        "git -h stash",
+        "git stash -h",
+        "git stash --help",
+        "git stash push --help",
+        "git stash drop -h",
     ):
-        got = agent(s, second, cmd, want=want)
-        real = s.run(["sh", "-c", cmd], want=want, cwd=second)
-        assert (got.out, got.err) == (real.out, real.err), (cmd, got, real)
+        real = subprocess.run(
+            ["/bin/sh", "-c", cmd],
+            cwd=second,
+            env=s.env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )  # real git's own result, whatever its version, is the oracle
+        got = agent(s, second, cmd, want=real.returncode)
+        assert (got.out, got.err) == (real.stdout.rstrip("\n"), real.stderr.rstrip("\n")), (
+            cmd,
+            got,
+        )
     assert s.git(first, "stash", "list") != ""
     r = repo(s, "solo")
     (r / "f").write_text("work\n")
