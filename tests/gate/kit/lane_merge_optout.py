@@ -117,31 +117,34 @@ UNCLEARED = "not cleared by the review verdict: " + NOTE
 
 
 def optout_cleared(s: Scratch) -> None:
-    """Realcase PR #16, one opt-out its clear verdict names cleared: tier 2, naming that opt-out,
-    waiting for nobody."""
+    """Realcase PR #16, one opt-out its clear verdict names cleared:
+    issue-lifecycle#acceptance-tier-optout-cleared (the reason's form: octo-feather-lane --help,
+    merge-ask)."""
     out = Lanes(s).ask("optout_cleared", "cleared").out
     assert block(out) == ["Tier: 2", f"- opt-out 6195f3b {CLEARED}", "Waits for: nobody"], out
 
 
 def optout_uncleared(s: Scratch) -> None:
-    """Realcase PR #17, one opt-out its clear verdict does not name: tier 3, naming its commit,
-    waiting for the owner."""
+    """Realcase PR #17, one opt-out its clear verdict does not name:
+    issue-lifecycle#acceptance-tier-optout-uncleared (the reason's form: octo-feather-lane --help,
+    merge-ask)."""
     out = Lanes(s).ask("optout_uncleared", "uncleared").out
     want = ["Tier: 3", f"- opt-out eac74d9 {UNCLEARED}", "Waits for: the owner"]
     assert block(out) == want, out
 
 
 def owner_decision_verdict(s: Scratch) -> None:
-    """Realcase PR #18, its clear verdict carrying an `Owner decision:` line, the section none: tier
-    3, the line shown as written, waiting for the owner."""
+    """Realcase PR #18, its clear verdict carrying an `Owner decision:` line, the section none:
+    issue-lifecycle#acceptance-tier-owner-decision (the reason's form: octo-feather-lane --help,
+    merge-ask)."""
     out = Lanes(s).ask("owner_decision_verdict", "decision").out
     line = "Owner decision: lib.py adds SANDBOX = False, a change to the sandbox policy (ADR 0022)"
     assert block(out) == ["Tier: 3", f"- {line}", "Waits for: the owner"], out
 
 
 def demo(s: Scratch) -> None:
-    """Realcase PR #19, two opt-outs (A1 cleared, A2 not) and an owner decision line: tier 3, each
-    named."""
+    """Realcase PR #19, two opt-outs (A1 cleared, A2 not) and an owner decision line, each a
+    reason (the reason's form: octo-feather-lane --help, merge-ask)."""
     out = Lanes(s).ask("demo", "demo").out
     assert block(out) == [
         "Tier: 3",

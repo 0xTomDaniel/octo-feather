@@ -155,8 +155,7 @@ FAILED = "- failed criterion demo#acceptance-c: repair ticket #99 (recorded case
 
 def owner(s: Scratch) -> None:
     """issue-lifecycle#acceptance-merge-guard-owner: PR #36, tier 3 (its Failed list), no relay
-    on record: `merge` refuses, saying its merge waits for the owner, with the tier block; exit 1,
-    nothing merged, the PR stays open."""
+    on record, merged by the supervisor (octo-feather-lane --help, merge and relay)."""
     w = World(s, "owner", "owner", 36, 32, R, B0)
     r = w.merge(1)
     assert "its merge waits for the owner, and no relay of its merge is on record" in r.err, r.err
@@ -166,8 +165,8 @@ def owner(s: Scratch) -> None:
 
 def order(s: Scratch) -> None:
     """issue-lifecycle#acceptance-merge-guard-order: PR #34, tier 1, #35 open with its head
-    conflicting, no relay on record: `merge` refuses, saying its merge waits for the director's
-    order, naming #35; exit 1, nothing merged, the PR stays open."""
+    conflicting, no relay on record, merged by the supervisor (octo-feather-lane --help, merge and
+    relay)."""
     w = World(s, "order", "order", 34, 31, HB, B0)
     r = w.merge(1)
     why = "the director's order (PR #35: its head conflicts with this head in app.py)"
@@ -178,8 +177,7 @@ def order(s: Scratch) -> None:
 
 def relay_director_only(s: Scratch) -> None:
     """issue-lifecycle#acceptance-merge-relay-director-only: PR #36, tier 3: the supervisor's pane
-    running `relay 36 R` is refused, saying only the director relays a merge, and no relay is on
-    record (none in the director's log); the merge then still waits for the owner."""
+    runs `relay 36 R`, then the merge (octo-feather-lane --help, merge and relay)."""
     w = World(s, "owner", "owner", 36, 32, R, B0)
     r = w.relay(1, pane=SUP)
     assert "only the director relays a merge" in r.err, r.err
@@ -193,8 +191,7 @@ def relay_director_only(s: Scratch) -> None:
 
 def self_merge(s: Scratch) -> None:
     """issue-lifecycle#acceptance-tier-self-merge: PR #39, tier 2 (a clarifying spec call), no
-    open PR set back, no relay: `merge 39 E` names the tier 2 ask it goes on, merges pinned to E,
-    step 1 reads it merged at E, its parent #37 done; no relay was asked for or recorded."""
+    open PR set back, no relay: `merge 39 E` (octo-feather-lane --help, merge and relay)."""
     w = World(s, "self", "self2", 39, 37, E, B3)
     r = w.merge(0)
     allowed = f"allowed: PR #39 at {E[:12]}, its merge ask (Tier: 2; {CALL}; Waits for: nobody)"
@@ -205,10 +202,9 @@ def self_merge(s: Scratch) -> None:
 
 
 def relayed(s: Scratch) -> None:
-    """issue-lifecycle#acceptance-tier-relayed: PR #40, tier 2 (a clarifying spec call), waiting
-    for the director's order (#41 conflicting): `merge 40 G` refuses with no relay on record;
-    the director's pane runs `relay 40 G`, one relay line on record naming the lane, PR and head;
-    `merge 40 G` then merges pinned to G, step 1 reads it merged at G."""
+    """issue-lifecycle#acceptance-tier-relayed: PR #40, tier 2 (a clarifying spec call), #41
+    conflicting: `merge 40 G`, the director's pane's `relay 40 G`, `merge 40 G` again
+    (octo-feather-lane --help, merge and relay)."""
     w = World(s, "relayed", "order2", 40, 38, G, B4)
     why = "the director's order (PR #41: its head conflicts with this head in app.py)"
     r = w.merge(1)
@@ -229,8 +225,7 @@ def relayed(s: Scratch) -> None:
 
 def head(s: Scratch) -> None:
     """issue-lifecycle#acceptance-merge-guard-head: PR #36, tier 3, the director's relay on record
-    naming R; a fix commit F lands after it: `merge 36 F` refuses, naming the head the relay
-    allows and the head it was given; exit 1, nothing merged, the PR stays open."""
+    naming R, a fix commit F after it: `merge 36 F` (octo-feather-lane --help, merge and relay)."""
     w = World(s, "head", "owner", 36, 32, F, B2)
     w.relay(0, R)
     r = w.merge(1)
@@ -242,8 +237,8 @@ def head(s: Scratch) -> None:
 
 def carry(s: Scratch) -> None:
     """A relay carried (spec #gates-merge-guard, #lanes-one-head): PR #36, tier 3, the director's
-    relay on record naming F; the supervisor merges the base in cleanly (M2): `merge 36 M2` names
-    the carry and its one-head proof, merges pinned to M2, step 1 reads it merged at M2."""
+    relay on record naming F, the base merged in cleanly after it (M2): `merge 36 M2`
+    (octo-feather-lane --help, merge and relay)."""
     w = World(s, "carry", "owner", 36, 32, M2, B2)
     w.relay(0, F)
     r = w.merge(0)

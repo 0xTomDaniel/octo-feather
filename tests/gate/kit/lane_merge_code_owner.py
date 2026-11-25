@@ -1,7 +1,6 @@
 """The scenarios of tests/gate/kit/test_lane_merge_code_owner.py (its items), this file their
-command (testkit.main): `octo-feather-lane merge-ask` gives tier 3 for each path the lane changes
-that the code owners file at the head gives to the repository's owner, naming it, and refuses a
-line whose syntax git reads otherwise than GitHub, naming the line (spec issue-lifecycle
+command (testkit.main): `octo-feather-lane merge-ask`'s code owner reasons and its refusal of a
+code owners line (the rule: octo-feather-lane --help, merge-ask; spec issue-lifecycle
 #gates-tiers, #gates-tier-areas; issue #1260). Offline: the testkit's gh answers only real gh's
 recorded answers (testkit/recordings/merge-tier-1260.json, one tape per scenario), never its store.
 
@@ -145,9 +144,9 @@ REFUSE_HEAD = "e8b0dcdec942dece07f9e48244cb5ed2d4e56779"
 
 
 def owner_path(s: Scratch) -> None:
-    """Realcase PR #27 changes app.py, which its CODEOWNERS gives to @0xTomDaniel, the repository's
-    owner, and adds the CODEOWNERS, whose last matching line names only the team
-    @0xTomDaniel/maintainers: tier 3 naming app.py alone, waiting for the owner."""
+    """Realcase PR #27 changes app.py (its CODEOWNERS line 2 names @0xTomDaniel, the repository's
+    owner) and adds the CODEOWNERS (line 1 names only the team @0xTomDaniel/maintainers):
+    issue-lifecycle#acceptance-tier-code-owner (the reason: octo-feather-lane --help, merge-ask)."""
     out = RealCase(s, 27, OWN).ask("owner_path").out
     assert block(out) == [
         "Tier: 3",
@@ -157,11 +156,9 @@ def owner_path(s: Scratch) -> None:
 
 
 def real_file(s: Scratch) -> None:
-    """Realcase PR #28, prometheus's CODEOWNERS (cited): each changed path sorted by the line
-    GitHub reads last for it: storage/remote/client.go (line 17), tsdb/agent/db.go (20) and
-    tsdb/head.go (19) the owner's; storage/remote/otlptranslator/helper.go not, though line 17
-    names the owner (its last line, 18, does not), nor storage/remotewrite.go (no directory
-    storage/remote), web/ui/module/index.ts, discovery/aws/ec2.go or the CODEOWNERS itself."""
+    """Realcase PR #28, prometheus's CODEOWNERS (cited), a file at each of REAL_PATHS, each
+    comment there naming the line GitHub read for it (the reason: octo-feather-lane --help,
+    merge-ask)."""
     out = RealCase(s, 28, REAL_HEAD).ask("real_file").out
     lines = REAL.splitlines()
     assert block(out) == [
@@ -179,8 +176,8 @@ def real_file(s: Scratch) -> None:
 
 
 def refused(s: Scratch) -> None:
-    """Realcase PR #29, a CODEOWNERS with a `!`, a `[ ]` and a `\\#` line: exit 1, each of those
-    lines named, no path sorted by owner: `Tier: 1` on stderr after the incomplete mark."""
+    """Realcase PR #29, a CODEOWNERS with a `!`, a `[ ]` and a `\\#` line: a failing ask naming
+    each (the refusal and where its tier block prints: octo-feather-lane --help, merge-ask)."""
     r = RealCase(s, 29, REFUSE_HEAD).ask("refused", want=1)
     assert not r.out, r.out
     for n, ln in (
@@ -197,8 +194,7 @@ def refused(s: Scratch) -> None:
 
 def dropped_line(s: Scratch) -> None:
     """Realcase PR #42 drops `app.py @0xTomDaniel` from the CODEOWNERS its base holds and changes
-    app.py: the merge base's file still gives app.py to the owner, so tier 3 names it from there,
-    waiting for the owner: a lane never lowers its own tier by editing the file."""
+    app.py (which end's file counts: octo-feather-lane --help, merge-ask)."""
     out = RealCase(s, DROP_PR, DROP_HEAD).ask("dropped_line").out
     assert block(out) == [
         "Tier: 3",

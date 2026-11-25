@@ -363,11 +363,12 @@ class Replay:
 
 @dataclass(frozen=True)
 class Owned:
-    """A code owners file's facts at one end of the lane (spec #gates-tier-areas, #1260): FILE,
-    the file GitHub reads (CODE_OWNERS, the first found), ` at the merge base <sha>` after it for
-    the base's; OWNER, `@<login>` of the repository's owner; PATHS, each path the lane changes
-    whose last matching line names OWNER, with that line's number and text; REFUSED, each line
-    whose pattern git reads otherwise than GitHub (number, text, why), none matched when any is."""
+    """A code owners file's facts at one end of the lane (spec #gates-tier-areas, #1260; which
+    file, which line and which owner count: octo-feather-lane --help, merge-ask): FILE, the file
+    read (CODE_OWNERS), ` at the merge base <sha>` after it for the base's; OWNER, `@<login>` of
+    the repository's owner; PATHS, each path the lane changes the file gives OWNER (_owned), with
+    that line's number and text; REFUSED, each line code_owner_differs names (number, text,
+    why)."""
 
     file: str
     owner: str
@@ -2818,14 +2819,14 @@ class Tier:
 # a column-0 line starting `Owner decision` up to its first colon (#1184 wrote `Owner decision 1
 # (...): ...`); it only raises a tier, so the looser match is the safe side
 OWNER_DECISION = re.compile(r"Owner decision[^:\n]*:", re.IGNORECASE)
-OWNER_TIER = 3  # the tier that waits for the owner, whatever the merge order names
+OWNER_TIER = 3  # the tier whose ask waits for the owner (octo-feather-lane --help, merge-ask)
 
 
 def sets_back(o: Order) -> list[str]:
     """`PR #N: <why>` for each other open PR O names this merge sets back, or may: its head
     conflicting with this one, a pinned run this merge newly stales, a pinned run not read
-    (merge_order's own findings); then `not read: <line>` for each read of O that failed. A read
-    that failed cannot prove no PR is set back, so it waits as one that is."""
+    (merge_order's own findings); then `not read: <line>` for each read of O that failed (why an
+    unread one counts: octo-feather-lane --help, merge-ask)."""
     out: list[str] = []
     for p in o.prs:
         files = ", ".join(p.conflicts)
@@ -2875,8 +2876,8 @@ def tier(s: Snapshot) -> Tier:
 
 def relay_proof(s: Snapshot, relayed: str, head: str) -> tuple[str | None, list[str]]:
     """(proof line, []) when the director's relay recorded for the full head RELAYED carries to
-    the full HEAD over S's git facts: the same head, or only merges of main between them that the
-    one-head check proves clean (spec #gates-merge-guard, #lanes-one-head); else (None, why)."""
+    the full HEAD over S's git facts (when one carries: octo-feather-lane --help, merge; spec
+    #gates-merge-guard, #lanes-one-head); else (None, why)."""
     r, h = relayed.lower(), head.lower()
     rerun = f"send a new merge ask for {h[:12]}"
     p = _why(_proved(s, r, h, at="relayed head", kept="the director's relay", rerun=rerun))
@@ -2948,8 +2949,9 @@ def code_owner_gaps(o: tuple[Owned, ...] | Unread | None) -> list[str]:
     ]
 
 
-# The code owners file (spec #gates-tier-areas; issue #1260): where GitHub looks, in its order, the
-# first found the one read (docs.github.com, About code owners).
+# The code owners file (spec #gates-tier-areas; issue #1260): the paths merge-ask reads, in order
+# (which one counts: octo-feather-lane --help, merge-ask; GitHub's: docs.github.com, About code
+# owners).
 CODE_OWNERS = (".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS")
 # A CODEOWNERS pattern follows gitignore's rules, matched here by git's own matcher (_owned), save
 # where GitHub reads the syntax otherwise (docs.github.com, About code owners: no `\#` escape, no
@@ -3385,12 +3387,12 @@ class _Line(NamedTuple):
 
 
 def _code_owners(head: str, fork: str, repo: str | None) -> tuple[Owned, ...] | Unread | None:
-    """The code owners file at HEAD and at FORK, the merge base (as GitHub reads the base's, so a
-    lane editing the file never lowers its own tier: either end's file only raises), each with
-    each path the lane changes (git diff FORK HEAD, renames as a delete and an add) its last
-    matching line gives to REPO's owner (None: this directory's gh repo, gh repo view); the head's
-    first. None when neither end has such a file (no FORK read: the head's alone). A line either
-    file's git and GitHub read otherwise (code_owner_differs) is refused and nothing matched."""
+    """The code owners file at HEAD and at FORK, the merge base (why both ends, and which paths
+    and lines count: octo-feather-lane --help, merge-ask), each with each path the lane changes
+    (git diff FORK HEAD, renames as a delete and an add) it gives to REPO's owner (_owned; None:
+    this directory's gh repo, gh repo view); the head's first. None when neither end has such a
+    file (no FORK read: the head's alone). A line code_owner_differs names is refused and nothing
+    matched."""
     try:
         ends = [(head, "")]
         if fork:

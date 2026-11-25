@@ -62,7 +62,8 @@ FAILED = "- failed criterion demo#acceptance-c: repair ticket #99"
 
 
 def block(out: str) -> list[str]:
-    """The tier block OUT prints: `Tier:` to its `Waits for:` line."""
+    """OUT's one tier block, its first line to its last (its form: octo-feather-lane --help,
+    merge-ask)."""
     lines = out.splitlines()
     starts = [i for i, ln in enumerate(lines) if ln.startswith("Tier: ")]
     assert len(starts) == 1, f"not one tier block: {out}"
@@ -187,8 +188,8 @@ def history_ask(s: Scratch, r: Path, pr: int, want: int) -> Ran:
 
 
 def tier_one(s: Scratch) -> None:
-    """Realcase PR #1, a complete section, #2 open and setting nothing back: tier 1, no reason,
-    waiting for nobody, printed after the section on stdout."""
+    """Realcase PR #1, a complete section, #2 open and setting nothing back:
+    issue-lifecycle#acceptance-tier-one (the block: octo-feather-lane --help, merge-ask)."""
     out = RealCase(s).ask("tier_one", 1).out
     assert block(out) == ["Tier: 1", "Waits for: nobody"], out
     lines = out.splitlines()
@@ -196,15 +197,15 @@ def tier_one(s: Scratch) -> None:
 
 
 def tier_failed(s: Scratch) -> None:
-    """Realcase PR #1 passing with `Failed:` listing demo#acceptance-c and its triage: tier 3,
-    naming it, waiting for the owner."""
+    """Realcase PR #1 passing with `Failed:` listing demo#acceptance-c and its triage:
+    issue-lifecycle#acceptance-tier-failed (the block: octo-feather-lane --help, merge-ask)."""
     out = RealCase(s).ask("tier_failed", 1).out
     assert block(out) == ["Tier: 3", FAILED, "Waits for: the owner"], out
 
 
 def order_waits(s: Scratch) -> None:
     """Realcase PR #1's complete section with #3 open, its head conflicting with #1's in app.py:
-    tier 1, waiting for the director's order, naming #3."""
+    issue-lifecycle#acceptance-tier-order-waits (the block: octo-feather-lane --help, merge-ask)."""
     out = RealCase(s).ask("order_waits", 1).out
     why = "PR #3: its head conflicts with this head in app.py"
     assert block(out) == ["Tier: 1", f"Waits for: the director's order ({why})"], out
@@ -212,15 +213,15 @@ def order_waits(s: Scratch) -> None:
 
 def spec_pr(s: Scratch) -> None:
     """Realcase PR #2, the accepted spec plus its status file, Built and Failed none, no criterion
-    row: tier 1, waiting for nobody."""
+    row: issue-lifecycle#acceptance-tier-spec-pr (the block: octo-feather-lane --help, merge-ask).
+    """
     out = RealCase(s).ask("spec_pr", 2).out
     assert block(out) == ["Tier: 1", "Waits for: nobody"], out
 
 
 def failing_ask(s: Scratch) -> None:
-    """Realcase PR #1 with Failed listing a criterion and its Head stale: exit 1, stdout empty, its
-    tier block on stderr after the incomplete mark, before the items. Kit PR #1248, merged with no
-    section: the same, at tier 1."""
+    """Realcase PR #1 with Failed listing a criterion and its Head stale: a failing ask and its
+    tier block (where a failing ask prints it: octo-feather-lane --help, merge-ask)."""
     r: Ran = RealCase(s).ask("failing_ask", 1, want=1)
     assert not r.out, f"a failing merge ask printed to stdout: {r.out}"
     err = r.err.splitlines()
@@ -230,9 +231,9 @@ def failing_ask(s: Scratch) -> None:
 
 
 def failing_history(s: Scratch) -> None:
-    """Kit PR #1248, the spec PR merged with no `## Merge ask` section: exit 1, stdout empty,
-    `Tier: 1` on stderr after the incomplete mark, waiting for the director's order: open PR
-    #1246's pinned runs are not read (a real unread merge order)."""
+    """Kit PR #1248, the spec PR merged with no `## Merge ask` section: a failing ask, its merge
+    order unread (open PR #1246's pinned runs; where a failing ask prints its tier block and whom
+    an unread merge order waits for: octo-feather-lane --help, merge-ask)."""
     head, base = (
         "08548de59a78ea1644fab491706bbdef7250de49",
         "7b39556a6f17b02665bf92194b302842a9fe5219",
@@ -242,8 +243,8 @@ def failing_history(s: Scratch) -> None:
     err = r.err.splitlines()
     i = err.index(INCOMPLETE)
     assert err[i + 1] == "Tier: 1", r.err
-    # the tape's open PR #1246 pins runs no qa store here holds: a merge-order read that failed,
-    # so the ask cannot prove no PR is set back and waits for the director's order
+    # the tape's open PR #1246 pins runs no qa store here holds: a merge-order read that failed
+    # (whom an unread merge order waits for: octo-feather-lane --help, merge-ask)
     assert err[i + 2].startswith("Waits for: the director's order ("), r.err
     # read here (its pins), or its head not in this repo's objects (the PR not read): unread both
     assert "PR #1246: its pinned run " in err[i + 2] or "not read: PR #1246 " in err[i + 2], r.err
@@ -252,7 +253,8 @@ def failing_history(s: Scratch) -> None:
 
 def owner_decision(s: Scratch) -> None:
     """Kit PR #1184, its section carrying `Owner decision 1 (...): ...` and `Owner decision 2
-    (optional): ...` at column 0: tier 3, each shown as written, waiting for the owner."""
+    (optional): ...` at column 0: issue-lifecycle#acceptance-tier-owner-decision (the block:
+    octo-feather-lane --help, merge-ask)."""
     head, base = (
         "e43afc656d1117c7cce58b57f259f42566e9a707",
         "6adc851386f7a846346c37f28c87264e30a3dd3a",
