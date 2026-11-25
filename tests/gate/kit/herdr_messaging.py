@@ -663,8 +663,18 @@ def supervisor_parked_moved(s: Scratch) -> None:
     """comms #acceptance-parent-director-relaunched through a park: the director w0:p1 parks
     lane gh7's supervisor, then moves to MOVED (moved_director); its `herdr-say gh7 MSG` resumes
     the supervisor with OCTO_FEATHER_PARENT MOVED, not the parked line's w0:p1, and the
-    supervisor's `herdr-say --parent` reaches MOVED."""
-    d, sup, _ = supervised(s)
+    supervisor's `herdr-say --parent` reaches MOVED. Its implementer, parked before it (its line's
+    parent the supervisor's old pane, as herdr-close --park writes it then), is reached by the
+    resumed supervisor on its new pane through the up-chain guard's parent check: Herdr names
+    that pane no lane (a name other than gh7), so the lane-name fallback cannot pass it."""
+    d, sup, worker = supervised(s)
+    stale = {"at": "2026-11-25T00:00:00Z", "kind": "parked", "pane": worker["HERDR_PANE_ID"]}
+    stale |= {"name": "implementer-gh7", "label": "gh7", "role": "implementer"}
+    stale |= {"parent": sup["pane"], "cwd": str(s.root)}
+    stale["session"] = worker["OCTO_FEATHER_SESSION_ID"]
+    with (state_dir(s) / "lanes" / "gh7.handoffs.jsonl").open("a") as f:
+        f.write(json.dumps(stale) + "\n")
+    drop(d, worker["HERDR_PANE_ID"])
     p = tab_process(s, d, sup["pane"], s.root / "target")
     try:
         s.run([str(ASSETS / "herdr-close"), "--park", sup["pane"]], env=DIRECTOR)
@@ -682,6 +692,14 @@ def supervisor_parked_moved(s: Scratch) -> None:
     s.run([SAY, "--parent", "from gh7"], env=env)
     assert to(d, MOVED) == ["from gh7"], lines(d / "prompts")
     show(f"resumed supervisor --parent: {MOVED} received: {to(d, MOVED)}")
+    agents = json.loads((d / "agents.json").read_text())
+    agents[new]["name"] = "supervisor-b"  # no lane name: only the parent check can allow the send
+    (d / "agents.json").write_text(json.dumps(agents))
+    got = s.run([SAY, "implementer-gh7", "go on"], env=env)
+    back, tab = resumed_as(d, got.out, env["HERDR_WORKSPACE_ID"], stale["session"])
+    assert tab["OCTO_FEATHER_PARENT"] == new, tab
+    assert to(d, back) == [f"Resumed from park as pane={back}. go on"], lines(d / "prompts")
+    show(f"implementer parked under {sup['pane']}, sent by the supervisor at {new}: {got.out}")
 
 
 def director_moved(s: Scratch) -> None:

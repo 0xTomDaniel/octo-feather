@@ -47,7 +47,8 @@
 # (implementer, code-reviewer, corrector, general-worker) may reach only its
 # parent, never the director unless it is that parent; a supervisor only its
 # parent, the director pane in director.toml, agents in its own lane workspace, or a parked agent whose latest parked line
-# sits in its lane's hand-off log or names it as parent. Anything else exits 77.
+# sits in its lane's hand-off log or whose parent, resolved now as on resume, is it.
+# Anything else exits 77.
 # The director and callers that are not kit agents (an owner shell, Spec Chat's
 # wake) are not limited.
 set -euo pipefail
@@ -108,9 +109,10 @@ allowed() {
   [[ "$role" == supervisor && -n "$director" && ( "$target" == "$director" || "$pane" == "$director" ) ]] && return 0
   [[ "$role" == supervisor && -n "$space" && "$space" == "${HERDR_WORKSPACE_ID:-}" ]] && return 0
   # A supervisor's own parked agent: not live, its latest parked line in the
-  # caller's lane log (the caller's agent name) or naming the caller as parent.
+  # caller's lane log (the caller's agent name) or naming the caller as the parent
+  # resolved now (octo-feather-handoff resume-workspace --parent), never the line's.
   if [[ "$role" == supervisor && -z "$pane" && -n "${HERDR_PANE_ID:-}" ]] && line="$(parked "$target")"; then
-    [[ "$(jq -r '.parent // empty' <<<"$line")" == "$HERDR_PANE_ID" ]] && return 0
+    [[ "$("$here/../../../../scripts/octo-feather-handoff" resume-workspace --parent <<<"$line")" == "$HERDR_PANE_ID" ]] && return 0
     lane="$(herdr agent get "$HERDR_PANE_ID" 2>/dev/null | jq -r '.result.agent.name // empty' 2>/dev/null || true)"
     [[ -n "$lane" && "$(jq -r .lane <<<"$line")" == "$lane" ]] && return 0
   fi
