@@ -1,14 +1,14 @@
 Seeded defect: teardown removes a dirty lane worktree by force, its changes lost (octo-feather-lane --help, post-merge step 6).
-diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
-index 29b0852d..ba541ce4 100755
---- a/scripts/octo-feather-lane
-+++ b/scripts/octo-feather-lane
-@@ -4073,7 +4073,7 @@ def pm_worktree(branch: str) -> str:
-         if root == real:
-             raise Refuse(f"worktree {path} kept: it is the root of Spec Chat review row {slug} in {reg}; "
-                          "a preview stays, remove it by hand once its review ends")
--    pm_git_ok(f"worktree {path} not removed", "worktree", "remove", path)
-+    pm_git_ok(f"worktree {path} not removed", "worktree", "remove", "--force", path)
-     return f"worktree {path} removed ({pm_mise_prune(path)} mise config links into it pruned)"
+diff --git a/scripts/post_merge.py b/scripts/post_merge.py
+index b77465a2..2518d534 100755
+--- a/scripts/post_merge.py
++++ b/scripts/post_merge.py
+@@ -1577,7 +1577,7 @@ def _worktree(branch: str) -> str:
+                 "preview stays, remove it by hand once its review ends"
+             )
+             raise Refused(msg)
+-    _git_ok(f"worktree {path} not removed", "worktree", "remove", path)
++    _git_ok(f"worktree {path} not removed", "worktree", "remove", "--force", path)
+     return f"worktree {path} removed ({_mise_prune(path)} mise config links into it pruned)"
  
  

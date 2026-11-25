@@ -5,6 +5,6 @@ old_at = "7305a0fa"
 needs = []
 new = "tests/gate/kit/test_herdr_messaging.py::test_post_merge_tell_supervisors"
 
-# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit script run by the kit venv's python: coverage.py measures it.
+# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit module run by the kit venv's python: coverage.py measures it.
 [ran]
-"scripts/octo-feather-lane" = "coverage"
+"scripts/post_merge.py" = "coverage"
