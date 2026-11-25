@@ -12,6 +12,8 @@ from __future__ import annotations
 import difflib
 import glob
 import hashlib
+import importlib.machinery
+import importlib.util
 import json
 import math
 import os
@@ -4020,6 +4022,60 @@ while True:
 """
 
 
+def herdr_scope() -> Any:
+    """The kit's Herdr readers (.agents/skills/herdr-comms/assets/herdr_scope.py): each Herdr answer checked against
+    the shape Herdr states for it, the failing field named."""
+    path = REPO / ".agents" / "skills" / "herdr-comms" / "assets" / "herdr_scope.py"
+    loader = importlib.machinery.SourceFileLoader("herdr_scope", str(path))
+    spec = importlib.util.spec_from_loader("herdr_scope", loader)
+    assert spec
+    mod = sys.modules["herdr_scope"] = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def json_object(v: object, where: str) -> dict[str, object]:
+    """V, a decoded JSON value, as an object; TypeError naming WHERE when it is not."""
+    if not isinstance(v, dict):
+        msg = f"{where}: not a JSON object"
+        raise TypeError(msg)
+    return cast("dict[str, object]", v)
+
+
+def pi_user_texts(path: Path) -> list[str]:
+    """The user messages' text parts in Pi session file PATH, each JSONL record decoded and its fields checked: a
+    record an object with a string `type`; a `message` record's `message` an object with a string `role`; a user
+    message's `content` a list of objects, a `text` part's `text` a string. TypeError (ValueError: not JSON) naming the line and field."""
+    out: list[str] = []
+    for n, line in enumerate(path.read_text().splitlines(), 1):
+        at = f"{path}:{n}"
+        rec = json_object(json.loads(line), at)
+        if not isinstance(rec.get("type"), str):
+            msg = f"{at}.type: not a string"
+            raise TypeError(msg)
+        if rec["type"] != "message":
+            continue
+        message = json_object(rec.get("message"), f"{at}.message")
+        if not isinstance(message.get("role"), str):
+            msg = f"{at}.message.role: not a string"
+            raise TypeError(msg)
+        if message["role"] != "user":
+            continue
+        content = message.get("content")
+        if not isinstance(content, list):
+            msg = f"{at}.message.content: not a list"
+            raise TypeError(msg)
+        for i, part in enumerate(cast("list[object]", content)):
+            item = json_object(part, f"{at}.message.content[{i}]")
+            if item.get("type") == "text":
+                text = item.get("text")
+                if not isinstance(text, str):
+                    msg = f"{at}.message.content[{i}].text: not a string"
+                    raise TypeError(msg)
+                out.append(text)
+    return out
+
+
 def drive_director_relaunch(f: Feature) -> None:
     """comms#acceptance-director-relaunch-busy, -own-scope, -same-session: a real scratch Herdr server (its own
     XDG_CONFIG_HOME and session, never the box's), a real Pi director started by `octo-feather-start --director`, its
@@ -4051,6 +4107,8 @@ def drive_director_relaunch(f: Feature) -> None:
             "HERDR_SOCKET_PATH": str(sock), "PI_CODING_AGENT_DIR": str(sc / "pi-agent"), "PI_OFFLINE": "1",
             "PI_SKIP_VERSION_CHECK": "1", "PI_TELEMETRY": "0", "TMPDIR": str(sc / "tmp")}
     env = case_env(base)
+    scope = herdr_scope()  # its calls run in this process's environment: the scratch one while the drive runs
+    saved = dict(os.environ)
 
     def h(*args: str) -> str:
         return subprocess.run(["herdr", *args], env=env, capture_output=True, text=True, check=False).stdout
@@ -4067,20 +4125,37 @@ def drive_director_relaunch(f: Feature) -> None:
             subprocess.run(["sleep", "0.5"], check=False)
         return True
 
-    def status(pane: str) -> str:
+    def agent(target: str, field: str) -> str:  # FIELD of `herdr agent get TARGET`, validated; '' with no such agent
         try:
-            return str(json.loads(h("agent", "get", pane))["result"]["agent"]["agent_status"])
-        except (ValueError, KeyError):
+            answer = scope.herdr("agent", "get", target)
+        except scope.HerdrFailedError:
             return ""
+        return str(scope.found(answer, f"herdr agent get {target}", "agent", scope.AGENT_FIELDS, field))
+
+    def status(pane: str) -> str:
+        return agent(pane, "agent_status")
+
+    def workspaces() -> list[str]:  # `herdr workspace list`'s ids, its envelope and each workspace_id checked
+        where = "herdr workspace list"
+        got = scope.result(scope.herdr("workspace", "list"), where, "workspace_list", "workspaces")
+        if not isinstance(got, list):
+            msg = f"{where}: result.workspaces not a list"
+            raise scope.BadAnswerError(msg)
+        items = cast("list[object]", got)
+        return [scope.text(json_object(v, f"{where}: result.workspaces[{i}]"), "workspace_id",
+                           f"{where}: result.workspaces[{i}]") for i, v in enumerate(items)]
+
+    def answers() -> bool:
+        try:
+            workspaces()
+        except scope.HerdrFailedError:
+            return False
+        return True
 
     toml = sc / "state" / "octo-feather" / "sessions" / session / "director.toml"
 
     def director_now(name: str) -> None:  # the director as Herdr and director.toml name it, after case NAME
-        try:
-            pane = str(json.loads(h("agent", "get", "director"))["result"]["agent"]["pane_id"])
-        except (ValueError, KeyError):
-            pane = ""
-        f.obs(name, "director", pane)
+        f.obs(name, "director", agent("director", "pane_id"))
         f.obs(name, "toml", toml.read_text() if toml.is_file() else "")
 
     def typed(pane: str, name: str, script: str) -> None:  # a `!!bash` step typed into the Pi at PANE (no model turn)
@@ -4088,24 +4163,28 @@ def drive_director_relaunch(f: Feature) -> None:
         h("pane", "run", pane, f"!!bash {sc / 'steps' / f'{name}.sh'}")
 
     try:
+        os.environ.clear()
+        os.environ.update(env)
         port = sc / "dead-model.port"
         bg("dead-model", sys.executable, "-c", DEAD_MODEL, str(port))
         if not until(lambda: port.is_file() and port.read_text().strip() != "", 10):
             msg = "the dead model socket did not start"
             raise RuntimeError(msg)
-        m = json.loads(models.read_text())
-        for p in m.get("providers", {}).values():
+        m = json_object(json.loads(models.read_text()), str(models))
+        providers = json_object(m.get("providers", {}), f"{models}: providers")
+        for k, v in providers.items():
+            p = json_object(v, f"{models}: providers.{k}")
             p["baseUrl"], p["apiKey"] = f"http://127.0.0.1:{port.read_text().strip()}", "invalid-verify"
         (sc / "pi-agent" / "models.json").write_text(json.dumps(m))
         user = models.parent / "settings.json"
-        own = cast("dict[str, object]", json.loads(user.read_text()) if user.is_file() else {})
+        own = json_object(json.loads(user.read_text()), str(user)) if user.is_file() else {}
         settings: dict[str, object] = {k: own[k] for k in ("defaultProvider", "defaultModel", "enabledModels") if k in own}
         (sc / "pi-agent" / "settings.json").write_text(json.dumps(settings | {"retry": {"enabled": False}}))
         (sc / "pi-agent" / "auth.json").write_text("{}")
         (xdg / "herdr" / "config.toml").write_text(
             "[update]\nversion_check = false\nmanifest_check = false\n[session]\nresume_agents_on_restore = false\n")
         bg("herdr-server", "herdr", "--session", session, "server")
-        if not until(lambda: sock.exists() and '"workspaces"' in h("workspace", "list"), 15):
+        if not until(lambda: sock.exists() and answers(), 15):
             msg = "the scratch Herdr server did not answer"
             raise RuntimeError(msg)
         say(f"scratch Herdr session {session}: socket {sock}")
@@ -4176,25 +4255,30 @@ def drive_director_relaunch(f: Feature) -> None:
         new = next((x[5:] for x in out.split() if x.startswith("pane=")), "")
         director_now("relaunch")
         f.obs("relaunch", "pi", str(len(output(["pgrep", "-f", "--", f"--session-id {sid}"])[1].split())))
-        # What the new pane received, from Pi's own session file (the pane wraps long lines).
-        kept = "".join(p.read_text() for p in (sc / "pi-agent" / "sessions").glob(f"*/*_{sid}.jsonl"))
-        f.obs("relaunch", "received", "\n".join(re.findall(r'Relaunched \([^"]*', kept)))
+        # What the new pane received, from Pi's own session file (the pane wraps long lines), each record decoded.
+        texts = [t for p in (sc / "pi-agent" / "sessions").glob(f"*/*_{sid}.jsonl") for t in pi_user_texts(p)]
+        f.obs("relaunch", "received", "\n".join(t for t in texts if t.startswith("Relaunched (")))
         say(f"relaunch: new pane {new}; agent get director, director.toml and the message: {f.d}")
         f.check("relaunch", lambda c: c.code == 0 and new not in ("", old) and c.o["director"] == new
                 and c.o["toml"] == f'pane = "{new}"\n' and c.o["pi"] == "1" and len(c.o["received"].splitlines()) == 1
                 and f"replacing pane {old}, session {sid}" in c.o["received"] and "director.handoffs.jsonl" in c.o["received"])
     finally:
         f.env = {}
-        if sock.exists():
-            for w in [x.get("workspace_id", "") for x in json.loads(h("workspace", "list") or "{}").get("result", {}).get("workspaces", [])]:
-                subprocess.run([str(kit / ".agents/skills/herdr-comms/assets/herdr-close"), w], env=env,
-                               capture_output=True, check=False)
-            h("server", "stop")
-        for p in sorted((sc / "pids").glob("*")) if (sc / "pids").is_dir() else []:
-            if p.read_text().strip():
-                subprocess.run(["kill", "--", f"-{p.read_text().strip()}"], capture_output=True, check=False)
-            p.unlink()
-        shutil.rmtree(xdg, ignore_errors=True)
+        try:
+            if sock.exists():
+                for w in workspaces():
+                    subprocess.run([str(kit / ".agents/skills/herdr-comms/assets/herdr-close"), w], env=env,
+                                   capture_output=True, check=False)
+        finally:  # whatever Herdr answered: the server and the dead model stopped, the caller's environment back
+            if sock.exists():
+                h("server", "stop")
+            for p in sorted((sc / "pids").glob("*")) if (sc / "pids").is_dir() else []:
+                if p.read_text().strip():
+                    subprocess.run(["kill", "--", f"-{p.read_text().strip()}"], capture_output=True, check=False)
+                p.unlink()
+            shutil.rmtree(xdg, ignore_errors=True)
+            os.environ.clear()
+            os.environ.update(saved)
         say(f"director-relaunch: scratch Herdr {session} and the dead model stopped; evidence: {f.d}")
 
 

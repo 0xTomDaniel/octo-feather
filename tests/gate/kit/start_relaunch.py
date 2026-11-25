@@ -4,9 +4,10 @@ and real processes standing in for the director's shell and Pi.
 
 A director at w0:p1 in workspace `director`, its Pi a herdr-spawn one on session D1, named by
 director.toml. relaunch_busy: its turn outlasts `--relaunch --wait 1`: refused, exit 75, naming
-the busy director. relaunch_own_scope: run by a detached job inside the director pane's agent
-scope with no HERDR_PANE_ID, then with HERDR_PANE_ID w0:p1 from outside: refused, exit 64,
-naming w0:p1 (end to end: the scope is the box's real systemd user manager's).
+the busy director; relaunch_short_wait: idle, but --wait 31 leaves no full gap for the fourth
+read: refused, exit 75. relaunch_own_scope: run by a detached job inside the director pane's agent
+scope with no HERDR_PANE_ID, then with HERDR_PANE_ID that pane from outside: refused, exit 64,
+naming it (end to end: a real scope, its two paths in its docstring).
 resume_same_session: `--director --resume D1` beside it: refused, exit 73, naming w0:p1. Each
 leaves Herdr's world, director.toml and the director's Pi as they were: nothing parked, closed or
 spawned."""
@@ -15,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import secrets
 import subprocess
 import sys
@@ -24,7 +26,6 @@ from pathlib import Path
 from testkit import Scratch, kit, main
 
 PI = ["python3", "-c", "import time; time.sleep(300)", "--session-id", "D1"]  # a stand-in Pi
-TOML = 'pane = "w0:p1"\n'
 
 
 def show(line: str) -> None:
@@ -32,9 +33,12 @@ def show(line: str) -> None:
     sys.stdout.write(line + "\n")
 
 
-def director(s: Scratch, status: str) -> tuple[Path, list[subprocess.Popen[bytes]]]:
-    """S's world: a target repo, director.toml naming w0:p1, workspace w0 labelled `director`,
-    the director there in STATUS, its shell and its Pi (on session D1) live stand-in processes.
+def director(
+    s: Scratch, status: str, pane: str = "w0:p1"
+) -> tuple[Path, list[subprocess.Popen[bytes]]]:
+    """S's world: a target repo, director.toml naming PANE (w0:p1), its workspace labelled
+    `director`, the director there in STATUS, its shell and its Pi (on session D1) live stand-in
+    processes.
     The Herdr world's dir, and the Pi and the shell."""
     d = s.root / "herdr"
     d.mkdir()
@@ -45,17 +49,18 @@ def director(s: Scratch, status: str) -> tuple[Path, list[subprocess.Popen[bytes
     s.git(s.root, "init", "-q", "-b", "main", "target")
     state = s.home / ".local" / "state" / "octo-feather" / "sessions" / s.env["HERDR_SESSION"]
     state.mkdir(parents=True)
-    (state / "director.toml").write_text(TOML)
+    (state / "director.toml").write_text(f'pane = "{pane}"\n')
     stamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
     with (state / "director.handoffs.jsonl").open("a") as f:  # a reflection just ran: none due
         f.write(json.dumps({"at": stamp, "kind": "reflection"}) + "\n")
     env = s.env | {"OCTO_FEATHER_SESSION_ID": "D1", "OCTO_FEATHER_ROLE": "director"}
     pi = subprocess.Popen(PI, cwd=s.root / "target", env=env, start_new_session=True)
     shell = subprocess.Popen(["sleep", "300"], start_new_session=True)  # noqa: S607
-    me = {"name": "director", "pane_id": "w0:p1", "workspace_id": "w0", "tab_id": "w0:t1"}
+    w, n = pane.split(":p")
+    me = {"name": "director", "pane_id": pane, "workspace_id": w, "tab_id": f"{w}:t{n}"}
     me |= {"agent_status": status, "shell_pid": shell.pid, "pi_pid": pi.pid, "label": "director"}
-    (d / "agents.json").write_text(json.dumps({"w0:p1": me}))
-    (d / "workspaces.json").write_text(json.dumps({"w0": "director"}))
+    (d / "agents.json").write_text(json.dumps({pane: me}))
+    (d / "workspaces.json").write_text(json.dumps({w: "director"}))
     return d, [pi, shell]
 
 
@@ -94,25 +99,78 @@ def relaunch_busy(s: Scratch) -> None:
             p.kill()
 
 
+def relaunch_short_wait(s: Scratch) -> None:
+    """comms #acceptance-director-relaunch-busy, the wait's bound: an idle director and --wait 31,
+    room for reads at 0, 15 and 30 s but not the fourth, 15 s after the third: refused, exit 75,
+    nothing changed (#1141 design: 4 reads 15 s apart; a shortened last gap never counts)."""
+    d, procs = director(s, "idle")
+    pi = procs[0]
+    before = snapshot(s, d)
+    try:
+        t0 = time.monotonic()
+        cmd = start("--relaunch", "--wait", "31", "--cwd", str(s.root / "target"))
+        ran = s.run(cmd, want=75)
+        took = time.monotonic() - t0
+        assert "w0:p1 is not settled" in ran.err, ran.err
+        assert took < 45, took  # the fourth read's earliest time
+        unchanged(s, d, before, pi)
+        show(f"--relaunch --wait 31, director idle: exit 75 after {took:.0f} s: {ran.err.strip()}")
+    finally:
+        for p in procs:
+            p.kill()
+
+
+AGENT_SCOPE = re.compile(
+    r"/user@\d+\.service/(?:.*/)?octo-feather-agent-(w[^/]*:p[^/]*)-[0-9a-f]{8}\.scope$"
+)
+
+
+def bus() -> bool:
+    """The box's systemd user manager starts a scope for this process."""
+    probe = ["systemd-run", "--user", "--scope", "--quiet", "--collect", "true"]
+    return subprocess.run(probe, capture_output=True, check=False).returncode == 0
+
+
+def own_agent_scope() -> str:
+    """The pane whose kit agent scope this process already runs in, from /proc/self/cgroup;
+    '' when none."""
+    cg = next(x[3:] for x in Path("/proc/self/cgroup").read_text().splitlines() if x[:3] == "0::")
+    m = AGENT_SCOPE.search(cg)
+    return m.group(1) if m else ""
+
+
 def relaunch_own_scope(s: Scratch) -> None:
     """comms #acceptance-director-relaunch-own-scope: the director's shell in its own agent
-    scope (as herdr-spawn adopts it), and from it a detached job, with no HERDR_PANE_ID of its
-    own, running the relaunch; then the relaunch from outside with HERDR_PANE_ID w0:p1."""
-    unit = f"octo-feather-agent-w0:p1-{secrets.token_hex(4)}.scope"  # as adopt names it
+    scope, and from it a detached job, with no HERDR_PANE_ID of its own, running the relaunch;
+    then the relaunch from outside with HERDR_PANE_ID the director's pane. The scope is real, by
+    the first path the box gives: (1) a reachable user manager: a new scope for director w0:p1,
+    made by systemd-run as herdr-spawn's adopt names one; (2) else the kit agent scope this
+    process already runs in (the qc sandbox reaches no manager; a claimed run starts in its
+    caller's agent scope): its pane is the director's, the shell and the job inherit it. Neither:
+    the scenario fails, naming why."""
+    reachable = bus()
+    pane = "w0:p1" if reachable else own_agent_scope()
+    if not pane:
+        msg = "no real agent scope: no user manager answers, and this process sits in no kit"
+        msg += f" agent scope ({Path('/proc/self/cgroup').read_text().strip()})"
+        raise AssertionError(msg)
+    unit = f"octo-feather-agent-{pane}-{secrets.token_hex(4)}.scope"  # as adopt names it
     out, rc, go = s.root / "job.out", s.root / "job.rc", s.root / "go"
-    d, procs = director(s, "idle")
+    d, procs = director(s, "idle", pane)
     pi = procs[0]
     cmd = start("--relaunch", "--wait", "1", "--cwd", str(s.root / "target"))
     # The shell detaches the job (its own session, reparented, in the scope), which starts once
-    # Herdr's world names the shell as w0:p1's.
+    # Herdr's world names the shell as the director pane's.
     job = f'while [ ! -e "{go}" ]; do sleep 0.05; done; "$@" >"{out}" 2>&1; echo $? >"{rc}"'
     script = f"(setsid sh -c '{job}' _ \"$@\" </dev/null &); exec sleep 300"
     run = ["systemd-run", "--user", "--scope", "--quiet", "--collect", "--unit", unit]
-    shell = subprocess.Popen([*run, "sh", "-c", script, "_", *cmd], env=s.env)
+    shell = subprocess.Popen(
+        [*(run if reachable else []), "sh", "-c", script, "_", *cmd], env=s.env
+    )
     procs.append(shell)
     try:
         agents = json.loads((d / "agents.json").read_text())
-        agents["w0:p1"]["shell_pid"] = shell.pid
+        agents[pane]["shell_pid"] = shell.pid
         (d / "agents.json").write_text(json.dumps(agents))
         before = snapshot(s, d)
         go.touch()
@@ -120,20 +178,23 @@ def relaunch_own_scope(s: Scratch) -> None:
             if rc.is_file() and rc.read_text().strip():
                 break
             time.sleep(0.05)
-        said = out.read_text()
+        said = out.read_text() if out.is_file() else f"(no job output: {out})"
+        assert rc.is_file(), said
         assert rc.read_text().strip() == "64", (rc.read_text(), said)
-        assert "w0:p1" in said, said
-        assert "scope" in said, said
+        assert f"director pane {pane}'s agent scope octo-feather-agent-{pane}-" in said, said
         unchanged(s, d, before, pi)
-        show(f"--relaunch from a detached job in {unit}: exit 64: {said.strip()}")
-        ran = s.run(cmd, env={"HERDR_PANE_ID": "w0:p1"}, want=64)
-        assert "w0:p1" in ran.err, ran.err
+        how = f"new scope {unit}" if reachable else f"its own agent scope (pane {pane})"
+        show(f"--relaunch from a detached job in {how}: exit 64: {said.strip()}")
+        ran = s.run(cmd, env={"HERDR_PANE_ID": pane}, want=64)
+        assert f"HERDR_PANE_ID is the director's pane {pane}" in ran.err, ran.err
         unchanged(s, d, before, pi)
-        show(f"--relaunch with HERDR_PANE_ID=w0:p1: exit 64: {ran.err.strip()}")
+        show(f"--relaunch with HERDR_PANE_ID={pane}: exit 64: {ran.err.strip()}")
     finally:
         for p in procs:
             p.kill()
-        subprocess.run(["systemctl", "--user", "stop", unit], check=False, capture_output=True)  # noqa: S607
+        if reachable:
+            stop = ["systemctl", "--user", "stop", unit]
+            subprocess.run(stop, check=False, capture_output=True)
 
 
 def resume_same_session(s: Scratch) -> None:
@@ -154,4 +215,4 @@ def resume_same_session(s: Scratch) -> None:
 
 if __name__ == "__main__":
     sys.path.insert(0, str(Path(__file__).parent))
-    main(relaunch_busy, relaunch_own_scope, resume_same_session)
+    main(relaunch_busy, relaunch_short_wait, relaunch_own_scope, resume_same_session)

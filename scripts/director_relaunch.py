@@ -140,7 +140,7 @@ def status(pane: str) -> str:
 
 def settle(old: str, wait: int) -> None:
     """Return once OLD reads idle or done SETTLE_READS times in a row, SETTLE_GAP s apart; refused
-    75 when WAIT s pass first (module docstring, 4)."""
+    75 once the next full gap would end past WAIT s (module docstring, 4)."""
     end = time.monotonic() + wait
     calm, now = 0, ""
     while True:
@@ -151,12 +151,13 @@ def settle(old: str, wait: int) -> None:
         calm = calm + 1 if now in ("idle", "done") else 0
         if calm >= SETTLE_READS:
             return
-        left = end - time.monotonic()
-        if left <= 0:
-            why = f"the director at pane {old} is busy (last read {now}): not idle or done for"
+        if end - time.monotonic() < SETTLE_GAP:  # the next read needs a full gap: none fits
+            state = "busy" if calm == 0 else "not settled"
+            state += f": idle or done {calm} of {SETTLE_READS} reads" if calm else ""
+            why = f"the director at pane {old} is {state} (last read {now}): not idle or done for"
             why += f" {SETTLE_READS} reads {SETTLE_GAP} s apart within --wait {wait} s; its turn"
             raise RefusedError(75, f"{why} is never interrupted. Retry once it is idle")
-        time.sleep(min(SETTLE_GAP, left))
+        time.sleep(SETTLE_GAP)
 
 
 def relaunch(args: argparse.Namespace) -> int:

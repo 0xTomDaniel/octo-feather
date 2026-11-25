@@ -24,7 +24,7 @@ Drive criterion: `comms#acceptance-director-relaunch-same-session`
 
 ## How to get to it (user POV)
 
-- The owner, from a shell outside the director's pane (or an agent, in the background from its own pane), runs `octo-feather-start --director --relaunch [--wait SECONDS] [--resume SESSION]`; its steps, refusals and exits: `scripts/director_relaunch.py`, its docstring.
+- `octo-feather-start --director --relaunch [--wait SECONDS] [--resume SESSION]`; who runs it and from where: [comms#director-relaunch](../../../../docs/specs/comms.spec.html#director-relaunch); its steps, refusals and exits: `scripts/director_relaunch.py`, its docstring.
 
 ## Driving it with verify-octo-feather
 
