@@ -1,7 +1,5 @@
-"""The launch's stash guard (spec roles#launch-stash-guard, #acceptance-stash-guard; #1308): every
-agent pi-role launches runs git through scripts/stash-guard/, so in a repository with 2+
-worktrees a git stash that writes the shared stash is refused naming a WIP commit, and nothing
-else about git changes. Driven through `pi-role`: a headless `pi-role agents/implementer.md -p`
+"""roles#acceptance-stash-guard (#1308; the rule: roles#launch-stash-guard; what the guard refuses:
+scripts/stash_guard.py), at its seam `pi-role`: a headless `pi-role agents/implementer.md -p`
 starts a stand-in pi that runs $STUB_RUN in its shell, as a role's bash call would (no model
 call); a pane's PATH is `pi-role --json`'s "path". Real git, in scratch repos; the entry set
 aside before any guard is made with real git off the guard's PATH."""
@@ -80,11 +78,9 @@ def pane(s: Scratch, cwd: Path, caller: str) -> str:
 
 
 def refused(s: Scratch) -> None:
-    """In the second worktree an agent's git stash drop, and its git stash push with changes, are
-    refused naming the WIP commit; the first's stash list still shows its entry, the second's
-    changes stay in its worktree; git stash list runs unchanged. A pane agent (its PATH from
-    `pi-role --json`) is refused the same, the caller's stub pi still found first, and a git the
-    caller put earlier on PATH still the git that runs."""
+    """The criterion's scenario: stash writes from an agent in the second worktree (headless, then
+    a pane's PATH), each refused naming the WIP commit, with the first's entry and the second's
+    changes kept; the caller's earlier PATH dirs (stub pi, its own git) still win."""
     first, second = two_worktrees(s)
     entry = s.git(first, "stash", "list")
     assert "first wip" in entry, entry
@@ -124,9 +120,8 @@ def refused(s: Scratch) -> None:
 
 
 def unchanged(s: Scratch) -> None:
-    """An argv without `stash`, in a two-worktree repo, through the guard: git's own output, stderr,
-    exit code and stdin; a read-only stash (show) too. In a repo with one worktree an agent's git
-    stash and git stash pop run as git's own."""
+    """What the guard must leave to git, each compared with real git's own run: the calls below in
+    a two-worktree repo, and a stash push and pop in a one-worktree repo."""
     first, second = two_worktrees(s)
     for cmd, want in (
         ("git rev-parse --verify nosuch", 128),
