@@ -88,16 +88,31 @@
       ]
     },
     "acceptance-slot-self-queue": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1329,
+      "record": "20261126T105259Z-0fcdb5c7",
+      "commit": "64dd00a58d82a2554280c1d7ddc329c80ca4a2df",
+      "tests": [
+        "tests/gate/kit/test_slot.py"
+      ]
     },
     "acceptance-slot-self-grant": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1329,
+      "record": "20261126T105259Z-c3f0e938",
+      "commit": "64dd00a58d82a2554280c1d7ddc329c80ca4a2df",
+      "tests": [
+        "tests/gate/kit/test_slot.py"
+      ]
     },
     "acceptance-slot-self-grant-ends": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1329,
+      "record": "20261126T105300Z-c4af7ac1",
+      "commit": "64dd00a58d82a2554280c1d7ddc329c80ca4a2df",
+      "tests": [
+        "tests/gate/kit/test_slot.py"
+      ]
     },
     "acceptance-fast-hook": {
       "status": "built",
