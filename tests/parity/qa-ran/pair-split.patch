@@ -1,10 +1,10 @@
 Seeded defect: ran matches a flag and its value each anywhere, not as an adjacent pair.
 diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
-index 404ccdfd..7bcb35d4 100755
+index 6ba0caa1..85aec0d9 100755
 --- a/scripts/eval_grading.py
 +++ b/scripts/eval_grading.py
-@@ -636,10 +636,7 @@ def args_match(want: list[str], got: list[str], head: str | None) -> bool:
-         return False
+@@ -679,10 +679,7 @@ def args_match(
+     start = 0 if lead is not got else k  # a PARSED program's options stand anywhere
      groups: list[list[str]] = []
      for w in want[k:]:
 -        if groups and not w.startswith("-") and len(groups[-1]) == 1:
@@ -12,6 +12,6 @@ index 404ccdfd..7bcb35d4 100755
 -        else:
 -            groups.append([w])
 +        groups.append([w])
-     rest = got[k:]
+     rest = got[start:]
      return all(
          any(

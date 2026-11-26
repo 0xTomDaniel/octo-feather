@@ -370,88 +370,200 @@
       ]
     },
     "acceptance-tier-one": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074105Z-08663cc9",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_tier.py"
+      ]
     },
     "acceptance-tier-clarify": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074105Z-49206be5",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_calls.py"
+      ]
     },
     "acceptance-tier-optout-cleared": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074105Z-f2106a45",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_optout.py"
+      ]
     },
     "acceptance-tier-optout-uncleared": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074106Z-02caa32a",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_optout.py"
+      ]
     },
     "acceptance-tier-adds": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074106Z-c75a1ac7",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_calls.py"
+      ]
     },
     "acceptance-tier-weakens": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074106Z-4ce3ed37",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_calls.py"
+      ]
     },
     "acceptance-tier-ruled": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074107Z-96c27baa",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_calls.py"
+      ]
     },
     "acceptance-tier-ruling-unconfirmed": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074107Z-e462a4d2",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_calls.py"
+      ]
     },
     "acceptance-tier-failed": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074107Z-35bb11d7",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_tier.py"
+      ]
     },
     "acceptance-tier-owner-decision": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074107Z-cf2ae036",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_optout.py"
+      ]
+    },
+    "acceptance-tier-declaration": {
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074107Z-b48efbbb",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_declaration.py"
+      ]
     },
     "acceptance-tier-code-owner": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074108Z-fd58c8c5",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_code_owner.py"
+      ]
     },
     "acceptance-tier-highest": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074108Z-842839fe",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_calls.py"
+      ]
     },
     "acceptance-tier-spec-pr": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074108Z-e575f3bb",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_tier.py"
+      ]
     },
     "acceptance-tier-self-merge": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074108Z-24e2a5de",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_guard.py"
+      ]
     },
     "acceptance-tier-order-waits": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074108Z-04f2e4fa",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_tier.py"
+      ]
     },
     "acceptance-tier-relayed": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074108Z-952b4bee",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_guard.py"
+      ]
     },
     "acceptance-tier-three-waits": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074143Z-2c1c7f96",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": []
     },
     "acceptance-merge-guard-owner": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074108Z-0660c7d3",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_guard.py"
+      ]
     },
     "acceptance-merge-guard-order": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074109Z-ec507ed1",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_guard.py"
+      ]
     },
     "acceptance-merge-guard-head": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074109Z-d83fe575",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_guard.py"
+      ]
     },
     "acceptance-merge-relay-director-only": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1269,
+      "record": "20261126T074109Z-d8709bf1",
+      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "tests": [
+        "tests/gate/kit/lane_merge_guard.py"
+      ]
     },
     "acceptance-merge-digest": {
       "status": "planned",

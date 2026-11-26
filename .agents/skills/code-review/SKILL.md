@@ -56,7 +56,7 @@ Report the findings, each marked **block** or **note**, then the verdict: the on
 - **Block**: a breach of a documented hard standard of the repo (cite file and rule), or a named simplification that lists the lines it deletes.
 - **Never a block**: every baseline smell, preferences, and any finding that cannot name a consequence.
 
-**Report fields.** This step owns the form of every report field it names (`Verdict:`, `Range:`, `Check:` or `Checks: none`, `Owner:` or `Owners: none`, `Prior art:`), for every role that reports one, the implementer's check field included (docs/adr/0008 rung 3 names them). Each is a plain line: its label at column 0, then its value, outside code blocks. A report with one check and no owned rule ends:
+**Report fields.** This step owns the form of every report field it names (`Verdict:`, `Range:`, `Check:` or `Checks: none`, `Owner decision:`, `Opt-out cleared:`, `Owner:` or `Owners: none`, `Prior art:`), for every role that reports one, the implementer's check field included (docs/adr/0008 rung 3 names them). Each is a plain line: its label at column 0, then its value, outside code blocks. A report with one check and no owned rule ends:
 
 ```
 Verdict: blocking
@@ -68,6 +68,10 @@ Owners: none
 `Checks:` takes only `none`: a report with `Check:` lines has no `Checks:` line. Failure examples, each read as a missing or refused field: `## Verdict: blocking`, a heading (gh122 and gh124 reviewers); a bare `Checks:` line heading the `Check:` lines (gh157 implementers, 3 of 3 runs); a bullet or bold label (`- Verdict: clear`, `**Verdict:** clear`).
 
 `Range: <from>..<to>` names the diff the review read, each end a commit sha: `<from>` the fixed point step 1 pinned, `<to>` the head reviewed. A review of the whole lane gives the commit of main it diffed from; a review of only what changed since an earlier posted round gives that round's head. `octo-feather-lane verdict` refuses a report without it (its `--help`, verdict). Failure example: PR #1216's round 3 read only `git diff ffba6ee7 2dc6f718`, said so in prose, and was posted as the whole lane's verdict, `Checks: none` (#1219).
+
+**Owner decisions.** A design or risk decision the diff makes that is the owner's gets one line, `Owner decision: <the decision, and where the diff makes it>`, else no line. Examples: a change to an ADR's decision, a change to the sandbox policy of the kit's ADR 0022, a change to the launch path, a change to what the owner is asked or shown. A path decides nothing alone: a diff that changes only role or skill files carries the line only when it makes such a decision. How the merge ask sorts the line: issue-lifecycle spec `#gates-tiers` in the kit.
+
+**Opt-outs.** For each behaviour-neutral opt-out in the lane (each `opt-out <sha>` line `check-behavior-smoke` prints for it), read that commit: when it changes no behaviour, report `Opt-out cleared: <sha>`, one line per commit; else give no line.
 
 Then classify every check, and every other decision docs/adr/0008 "Who builds what" classifies, that the diff adds or changes (Check: GLOSSARY.md), one line each, or the one line `Checks: none`:
 
@@ -105,4 +109,4 @@ Search once per part of the rule: each label, value and term it fixes, one grep 
 
 A writer (implementer, corrector) runs this same search on its own diff before its commit, points every hit, and ends its report and each commit message with the same `Owner:` lines or `Owners: none` (the kit's `scripts/check-owner-field` reads the messages; issue #466). A fix round for a `duplicated-rule` finding searches again: the finding's sites are a share. Failure example: gh121, gh152 and gh157 writers each fixed only the listed sites, and the next review found more.
 
-The verdict reader (`octo-feather-lane verdict`) counts `Verdict:`, `Check:` and `Checks:` lines only at column 0, outside a column-0 ``` or ~~~ fence (closed by a column-0 run of the same character, at least as long) and outside a column-0 `>` blockquote with its lazy continuation lines up to a blank line or a column-0 fence. Lists and indented code are not read as containers.
+The verdict reader (`octo-feather-lane verdict`) counts `Verdict:`, `Check:`, `Checks:`, `Owner decision` and `Opt-out cleared:` lines only at column 0, outside a column-0 ``` or ~~~ fence (closed by a column-0 run of the same character, at least as long) and outside a column-0 `>` blockquote with its lazy continuation lines up to a blank line or a column-0 fence. Lists and indented code are not read as containers.

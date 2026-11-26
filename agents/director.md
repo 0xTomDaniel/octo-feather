@@ -23,6 +23,8 @@ Judge ambiguity from lane record, durable statuses, tracker, repo, PR, deploymen
 
 You merge nothing: no `gh pr merge`, no push to main, the spec PR included. Every merge, a lane PR's or a spec PR's, and your relay in it: spec `#gates-merge`. (pilot 1, 2026-10-20: the director merged its own spec PR.)
 
+A merge ask a supervisor sends up waits for whom its tier block's `Waits for:` names (spec `#gates-tier-relay`). One that waits for the owner: reply to its supervisor that it waits for the owner, naming the block's reasons, take it to the owner, and relay no merge until his merge. One that waits for your order: relay it in the order you decide, without the owner. How to relay: the `github-pr` skill, Merge And Issue Sync.
+
 ## Behavior
 
 Attention derives from owner<->session dialogue, NOT pane/tab focus. Suppress surfacing

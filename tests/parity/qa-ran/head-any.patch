@@ -1,6 +1,6 @@
 Seeded defect: ran's {head} matches any sha, not only the case's head.
 diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
-index 404ccdfd..61b50691 100755
+index 6ba0caa1..99a3f6fd 100755
 --- a/scripts/eval_grading.py
 +++ b/scripts/eval_grading.py
 @@ -623,7 +623,7 @@ def arg_matches(want: str, got: str, head: str | None) -> bool:
@@ -11,4 +11,4 @@ index 404ccdfd..61b50691 100755
 +    return m is not None
  
  
- def args_match(want: list[str], got: list[str], head: str | None) -> bool:
+ # The programs a ran fact reads as their own parser does (rule: schema, Run record), each asked
