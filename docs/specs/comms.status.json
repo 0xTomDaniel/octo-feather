@@ -273,18 +273,28 @@
       ]
     },
     "acceptance-director-relaunch": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1313,
+      "record": "20261126T001110Z-80dc79a6",
+      "commit": "eb86e27f9bd544282bf88247dcc625884c39bcb7",
+      "tests": [
+        "tests/gate/kit/test_start_relaunch.py"
+      ]
     },
     "acceptance-director-replace": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1313,
+      "record": "20261126T001110Z-2011c7d9",
+      "commit": "eb86e27f9bd544282bf88247dcc625884c39bcb7",
+      "tests": [
+        "tests/gate/kit/test_start_relaunch.py"
+      ]
     },
     "acceptance-director-replace-outgoing": {
       "status": "built",
       "pr": 1313,
-      "record": "20261125T230756Z-3db3e74e",
-      "commit": "76f50dbdd3d2b4e8a28daf02e8bbe3102860de23",
+      "record": "20261126T001110Z-ae12e16c",
+      "commit": "eb86e27f9bd544282bf88247dcc625884c39bcb7",
       "tests": [
         "tests/gate/kit/test_start_relaunch.py"
       ]
@@ -292,8 +302,8 @@
     "acceptance-director-relaunch-busy": {
       "status": "built",
       "pr": 1313,
-      "record": "20261125T230756Z-1dfdcb24",
-      "commit": "76f50dbdd3d2b4e8a28daf02e8bbe3102860de23",
+      "record": "20261126T001110Z-8730ff47",
+      "commit": "eb86e27f9bd544282bf88247dcc625884c39bcb7",
       "tests": [
         "tests/gate/kit/test_start_relaunch.py"
       ]
@@ -301,8 +311,8 @@
     "acceptance-director-relaunch-own-scope": {
       "status": "built",
       "pr": 1313,
-      "record": "20261125T230756Z-a7fe1530",
-      "commit": "76f50dbdd3d2b4e8a28daf02e8bbe3102860de23",
+      "record": "20261126T001110Z-f58af4cb",
+      "commit": "eb86e27f9bd544282bf88247dcc625884c39bcb7",
       "tests": [
         "tests/gate/kit/test_start_relaunch.py"
       ]
@@ -310,8 +320,8 @@
     "acceptance-director-relaunch-same-session": {
       "status": "built",
       "pr": 1313,
-      "record": "20261125T230756Z-14cbf093",
-      "commit": "76f50dbdd3d2b4e8a28daf02e8bbe3102860de23",
+      "record": "20261126T001110Z-f2ac5ad9",
+      "commit": "eb86e27f9bd544282bf88247dcc625884c39bcb7",
       "tests": [
         "tests/gate/kit/test_start_relaunch.py"
       ]
