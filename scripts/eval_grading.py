@@ -964,12 +964,42 @@ def pytest_sessionfinish(session):
 """
 
 
+# Each tree's collection, once per process (#1297): the paths collected, by tree_key; a key's lock
+# held while its tree is collected, so watches running at once collect a shared tree once.
+COLLECTED: dict[str, list[str]] = {}
+COLLECTING: dict[str, threading.Lock] = {}
+COLLECTING_LOCK = threading.Lock()
+
+
+def tree_key(snap: Fact, where: Where) -> str:
+    """What a collection depends on: snap's paths and content hashes (its pyproject.toml and
+    uv.lock among them, which the repo's env is synced from: schema, Before targets) and the env
+    pytest runs in."""
+    raw = json.dumps([sorted(snap["files"].items()), sorted(where.env.items())])
+    return hashlib.sha256(raw.encode()).hexdigest()
+
+
 def declared_tests(snap: Fact, where: Where) -> dict[str, str | None]:
     """{path: content hash} of every file test_write's runner collects (rule: schema, Before
-    targets): run in the repo's synced env, collect only, no test module imported, no bytecode or
-    cache written, in a tree under the watcher's private dir from snap's "data" (#170). Raises
-    RuntimeError when pytest gives no list."""
-    files, tree = snap["files"], Path(f"{where.tmp}/collect/tree")
+    targets), collected once per tree (tree_key) and reused for an equal one. Raises RuntimeError
+    when pytest gives no list (never kept: the next equal tree collects again)."""
+    key = tree_key(snap, where)
+    with COLLECTING_LOCK:
+        lock = COLLECTING.setdefault(key, threading.Lock())
+    with lock:
+        if key not in COLLECTED:
+            COLLECTED[key] = collected_paths(snap, where)
+    return {p: snap["files"].get(p) for p in COLLECTED[key]}
+
+
+def collected_paths(snap: Fact, where: Where) -> list[str]:
+    """The paths test_write's runner collects in snap's tree: run in the repo's synced env, collect
+    only, no test module imported, no cache written, in a tree under the watcher's private dir
+    from snap's "data" (#170). Bytecode is written only beside the runner's own modules, in the
+    repo's env (uv's .venv, which git ignores, so no snapshot sees it), and under the private dir:
+    the runner imports from it after its first collection. Raises RuntimeError when pytest gives no
+    list."""
+    tree = Path(f"{where.tmp}/collect/tree")
     shutil.rmtree(tree, ignore_errors=True)
     for f, (kind, b) in snap["data"].items():
         (tree / f).parent.mkdir(parents=True, exist_ok=True)
@@ -982,9 +1012,7 @@ def declared_tests(snap: Fact, where: Where) -> dict[str, str | None]:
     (collect / "qa_collect.py").write_text(COLLECT_PLUGIN)
     out = collect / "collected.json"
     out.unlink(missing_ok=True)
-    env = dict(
-        where.env, PYTHONPATH=str(collect), PYTHONDONTWRITEBYTECODE="1", QA_COLLECTED=str(out)
-    )
+    env = dict(where.env, PYTHONPATH=str(collect), QA_COLLECTED=str(out))
     argv = [
         "uv",
         "run",
@@ -1008,7 +1036,7 @@ def declared_tests(snap: Fact, where: Where) -> dict[str, str | None]:
             f"{(r.stdout + r.stderr).strip()[-300:]}"
         )
         raise RuntimeError(msg)
-    return {p: files.get(p) for p in json.loads(out.read_text())}
+    return [str(p) for p in json.loads(out.read_text())]
 
 
 def changed(old: Fact, new: Fact, known: set[str]) -> list[str]:

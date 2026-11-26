@@ -1,0 +1,14 @@
+Seeded defect: append prints a record id but keeps no record: the staged record is never moved into records/.
+diff --git a/scripts/octo-feather-evidence b/scripts/octo-feather-evidence
+index 20344c5a..7cf3fe93 100755
+--- a/scripts/octo-feather-evidence
++++ b/scripts/octo-feather-evidence
+@@ -196,7 +196,7 @@ def append(a):
+         os.makedirs(os.path.dirname(final), exist_ok=True)
+         if os.path.exists(final):
+             raise Refused(f"record {rid} already exists; append again")
+-        os.rename(stage, final)
++        pass
+     finally:
+         if os.path.exists(stage):
+             shutil.rmtree(stage)

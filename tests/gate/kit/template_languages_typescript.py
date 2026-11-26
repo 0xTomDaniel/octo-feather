@@ -6,7 +6,7 @@ Its own check-languages (#362, owner rulings #225, #261): each rule, broken once
 the file and the fix: a tracked unknown file, a Go file (unmapped), a file a tool's own list
 misses (an unattributed bash script, a dot-file .ts outside tsconfig's include), an `env -S`
 shebang scc cannot read, both pnpm pins, and ShellCheck's recipe out of the gate; one run, as
-each run lints the repo with typed eslint (its file list), the cost floor. Its two tiers
+each run asks tsc and eslint for their file lists, the cost floor. Its two tiers
 (templates spec #acceptance-fresh-fast, #acceptance-test-kinds, #acceptance-shared-fixture), its
 trend line (comms #acceptance-report-gate-budget, issue-lifecycle
 #acceptance-merge-ask-gate-budget, #556) and its starter acceptance test (templates spec
