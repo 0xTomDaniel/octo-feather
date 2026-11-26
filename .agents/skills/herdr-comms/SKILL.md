@@ -182,10 +182,12 @@ herdr-close --park PANE
 
 Reads the parked line's fields only
 from PANE's own Pi process, the foreground process `herdr pane process-info`
-names with a `--session-id` (#1001): the session from that argv, role and parent
-from that process's own environ (`OCTO_FEATHER_ROLE`, `OCTO_FEATHER_PARENT`),
-cwd from Herdr's answer. It reads no other process's environ: one elsewhere
-tagged with the pane's ids is never read.
+names with a `--session-id` (#1001): the session from that argv, role
+from that process's own environ (`OCTO_FEATHER_ROLE`), parent the one
+`octo-feather-handoff parent` resolves now for that session and role (its
+`OCTO_FEATHER_PARENT` only the fallback), cwd from Herdr's answer. It reads
+no other process's environ: one elsewhere tagged with the pane's ids is never
+read.
 
 When the pane's shell is in its own agent scope (as Close an agent names it), park refuses
 while that scope holds any live member other than Pi and the pane's shell: exit
@@ -272,11 +274,12 @@ typed into.
 
 A target Herdr does not find may be parked (comms spec `#roles-park`): which
 parked line counts, `octo-feather-handoff --help` (parked); where the agent
-resumes, `herdr-say`'s header. A resumed agent gets the message prefixed
+resumes and with which parent, `herdr-say`'s header. A resumed agent gets the message prefixed
 `Resumed from park as pane=PANE. `, and `herdr-say` prints its new `pane=`.
 `herdr-say --parked TARGET` prints that line, or exits 1.
-`herdr-say --parent` finds the parent by identity at each send, not by the pane
-frozen at spawn: `octo-feather-handoff --help`, parent.
+`herdr-say` finds a kit agent's parent by identity at each send, not by the pane
+frozen at spawn: what uses it, `herdr-say`'s header (up-chain guard); how it is
+found, `octo-feather-handoff --help`, parent.
 A worker's `herdr-say --parent` report goes to a result file, and the parent
 gets a notice naming it: `octo-feather-handoff --help`, report. The parent's
 listing of its workers and their result files: `octo-feather-handoff results`, put

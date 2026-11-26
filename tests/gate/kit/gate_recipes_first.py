@@ -1,6 +1,6 @@
 """The gate runs its static checks first (quality #recipes-static-first,
 #acceptance-gate-recipes-first; #1019), through `just fast` and `just check` in a throwaway git
-copy of the kit's tracked files without its tests, as tests/fast.sh builds one. The copy's
+copy of the kit's tracked files without its tests. The copy's
 justfile declares two static checks, GATE_RECIPES "check-dashes check-probe" (check-probe, added
 to it, logs its name), and its test items are tests/a.sh and tests/b.sh, each logging its name,
 tests/a.sh end-to-end by its header (`# gate: e2e`), so `just check` asks the slot and `just fast`
@@ -69,16 +69,6 @@ fi
 ASK = f"slot hold --kind heavy --items {ITEMS}"
 EARLY = f"{ASK} --if-granted"
 DASH = "\u2014"
-NO_DEPS = """lockfileVersion: '9.0'
-
-settings:
-  autoInstallPeers: true
-  excludeLinksFromLockfile: false
-
-importers:
-
-  .: {}
-"""
 
 
 def kit_copy(s: Scratch) -> Path:
@@ -113,10 +103,8 @@ def kit_copy(s: Scratch) -> Path:
         (k / "tests" / f"{n}.sh").write_text(f'#!/usr/bin/env bash\n{e2e}echo {n} >> "$PROBE"\n')
         (k / "tests" / f"{n}.sh").chmod(0o755)
     (k / "scripts" / "octo-feather-slot").write_text(SLOT)
-    pkg = json.loads((k / "package.json").read_text())
-    del pkg["devDependencies"]  # none of its recipes here needs one: check-tests' install is cheap
-    (k / "package.json").write_text(json.dumps(pkg, indent=2) + "\n")
-    (k / "pnpm-lock.yaml").write_text(NO_DEPS)
+    # none of its recipes here needs a package: check-tests' install is cheap
+    s.run([str(ROOT / "tests" / "lib" / "no-packages.py"), str(k)])
     s.git(k, "init", "-q", "-b", "main")
     s.git(k, "add", "-A")
     s.git(k, "commit", "-qm", "copy")

@@ -1,0 +1,32 @@
+#!/bin/sh
+# The kit's stash guard (spec roles#launch-stash-guard; placement: pi-role --help, Stash guard; what it refuses:
+# scripts/stash_guard.py). This file is its fast path: an argv with no `stash` word execs the next git on PATH after
+# this one, no Python start; one with it goes to scripts/stash_guard.py.
+# Not reached: a process calling git by absolute path (/usr/bin/git), the owner's own shell, a git alias for stash.
+set -f   # PATH split on : below, never globbed
+me="$0"
+here="${me%/*}"   # found through PATH, $0 is that PATH entry, a slash, git
+next=""
+past=""
+IFS=:
+for d in $PATH; do
+  [ -n "$d" ] || continue
+  if [ -z "$past" ]; then
+    [ "$d" = "$here" ] && past=1
+    continue
+  fi
+  if [ -x "$d/git" ] && [ ! -d "$d/git" ]; then next="$d/git"; break; fi
+done
+unset IFS
+if [ -z "$past" ]; then   # run by its own path, not found through PATH: the first git on PATH outside its dir
+  IFS=:
+  for d in $PATH; do
+    if [ -n "$d" ] && [ -x "$d/git" ] && [ ! -d "$d/git" ] && [ "$d" != "$here" ]; then next="$d/git"; break; fi
+  done
+  unset IFS
+fi
+[ -n "$next" ] || { echo "git (kit stash guard $me): no git on PATH after this guard" >&2; exit 127; }
+for a in "$@"; do
+  [ "$a" = stash ] && exec python3 "$here/../stash_guard.py" "$next" "$@"
+done
+exec "$next" "$@"
