@@ -2,9 +2,9 @@
 # gate: e2e
 # criterion: quality#acceptance-qc-carry
 # Integration test for qc carry (quality spec #qc-carry), through `just qc` / octo-feather-qc, the status file and the qc
-# report, with a fake herdr and the stub judge tests/fixtures/qc-judge/pi (no model). A scratch target on a lane
-# branch: its earlier head passes demos a, b, c, the agent fallback f (an entry with covers, no demo), the tagged tests
-# g and h (h with no covered path), fails e and gets insufficient evidence on i. Each later head is a merge of main changing one thing; what qc on it carries or
+# report, with a fake herdr and a fake pi that reaches no model (the advisory's). A scratch target on a lane
+# branch: its earlier head passes demos a, b, c and the tagged tests g and h (h with no covered path), fails e and gets
+# insufficient evidence on i and on f (an entry with covers, no demo, no tagged test: neither). Each later head is a merge of main changing one thing; what qc on it carries or
 # judges again: quality spec #qc-carry, each case below. Needs unprivileged user namespaces (`unshare -rm`), as tests/qc.sh.
 set -euo pipefail
 unset OCTO_FEATHER_CHECK_RUN OCTO_FEATHER_QC_CLAIMS   # a test harness, as tests/qc.sh: the scratch gate sets its own
@@ -16,9 +16,9 @@ UV_CACHE_DIR="$(uv cache dir)"; UV_PYTHON_INSTALL_DIR="$(uv python dir)"; export
 for d in data cache config; do v="MISE_${d^^}_DIR"; [[ -n "${!v:-}" ]] || export "$v=$(mise doctor --json | jq -r --arg d "$d" '.dirs[$d]')"; done
 fail() { echo "qc-carry test: $*" >&2; exit 1; }
 export HOME="$t/home" XDG_STATE_HOME="$t/state" TMPDIR="$t/tmp" KIT="$kit"
-unset XDG_CONFIG_HOME XDG_CACHE_HOME GH_CONFIG_DIR HERDR_SESSION HERDR_SOCKET_PATH HERDR_BIN_PATH HERDR_ENV OCTO_FEATHER_QC_DIR FAKE_QC_JUDGE FAKE_QC_FAIL
+unset XDG_CONFIG_HOME XDG_CACHE_HOME GH_CONFIG_DIR HERDR_SESSION HERDR_SOCKET_PATH HERDR_BIN_PATH HERDR_ENV OCTO_FEATHER_QC_DIR
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
-mkdir -p "$HOME" "$TMPDIR" "$t/bin" "$t/repo/docs/specs" "$t/repo/tests/gate" "$t/repo/src" "$t/repo/fixtures"
+mkdir -p "$HOME" "$TMPDIR" "$t/bin" "$t/stub" "$t/repo/docs/specs" "$t/repo/tests/gate" "$t/repo/src" "$t/repo/fixtures"
 cat > "$t/bin/herdr" <<'EOF'
 #!/usr/bin/env bash
 C="${XDG_CONFIG_HOME:-$HOME/.config}/herdr"; s=default; a=()
@@ -33,8 +33,9 @@ esac
 [[ -f "$sock" ]] || { echo server_not_running >&2; exit 1; }
 echo "{\"session\":\"$(cat "$sock")\"}"
 EOF
-chmod +x "$t/bin/herdr"
-export PATH="$t/bin:$kit/scripts:$PATH" OCTO_FEATHER_QC_PATH="$kit/tests/fixtures/qc-judge"
+printf '#!/bin/sh\necho "fake pi: no model here" >&2; exit 9\n' > "$t/stub/pi"
+chmod +x "$t/bin/herdr" "$t/stub/pi"
+export PATH="$t/bin:$kit/scripts:$PATH" OCTO_FEATHER_QC_PATH="$t/stub"
 
 cd "$t/repo"; git init -q -b main .
 git commit -qm accepted --allow-empty
@@ -97,17 +98,17 @@ said() { grep -q -- "$1" "$t/err" || fail "qc at ${head:0:12}: want stderr namin
 gate; h0="$(git rev-parse HEAD)"
 qcrun 1 a b c e f g h i
 read -r a0 _ _ <<< "$(row a)"; read -r c0 _ _ <<< "$(row c)"; read -r g0 _ _ <<< "$(row g)"
-results a=judged:pass b=judged:pass c=judged:pass e=judged:fail f=judged:pass g=judged:pass h=judged:pass i="judged:insufficient evidence"
+results a=judged:pass b=judged:pass c=judged:pass e=judged:fail f="judged:insufficient evidence" g=judged:pass h=judged:pass i="judged:insufficient evidence"
 
 # A merge of main changes src/b, which only b covers: b judged again; a, c and g carried with their head and record,
-# g with no gate run here; the fallback's f, h with no covered path, the failed e and the insufficient i judged again.
+# g with no gate run here; h with no covered path, the failed e and the insufficient f and i judged again.
 echo "b v2" > src/b; merge "main: src/b"
 qcrun 1 a b c e f g h i
-results a="carried@$h0:$a0" c="carried@$h0:$c0" g="carried@$h0:$g0" b=judged:pass e=judged:fail f=judged:pass h="judged:insufficient evidence" i="judged:insufficient evidence"
+results a="carried@$h0:$a0" c="carried@$h0:$c0" g="carried@$h0:$g0" b=judged:pass e=judged:fail f="judged:insufficient evidence" h="judged:insufficient evidence" i="judged:insufficient evidence"
 grep -A1 '^PASS acceptance-a: ' <<< "$out" | grep -q "carried: judged at ${h0:0:12}, record $a0" || fail "carried a not shown with its head and record: $out"
 grep -c '^qc: demo ' "$t/err" | grep -qx 3 || fail "want only b, e and i's demos run: $(cat "$t/err")"
 [[ "$(row a)" == "$a0 $h0 built" && "$(row b | cut -d' ' -f2-)" == "$head built" ]] || fail "want a and b built, a at $h0, b at $head: $(row a); $(row b)"
-said "covered path src/b changed"; said "acceptance-f again: judged by the agent fallback"; said "acceptance-h again: no covered path"
+said "covered path src/b changed"; said "acceptance-h again: no covered path"
 
 # The gate configuration (the justfile) moves: g judged again from its new gate record; a carried.
 echo "# a comment" >> justfile; merge "main: justfile"
@@ -133,4 +134,4 @@ qcrun 0 a; results a=judged:pass; said "acceptance-a again: contract"
 # Another lane (PR 10) naming a: judged again, never carried from lane 9's pass.
 echo "b v3" > src/b; merge "main: src/b again"
 PR=10 qcrun 0 a; results a=judged:pass; said "acceptance-a again: built in PR #9"
-echo "qc-carry: ok (a merge of main: the criterion whose covered path moved judged again, the others carried with their judged head and record, both built; fallback, failed and insufficient criteria, and moved text, named test, a newly tagged test, gate configuration, fixture and contract, or another lane, judged again)"
+echo "qc-carry: ok (a merge of main: the criterion whose covered path moved judged again, the others carried with their judged head and record, both built; failed and insufficient criteria, and moved text, named test, a newly tagged test, gate configuration, fixture and contract, or another lane, judged again)"

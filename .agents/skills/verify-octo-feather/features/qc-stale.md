@@ -35,4 +35,4 @@ The drive makes a scratch target (the kit's `tests/fixtures/spec-status/good/dem
 
 ## Gotchas
 
-- What `show` compares (HEAD or worktree, code or text), what a fallback-built criterion's line means, and why the kit's own built rows show `no evidence link`: `octo-feather-spec-status` usage, the `show` paragraph.
+- What `show` compares (HEAD or worktree, code or text), what a built criterion with no declared demo shows, and why the kit's own built rows show `no evidence link`: `octo-feather-spec-status` usage, the `show` paragraph.
