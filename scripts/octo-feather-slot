@@ -37,7 +37,17 @@
       slot needed), `nested: ...` (exit 0, an ancestor process holds this kind's slot), or
       `held: ...` (the lock is taken; the command then stays, holding it, until its stdin closes:
       the caller keeps the pipe open for its life, and its exit or crash closes it, so the lock
-      goes with the caller); else the refusal (exit 75), nothing run. With --if-granted (the
+      goes with the caller); else the refusal (exit 75), nothing run. A run whose lane holds no
+      grant asks for its own lane (quality #recipes-static-first, #1326), never through the
+      director: with a slot of the kind free and its queue empty, the lane is granted at once
+      (the `grant` default hours, by `self PANE`, PANE the caller's HERDR_PANE_ID) and the lock
+      taken in the same call: `held: ... (granted at once: the KIND slot free, queue empty)`;
+      else the lane is appended to KIND's queue as `queue` appends it (by `self PANE`, once: a
+      lane already queued is told its place, nothing changed) and the refusal ends with its
+      place, read back from KIND.queue.json; a caller pane that is not the lane's supervisor
+      (a worker's run) also tells the supervisor that place; then it settles KIND, as `queue`
+      does. The director is told nothing of either. No lane resolved, or the director's own
+      run: refused, nothing queued. With --if-granted (the
       gate, before its static checks: quality #recipes-static-first, #1113) it takes the slot
       only for a lane already holding its grant: where it would refuse it prints `later: ...`
       (exit 0, nothing held), and the gate asks again, plainly, once its static checks are
@@ -57,8 +67,9 @@ the owner's shell are free, and so are a gate item's processes (the gate clears 
 tests/gate/test_gate.py) and anything in the qc or qa sandbox (scripts/octo-feather-qc-sandbox,
 step 6, unsets them). A run under a process that holds its kind's slot (qc's capture inside a
 granted integrate) is nested: it takes no second slot. Else the run's lane must hold a grant of
-its kind, and one of the kind's locks must be free. A lane refused for want of a grant is told to
-ask the director for `queue` when every slot of the kind is granted, `grant` when one is free.
+its kind, and one of the kind's locks must be free. A lane with no grant asks for itself, as hold
+says above; only a run with no lane resolved is told to ask the director for `queue` when every
+slot of the kind is granted, `grant` when one is free.
 
 The queue (owner ruling 2026-11-14 #906, #976). The director queues lanes for a kind; when a
 holder's run ends (a `hold` of that lane under its grant released its lock) and no run of that
@@ -139,11 +150,15 @@ an empty queue, nothing but `grant` and `revoke` writes it, and a check writes n
 copy's grant and revoke take no files lock: what they write is read fresh by the next check, a
 grant they removed never written back. Also there, never opened by this command: the gate's
 fast-run turns, fast-I.lock and fast-I.run.json (fast_runs; tests/gate/heavy_slot.py).
+And KIND.log, which older copies never open: one line appended per grant at once or queue a run
+made for its own lane (`TIME KIND: lane LANE granted at once, by self PANE`, `TIME KIND: lane LANE
+queued, position N, by self PANE`); `status` prints its last line as `  last: ...`.
 """
 
 from __future__ import annotations
 
 import argparse
+import functools
 import os
 import shutil
 import signal
@@ -158,7 +173,7 @@ import tomllib
 
 # The slot queue's rule (scripts/slot_queue.py, its docstring): a kit module beside this script,
 # found because Python puts this script's own directory, symlinks resolved, first on sys.path.
-from slot_queue import Line, Outcome, Refused, SlotQueue, Taken, box, home, system_clock
+from slot_queue import Caller, Line, Outcome, Refused, SlotQueue, Taken, box, home, system_clock
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -204,6 +219,7 @@ def apply(kind: str, o: Outcome, out: IO[str] | None = None) -> int:
     return o.code
 
 
+@functools.cache
 def lanes_dir() -> Path:
     """The caller's Herdr session's lanes dir (octo-feather-state)."""
     state = KIT / "scripts" / "octo-feather-state"
@@ -305,9 +321,13 @@ def hold(kind: str, items: int | None, *, if_granted: bool = False) -> int:
     if not in_agent():
         say(f"free: outside a Herdr agent (no HERDR_PANE_ID or OCTO_FEATHER_ROLE), no {kind} slot")
         return 0
-    got = q.take(items, os.getppid(), ancestors(), caller_lane, if_granted=if_granted)
+    caller = Caller(caller_lane, os.environ.get("HERDR_PANE_ID", ""), lanes_dir, session_key())
+    got = q.take(items, os.getppid(), ancestors(), caller, if_granted=if_granted)
     if isinstance(got, Outcome):
-        return apply(kind, got)
+        apply(kind, got)
+        if got.settle:  # queued: a hand-over already due happens at once
+            settle_now(kind, sys.stderr, quiet=True)
+        return got.code
     return keep(q, got)
 
 

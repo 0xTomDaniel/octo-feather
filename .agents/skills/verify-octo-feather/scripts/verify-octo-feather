@@ -3314,11 +3314,13 @@ def drive_template_edge(f: Feature) -> None:
 
 def drive_run_slots(f: Feature) -> None:
     """The box's heavy-run slot (octo-feather-slot --help) as a lane's implementer and the director meet it, in
-    scratch box state: a lane gh7 whose implementer's `just test` over a 31-item scratch suite is refused before any
-    item runs, naming the grant to ask for; the implementer's own grant refused; the director's grant; status naming
+    scratch box state: a lane gh7 whose implementer's `just test` over a 31-item scratch suite, the slot free and
+    nobody queued, is granted the slot at once for its lane and runs, nobody told (#1326); the implementer's own grant
+    refused; the director's grant; status naming
     the holder; the same run then holding the slot and passing; the lock released after it. The queue: gh8 queued
     onto gh7's slot, nothing passed before gh7 ran, the slot passed to gh8 a grace after gh7's run ended with gh8's
-    supervisor and the director told (a stand-in herdr-say records each message), gh7 then told to queue, and a
+    supervisor and the director told (a stand-in herdr-say records each message), gh7's next run then queuing gh7
+    itself and saying its place, gh7's supervisor told it and the director nothing, and a
     lane queued onto a free kind granted at once. Manual moves and pass-over (#977): a revoke frees the slot, the
     head granted only after the grace; a revoke then a grant by hand inside the grace keeps the director's choice;
     that hand-granted lane, starting no run within the bound, passed over to the head. herdr-say is the checkout's own; Herdr (`herdr`) is a stand-in first on
@@ -3351,11 +3353,15 @@ def drive_run_slots(f: Feature) -> None:
     f.env = agent
     f.run("grant-not-director", "octo-feather-slot", "grant", "gh7", "--kind", "heavy")
     f.check("grant-not-director", lambda c: c.code == 77 and "grant is the director's" in c.err)
-    f.run("refused", *gate)
-    f.check("refused", lambda c: c.code == 75 and "passed" not in c.out and (
-        "octo-feather-slot: refused, nothing ran: this heavy run selects 31 items, over heavy_items 30 (gate-budget.toml), "
-        "and lane gh7 holds no heavy grant; current holder: none; ask the director: octo-feather-slot grant gh7 --kind heavy"
-    ) in c.err)
+    f.run("self-grant", *gate)
+    f.obs("self-grant", "said", said.read_text() if said.exists() else "")
+    f.check("self-grant", lambda c: c.code == 0 and "heavy slot: held: the heavy slot for lane gh7, run pid " in c.out
+            and "(granted at once: the heavy slot free, queue empty)" in c.out and "31 passed" in c.out
+            and c.o["said"] == "")
+    f.run("self-grant-status", "octo-feather-slot", "status")
+    f.check("self-grant-status", lambda c: c.code == 0 and " by self w9:p3, expires " in c.out
+            and "  last: " in c.out and " heavy: lane gh7 granted at once, by self w9:p3" in c.out)
+    subprocess.run(["sleep", "1.1"], check=False)  # the director's grant below: a fresh since, no run under it
     f.env = director
     f.run("grant", "octo-feather-slot", "grant", "gh7", "--kind", "heavy")
     f.check("grant", lambda c: c.code == 0 and c.out.startswith("granted: heavy slot to lane gh7 (granted ") and "by w1:p1, expires " in c.out)
@@ -3390,10 +3396,15 @@ def drive_run_slots(f: Feature) -> None:
         f"(lane gh7's run ended, no run within the {grace} s grace); run your heavy run now.{wait}"
         f"agent prompt w1:p1 octo-feather-slot: heavy slot passed from lane gh7 to lane gh8; queue left: none.{wait}"
     ) == c.o["said"])
-    f.run("refused-queue", *gate)
-    f.check("refused-queue", lambda c: c.code == 75 and "passed" not in c.out and (
+    told = said.read_text()
+    f.run("self-queue", *gate)
+    f.obs("self-queue", "said-since", said.read_text()[len(told):])
+    f.check("self-queue", lambda c: c.code == 75 and "passed" not in c.out and (
         "and lane gh7 holds no heavy grant; current holder: gh8 (granted "
-    ) in c.err and "ask the director: octo-feather-slot queue gh7 --kind heavy" in c.err)
+    ) in c.err and "; lane gh7 queued for the heavy slot, position 1, by self w9:p3; the slot passes to it" in c.err
+            and "ask the director" not in c.err and c.o["said-since"] == (
+        "agent prompt w9:p1 octo-feather-slot: lane gh7 queued for the heavy slot, position 1, by its run in w9:p3; "
+        f"the slot passes to it as the queue rule says (octo-feather-slot --help) and you are told then.{wait}"))
     f.env = director
     f.run("queue-free", "octo-feather-slot", "queue", "gh7", "--kind", "eval")
     f.obs("queue-free", "said", said.read_text().splitlines(keepends=True)[-1])
@@ -3419,7 +3430,8 @@ def drive_run_slots(f: Feature) -> None:
         return heavy(out).split(f"holder: {lane} (granted ", 1)[1].split(", expires ", 1)[1].split(")", 1)[0]
 
     f.run("queue-behind", "octo-feather-slot", "queue", "gh7", "--kind", "heavy")
-    f.check("queue-behind", lambda c: c.code == 0 and c.out == "queued: lane gh7 for the heavy slot, position 1\n")
+    f.check("queue-behind", lambda c: c.code == 0
+            and c.out == "gh7 is already queued for the heavy slot, position 1; nothing changed\n")
     f.run("revoke", "octo-feather-slot", "revoke", "gh8", "--kind", "heavy")
     f.check("revoke", lambda c: c.code == 0 and c.out == (
         f"revoked: heavy slot of lane gh8\nthe heavy slot passes to lane gh7 after the {grace} s grace\n"))

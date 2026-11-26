@@ -5,11 +5,18 @@ tier's: quality #recipes-static-first), octo-feather-slot (grant, status) and oc
 implementer of lane gh7 (its pane in gh7's space, its parent gh7's supervisor) or the director,
 with a scratch XDG_STATE_HOME holding the box's slot files and the session's lane records.
 
-refused: a 31-item run without gh7's grant stops before any item runs, naming its count, the
-threshold, the current holder (gh8) and the grant to ask for; 30 items need none, and neither
-does a run outside a Herdr agent; a non-director's grant is refused. granted: with gh7's grant
-the run holds the slot (status names its run) while a nested 31-item run under it is not
-refused, a second concurrent one is, and qa needs its own eval grant, then runs beside it.
+refused: a 31-item run without gh7's grant, gh8 holding it, stops before any item runs, naming
+its count, the threshold, the current holder (gh8) and gh7's place in the queue, gh7 queued once
+(quality #recipes-static-first, #1326); 30 items need none, and neither does a run outside a
+Herdr agent; a non-director's grant is refused. granted: with gh7's grant the run holds the slot
+(status names its run) while a nested 31-item run under it is not refused, a second concurrent
+one is, and qa takes its own eval slot, free, at once for gh7, then runs beside it.
+self_asked (quality #acceptance-slot-self-grant, #acceptance-slot-self-queue): through the kit's
+`just test` over a suite with one green static check (the gate's node id) and 31 items, gh7's
+implementer, no grant, the slot free and nobody queued: its run says the slot was granted to gh7
+at once and runs its tests. While gh7's run holds it, gh8's implementer's run stops after its
+green static check (exit 75, no other item run) saying gh8 queued and its place, which the queue
+file holds; gh8's supervisor is told the place, the director's pane nothing.
 sandboxed: a 31-item run inside the qc sandbox (a `just qc` demo, as qa runs its cases there)
 from that same ungranted agent runs.
 
@@ -41,6 +48,7 @@ no earlier run's end inherited, so nothing passes."""
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -144,9 +152,12 @@ def refused(s: Scratch) -> None:
         for want in (
             "refused, nothing ran: this heavy run selects 31 items, over heavy_items 30",
             "lane gh7 holds no heavy grant; current holder: gh8 (granted ",
-            "ask the director: octo-feather-slot queue gh7 --kind heavy",
+            "lane gh7 queued for the heavy slot, position 1, by self w9:p3"
+            if workers == 0
+            else "lane gh7 already queued for the heavy slot, position 1, nothing changed",
         ):
             assert want in out, out
+        assert "ask the director" not in out, out
         assert "passed" not in out, out
         assert not trend.exists(), "a refused run wrote a trend line"
         assert not (big / "junit.xml").exists(), "a refused run wrote its junit xml"
@@ -182,12 +193,9 @@ def granted(s: Scratch) -> None:
             assert "lane gh7 holds the heavy grant, but every heavy slot is held now" in second
             assert f"by a run: pid {p.pid} of lane gh7" in second, second
             qa = [kit("octo-feather-qa"), "--suite", "no-such-suite"]
-            no = s.run(qa, want=REFUSED, env=AGENT)
-            assert "this eval run (octo-feather-qa) runs model evals, and lane gh7" in no.err
-            assert "ask the director: octo-feather-slot grant gh7 --kind eval" in no.err, no.err
-            s.run([SLOT, "grant", "gh7", "--kind", "eval"], env=DIRECTOR)
             ok = s.run(qa, want=64, env=AGENT)  # past the slot: the unknown suite
             assert "qa: eval slot: held: the eval slot for lane gh7" in ok.out, ok.out
+            assert "(granted at once: the eval slot free, queue empty)" in ok.out, ok.out
             assert "no suite no-such-suite" in ok.err, ok.err
         finally:
             Path(files["done"]).touch()
@@ -200,19 +208,17 @@ def granted(s: Scratch) -> None:
 
 def user_mise_gate(s: Scratch) -> None:
     """`just check-user-mise` (tests/user-mise.sh --gate) in the fixture's pane: the run takes the
-    heavy slot in the caller's env and lane, so it is refused without gh7's grant, naming it; with
-    it, it holds the slot and the gate in the fixture's pane runs nested under it."""
+    heavy slot in the caller's env and lane, so with the slot free it is granted to gh7 at once and
+    holds it, and the gate in the fixture's pane runs nested under it."""
     world(s)
     s.env |= tool_homes() | {"npm_config_store_dir": pnpm_store()}
     big = str(suite(s, "big", 31))
     cmd = [str(ROOT / "tests" / "user-mise.sh"), "--gate", big]
-    no = s.run(cmd, want=REFUSED, env=AGENT)
-    assert "ask the director: octo-feather-slot grant gh7 --kind heavy" in no.err, no.err
-    s.run([SLOT, "grant", "gh7", "--kind", "heavy"], env=DIRECTOR)
     ran = s.run(cmd, env=AGENT)
     out = ran.out + ran.err
     for want in (
         "user-mise: heavy slot: held: the heavy slot for lane gh7, run pid ",
+        "(granted at once: the heavy slot free, queue empty)",
         "heavy slot: nested: under the heavy run pid ",
         "31 passed",
     ):
@@ -683,6 +689,66 @@ def back_to_back(s: Scratch) -> None:
     assert said_n(s, 2) == want, said(s)
 
 
+# One green static check, as the gate's node id (tests/gate/heavy_slot.py's STATIC).
+GREEN = """import pytest
+
+@pytest.mark.parametrize("name", ["probe"])
+def test_recipe(name):
+    pass
+"""
+
+
+def self_asked(s: Scratch) -> None:
+    world(s)
+    s.env |= tool_homes() | {"npm_config_store_dir": pnpm_store()}  # `just test`: uv, pnpm
+    # The justfile puts the kit's own herdr-say first on its recipes' PATH: Herdr's stand-in is
+    # `herdr` here, recording each call's arguments, as SAY does.
+    (s.bin / "herdr").unlink()  # the testkit's fake, a link: replaced, never written through
+    (s.bin / "herdr").write_text(SAY.replace("herdr-say", "herdr"))
+    (s.bin / "herdr").chmod(0o755)
+    big = suite(s, "big", 31)
+    (big / "tests" / "gate").mkdir(parents=True)
+    (big / "tests" / "gate" / "test_gate.py").write_text(GREEN)
+    gate_ = ["just", "--justfile", str(ROOT / "justfile"), "test", str(big)]
+    ran = s.run(gate_, env={**AGENT, "GATE_WORKERS": "2"})
+    out = ran.out + ran.err
+    assert "heavy slot: held: the heavy slot for lane gh7, run pid " in out, out
+    assert "(granted at once: the heavy slot free, queue empty)" in out, out
+    assert "32 passed" in out, out
+    st = holder(s)
+    assert "holder: gh7 (granted " in st, st
+    assert " by self w9:p3, " in st, st
+    # gh7's run holding the slot: a shell beside gh8's run, never its ancestor (else nested)
+    hold = ["sh", "-c", '"$@"; :', "sh", SLOT, "hold", "--kind", "heavy", "--items", "31"]
+    pipe = subprocess.PIPE
+    with subprocess.Popen(hold, env={**s.env, **AGENT}, stdin=pipe, stdout=pipe, text=True) as p:
+        assert p.stdout is not None
+        line = p.stdout.readline()
+        assert line.startswith("held: the heavy slot for lane gh7"), line
+        try:
+            no = s.run(gate_, want=REFUSED, env={**AGENT8, "GATE_WORKERS": "2"})
+        finally:
+            p.communicate()
+    out = no.out + no.err
+    for want in (
+        "lane gh8 holds no heavy grant; current holder: gh7 (granted ",
+        "lane gh8 queued for the heavy slot, position 1, by self w8:p3",
+        "(the static checks ran first, green; no other item ran)",
+    ):
+        assert want in out, out
+    assert " passed" not in out, out
+    queue = s.root / "state" / "octo-feather" / "slots" / "heavy.queue.json"
+    assert [q["lane"] for q in json.loads(queue.read_text())["queue"]] == ["gh8"]
+    told = (
+        "octo-feather-slot: lane gh8 queued for the heavy slot, position 1, by its run in w8:p3; "
+        "the slot passes to it as the queue rule says (octo-feather-slot --help) and you are told "
+        "then."
+    )
+    wait = ["--wait", "--until", "working", "--until", "idle", "--timeout", "60000"]
+    want = [["agent", "prompt", "w8:p1", told, *wait]]  # none to the director, w1:p1
+    assert said(s) == want, said(s)
+
+
 def two_sessions(s: Scratch) -> None:
     """Holder gh7 in the default session, gh8 queued from session sb: both notices go to sb."""
     world(s)
@@ -719,4 +785,5 @@ if __name__ == "__main__":
         queued_late,
         two_sessions,
         back_to_back,
+        self_asked,
     )

@@ -902,7 +902,7 @@ def eval_slot():
     if said.startswith(("held:", "free:", "nested:")):
         print(f"qa: eval slot: {said}", flush=True)
         return
-    print((said + (p.stdout.read() if p.stdout else "")).rstrip("\n"), file=sys.stderr)
+    print((said + "\n" + (p.stdout.read() if p.stdout else "")).rstrip("\n"), file=sys.stderr)
     sys.exit(p.wait() or 75)
 
 
