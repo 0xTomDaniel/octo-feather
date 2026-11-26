@@ -78,32 +78,4 @@ for role in "${roles[@]}"; do
   [[ "$got" == "$want" ]] || { echo "pi-role test: $role extensions are [$got], want [$want]" >&2; exit 1; }
 done
 
-# #175 (roles#fm-tools).
-# A fixture kit: the real scripts and skills, a director whose tools list codemode.
-mkdir -p "$t/kit/scripts" "$t/kit/.agents"
-cp "$kit/scripts/check-roles" "$kit/scripts/pi-role" "$t/kit/scripts/"; cp -r "$kit/agents" "$t/kit/"; cp "$kit/web-mcp.json" "$t/kit/"; cp -r "$kit/extensions" "$t/kit/"
-ln -s "$kit/.agents/skills" "$t/kit/.agents/skills"
-# #829: check-roles counts general-worker among its roles.
-out="$("$t/kit/scripts/check-roles" 2>"$t/cr")" || { echo "pi-role test: check-roles refused the kit's roles: $(cat "$t/cr")" >&2; exit 1; }
-[[ "$out" == "roles: ok (9 role files"* ]] || { echo "pi-role test: check-roles did not count 9 roles: $out" >&2; exit 1; }
-# Then each fault below planted in its own role file, and one check-roles run (it names every fault; the CPU budget,
-# #1323) must refuse and name each: a role listing codemode (#175), a role file not in ROLES (#829), an extension
-# that is no file name in extensions/, missing or a path, naming file and name (roles#fm-extensions), and a key
-# pi-role does not honour (roles#acceptance-unknown-key). pi-role refuses the launch of each bad extension too.
-sed -i 's/^tools: .*/tools: read, grep, find, ls, bash, codemode/' "$t/kit/agents/director.md"
-sed 's/^name: .*/name: stray/' "$kit/agents/general-worker.md" > "$t/kit/agents/stray.md"
-declare -A badext=([supervisor]=missing.ts [general-worker]=../extensions/results-on-wake.ts)
-sed "s|^extensions: .*|extensions: ${badext[supervisor]}|" "$kit/agents/supervisor.md" > "$t/kit/agents/supervisor.md"
-sed "/^skills: /a extensions: ${badext[general-worker]}" "$kit/agents/general-worker.md" > "$t/kit/agents/general-worker.md"
-sed '/^skills: /a bogus: x' "$kit/agents/corrector.md" > "$t/kit/agents/corrector.md"
-if "$t/kit/scripts/check-roles" >/dev/null 2>"$t/cr"; then echo "pi-role test: check-roles passed the planted faults" >&2; exit 1; fi
-grep -q 'agents/director.md: .*`codemode`.*pi-role adds it' "$t/cr" || { echo "pi-role test: check-roles did not name the file and codemode: $(cat "$t/cr")" >&2; exit 1; }
-grep -qF "agents/: role files ['stray'] are not in ROLES" "$t/cr" || { echo "pi-role test: check-roles did not name the stray role file: $(cat "$t/cr")" >&2; exit 1; }
-for role in "${!badext[@]}"; do
-  bad="${badext[$role]}"
-  grep -qF "agents/$role.md: extension \`$bad\` is no file name in extensions/" "$t/cr" || { echo "pi-role test: check-roles did not name $role.md and $bad: $(cat "$t/cr")" >&2; exit 1; }
-  if (cd "$t/gh1" && "$t/kit/scripts/pi-role" --json "$t/kit/agents/$role.md" >/dev/null 2>"$t/pr"); then echo "pi-role test: pi-role launched with extensions: $bad" >&2; exit 1; fi
-  grep -qF "extension '$bad' is no file in" "$t/pr" || { echo "pi-role test: pi-role did not name $bad: $(cat "$t/pr")" >&2; exit 1; }
-done
-grep -qF 'agents/corrector.md: field `bogus` is not one pi-role honours' "$t/cr" || { echo "pi-role test: check-roles did not name bogus: $(cat "$t/cr")" >&2; exit 1; }
-echo "pi-role: ok (repo skill from a lane worktree, home ignored, missing one warned; -p/--print child has no OCTO_FEATHER_PARENT or HERDR_PANE_ID/TAB_ID/WORKSPACE_ID, a pane launch keeps them; mise's shims before the system dirs in a mise.toml repo, none elsewhere or without mise (#261); #175 (roles#launch-codemode, roles#fm-tools); #829 general-worker launch, check-roles counts it and refuses a stray role file; roles#fm-extensions: results-on-wake.ts for director and supervisor only, every role's extensions unchanged, a missing or path extension refused by check-roles and pi-role, an unknown key still refused)"
+echo "pi-role: ok (repo skill from a lane worktree, home ignored, missing one warned; -p/--print child has no OCTO_FEATHER_PARENT or HERDR_PANE_ID/TAB_ID/WORKSPACE_ID, a pane launch keeps them; mise's shims before the system dirs in a mise.toml repo, none elsewhere or without mise (#261); #175 (roles#launch-codemode, roles#fm-tools); #829 general-worker launch; roles#fm-extensions: results-on-wake.ts for director and supervisor only, every role's extensions unchanged; check-roles and the bad role files: tests/check-roles.sh)"
