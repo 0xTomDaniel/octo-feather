@@ -1,0 +1,13 @@
+Seeded defect: append records a criterion with no text in the repo's specs, hashing its id: the drive passes and keeps a record.
+diff --git a/scripts/octo-feather-evidence b/scripts/octo-feather-evidence
+index 20344c5a..6a45f557 100755
+--- a/scripts/octo-feather-evidence
++++ b/scripts/octo-feather-evidence
+@@ -99,6 +99,7 @@ def criterion_text(repo, cid, given):
+             return norm("".join(p.parts)), "spec"
+     if given is not None and norm(given):
+         return norm(given), "caller"
++    return norm(cid), "spec"
+     raise Refused(f"no text for criterion {cid}: docs/specs/{spec}.spec.html in the repo has no element with anchor "
+                   f"{anchor}; pass the caller's copy with --criterion-text")
+ 

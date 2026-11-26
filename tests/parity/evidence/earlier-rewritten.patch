@@ -1,0 +1,20 @@
+Seeded defect: append marks the criterion's earlier records superseded, rewriting their record.json: the store is no longer append-only.
+diff --git a/scripts/octo-feather-evidence b/scripts/octo-feather-evidence
+index 20344c5a..92a316a5 100755
+--- a/scripts/octo-feather-evidence
++++ b/scripts/octo-feather-evidence
+@@ -197,6 +197,14 @@ def append(a):
+         if os.path.exists(final):
+             raise Refused(f"record {rid} already exists; append again")
+         os.rename(stage, final)
++        for old in os.listdir(os.path.dirname(final)):
++            p = os.path.join(os.path.dirname(final), old, "record.json")
++            if old != rid:
++                r = json.load(open(p))
++                r["superseded_by"] = rid
++                os.chmod(p, 0o644)
++                with open(p, "w") as fh:
++                    json.dump(r, fh, indent=2, sort_keys=True)
+     finally:
+         if os.path.exists(stage):
+             shutil.rmtree(stage)

@@ -5,28 +5,40 @@ from the kit's pnpm store (CI's pnpm step fills it; one store, owner ruling #422
 An empty pnpm store fails naming the fetch command, never reaching the network (--offline); the
 kit's package.json and lockfile in a dir on another filesystem than the kit's (/dev/shm, a tmpfs,
 where the box has one; else TMPDIR) install offline from the kit's store; a type error and a
-lint violation added to an extension fail naming each file and line; eslint's baseline only
-shrinks: one more `any` in extensions/spend-ledger.ts fails naming its line, and, alone, a fixed
+lint violation added to a new file fail naming each file and line; eslint's baseline only
+shrinks: one more `any` in a baselined file fails naming its line, and, alone, a fixed
 violation leaves an unused suppression that fails naming --prune-suppressions. The clean copy
 passing is the kit gate's own check-ts item (tests/gate/test_gate.py, test_recipe): each failing
-case names its own lines, so none passes on a copy broken some other way. Each run lints the
-kit's TypeScript with typed eslint, the cost floor: two such runs, as eslint reports unused
-suppressions only in a run with no other finding.
+case names its own lines, so none passes on a copy broken some other way. The findings and
+unused-suppression cases run on the shared installed copy (testkit installed_kit),
+tsconfig.json's include narrowed to the files each probes (Copy.only): two typed eslint runs, as
+eslint reports unused suppressions only in a run with no other finding.
 """
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-from testkit import FIXTURES, ROOT, Ran, Scratch, main, pnpm_store, tool_homes
+from testkit import (
+    FIXTURES,
+    ROOT,
+    Ran,
+    Scratch,
+    installed_kit,
+    main,
+    pnpm_store,
+    tool_homes,
+    tracked,
+)
 from testkit.template import uncoloured
 
-EXT = "extensions/resume-on-error.ts"
-LEDGER = "extensions/spend-ledger.ts"
+PROBE = "probe.ts"  # a new file in the copy, never baselined
+NESTED = "tests/fixtures/spend-ledger/nested-tool.ts"  # baselined in eslint-suppressions.json
 
 
 def tool(name: str) -> str:
@@ -37,26 +49,31 @@ def tool(name: str) -> str:
 
 
 class Copy:
-    """The kit's tracked files under SCRATCH/kit, the kit's pnpm store named for every command."""
+    """The kit's tracked files under SCRATCH/kit, the kit's pnpm store named for every command;
+    INSTALLED, its node_modules installed too (testkit installed_kit, prepared once per gate
+    run)."""
 
-    def __init__(self, s: Scratch) -> None:
+    def __init__(self, s: Scratch, *, installed: bool = False) -> None:
         self.s = s
-        self.dir = s.root / "kit"
-        self.dir.mkdir()
-        files = subprocess.run(
-            [tool("git"), "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True
-        ).stdout
-        tar = subprocess.run(  # a tracked file deleted in the worktree is skipped
-            [tool("tar"), "-cf", "-", "--null", "--ignore-failed-read", "-T", "-"],
-            cwd=ROOT,
-            input=files,
-            capture_output=True,
-            check=False,
-        ).stdout
-        subprocess.run([tool("tar"), "-xf", "-"], cwd=self.dir, input=tar, check=True)
-        self.store = pnpm_store()  # the caller's HOME finds it, never the scratch HOME
-        s.env |= tool_homes() | {"npm_config_store_dir": self.store}
+        if installed:
+            self.dir = installed_kit(s)
+        else:
+            self.dir = s.root / "kit"
+            tracked(self.dir)
+            store = pnpm_store()  # the caller's HOME finds it, never the scratch HOME
+            s.env |= tool_homes() | {"npm_config_store_dir": store}
         uncoloured(s)  # eslint's stylish rows and tsc's lines read here
+
+    def only(self, *rels: str) -> None:
+        """The copy's tsconfig.json include narrowed to RELS, with no ambient types (RELS import
+        no package), so tsc and eslint check only them, cheaply."""
+        cfg = self.dir / "tsconfig.json"
+        text = cfg.read_text()
+        for old, new in (('"include": ["**/*"]', f'"include": {json.dumps(list(rels))}'),
+                         ('"types": ["node"]', '"types": []')):  # fmt: skip
+            assert old in text, f"no {old} in {cfg}"
+            text = text.replace(old, new)
+        cfg.write_text(text)
 
     def check_ts(self, **env: str) -> Ran:
         p = subprocess.run(
@@ -123,25 +140,30 @@ def other_fs(s: Scratch) -> None:
 
 
 def findings(s: Scratch) -> None:
-    """A type error and a lint violation in the extension, and one more `any` in baselined
-    spend-ledger.ts: one run names each by file and line."""
-    c = Copy(s)
-    n = c.append(EXT, 'export const typeProbe: number = "x";\n')
-    c.append(EXT, "export function lintProbe(x: any): unknown { return x; }\n")
-    m = c.append(LEDGER, "export function probe(x: any): unknown { return x; }\n")
+    """A type error and a lint violation in a new file, and one more `any` in baselined
+    nested-tool.ts: one run names each by file and line. Only those two files in tsconfig.json,
+    so tsc and eslint stay cheap."""
+    c = Copy(s, installed=True)
+    c.only(PROBE, NESTED)
+    (c.dir / PROBE).write_text("export const probe = 1;\n")
+    n = c.append(PROBE, 'export const typeProbe: number = "x";\n')
+    c.append(PROBE, "export function lintProbe(x: any): unknown { return x; }\n")
+    m = c.append(NESTED, "export function probe(x: any): unknown { return x; }\n")
     got = c.check_ts()
     assert got.rc != 0, f"a type error and lint violations passed: {got.out}"
-    for want in (f"{EXT}({n},14): error TS2322", "check-ts: fix each tsc error above"):
+    for want in (f"{PROBE}({n},14): error TS2322", "check-ts: fix each tsc error above"):
         assert want in got.out, got.out
-    named(c, got.out, EXT, n + 1)
-    named(c, got.out, LEDGER, m)
+    named(c, got.out, PROBE, n + 1)
+    named(c, got.out, NESTED, m)
 
 
 def unused_suppression(s: Scratch) -> None:
     """Only an unused suppression (a fixed violation in the fixture): fails naming
-    --prune-suppressions."""
-    c = Copy(s)
-    f = c.dir / "tests" / "fixtures" / "spend-ledger" / "nested-tool.ts"
+    --prune-suppressions. Only that file in tsconfig.json, so tsc and eslint stay cheap, and
+    eslint reports suppressions only for the files it lints."""
+    c = Copy(s, installed=True)
+    c.only(NESTED)
+    f = c.dir / NESTED
     text = f.read_text()
     assert "    async execute() {" in text, f"no async execute() in {f}"
     f.write_text(text.replace("    async execute() {", "    execute() {"))

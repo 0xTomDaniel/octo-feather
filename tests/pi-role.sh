@@ -36,15 +36,17 @@ done
 # #261: agent shells are non-interactive, so in a repo with its own mise.toml pi-role places mise's shims dir (mise's
 # own answer) just before the caller PATH's first system dir: the caller's earlier dirs (here $t/bin, the stub pi)
 # still win. In a repo without one (a repo the kit did not create, here gh1) and with no mise on PATH, PATH is left
-# as it was. The PATHs are fixed here, so an empty entry in the caller's PATH cannot change the comparison.
-shims="$(mise doctor --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["dirs"]["shims"])')"
+# as it was. The PATHs are fixed here, so an empty entry in the caller's PATH cannot change the comparison. In each,
+# the stash guard's dir ($g) where pi-role places it (pi-role --help, Stash guard).
+shims="$(mise doctor --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["dirs"]["shims"])')"; g="$kit/scripts/stash-guard"
 mkdir -p "$t/mbin"; ln -s "$(command -v mise)" "$t/mbin/mise"
-grep -qxF "PATH=$t/bin:$PATH" "$t/env.pane" || { echo "pi-role test: child PATH in a repo without mise.toml changed: $(grep ^PATH= "$t/env.pane")" >&2; exit 1; }
+grep -qF ":$g:" "$t/env.pane" || { echo "pi-role test: child PATH in a repo without mise.toml lacks the stash guard $g: $(grep ^PATH= "$t/env.pane")" >&2; exit 1; }
+grep -qxF "PATH=$t/bin:$PATH" <(sed "s|:$g:|:|" "$t/env.pane") || { echo "pi-role test: child PATH in a repo without mise.toml changed: $(grep ^PATH= "$t/env.pane")" >&2; exit 1; }
 git init -q "$t/made"; printf '[tools]\n' >"$t/made/mise.toml"
 (cd "$t/made" && env PATH="$t/bin:$t/mbin:/usr/local/bin:/usr/bin:/bin" PI_ENV_OUT="$t/env.made" "$kit/scripts/pi-role" "$kit/agents/implementer.md" 2>/dev/null)
-grep -qxF "PATH=$t/bin:$t/mbin:$shims:/usr/local/bin:/usr/bin:/bin" "$t/env.made" || { echo "pi-role test: child PATH in a mise.toml repo lacks mise's shims $shims before the system dirs, after the caller's: $(grep ^PATH= "$t/env.made")" >&2; exit 1; }
+grep -qxF "PATH=$t/bin:$t/mbin:$g:$shims:/usr/local/bin:/usr/bin:/bin" "$t/env.made" || { echo "pi-role test: child PATH in a mise.toml repo lacks mise's shims $shims before the system dirs, after the caller's: $(grep ^PATH= "$t/env.made")" >&2; exit 1; }
 (cd "$t/made" && env PATH="$t/bin:/usr/bin:/bin" PI_ENV_OUT="$t/env.nomise" "$kit/scripts/pi-role" "$kit/agents/implementer.md" 2>/dev/null)
-grep -qx "PATH=$t/bin:/usr/bin:/bin" "$t/env.nomise" || { echo "pi-role test: without mise, child PATH changed: $(grep ^PATH= "$t/env.nomise")" >&2; exit 1; }
+grep -qxF "PATH=$t/bin:$g:/usr/bin:/bin" "$t/env.nomise" || { echo "pi-role test: without mise, child PATH changed: $(grep ^PATH= "$t/env.nomise")" >&2; exit 1; }
 # #175 (roles#launch-codemode, roles#acceptance-codemode-every-role).
 # #262 (roles#launch-web): a web role's tab args add the kit's two web servers and drop --no-mcp.
 ro=read,grep,find,ls,bash,codemode; rw=read,grep,find,ls,bash,edit,write,codemode

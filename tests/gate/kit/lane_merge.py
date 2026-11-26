@@ -33,6 +33,7 @@ STEPS = (
     "main CI",
     "kit refresh",
     "checkout",
+    "coverage map",
     "stale agents",
     "tell supervisors",
     "teardown",
@@ -154,9 +155,9 @@ def merge_starts_routine(s: Scratch) -> None:
     record's lane key gh70 (71 then 70 closed), leaves the kit install and the director's checkout
     at the merge commit, tells lane gh8's supervisor main moved (not gh7's own) through the
     guard of the supervisor's environment, that line and its prod line in the director log naming
-    the post-merge routine of lane gh7 as sender, and prints steps 1-6 ok and step 7 pending;
+    the post-merge routine of lane gh7 as sender, and prints steps 1-7 ok and step 8 pending;
     exit 0. The only gh writes: the merge and the two closes. `post-merge --lane gh7` then prints
-    the record: PR, head and merge commit, steps 1-6 ok and step 7 pending. The guard still holds
+    the record: PR, head and merge commit, steps 1-7 ok and step 8 pending. The guard still holds
     for the supervisor's own send: its `herdr-say zt2:p1 ...` exits 77, nothing delivered."""
     w = World(s)
     lane = w.lane
@@ -170,11 +171,11 @@ def merge_starts_routine(s: Scratch) -> None:
     out = r.out.split("\n")
     assert out[0] == "merged: PR #7 at head 1234567890ab (lane gh7)", r.out
     assert out[1:4] == ["71: done", "70: done", "70: parent and 1 tickets done"], r.out
-    for n, name in enumerate(STEPS[:6], 1):
+    for n, name in enumerate(STEPS[:7], 1):
         assert any(x.startswith(f"step {n} {name}: ok: ") for x in out), f"step {n}: {r.out}"
-    pending = "step 7 teardown: pending: lane gh7 not archived; its archive starts this step"
+    pending = "step 8 teardown: pending: lane gh7 not archived; its archive starts this step"
     assert pending in out, r.out
-    assert out[-1].endswith("step 6 tell supervisors ok; step 7 teardown pending"), r.out
+    assert out[-1].endswith("step 7 tell supervisors ok; step 8 teardown pending"), r.out
     assert lane.head() == m, f"kit install at {lane.head()}, not the merge commit"
     assert lane.where() == (m, "main"), f"checkout at {lane.where()}"
     told = w.told()
@@ -198,8 +199,8 @@ def merge_starts_routine(s: Scratch) -> None:
     record = w.st / "post-merge" / "gh7.json"
     want = f"post-merge record gh7: PR #7, head {H}, merge commit {m} ({record})"
     assert head == want, head
-    ok = [f"{n} {name} ok" for n, name in enumerate(STEPS[:6], 1)]
-    assert outcomes(shown) == [*ok, "7 teardown pending"], shown
+    ok = [f"{n} {name} ok" for n, name in enumerate(STEPS[:7], 1)]
+    assert outcomes(shown) == [*ok, "8 teardown pending"], shown
 
 
 def resume(s: Scratch) -> None:
@@ -208,7 +209,7 @@ def resume(s: Scratch) -> None:
     gh70): merged, its done step refuses naming both keys, closing nothing, and step 3 stops before
     the install moves, exit 1. Cleaned, `post-merge 7 H --lane gh7` resumes at step 3: steps 1 and 2
     print their recorded lines, not rerun (no PR read for step 1, no run list for step 2 in the
-    fake gh's log), steps 3-6 run, step 7 pending, exit 3; the record shows 1-6 ok, 7 pending."""
+    fake gh's log), steps 3-7 run, step 8 pending, exit 3; the record shows 1-7 ok, 8 pending."""
     w = World(s)
     lane = w.lane
     t = lane.target
@@ -236,8 +237,8 @@ def resume(s: Scratch) -> None:
     assert not [x for x in log if x.startswith(("pr view 7 --json state,", "run "))], log
     assert any(x.startswith("step 3 kit refresh: ok: kit install ") for x in out), r.out
     assert lane.head() == lane.m, "install not moved on the resume"
-    ok = [f"{n} {name} ok" for n, name in enumerate(STEPS[:6], 1)]
-    assert outcomes(w.shown()) == [*ok, "7 teardown pending"], w.shown()
+    ok = [f"{n} {name} ok" for n, name in enumerate(STEPS[:7], 1)]
+    assert outcomes(w.shown()) == [*ok, "8 teardown pending"], w.shown()
 
 
 def refused(s: Scratch) -> None:
