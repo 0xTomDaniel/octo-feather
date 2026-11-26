@@ -350,7 +350,8 @@ class Box:
     def started(self) -> bool:
         """Whether acceptance-a's demo ran, by the newest report (its capture's exit)."""
         caps = self.report("captures")
-        return isinstance(caps, list) and bool(caps) and at(caps, 0, "exit") is not None
+        ran = caps != [] and self.report("captures", 0, "exit") is not None
+        return isinstance(caps, list) and ran
 
     def judge(self) -> str:
         """The demo's stdout and stderr, from its evidence record (the newest report names it)."""

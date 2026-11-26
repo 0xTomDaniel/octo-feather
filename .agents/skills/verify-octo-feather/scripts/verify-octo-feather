@@ -2350,8 +2350,10 @@ def drive_qc_fallback(f: Feature) -> None:
         f.obs(name, "built", statuses())
 
     def short(c: Case) -> bool:   # acceptance-b: insufficient evidence naming neither, nothing judged, no fallback key
-        rep = json.loads(c.o["report"])
-        b = next((x for x in rep.get("results", []) if x.get("id") == "acceptance-b"), {})
+        rep: dict[str, Any] = json.loads(c.o["report"])
+        results: list[dict[str, Any]] = rep.get("results", [])
+        none: dict[str, Any] = {}
+        b = next((x for x in results if x.get("id") == "acceptance-b"), none)
         return (c.code == 2 and re.search(r"(?m)^INSUFFICIENT EVIDENCE acceptance-b: .*" + re.escape(neither), c.out + "\n") is not None
                 and not re.search(r"pi-role|qc-judge|agent fallback", c.err) and "fallback" not in rep and "cap_s" not in rep
                 and b.get("record") is None and b.get("missing") == ["no tagged acceptance test and no declared demo"])
