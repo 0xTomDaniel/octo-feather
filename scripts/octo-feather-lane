@@ -809,6 +809,7 @@ from typing import Any, cast
 # Kit modules, .py files beside this script, found through its own directory (symlinks resolved) on sys.path: from any
 # cwd and through a symlink (scripts/correction_lanes.py docstring). correction_lanes is the correction filer.
 import merge_ask
+from kit_env import kit_python
 from merge_ask import (BUDGET, CHECK_SHAPE, COMMENT_URL, HEAD_LINE, MARKER, OWNED,
                        budget_lines, budget_parse, check_lines, markdown, numbered_jsonl, outside,
                        passed_full, stamp, verdicts)
@@ -1582,8 +1583,7 @@ def workflow_jobs(head: str, path: str) -> int | None:
     try:
         count = ("import sys, yaml; w = yaml.safe_load(sys.stdin); j = w.get('jobs') if isinstance(w, dict) else None; "
                  "print(len(j) if isinstance(j, dict) else '')")
-        p = subprocess.run(["uv", "run", "--project", str(KIT), "--locked", "--offline", "--no-dev", "--quiet", "python", "-c", count],
-                           input=text, capture_output=True, text=True, check=False)
+        p = kit_python("-c", count, stdin=text, capture=True)
     except FileNotFoundError:
         raise Refuse("uv not on PATH: it runs the kit's locked environment that reads the workflow (just install-check)")
     out = p.stdout.strip()
