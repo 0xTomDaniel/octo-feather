@@ -1,0 +1,12 @@
+# The parity lever's case for tests/evidence.sh, its drives moved from each template's whole app to the one-step
+# contract fixture tests/fixtures/evidence (#1292; tests/parity/lever.py --help).
+old = "tests/evidence.sh"
+old_at = "32130e87"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
+needs = ["tests/lib/prepared.py"]
+new = "tests/gate/test_gate.py::test_script[tests/evidence.sh]"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: each template's verify-app
+# runs it as its program, under python3 by its shebang.
+[ran]
+"scripts/octo-feather-evidence" = "exec scripts/octo-feather-evidence"
