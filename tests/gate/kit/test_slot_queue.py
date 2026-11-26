@@ -9,7 +9,6 @@ queues its lane and says its place, the director told nothing (quality #recipes-
 (tests/gate/conftest.py, qc_command); the criteria's tagged case is tests/gate/kit/test_slot.py's
 test_self_asked."""
 
-import json
 import os
 from pathlib import Path
 
@@ -240,16 +239,8 @@ def test_self_queue(tmp_path: Path) -> None:
         "then."
     )
     assert o.steps == (Line(refusal), Notice("w9:p1", "", told)), o.steps
-    queued = json.loads((tmp_path / "slots" / "heavy.queue.json").read_text())["queue"]
-    assert queued == [
-        {
-            "lane": "gh7",
-            "since": "2027-01-15T08:00:02Z",
-            "by": "self w9:p3",
-            "lanes": str(lanes),
-            "session": "sb",
-        }
-    ]
+    entry = "  queue: 1. gh7 (queued 2027-01-15T08:00:02Z by self w9:p3)"  # the one entry
+    assert q.status()[3] == entry, q.status()
     again = ask(q, lanes, pane="w9:p1")  # the supervisor's own run: no message to itself
     assert isinstance(again, Outcome), again
     assert again.code == 75, again
@@ -261,9 +252,8 @@ def test_self_queue(tmp_path: Path) -> None:
             )
         ),
     ), again.steps
-    assert len(json.loads((tmp_path / "slots" / "heavy.queue.json").read_text())["queue"]) == 1
     st = q.status()
-    assert st[3] == "  queue: 1. gh7 (queued 2027-01-15T08:00:02Z by self w9:p3)", st
+    assert st[3] == entry, st  # still the one entry
     assert st[-1] == (
         "  last: 2027-01-15T08:00:02Z heavy: lane gh7 queued, position 1, by self w9:p3"
     ), st

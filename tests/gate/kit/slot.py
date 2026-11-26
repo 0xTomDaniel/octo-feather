@@ -15,12 +15,13 @@ self_asked (quality #acceptance-slot-self-grant, #acceptance-slot-self-queue): t
 `just test` over a suite with one green static check (the gate's node id) and 31 items, gh7's
 implementer, no grant, the slot free and nobody queued: its run says the slot was granted to gh7
 at once and runs its tests. While gh7's run holds it, gh8's implementer's run stops after its
-green static check (exit 75, no other item run) saying gh8 queued and its place, which the queue
-file holds; gh8's supervisor is told the place, the director's pane nothing.
+green static check (exit 75, no other item run) saying gh8 queued and its place, which status
+shows as its one entry; gh8's supervisor is told the place, the director's pane nothing.
 self_grant_ends (quality #acceptance-slot-self-grant-ends, #1327): through `just test`, gh7's
-implementer's run, granted at once, ends red; a grace later gh8's implementer's run is granted
-the slot at once and runs its tests; after gh7's hold, granted at once, is killed (no end
-recorded), gh8's next run is granted at once with no grace waited; nobody told.
+implementer's run, granted at once, ends red; once its hold is gone (the grace 0, so no wall
+clock: the grace's own timing is tests/gate/kit/test_slot_queue.py's self_grant_ends) gh8's
+implementer's run is granted the slot at once and runs its tests; after gh7's hold, granted at
+once, is killed (no end recorded), gh8's next run is granted at once; nobody told.
 sandboxed: a 31-item run inside the qc sandbox (a `just qc` demo, as qa runs its cases there)
 from that same ungranted agent runs.
 
@@ -53,7 +54,6 @@ no earlier run's end inherited, so nothing passes."""
 
 from __future__ import annotations
 
-import json
 import os
 import shutil
 import subprocess
@@ -704,54 +704,56 @@ def just_test(s: Scratch, name: str, extra: str = "") -> list[str]:
 
 
 def self_asked(s: Scratch) -> None:
-    world(s)
-    s.env |= {"OCTO_FEATHER_SLOT_GRACE": str(WAIT_S)}  # gh7's self-grant outlives its run here
+    world(s)  # grace 0: a self-grant ends at the first check after its run (#1327)
     gate_ = just_test(s, "big")
     ran = s.run(gate_, env={**AGENT, "GATE_WORKERS": "2"})
     out = ran.out + ran.err
     assert "heavy slot: held: the heavy slot for lane gh7, run pid " in out, out
     assert "(granted at once: the heavy slot free, queue empty)" in out, out
     assert "32 passed" in out, out
-    st = holder(s)
-    assert "holder: gh7 (granted " in st, st
-    assert " by self w9:p3, " in st, st
+    unheld(s)  # the gate's hold gone (it outlives pytest by its release), its grant with it
     # gh7's run holding the slot: a shell beside gh8's run, never its ancestor (else nested)
     hold = ["sh", "-c", '"$@"; :', "sh", SLOT, "hold", "--kind", "heavy", "--items", "31"]
     pipe = subprocess.PIPE
-    with subprocess.Popen(hold, env={**s.env, **AGENT}, stdin=pipe, stdout=pipe, text=True) as p:
-        assert p.stdout is not None
-        line = p.stdout.readline()
-        assert line.startswith("held: the heavy slot for lane gh7"), line
-        try:
-            no = s.run(gate_, want=REFUSED, env={**AGENT8, "GATE_WORKERS": "2"})
-        finally:
-            p.communicate()
-    out = no.out + no.err
-    for want in (
-        "lane gh8 holds no heavy grant; current holder: gh7 (granted ",
-        "lane gh8 queued for the heavy slot, position 1, by self w8:p3",
-        "(the static checks ran first, green; no other item ran)",
-    ):
-        assert want in out, out
-    assert " passed" not in out, out
-    queue = s.root / "state" / "octo-feather" / "slots" / "heavy.queue.json"
-    assert [q["lane"] for q in json.loads(queue.read_text())["queue"]] == ["gh8"]
     told = (
         "octo-feather-slot: lane gh8 queued for the heavy slot, position 1, by its run in w8:p3; "
         "the slot passes to it as the queue rule says (octo-feather-slot --help) and you are told "
         "then."
     )
     wait = ["--wait", "--until", "working", "--until", "idle", "--timeout", "60000"]
-    want = [["agent", "prompt", "w8:p1", told, *wait]]  # none to the director, w1:p1
-    assert said(s) == want, said(s)
+    with subprocess.Popen(hold, env={**s.env, **AGENT}, stdin=pipe, stdout=pipe, text=True) as p:
+        assert p.stdout is not None
+        line = p.stdout.readline()
+        assert line.startswith("held: the heavy slot for lane gh7"), line
+        try:
+            st = holder(s)
+            assert "holder: gh7 (granted " in st, st
+            assert " by self w9:p3, " in st, st
+            no = s.run(gate_, want=REFUSED, env={**AGENT8, "GATE_WORKERS": "2"})
+            # while gh7 holds the slot, so nothing passes yet: gh8 queued once, by its own run
+            queue = holder(s).splitlines()[-1]  # its one entry: `; 2. ...` follows a second
+            assert queue.startswith("  queue: 1. gh8 (queued "), queue
+            assert queue.endswith(" by self w8:p3)"), queue
+            assert ";" not in queue, queue
+            want = [["agent", "prompt", "w8:p1", told, *wait]]  # none to the director, w1:p1
+            assert said(s) == want, said(s)
+        finally:
+            p.communicate()
+    out = no.out + no.err
+    for want_ in (
+        "lane gh8 holds no heavy grant; current holder: gh7 (granted ",
+        "lane gh8 queued for the heavy slot, position 1, by self w8:p3",
+        "(the static checks ran first, green; no other item ran)",
+    ):
+        assert want_ in out, out
+    assert " passed" not in out, out
 
 
 RED = "def test_red():\n    assert False\n"
 
 
 def self_grant_ends(s: Scratch) -> None:
-    world(s)
-    s.env |= {"OCTO_FEATHER_SLOT_GRACE": str(GRACE)}
+    world(s)  # grace 0: the grace is over at the first check after a run (no wall clock)
     red, green = just_test(s, "red", RED), just_test(s, "green")
     at_once = "(granted at once: the heavy slot free, queue empty)"
     ran = s.run(red, want=1, env={**AGENT, "GATE_WORKERS": "2"})
@@ -759,7 +761,7 @@ def self_grant_ends(s: Scratch) -> None:
     assert "heavy slot: held: the heavy slot for lane gh7, run pid " in out, out
     assert at_once in out, out
     assert "1 failed" in out, out  # red: the gate stops at its first failure
-    time.sleep(GRACE + 0.5)  # the grace after gh7's red run, no run of gh7 since
+    unheld(s)  # gh7's hold gone, its end recorded; no run of gh7 since
 
     def takes_at_once(lane: str, env: dict[str, str]) -> None:
         ran = s.run(green, env={**env, "GATE_WORKERS": "2"})
@@ -769,7 +771,7 @@ def self_grant_ends(s: Scratch) -> None:
         assert "32 passed" in out, out
 
     takes_at_once("gh8", AGENT8)
-    time.sleep(GRACE + 0.5)  # gh8's self-grant ends too
+    unheld(s)  # gh8's self-grant ends too, at the next check
     killed = holding(s)  # gh7's run granted at once, then its hold killed: no end recorded
     killed.kill()
     killed.wait(timeout=WAIT_S)
