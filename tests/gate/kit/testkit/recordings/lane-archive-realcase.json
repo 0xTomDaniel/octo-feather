@@ -74,7 +74,7 @@
    "repo": "0xTomDaniel/octo-feather-realcase",
    "command": "gh pr list --base gh10 --state open --json number -R 0xTomDaniel/octo-feather-realcase",
    "date": "2026-11-24",
-   "caller": "the teardown unit (systemd-run, step 7), 2026-11-24T21:48:22.128557+00:00"
+   "caller": "the teardown unit (systemd-run, the routine's teardown step), 2026-11-24T21:48:22.128557+00:00"
   }
  }
 ]

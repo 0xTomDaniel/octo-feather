@@ -70,7 +70,7 @@ and the move as above; then it records its part in the lane's post-merge record 
 counts, the correction lane lines, the tickets done and what is left open and where, as issue-view (of the tracker key
 of the record's `issue`, as merge's done step maps it, below), `gh pr list
 --base <lane-key>` and the Spec Chat registries read them then, and every line it printed). Its last act starts
-step 7 in one transient unit outside the lane's workspace, as herdr-close stops every process of the closed pane's
+step 8 in one transient unit outside the lane's workspace, as herdr-close stops every process of the closed pane's
 agent scope (herdr-comms herdr_scope.py close): `systemd-run --user --unit=octo-feather-teardown-<lane>`, never a
 service or timer, running `post-merge PR HEAD --lane <lane>` in the director's checkout (`git worktree list`, first
 entry) with the archive's environment, bounded by RuntimeMaxSec 900, its lines appended to
@@ -565,7 +565,7 @@ merge policy. In order, each refusal before the merge exit 1 on stderr, nothing 
            routine still runs
   routine  the post-merge routine for the lane, PR and HEAD (below), its lines and summary as `post-merge` prints
            them, its record written
-Exit 0 when merged, done, and steps 1-6 ok (step 7 pending or ok); 1 otherwise. A merged lane's routine resumes
+Exit 0 when merged, done, and steps 1-7 ok (step 8 pending or ok); 1 otherwise. A merged lane's routine resumes
 with `post-merge PR HEAD --lane <name>`.
 
   octo-feather-lane post-merge PR HEAD --lane NAME [--wait SECONDS] [--repo O/R]
@@ -575,18 +575,21 @@ with `post-merge PR HEAD --lane <name>`.
   octo-feather-lane post-merge --lane NAME --unit-end [--repo O/R]
                                    the teardown unit's stop hook (archive, above): its end recorded, then the
                                    director told (below)
+  octo-feather-lane post-merge --map-job [--unit-run]
+  octo-feather-lane post-merge --map-end
+                                   step 5's map job, run in its unit, and its stop hook (step 5, below)
 
 `post-merge` is the routine after a lane merges (owner ruling 2026-10-29 on issue 206; docs/adr/0008 Duties): `merge`
-(above) runs it; `archive` (above) runs it for step 7 in its teardown unit; the director reruns it after a stop. The
+(above) runs it; `archive` (above) runs it for step 8 in its teardown unit; the director reruns it after a stop. The
 director's message (issue 1134): a run that stops tells the director's pane (director.toml) the stop, `post-merge
 <lane> PR #<n> stopped: step <n> <name> stopped: <line>; fix it, then rerun ...` (the run's --repo kept, and its --wait when not 300); a run whose steps are
 all ok, on a record the archive recorded its part in, sends the one message for the merge: the summary, tickets done, left open,
 reflection findings, correction lanes, left on disk on purpose (the teardown's kept items) and the teardown line,
 ` | ` between them; a teardown unit that ended before its routine finished (killed, timed out) tells that. Each
 once: the record's told keeps what was told (the end, or the stop's line), and a run telling it again sends nothing
-(`director already told`). Sent as step 6 sends (herdr-say --timeout 20, killed 15 s past); a failed send prints
+(`director already told`). Sent as step 7 sends (herdr-say --timeout 20, killed 15 s past); a failed send prints
 `director NOT told: <why>; re-send by hand: herdr-say ...` (no pane in director.toml: DIRECTOR_PANE and where
-to find it), exit 1, nothing recorded. Every send of the routine (step 6, the director's messages, the teardown
+to find it), exit 1, nothing recorded. Every send of the routine (step 7, the director's messages, the teardown
 unit's end) is the routine's own, not its caller's: herdr-say runs without the caller's OCTO_FEATHER_ROLE and
 OCTO_FEATHER_PARENT, so the up-chain guard of the supervisor whose pane runs merge or archive does not refuse it
 (#1249; docs/adr/0015 holds for that supervisor's own herdr-say). One run of a lane at a
@@ -594,7 +597,7 @@ time: a second waits for the first (a lock per lane). Each run records each step
 time, in the lane's record, $(octo-feather-state)/post-merge/<lane>.json (its form: scripts/post_merge.py). A rerun for the same merge (its PR, and a
 head one of the two is a prefix of) runs no step recorded ok before the first one not ok: each prints its recorded
 line as `step <n> <name>: ok: <what> (recorded <time>, not rerun)`, and the routine resumes at the first step not
-ok; a record of another merge is replaced. Each step is idempotent, and step 6 tells no lane twice. With only
+ok; a record of another merge is replaced. Each step is idempotent, and step 7 tells no lane twice. With only
 --lane NAME it prints the lane's record: `post-merge record <lane>: PR #<n>, head <head>, merge commit <sha> (<file>)`,
 then per step `step <n> <name>: <outcome> at <time>: <line>` or `step <n> <name>: not run`, then, when recorded,
 `teardown unit <name> (<how>): started <time>, ended <time>: <result> (<status>)` (`running or ended unrecorded`
@@ -643,9 +646,39 @@ before its end) and `director told: <each>`; exit 0, 1 with no or an unreadable 
                    a branch other than the PR's base or a detached HEAD (`is on <branch>, not <base>`), or diverged
                    from the merge commit; one behind it on the base fast-forwards (`git merge --ff-only`), one at
                    or past it does not move. `git fetch origin` only when the merge commit is missing there
-  step 5 stale agents  `stale`'s report (below), its lines joined by `; `; always ok: it never stops the routine,
+  step 5 coverage map  where the repo builds a coverage map (`just --summary` in step 4's checkout names a fast-map
+                   recipe; else `coverage map: skipped: <checkout> has no fast-map recipe (just --summary)`),
+                   its map for the merge commit is built by the clone's one map job, never waited for (quality
+                   #acceptance-map-after-merge, #acceptance-map-full-daily, #acceptance-map-build-failed). The
+                   map dir, <git common dir>/octo-feather/fast-map/ (octo-feather-gate --help, map), holds its
+                   record, build.json (its form: scripts/post_merge.py, step 5), under build.lock. Its line:
+                   `coverage map: already done: <map file>` when the merge's map exists; `already started` or
+                   `already queued` when the record has that merge; `queued: <m>, after unit <unit>'s build
+                   of <r>[, replacing queued <q>, never mapped]` while a build runs (one merge queued at
+                   most, a newer one replacing it); else `started: unit <unit> (<how>, limit 3600s, its lines
+                   in <map dir>/build.log) builds the map for <m>; the routine goes on without it`. The job
+                   is one transient unit per clone, octo-feather-fast-map-<clone id> (the teardown unit's
+                   start: `systemd-run --user`, RuntimeMaxSec 3600, ExecStopPost `post-merge --map-end`;
+                   where no systemd user manager answers, its own session, `post-merge --map-job
+                   --unit-run`, killed past the same limit, then the same end), cwd the checkout, running
+                   `post-merge --map-job`: at the lowest processor and disk priority (nice 19, ionice
+                   idle), and only once a fast-run turn is free (no fast run waiting for one: the slots
+                   dir's fast-I.lock, octo-feather-slot --help, Files), in a scratch worktree at the merge
+                   commit (`git worktree add --detach` in the map dir, removed at the build's end) it runs
+                   `just fast-map --since-newest` (re-mapping only the test items changed since the newest
+                   map: the justfile's fast-map), or a full `just fast-map` when the record holds no full
+                   map built less than a day before that is still an ancestor's map: a fast-tier run, no
+                   heavy slot. It then builds the queued merge, if any, and ends. Each build's end goes in
+                   the record (last: merge, result, why, items run, mapped, not passed, wall, CPU). A build
+                   that writes no map for its merge (just failed, killed, timed out, the unit not started)
+                   leaves every map as it was, so select keeps the previous one, and tells the merge's
+                   lane's director once (`coverage map build for <m> (lane <lane>, PR #<n>) failed: <why>;
+                   ...`, as the routine's stops are told); a unit ended while building has that recorded
+                   by its stop hook, its scratch worktree removed and the queued merge dropped. Always ok:
+                   it never stops the routine
+  step 6 stale agents  `stale`'s report (below), its lines joined by `; `; always ok: it never stops the routine,
                    and a Herdr it cannot read is named in its line (`stale agents: not read: ...`)
-  step 6 tell supervisors  each open lane record but --lane's, of the PR's repo (every lane when the PR is the kit
+  step 7 tell supervisors  each open lane record but --lane's, of the PR's repo (every lane when the PR is the kit
                    install's origin repo: every lane runs kit roles), whose supervisor pane `herdr agent get` finds
                    gets one herdr-say: "main moved to <merge sha12> (#PR <title>); rule files changed: <list or
                    none>; re-read the changed ones before your next step. (from the post-merge routine of lane
@@ -671,7 +704,7 @@ before its end) and `director told: <each>`; exit 0, 1 with no or an unreadable 
                    writes no prod line; the step goes on to the other supervisors, then stops. Its line:
                    `NOT told: ...; told: ...; already told: ...; not woken: ...; gone: director to resume or
                    archive: ...`
-  step 7 teardown  only once $(octo-feather-state)/lanes/archive/<lane>.toml exists (`octo-feather-lane archive`
+  step 8 teardown  only once $(octo-feather-state)/lanes/archive/<lane>.toml exists (`octo-feather-lane archive`
                    moves it there, then starts this step in its teardown unit), else `pending: lane <lane> not
                    archived; its archive starts this step`; an archived record whose `pr` is not PR stops. In order, each stop keeping the
                    rest: first step 3's live-run rule on a run whose recorded process works in the lane's
@@ -699,10 +732,10 @@ before its end) and `director told: <each>`; exit 0, 1 with no or an unreadable 
                    when origin has it. Gone already prints `already`; review rows, spools and records stay
 Each step prints one line as it finishes, `step <n> <name>: ok: <what>` or `step <n> <name>: stopped: <why>`;
 a stopped step runs no later step. The last line is the summary, each step's outcome (ok, stopped, not run):
-`post-merge <lane> PR #<n>: step 1 merged ok; step 2 main CI ok`, ending `; NOT told: <lane> <pane>, ... (step 6
-names each re-send)` when step 6 failed a send. Exit 0 when every step is ok, 1 when one (not merged, merged at another head, a red run named by its URL, no run within the bound, a watch that failed,
-a checkout kept, a supervisor not told, a teardown refusal), 3 when steps 1-6 are ok and step 7 is pending (the run at the merge; the
-archive starts step 7), 1 with usage on stderr for bad arguments.
+`post-merge <lane> PR #<n>: step 1 merged ok; step 2 main CI ok`, ending `; NOT told: <lane> <pane>, ... (step 7
+names each re-send)` when step 7 failed a send. Exit 0 when every step is ok, 1 when one (not merged, merged at another head, a red run named by its URL, no run within the bound, a watch that failed,
+a checkout kept, a supervisor not told, a teardown refusal), 3 when steps 1-7 are ok and step 8 is pending (the run at the merge; the
+archive starts step 8), 1 with usage on stderr for bad arguments.
 
   octo-feather-lane stale          the live agents on a stale launch set, and those with none recorded
 
@@ -722,7 +755,7 @@ Lines, kit paths relative to the launcher's kit, skill folders with a trailing /
   unknown: <pane> <name>: its process not read (<Herdr's error>)
   stale agents: <n> stale, <n> unknown, <n> current of <n> live
 It relaunches nothing. Exit 0; 1 when Herdr's agent list cannot be read or is malformed, its one line `stale
-agents: not read: <why>`. post-merge step 5 prints the same report.
+agents: not read: <why>`. post-merge step 6 prints the same report.
 
   octo-feather-lane start TICKET|--new TITLE --body-file FILE --goal TITLE --outcome TEXT --brief-file FILE
                                    the director's lane start, one command, in its checkout of a target
@@ -3403,7 +3436,18 @@ def cmd_post_merge(args: list[str]) -> int:
     args, lane = take_opt(args, "--lane")
     args, wait = take_opt(args, "--wait")
     unit_end, unit_run = "--unit-end" in args, "--unit-run" in args   # the teardown unit's (--help, archive)
-    args = [a for a in args if a not in ("--unit-end", "--unit-run")]
+    map_job, map_end = "--map-job" in args, "--map-end" in args   # step 5's job and its stop hook (--help, step 5)
+    args = [a for a in args if a not in ("--unit-end", "--unit-run", "--map-job", "--map-end")]
+    if (map_job or map_end) and not args and lane is None and wait is None and repo is None:
+        if map_end:
+            return post_merge.map_end(lanes_dir(), os.environ.get("SERVICE_RESULT", ""),
+                                      f"{os.environ.get('EXIT_CODE', '')} {os.environ.get('EXIT_STATUS', '')}".strip(),
+                                      show_line)
+        if not unit_run:
+            return post_merge.map_job(lanes_dir(), show_line)
+        result, status = post_merge.bounded([str(Path(__file__).resolve()), "post-merge", "--map-job"],
+                                            post_merge.MAP_LIMIT)
+        return post_merge.map_end(lanes_dir(), result, status, show_line)
     if unit_end and not args and lane and NAME.fullmatch(lane):
         return post_merge.unit_end(lanes_dir(), lane, os.environ.get("SERVICE_RESULT", ""),
                                    f"{os.environ.get('EXIT_CODE', '')} {os.environ.get('EXIT_STATUS', '')}".strip(),
@@ -3488,11 +3532,6 @@ def cmd_merge(args: list[str]) -> int:
 # archive of a merged lane) ---
 
 PM_UNIT_LIMIT = 900   # s: the teardown unit's runtime limit (systemd RuntimeMaxSec; the fallback's own kill)
-# What systemd sets in each unit itself, never carried over from the archive's environment.
-PM_UNIT_OWN = frozenset({"INVOCATION_ID", "JOURNAL_STREAM", "SYSTEMD_EXEC_PID", "MANAGERPID", "NOTIFY_SOCKET", "LISTEN_PID",
-                         "LISTEN_FDS", "LISTEN_FDNAMES", "WATCHDOG_PID", "WATCHDOG_USEC", "SERVICE_RESULT", "EXIT_CODE",
-                         "EXIT_STATUS", "MONITOR_SERVICE_RESULT", "MONITOR_EXIT_CODE", "MONITOR_EXIT_STATUS"})
-PM_MANAGER_UP = ("running", "degraded", "starting", "initializing", "maintenance", "stopping")
 
 
 def cmd_archive_lane(args: list[str]) -> int:
@@ -3559,44 +3598,19 @@ def archive_waits(name: str, pr: int, repo: str | None, args: list[str]) -> str:
     return now.head
 
 
-def pm_manager() -> bool:
-    """Whether a systemd user manager answers (`systemctl --user is-system-running`): none on macOS."""
-    try:
-        p = subprocess.run(["systemctl", "--user", "is-system-running"], capture_output=True, text=True,
-                           stdin=subprocess.DEVNULL, timeout=20)
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-    return p.stdout.strip() in PM_MANAGER_UP
-
-
 def pm_unit_start(name: str, pr: int, head: str, repo: str | None) -> int:
-    """The archive's last act: step 7 in one finite transient unit outside the lane's workspace, cwd the director's
+    """The archive's last act: step 8 in one finite transient unit outside the lane's workspace, cwd the director's
     checkout (--help, archive). A unit that cannot start is a stop the director is told once; exit 1."""
     unit, me, top = f"octo-feather-teardown-{name}", Path(__file__).resolve(), post_merge.top()
     records = post_merge.records(lanes_dir())
     log = records / f"{name}.teardown.log"
     run = [str(me), "post-merge", str(pr), head, "--lane", name, *(["--repo", repo] if repo else [])]
-    managed = pm_manager()
+    managed = post_merge.manager()
     how = "systemd-run --user" if managed else "start_new_session"
     post_merge.update(records, name, lambda r: dataclasses.replace(r, unit=post_merge.Unit(unit, how, post_merge.now(), "", "", "")))
-    env = {k: v for k, v in os.environ.items() if k not in PM_UNIT_OWN}
-    why = ""
-    try:
-        if managed:
-            hook = shlex.join([str(me), "post-merge", "--lane", name, "--unit-end", *(["--repo", repo] if repo else [])])
-            cmd = ["systemd-run", "--user", "--quiet", "--collect", f"--unit={unit}", f"--working-directory={top}",
-                   "-p", f"RuntimeMaxSec={PM_UNIT_LIMIT}", "-p", f"ExecStopPost={hook}",
-                   "-p", f"StandardOutput=append:{log}", "-p", f"StandardError=append:{log}",
-                   *(f"--setenv={k}={v}" for k, v in env.items()), "--", *run]
-            p = subprocess.run(cmd, capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=60)
-            err = (p.stderr or p.stdout).strip().splitlines()
-            why = f"systemd-run exit {p.returncode}: {err[-1][:200] if err else 'no output'}" if p.returncode else ""
-        else:
-            with log.open("a") as f:
-                subprocess.Popen([*run, "--unit-run"], cwd=top, env=env, stdin=subprocess.DEVNULL, stdout=f,
-                                 stderr=subprocess.STDOUT, start_new_session=True)
-    except (OSError, subprocess.TimeoutExpired) as e:
-        why = f"{type(e).__name__}: {e}"
+    hook = [str(me), "post-merge", "--lane", name, "--unit-end", *(["--repo", repo] if repo else [])]
+    why = post_merge.transient(unit, run, hook=hook, fallback=[*run, "--unit-run"], cwd=top, limit=PM_UNIT_LIMIT,
+                               log=log, managed=managed)
     if why:
         print(f"teardown: unit {unit} not started ({why})", flush=True)
         post_merge.unit_end(lanes_dir(), name, "start failed", why, show_line, repo=repo)
@@ -3609,16 +3623,8 @@ def pm_unit_start(name: str, pr: int, head: str, repo: str | None) -> int:
 def pm_unit_run(pr: int, head: str, lane: str, repo: str | None) -> int:
     """The unit where no systemd user manager answers: the routine under PM_UNIT_LIMIT, then its end
     (post_merge.unit_end)."""
-    import signal
     run = [str(Path(__file__).resolve()), "post-merge", str(pr), head, "--lane", lane, *(["--repo", repo] if repo else [])]
-    with subprocess.Popen(run, stdin=subprocess.DEVNULL, start_new_session=True) as p:
-        try:
-            rc = p.wait(PM_UNIT_LIMIT)
-            result, status = ("success" if rc == 0 else "exit-code"), f"exited {rc}"
-        except subprocess.TimeoutExpired:
-            os.killpg(p.pid, signal.SIGKILL)
-            p.wait()
-            result, status = "timeout", "killed KILL"
+    result, status = post_merge.bounded(run, PM_UNIT_LIMIT)
     return post_merge.unit_end(lanes_dir(), lane, result, status, show_line, repo=repo)
 
 

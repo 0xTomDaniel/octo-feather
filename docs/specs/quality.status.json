@@ -13,6 +13,61 @@
       "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
       "tests": []
     },
+    "acceptance-fast-map-slot-free": {
+      "status": "built",
+      "pr": 1246,
+      "record": "20261125T045911Z-44d50dff",
+      "commit": "d400e6b3909522f384f17f37ea1155659e2c5317",
+      "tests": [
+        "tests/gate/kit/test_fast_map.py"
+      ]
+    },
+    "acceptance-fast-map-behind": {
+      "status": "built",
+      "pr": 1246,
+      "record": "20261125T045911Z-ad2651f0",
+      "commit": "d400e6b3909522f384f17f37ea1155659e2c5317",
+      "tests": [
+        "tests/gate/kit/test_fast_map.py"
+      ]
+    },
+    "acceptance-fast-diff-base": {
+      "status": "built",
+      "pr": 1246,
+      "record": "20261125T045911Z-598fc1df",
+      "commit": "d400e6b3909522f384f17f37ea1155659e2c5317",
+      "tests": [
+        "tests/gate/kit/test_fast_map.py"
+      ]
+    },
+    "acceptance-map-after-merge": {
+      "status": "built",
+      "pr": 1246,
+      "record": "20261125T045911Z-6b76b26c",
+      "commit": "d400e6b3909522f384f17f37ea1155659e2c5317",
+      "tests": [
+        "tests/gate/kit/test_fast_map.py",
+        "tests/gate/kit/test_lane_post_merge_map.py"
+      ]
+    },
+    "acceptance-map-full-daily": {
+      "status": "built",
+      "pr": 1246,
+      "record": "20261125T045912Z-7bb0234e",
+      "commit": "d400e6b3909522f384f17f37ea1155659e2c5317",
+      "tests": [
+        "tests/gate/kit/test_lane_post_merge_map.py"
+      ]
+    },
+    "acceptance-map-build-failed": {
+      "status": "built",
+      "pr": 1246,
+      "record": "20261125T045912Z-73fa5407",
+      "commit": "d400e6b3909522f384f17f37ea1155659e2c5317",
+      "tests": [
+        "tests/gate/kit/test_lane_post_merge_map.py"
+      ]
+    },
     "acceptance-gate-recipes-first": {
       "status": "built",
       "pr": 1126,
