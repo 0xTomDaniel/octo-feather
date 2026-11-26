@@ -1,0 +1,12 @@
+# The parity lever's case for test_check_ts_current, moved to the shared installed kit copy (testkit installed_kit) and a
+# one-line .ts in place of eslint.config.js (#1289; tests/parity/lever.py --help).
+old = "tests/gate/kit/test_check_languages.py::test_check_ts_current"
+old_at = "32130e87"
+# The old item's scenario file, the one it imports Copy from, and the testkit both import.
+needs = ["tests/gate/kit/check_languages.py", "tests/gate/kit/check_ts.py", "tests/gate/kit/testkit/__init__.py"]
+new = "tests/gate/kit/test_check_languages.py::test_check_ts_current"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): run: the justfile is no program: just
+# reads it to run the recipe; coverage.py cannot see it.
+[ran]
+"justfile" = "run just check-ts"

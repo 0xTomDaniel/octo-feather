@@ -53,6 +53,7 @@ extend-include = [
   "scripts/check-gate-free",
   "scripts/check-languages",
   "scripts/check-owner-field",
+  "scripts/check-parity",
   "scripts/check-roles",
   "scripts/check-skills",
   "scripts/check-templates",

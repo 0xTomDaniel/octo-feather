@@ -7,21 +7,23 @@ never reports, or whose integration install fails, fails closed naming it, withi
 bound for the report and the idle wait together; a herdr-say whose
 `herdr agent get` lookup fails names that lookup (not the up-chain refusal, 77); a prompt Herdr
 reports stalled exits non-zero naming the pane and its state; and `octo-feather-lane post-merge`
-step 6 to a busy (working) supervisor returns within its bound, its step 6 line naming the
+step 7 to a busy (working) supervisor returns within its bound, its step 7 line naming the
 supervisor NOT told (lane, pane, timeout, the re-send command) and going on to tell the others
 (director rule #619). A general worker routes like every worker (roles
 spec #acceptance-task-worker-route): its parent reached, a peer lane refused (77); and a worker
 never messages the director: its parent proven gone, herdr-say itself sends the director one
 fixed alert, a timeout or a stall none (comms spec #acceptance-parent-gone). director_worker_resume
-drives comms spec #acceptance-director-worker-resume (its docstring names each step).
+drives comms spec #acceptance-director-worker-resume (its docstring names each step), and
+director_worker_moved and supervisor_parked_moved its parked and resumed parent after the director
+moved (#acceptance-parent-director-relaunched).
 fresh_worker_session drives the provider-session half of roles spec
 #acceptance-fresh-independent-worker (its docstring names each step).
 
-post-merge step 6 (owner ruling on issue 206; issues 398, 458): live supervisors of the PR's repo
+post-merge step 7 (owner ruling on issue 206; issues 398, 458): live supervisors of the PR's repo
 (every lane on a kit PR) told once, by the kit's own herdr-say with its bound, with the merge, PR,
 title and rule files, one prod line each, a rerun telling nothing new; parked and gone lanes
 listed, never sent to; a failed send named, no prod line, exit 1; any other herdr failure stops
-the step; step 7 reached, the kit's own herdr-close run and Herdr's workspace_not_found read as
+the step; step 8 reached, the kit's own herdr-close run and Herdr's workspace_not_found read as
 already closed. Space ids `zt*`, which no real Herdr gives."""
 
 from __future__ import annotations
@@ -41,7 +43,7 @@ import tomllib
 from testkit import HERE, ROOT, Scratch, kit, main
 
 ASSETS = ROOT / ".agents" / "skills" / "herdr-comms" / "assets"
-TELL_BOUND = 20  # post-merge step 6's bound on one send, seconds (octo-feather-lane --help)
+TELL_BOUND = 20  # post-merge step 7's bound on one send, seconds (octo-feather-lane --help)
 
 
 def herdr_world(s: Scratch, agents: dict[str, dict[str, object]] | None = None) -> Path:
@@ -444,9 +446,9 @@ def director_worker_resume(s: Scratch) -> None:
     general-worker-a1 into the director log (director_parks); `herdr-say --parked
     general-worker-a1` prints that line; the director's `herdr-say general-worker-a1 MSG` prints
     the resumed pane=, in w0, with the recorded role, session and parent, and the worker receives
-    "Resumed from park as pane=..."; its `--parent RESULT` reaches the director. A parked lane
-    worker still resumes in its supervisor's workspace w1, by its supervisor or by the director.
-    Each observation printed, for the qc demo."""
+    "Resumed from park as pane=..."; its `--parent RESULT` reaches the director. Each observation
+    printed, for the qc demo. A parked lane worker still resumes in its supervisor's workspace:
+    lane_worker_resume, its own item."""
     d, _ = worker_world(s)
     s.env["HERDR_SESSION"] = f"park-{os.getpid()}"  # only this scenario's processes count
     line = director_parks(s, d)
@@ -463,8 +465,67 @@ def director_worker_resume(s: Scratch) -> None:
     s.run([SAY, "--parent", RESULT], env=back | {"HERDR_PANE_ID": new, "HERDR_WORKSPACE_ID": "w0"})
     assert to(d, "w0:p1") == [RESULT], lines(d / "prompts")
     show(f"resumed worker --parent: director w0:p1 received: {to(d, 'w0:p1')}")
-    for caller, who in (("w1:p1", "its supervisor"), ("w0:p1", "the director")):
-        lane_worker_resumes(sub(s, caller.replace(":", "-")), caller, who)
+
+
+def lane_worker_resume(s: Scratch, caller: str) -> None:
+    """A parked lane worker still resumes in its supervisor's workspace w1, by CALLER: its
+    supervisor w1:p1 or the director w0:p1 (lane_worker_resumes)."""
+    lane_worker_resumes(s, caller, "its supervisor" if caller == "w1:p1" else "the director")
+
+
+MOVED = "w3:p1"  # the director's pane after it moved, in a workspace of its own
+
+
+def moved_director(s: Scratch, d: Path) -> dict[str, str]:
+    """The director moved from w0:p1 to MOVED: a live agent there, director.toml's `pane` MOVED,
+    w0:p1 left running (a pane that is no longer the director's). Its caller env."""
+    agents = json.loads((d / "agents.json").read_text())
+    agents[MOVED] = agent(MOVED, "director-b", "idle")
+    (d / "agents.json").write_text(json.dumps(agents))
+    (state_dir(s) / "director.toml").write_text(f'pane = "{MOVED}"\n')
+    return DIRECTOR | {"HERDR_PANE_ID": MOVED, "HERDR_WORKSPACE_ID": "w3"}
+
+
+def director_worker_moved(s: Scratch) -> None:
+    """comms #acceptance-director-worker-resume after the director moved: the director at w0:p1
+    spawns general-worker-a1 (its spawn line in the director log), then moves to MOVED
+    (moved_director); its `herdr-close --park` of the worker writes the parked line with parent
+    MOVED, never the worker's launch OCTO_FEATHER_PARENT w0:p1. A parked line naming w0:p1 (as
+    one parked before that rule) resumes through `herdr-say` in MOVED's workspace w3 with
+    OCTO_FEATHER_PARENT MOVED, and the worker's `--parent RESULT` reaches MOVED."""
+    d, _ = worker_world(s)
+    s.env["HERDR_SESSION"] = f"moved-{os.getpid()}"  # only this scenario's processes count
+    state = state_dir(s)
+    (state / "lanes").mkdir(parents=True)
+    (state / "director.toml").write_text('pane = "w0:p1"\n')
+    s.identity()
+    spawn = [str(ASSETS / "herdr-spawn"), "--workspace", "w0", "--name", "general-worker-a1"]
+    spawn += ["--label", "a1", "--role", "general-worker", "--cwd", str(s.root)]
+    got = dict(x.split("=", 1) for x in s.run(spawn, env=DIRECTOR).out.split())
+    assert tab_env(d, got["pane"])["OCTO_FEATHER_PARENT"] == "w0:p1", got
+    moved = moved_director(s, d)
+    worker = tab_process(s, d, got["pane"], s.root)
+    try:
+        s.run([str(ASSETS / "herdr-close"), "--park", got["pane"]], env=moved)
+    finally:
+        worker.kill()
+    dlog = state / "director.handoffs.jsonl"
+    line = json.loads(dlog.read_text().splitlines()[-1])
+    assert (line["kind"], line["parent"]) == ("parked", MOVED), line
+    found = s.run([SAY, "--parked", "general-worker-a1"], env=moved).out
+    assert json.loads(found)["parent"] == MOVED, found
+    show(f"director moved to {MOVED}, herdr-close --park {got['pane']}: parked line {found}")
+    with dlog.open("a") as f:  # a parked line written before the rule: the old pane
+        f.write(json.dumps(line | {"parent": "w0:p1"}) + "\n")
+    got = s.run([SAY, "general-worker-a1", "continue a1"], env=moved)
+    new, env = resumed_as(d, got.out, "w3", line["session"])
+    assert env["OCTO_FEATHER_PARENT"] == MOVED, env
+    show(f"parked line naming w0:p1, herdr-say from {MOVED}: {got.out}, in w3, parent {MOVED}")
+    back = {k: env[k] for k in ("OCTO_FEATHER_ROLE", "OCTO_FEATHER_PARENT")}
+    s.run([SAY, "--parent", RESULT], env=back | {"HERDR_PANE_ID": new, "HERDR_WORKSPACE_ID": "w3"})
+    assert to(d, MOVED) == [RESULT], lines(d / "prompts")
+    assert to(d, "w0:p1") == [], lines(d / "prompts")
+    show(f"resumed worker --parent: {MOVED} received: {to(d, MOVED)}")
 
 
 def tab_env(d: Path, pane: str) -> dict[str, str]:
@@ -602,6 +663,49 @@ def parked_resumed(s: Scratch) -> None:
     show(f"supervisor parked, resumed as {new}: implementer --parent exit 0, {new} received it")
 
 
+def supervisor_parked_moved(s: Scratch) -> None:
+    """comms #acceptance-parent-director-relaunched through a park: the director w0:p1 parks
+    lane gh7's supervisor, then moves to MOVED (moved_director); its `herdr-say gh7 MSG` resumes
+    the supervisor with OCTO_FEATHER_PARENT MOVED, not the parked line's w0:p1, and the
+    supervisor's `herdr-say --parent` reaches MOVED. Its implementer, parked before it (its line's
+    parent the supervisor's old pane, as herdr-close --park writes it then), is reached by the
+    resumed supervisor on its new pane through the up-chain guard's parent check: Herdr names
+    that pane no lane (a name other than gh7), so the lane-name fallback cannot pass it."""
+    d, sup, worker = supervised(s)
+    stale = {"at": "2026-11-25T00:00:00Z", "kind": "parked", "pane": worker["HERDR_PANE_ID"]}
+    stale |= {"name": "implementer-gh7", "label": "gh7", "role": "implementer"}
+    stale |= {"parent": sup["pane"], "cwd": str(s.root)}
+    stale["session"] = worker["OCTO_FEATHER_SESSION_ID"]
+    with (state_dir(s) / "lanes" / "gh7.handoffs.jsonl").open("a") as f:
+        f.write(json.dumps(stale) + "\n")
+    drop(d, worker["HERDR_PANE_ID"])
+    p = tab_process(s, d, sup["pane"], s.root / "target")
+    try:
+        s.run([str(ASSETS / "herdr-close"), "--park", sup["pane"]], env=DIRECTOR)
+    finally:
+        p.kill()
+    line = json.loads((state_dir(s) / "lanes" / "gh7.handoffs.jsonl").read_text().splitlines()[-1])
+    assert (line["kind"], line["parent"]) == ("parked", "w0:p1"), line
+    moved = moved_director(s, d)
+    got = s.run([SAY, "gh7", "go on"], env=moved)
+    new = next(x.removeprefix("pane=") for x in got.out.split() if x.startswith("pane="))
+    env = tab_env(d, new)
+    assert env["OCTO_FEATHER_PARENT"] == MOVED, env
+    assert env["OCTO_FEATHER_SESSION_ID"] == line["session"], env
+    show(f"supervisor parked under w0:p1, resumed by {MOVED}: pane={new}, parent {MOVED}")
+    s.run([SAY, "--parent", "from gh7"], env=env)
+    assert to(d, MOVED) == ["from gh7"], lines(d / "prompts")
+    show(f"resumed supervisor --parent: {MOVED} received: {to(d, MOVED)}")
+    agents = json.loads((d / "agents.json").read_text())
+    agents[new]["name"] = "supervisor-b"  # no lane name: only the parent check can allow the send
+    (d / "agents.json").write_text(json.dumps(agents))
+    got = s.run([SAY, "implementer-gh7", "go on"], env=env)
+    back, tab = resumed_as(d, got.out, env["HERDR_WORKSPACE_ID"], stale["session"])
+    assert tab["OCTO_FEATHER_PARENT"] == new, tab
+    assert to(d, back) == [f"Resumed from park as pane={back}. go on"], lines(d / "prompts")
+    show(f"implementer parked under {sup['pane']}, sent by the supervisor at {new}: {got.out}")
+
+
 def director_moved(s: Scratch) -> None:
     """comms say-parent for a director's own general worker: a director started by hand (no kit
     env) at w0:p1 spawns general-worker-a1 (its spawn line in the director log); the director is
@@ -630,6 +734,93 @@ def director_moved(s: Scratch) -> None:
     assert worker["OCTO_FEATHER_PARENT"] == "w0:p1", worker
     assert to(d, new) == [noted(s, worker, "director", "general-worker-a1")], lines(d / "prompts")
     show(f"director resumed as {new}: general worker --parent exit 0 {ran.err.strip()}")
+
+
+OLD, NEW = "w0:p1", "w0:p5"  # the director's pane before and after its relaunch
+
+
+def relaunched(s: Scratch, *, live: bool = True) -> tuple[Path, dict[str, str], dict[str, str]]:
+    """worker_world's, its director relaunched from OLD into NEW: OLD gone, director.toml `pane`
+    NEW, live unless not LIVE. A director-owned general worker general-worker-a1 at w0:p2, its
+    spawn line (session S9) in the director log. The Herdr world, lane gh7's supervisor's env and
+    the worker's, both launched under OLD; the supervisor started from a pane owning no log (no
+    spawn line)."""
+    d, _ = worker_world(s, director=False)
+    agents = json.loads((d / "agents.json").read_text())
+    agents["w0:p2"] = agent("w0:p2", "general-worker-a1", "idle")
+    if live:
+        agents[NEW] = agent(NEW, "director", "idle")
+    (d / "agents.json").write_text(json.dumps(agents))
+    state = state_dir(s)
+    (state / "director.toml").write_text(f'pane = "{NEW}"\n')
+    spawn = {"at": "2026-11-25T00:00:00Z", "kind": "spawn", "name": "general-worker-a1"}
+    spawn |= {"role": "general-worker", "pane": "w0:p2", "cwd": str(s.root), "session": "S9"}
+    (state / "director.handoffs.jsonl").write_text(json.dumps(spawn) + "\n")
+    sup = SUPERVISOR | {"HERDR_PANE_ID": "w1:p1"}
+    worker = {"OCTO_FEATHER_ROLE": "general-worker", "OCTO_FEATHER_PARENT": OLD}
+    worker |= {"OCTO_FEATHER_SESSION_ID": "S9", "HERDR_PANE_ID": "w0:p2"}
+    worker["HERDR_WORKSPACE_ID"] = "w0"
+    assert sup["OCTO_FEATHER_PARENT"] == OLD, sup
+    return d, sup, worker
+
+
+def director_relaunched(s: Scratch) -> None:
+    """comms #acceptance-parent-director-relaunched, and a supervisor messages only up its chain
+    (docs/adr/0015): relaunched's supervisor (OCTO_FEATHER_PARENT the old pane OLD): its
+    `herdr-say --parent` reaches NEW; `octo-feather-handoff parent OLD` prints NEW without a spawn
+    line for its session and with one in the director log (a worker with no spawn line keeps
+    OLD); a send to a peer lane's agent or to OLD exits 77 naming NEW, never OLD, nothing sent;
+    one to an agent in its own workspace is delivered."""
+    d, sup, _ = relaunched(s)
+    s.run([SAY, "--parent", "parent check"], env=sup)
+    assert to(d, NEW) == ["parent check"], lines(d / "prompts")
+    show(f"supervisor launched under {OLD}, --parent: {NEW} received: {to(d, NEW)}")
+    parent = [kit("octo-feather-handoff"), "parent", OLD]
+    assert s.run(parent, env=sup).out == NEW, "no spawn line"
+    log = state_dir(s) / "director.handoffs.jsonl"
+    spawn = {"at": "2026-11-25T00:00:00Z", "kind": "spawn", "name": "gh7", "role": "supervisor"}
+    with log.open("a") as f:
+        f.write(json.dumps(spawn | {"pane": "w1:p1", "session": "S7"}) + "\n")
+    assert s.run(parent, env=sup | {"OCTO_FEATHER_SESSION_ID": "S7"}).out == NEW, "spawn line"
+    lone = sup | {"OCTO_FEATHER_ROLE": "general-worker", "OCTO_FEATHER_SESSION_ID": "S0"}
+    assert s.run(parent, env=lone).out == OLD, "a worker with no spawn line"
+    show(f"octo-feather-handoff parent {OLD}, supervisor with and without a spawn line: {NEW}")
+    for outside in ("w2:p2", OLD):
+        ran = s.run([SAY, outside, RESULT], want=77, env=sup)
+        assert f"its parent {NEW};" in ran.err, ran.err
+        assert f"its parent {OLD}" not in ran.err, ran.err
+        show(f"supervisor to {outside}: exit 77: {ran.err.strip()}")
+    assert lines(d / "prompts") == [f"{NEW}\tparent check"], lines(d / "prompts")
+    s.run([SAY, "w1:p2", "in my workspace"], env=sup)
+    assert to(d, "w1:p2") == ["in my workspace"], lines(d / "prompts")
+
+
+def parent_relaunched_gone(s: Scratch) -> None:
+    """comms #acceptance-parent-gone after a director relaunch, and a worker messages only its
+    parent (docs/adr/0015): relaunched's director worker (spawned under OLD) may send to NEW, its
+    resolved parent, never to OLD (77 naming NEW). NEW then gone: its `herdr-say --parent` exits
+    68, the alert naming NEW as the gone parent; the supervisor's gets the not-delivered error
+    naming NEW, never OLD, and no alert."""
+    d, sup, worker = relaunched(s)
+    s.run([SAY, NEW, "to my parent"], env=worker)
+    assert to(d, NEW) == ["to my parent"], lines(d / "prompts")
+    ran = s.run([SAY, OLD, RESULT], want=77, env=worker)
+    assert f"its parent {NEW};" in ran.err, ran.err
+    show(f"director worker to {NEW}: delivered; to {OLD}: exit 77: {ran.err.strip()}")
+
+    s2 = sub(s, "gone")
+    d, sup, worker = relaunched(s2, live=False)
+    ran = s2.run([SAY, "--parent", RESULT], want=68, env=worker)
+    assert f"parent {NEW} is gone" in ran.err, ran.err
+    assert f"alert NOT delivered to the director (pane {NEW}" in ran.err, ran.err
+    assert OLD not in ran.err, ran.err
+    show(f"director worker, {NEW} gone: exit 68: {ran.err.strip()}")
+    ran = s2.run([SAY, "--parent", RESULT], want=1, env=sup)
+    assert f"{NEW} is gone" in ran.err, ran.err
+    assert OLD not in ran.err, ran.err
+    assert "alert" not in ran.err, ran.err
+    assert lines(d / "prompts") == [], lines(d / "prompts")
+    show(f"supervisor, {NEW} gone: exit 1: {ran.err.strip()}")
 
 
 REPORT = "DONE commit abc123: the report\nevidence: just fast green\nnext: review"
@@ -935,7 +1126,7 @@ def merged_repo(s: Scratch) -> tuple[Path, str]:
 
 def post_merge_busy(s: Scratch) -> None:
     """post-merge after PR 7 merged, lane live1's supervisor w1:p1 busy (working the whole run),
-    lane live2's w2:p1 idle: step 6 returns within its bound; live2 told (its prod line), live1
+    lane live2's w2:p1 idle: step 7 returns within its bound; live2 told (its prod line), live1
     NOT told, named with its pane, the timeout, its state and the herdr-say that re-sends it by
     hand, no prod line; the summary names live1 NOT told; exit 1."""
     busy = agent("w1:p1", "live1", "working")
@@ -997,15 +1188,15 @@ def post_merge_busy(s: Scratch) -> None:
     said = f"exit {p.returncode} after {took:.0f}s\n{p.stdout}\n{p.stderr}"
     assert p.returncode == 1, said
     assert took < TELL_BOUND + 20, said
-    tell = next((x for x in p.stdout.splitlines() if x.startswith("step 6 ")), "")
-    assert tell.startswith("step 6 tell supervisors: stopped: NOT told: live1 w1:p1: "), said
+    tell = next((x for x in p.stdout.splitlines() if x.startswith("step 7 ")), "")
+    assert tell.startswith("step 7 tell supervisors: stopped: NOT told: live1 w1:p1: "), said
     assert f"send timed out after {TELL_BOUND}s" in tell, said
     assert f"w1:p1 (pane w1:p1) still working after {TELL_BOUND}s" in tell, said
     assert "re-send by hand: herdr-say w1:p1 'main moved to " in tell, said
     assert "; NOT told: live1 w1:p1; told: live2 w2:p1;" in tell, said
     last = p.stdout.splitlines()[-1]
-    want = "step 7 teardown not run; NOT told: live1 w1:p1 (step 6 names each re-send)"
-    assert last.endswith(f"step 6 tell supervisors stopped; {want}"), said
+    want = "step 8 teardown not run; NOT told: live1 w1:p1 (step 7 names each re-send)"
+    assert last.endswith(f"step 7 tell supervisors stopped; {want}"), said
     assert [x.split("\t")[0] for x in lines(d / "prompts")] == ["w1:p1", "w2:p1"], said
     prods = [json.loads(x) for x in lines(lanes.parent / "director.handoffs.jsonl")]
     assert [x["issue"] for x in prods] == [12], said
@@ -1015,7 +1206,7 @@ def post_merge_busy(s: Scratch) -> None:
 TELL_JUSTFILE = "vendored-fetch:\n    @true\n\ninstall-check target:\n    @true\n"
 RULED = ".agents/skills/foo/SKILL.md, agents/supervisor.md"
 REREAD = "re-read the changed ones before your next step."
-SENDER = "(from the post-merge routine of lane gh7)"  # step 6's sender, its line and prod line
+SENDER = "(from the post-merge routine of lane gh7)"  # step 7's sender, its line and prod line
 
 
 def build_tell(p: Scratch) -> None:
@@ -1120,7 +1311,7 @@ class Tell:
         (self.d / "agents.json").write_text(json.dumps(live))
 
     def run(self, want: int, pr: int, *args: str) -> tuple[str, str]:
-        """post-merge PR (its head) ARGS --wait 0, exit WANT, no traceback: its step 6 line and
+        """post-merge PR (its head) ARGS --wait 0, exit WANT, no traceback: its step 7 line and
         its last line. Each run a fresh routine: the post-merge records removed first (a rerun's
         resume: tests/gate/kit/lane_merge.py)."""
         shutil.rmtree(self.lanes.parent / "post-merge", ignore_errors=True)
@@ -1175,7 +1366,7 @@ def told_live(t: Tell) -> None:
     assert "told: live1 zt1:p1" in tell, tell
     gone = "gone: director to resume or archive: none"
     assert tell.endswith(f"not woken: parked zt2:p1; {gone}"), tell
-    assert last.endswith("tell supervisors ok; step 7 teardown pending"), last
+    assert last.endswith("tell supervisors ok; step 8 teardown pending"), last
     assert "agent get zt3:p1" not in lines(t.d / "log"), lines(t.d / "log")
     prods = t.prods()
     assert len(prods) == 2, prods
@@ -1244,11 +1435,11 @@ def told_gone(t: Tell) -> None:
     tell, _ = t.run(3, 7, "--lane", "gh1", "--repo", "o/r")
     assert t.said() == ["zt1:p1"], t.said()
     want = "told: live1 zt1:p1; already told: none; not woken: parked zt2:p1; " + gone
-    assert tell.startswith("step 6 tell supervisors: ok: "), tell
+    assert tell.startswith("step 7 tell supervisors: ok: "), tell
     assert tell.endswith(want), tell
-    pending = "step 7 teardown: pending: lane gh1 not archived; its archive starts this step"
+    pending = "step 8 teardown: pending: lane gh1 not archived; its archive starts this step"
     assert pending in t.out.splitlines(), t.out
-    # Archived: step 7 runs the kit's herdr-close on space zt9, which Herdr has not: its close
+    # Archived: step 8 runs the kit's herdr-close on space zt9, which Herdr has not: its close
     # fails, and Herdr's workspace_not_found (stderr) reads as already closed.
     (t.lanes / "archive").mkdir()
     (t.lanes.parent / "director.toml").write_text('pane = "zt0:p9"\n')
@@ -1259,7 +1450,7 @@ def told_gone(t: Tell) -> None:
     )
     t.run(0, 7, "--lane", "gh1", "--repo", "o/r")
     down = (
-        "step 7 teardown: ok: space zt9 already closed; worktree of gh1 already removed; no open "
+        "step 8 teardown: ok: space zt9 already closed; worktree of gh1 already removed; no open "
         "PR based on gh1; local branch gh1 already deleted; remote branch gh1 already deleted "
         "from origin"
     )
@@ -1267,12 +1458,12 @@ def told_gone(t: Tell) -> None:
     log = lines(t.d / "log")
     assert "workspace close zt9" in log, f"herdr-close asked no close: {log}"
     assert "workspace get zt9" in log, f"teardown asked no workspace get: {log}"
-    # Any other herdr failure still stops step 6, named; the other lanes are still handled.
+    # Any other herdr failure still stops step 7, named; the other lanes are still handled.
     (t.lanes / "archive" / "gh1.toml").unlink()
     (t.d / "get-down").write_text("zt2:p1\n")
     tell, _ = t.run(1, 7, "--lane", "gh1", "--repo", "o/r")
     stop = (
-        "step 6 tell supervisors: stopped: parked zt2:p1: herdr agent get zt2:p1 failed (herdr: "
+        "step 7 tell supervisors: stopped: parked zt2:p1: herdr agent get zt2:p1 failed (herdr: "
         "server not reachable)"
     )
     assert tell.startswith(stop), tell
@@ -1283,15 +1474,15 @@ def tell_supervisors(s: Scratch) -> None:
     """Only a live supervisor of the PR's repo gets one message naming the merge commit, PR,
     title and changed rule files, by the kit's herdr-say bounded by post-merge's bound; the --lane
     lane, a parked one (its latest parked line names its pane) and another repo's lane (never
-    looked up) none; one canonical prod line per lane told, after the director's own; step 6 ok,
-    step 7 pending, exit 3. A rerun sends and logs nothing new (already told). A merge touching no
+    looked up) none; one canonical prod line per lane told, after the director's own; step 7 ok,
+    step 8 pending, exit 3. A rerun sends and logs nothing new (already told). A merge touching no
     rule file says none, and is told again. The old test's other phases, each its own world:
     tell_kit, tell_failed, tell_gone."""
     told_live(Tell(s))
 
 
 def tell_kit(s: Scratch) -> None:
-    """post-merge step 6 on a kit PR (o/kit, the install's own repo): every lane runs kit roles,
+    """post-merge step 7 on a kit PR (o/kit, the install's own repo): every lane runs kit roles,
     so another repo's live lane is told too, one prod line each (step 3 refreshes the install
     first: its recipes no-ops by the real just, uv and pnpm argv_recorder.sh)."""
     t = Tell(s)
@@ -1300,7 +1491,7 @@ def tell_kit(s: Scratch) -> None:
 
 
 def tell_failed(s: Scratch) -> None:
-    """post-merge step 6 with a send that fails (its supervisor blocked on a dialog, herdr-say's
+    """post-merge step 7 with a send that fails (its supervisor blocked on a dialog, herdr-say's
     75): named, no prod line for it, the others still tried and told, the step stopped, exit 1; a
     rerun tells only that one."""
     t = Tell(s)
@@ -1309,11 +1500,11 @@ def tell_failed(s: Scratch) -> None:
 
 
 def tell_gone(s: Scratch) -> None:
-    """post-merge step 6, issue 458: --lane gh1 with a live, a parked and two gone lanes (one
+    """post-merge step 7, issue 458: --lane gh1 with a live, a parked and two gone lanes (one
     never parked, one whose latest parked line names an older pane): only the live one told, the
-    rest listed, step 6 ok, step 7 pending (not archived). Archived: step 7 runs, the kit's
+    rest listed, step 7 ok, step 8 pending (not archived). Archived: step 8 runs, the kit's
     herdr-close failing and Herdr's workspace_not_found read as already closed. Any other herdr
-    failure (Herdr unreachable on the parked lane's lookup) stops step 6, named, the other lanes
+    failure (Herdr unreachable on the parked lane's lookup) stops step 7, named, the other lanes
     still handled."""
     told_gone(Tell(s))
 
@@ -1410,11 +1601,16 @@ if __name__ == "__main__":
         worker_route,
         parent_gone,
         director_worker_resume,
+        lane_worker_resume,
         queued_completion,
         fresh_worker_session,
         parent_resumed,
         parked_resumed,
         director_moved,
+        director_relaunched,
+        parent_relaunched_gone,
+        director_worker_moved,
+        supervisor_parked_moved,
         result_compacting,
         result_resumed,
         results_listing,

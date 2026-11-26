@@ -58,7 +58,7 @@ default:
 
 # The recipes the gate runs, in order, each one pytest item of check-tests (tests/gate/). Only check-* recipes,
 # so check-gate-free's scan of them sees every recipe the gate runs.
-export GATE_RECIPES := "check-languages check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-owner-field check-vendored check-spec-status check-templates check-evals check-lint check-format check-types check-ts"
+export GATE_RECIPES := "check-languages check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-owner-field check-vendored check-spec-status check-templates check-evals check-parity check-lint check-format check-types check-ts"
 
 # Every GATE_RECIPES recipe and every tests/*.sh, through check-tests (#201, #224).
 # The gate: every tracked language gated, script syntax, Pi-only references, no dashes, skill frontmatter, decision logs, vendored skills, eval case shape, kit Python lint, format and types, kit tests.
@@ -303,18 +303,33 @@ fast:
 fast-list:
     @python3 "$root/scripts/octo-feather-gate" select 2>&1 >/dev/null
 
-# The coverage map just fast selects from: every gate item run under coverage.py (COVERAGE_PROCESS_START and the
-# .pth coverage installs in the kit venv; one data dir per item, GATE_ITEM: tests/gate/coverage.toml), on a clean tree,
-# written for HEAD into the git common dir (scripts/octo-feather-gate map), from the items that passed; exits as the run did.
-# Slower than just check; never in it or CI.
+# The coverage map just fast selects from: every test item just fast can choose (no e2e item, no static check: select
+# never reads their coverage) run under coverage.py (COVERAGE_PROCESS_START and the .pth coverage installs in the kit
+# venv; one data dir per item, GATE_ITEM: tests/gate/coverage.toml), on a clean tree, written for HEAD into the git
+# common dir (scripts/octo-feather-gate map), from the items that passed; exits as the run did. On fast_workers
+# workers, as just fast: a fast-tier run, no heavy slot, the lowest priority, one fast-run turn (quality
+# #recipes-static-first, tests/gate/heavy_slot.py). Its CPU is coverage's, not the tests': the run blocks the gate's
+# CPU show and per-test budget (tests/gate/conftest.py's cpu-shown plugin; -p no:, an argument, so a gate an item
+# runs still applies it), so its exit is its tests' and the map's alone. Extra arguments go to pytest. Never in just
+# check or CI. `just fast-map --since-newest` (the post-merge routine's job, octo-feather-lane --help, post-merge):
+# only the test items changed since the newest map's head (octo-feather-gate changed --since-map), the map written
+# that map with their entries replaced (map --onto-newest); none changed, no run, that map for HEAD.
 fast-map *args:
     #!/usr/bin/env bash
     set -euo pipefail
     cd "$root"
     [[ -z "$(git status --porcelain)" ]] || { echo "fast-map: the tree has changes; commit them first, the map is written for HEAD" >&2; exit 1; }
     d="$(mktemp -d)"; trap 'rm -rf "$d"' EXIT
-    rc=0; env -u GATE_ITEM COV_MAP_DIR="$d" COVERAGE_PROCESS_START="$root/tests/gate/coverage.toml" just check-tests --junitxml="$d/junit.xml" "$@" || rc=$?
-    uv run --locked --offline --no-sync python3 "$root/scripts/octo-feather-gate" map "$d" --junit "$d/junit.xml"
+    cap="$(python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))["fast_workers"])' "$root/gate-budget.toml")"
+    onto=(); junit=(--junit "$d/junit.xml")
+    if [[ "${1:-}" == --since-newest ]]; then
+      shift; onto=(--onto-newest); ids="$(python3 "$root/scripts/octo-feather-gate" changed --since-map)"
+      [[ -z "$ids" ]] || { mapfile -t ids <<<"$ids"; set -- "${ids[@]}" "$@"; }
+      [[ $# -gt 0 ]] || junit=()
+    fi
+    rc=0; [[ ${#junit[@]} -eq 0 ]] || env -u GATE_ITEM COV_MAP_DIR="$d" COVERAGE_PROCESS_START="$root/tests/gate/coverage.toml" GATE_WORKERS="$cap" \
+      just check-tests --junitxml="$d/junit.xml" -p no:cpu-shown -m 'not e2e' --deselect tests/gate/test_gate.py::test_recipe "$@" || rc=$?
+    uv run --locked --offline --no-sync python3 "$root/scripts/octo-feather-gate" map "$d" "${junit[@]}" "${onto[@]}"
     exit "$rc"
 
 # The gate's pytest items, all or a subset by pytest arguments (`just test -k check-dashes`, `just test --lf`): check-tests.
@@ -360,6 +375,10 @@ integrate issue +refs:
 # Every eval case's shape (rules: .agents/skills/eval-cases/references/schema.md; quality #acceptance-qa-cases-checked).
 check-evals:
     @python3 "$root/scripts/check-evals"
+
+# Every tests/parity/*/*.patch still applies, so each parity case stays rerunnable; a stale one: re-anchor it (tests/parity/lever.py --help, Re-anchoring; #1154).
+check-parity:
+    @python3 "$root/scripts/check-parity"
 
 # Role files: only fields pi-role honours, skills resolve, allowed models (docs/adr/0013).
 check-roles:

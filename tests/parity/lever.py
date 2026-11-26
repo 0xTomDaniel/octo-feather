@@ -47,6 +47,21 @@ line N: X: No such file or directory" or "... command not found" from the old te
 file it sources (a failed `source` lets a test carry on without its library, print its pass
 line and exit 0).
 
+Re-anchoring (#1154): when scripts/check-parity names a case's patch, the change that moved its
+code remakes that patch against the code as it now is, seeding the same defect (and points the
+case's `ran` at the file it now patches), then runs `tests/parity/lever.py CASE` to exit 0; a
+case whose target behaviour is gone is deleted in the same change. A case retires when the
+behaviour or the input contract its old test relies on was changed on purpose, naming that change
+(commit and PR) in the change that retires it; no one-sided case is kept, and no old side mixes
+commits.
+
+The CPU budget (quality spec #acceptance-test-cpu-budget): before each run the lever commits what
+the run adds (the restored files, the defect) on the copy's own branch, so the copy's default
+branch holds them and the gate judges no item of the run as changed (what counts as changed:
+`octo-feather-gate --help`, changed): no test the lever runs there is held to the budget. Only
+the lever's own copy is so committed; a real gate run reads no new variable, flag or option and
+still judges every changed item.
+
 The caller's GATE_WORKERS reaches each run. The copy: under the git common dir's
 octo-feather/, removed after, as is the runs' own mise state dir (the caller's is never
 written); each run's output: in the log dir printed last, kept.
@@ -75,6 +90,9 @@ DROP = (
     "OCTO_FEATHER_QC_CLAIMS",
     "OCTO_FEATHER_QC_CAPTURE_DIR",
 )
+# Git with the copy's commit identity; COPY: the copy's first commit, every run's start.
+GIT = ["git", "-c", "user.name=lever", "-c", "user.email=lever@t", "-c", "commit.gpgsign=false"]
+COPY = "refs/lever/copy"
 # What an old test names under tests/: a sourced file beside it, a kit path.
 SOURCED = re.compile(
     r'^\s*(?:source|\.)\s+"\$\(dirname "\$(?:0|\{BASH_SOURCE\[0\]\})"\)/([^"]+)"', re.MULTILINE
@@ -117,13 +135,13 @@ def copy(dest: Path) -> None:
         if src.is_file() or src.is_symlink():
             (dest / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, dest / rel, follow_symlinks=False)
-    g = ["git", "-c", "user.name=lever", "-c", "user.email=lever@t", "-c", "commit.gpgsign=false"]
     for a in (["init", "-q"], ["add", "-A"], ["commit", "-qm", "parity copy"]):
-        subprocess.run([*g, *a], cwd=dest, capture_output=True, check=True)
+        subprocess.run([*GIT, *a], cwd=dest, capture_output=True, check=True)
+    subprocess.run([*GIT, "update-ref", COPY, "HEAD"], cwd=dest, capture_output=True, check=True)
     # The kit's history, its objects copied into the copy's own .git (no link into the kit's), so a
     # commit a kit file names resolves there: check-evals' history fixtures (repo kit, #1204).
     fetch = ["fetch", "-q", "--no-tags", str(ROOT), "+HEAD:refs/kit/head"]
-    subprocess.run([*g, *fetch], cwd=dest, capture_output=True, check=True)
+    subprocess.run([*GIT, *fetch], cwd=dest, capture_output=True, check=True)
 
 
 def old_files(old: str, old_at: str, needs: list[str]) -> dict[str, bytes]:
@@ -279,16 +297,23 @@ def check_ran(how: dict[str, str], trace: Trace | None, cov: set[str]) -> list[s
     return missing
 
 
+def settle(k: Path) -> None:
+    """What the run adds to the copy (restored files, a defect) committed on its branch: the
+    copy's default branch then holds it, so the gate judges none of it changed (--help, budget)."""
+    for a in (["add", "-A"], ["commit", "-q", "--allow-empty", "-m", "parity run"]):
+        subprocess.run([*GIT, *a], cwd=k, capture_output=True, check=True)
+
+
 def reset(k: Path) -> None:
     """The copy back at its commit: a patch and every restored file gone."""
-    subprocess.run(["git", "reset", "-q", "--hard"], cwd=k, check=True)  # noqa: S607
+    subprocess.run(["git", "reset", "-q", "--hard", COPY], cwd=k, check=True)  # noqa: S607
     subprocess.run(["git", "clean", "-qfd"], cwd=k, check=True)  # noqa: S607
 
 
 def apply(k: Path, patch: Path | None) -> None:
     if patch and sh(["git", "apply", str(patch)], k):
         sys.exit(
-            f"lever: {patch} does not apply to this kit; remake it against the command it breaks"
+            f"lever: {patch} does not apply to this kit; remake it: lever --help, Re-anchoring"
         )
 
 
@@ -303,7 +328,8 @@ class Lever:
     files: dict[str, bytes]
 
     def run_old(self, name: str, how: dict[str, str] | None) -> int:
-        """The old test with FILES restored (staged, so the coverage map sees it as the kit's);
+        """The old test with FILES restored (committed, settle(): the coverage map sees it as the
+        kit's, the budget as unchanged);
         with HOW (the clean run), traced and measured, and refused unless it ran every file HOW
         names."""
         k, logs, files, old = self.k, self.logs, self.files, self.case["old"]
@@ -313,7 +339,7 @@ class Lever:
         item = "::" in old  # a pytest item id: run as itself, its file restored above
         if not item:
             (k / old).chmod(0o755)
-        git("add", "-A", cwd=k)
+        settle(k)
         log = logs / f"{name}.old.log"
         cmd = [
             "just",
@@ -391,6 +417,7 @@ class Lever:
         old_rc = self.run_old(name, how)
         reset(k)
         apply(k, patch)
+        settle(k)
         new_rc = sh(["just", "test", "-x", "-rA", case["new"]], k, logs / f"{name}.new.log")
         reset(k)
         said = {0: "pass"}
