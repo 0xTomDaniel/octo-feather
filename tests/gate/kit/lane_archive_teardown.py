@@ -17,11 +17,11 @@ unit inherits it. Space ids `zt*`, which no real Herdr gives.
 The demo's commands and output are printed: the merge, the archive, the teardown unit's lines
 and the director's one message, `post-merge --lane gh7`.
 
-archive_tears_down runs instead in gh1249's real case (testkit.realcase): lane A's
-merge then its `archive gh10`, gh answering only from their recorded tapes (testkit/recordings/
-lane-merge-realcase.json, then lane-archive-realcase.json), lane A's worktree on its branch gh10 at
-the PR's recorded head, the systemd stand-in as above; every expected value the tapes' recorded
-answer (#1267).
+archive_tears_down runs instead in the gh1255 remerge's real case (testkit.realcase REMERGE):
+lane A's merge then its `archive <A>`, gh answering only from their recorded tapes
+(testkit/recordings/lane-merge-remerge.json, then lane-archive-remerge.json), lane A's worktree on
+its branch <A> at the PR's recorded head, the systemd stand-in as above; every expected value the
+tapes' recorded answer (#1267, #1266).
 """
 
 from __future__ import annotations
@@ -37,7 +37,7 @@ from herdr_messaging import ASSETS, agent, lines
 from lane_merge import DIRECTOR, STEPS, SUPERVISOR, World
 from lane_post_merge import run1
 from testkit import HERE, Scratch, kit, main, reflector
-from testkit.realcase import REALCASE, REALCASE_TAPES, RealCase, recorded, recordings
+from testkit.realcase import REALCASE, REMERGE, REMERGE_TAPES, RealCase, recorded, recordings
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -236,46 +236,47 @@ def torn_down(lane: Lane, how: str) -> None:
 
 def archive_tears_down(s: Scratch) -> None:
     """issue-lifecycle#acceptance-archive-tears-down, comms#acceptance-close-message (the ticket's
-    demo) on gh1249's real case (testkit.realcase, both tapes): after supervisor A's
-    `merge 14 7d7155984818 --repo REALCASE` (steps 1-7 ok), its `archive gh10` from its worktree
-    asks gh exactly the recorded archive's calls, in its order (its ticket read of parent 10,
-    the tracker key of lane key gh10, and its sub-issue; the teardown unit's PR list last),
+    demo) on the gh1255 remerge's real case (testkit.realcase REMERGE, both tapes): after
+    supervisor A's `merge N <head> --repo REALCASE` (steps 1-7 ok), its `archive A` from its
+    worktree asks gh exactly the recorded archive's calls, in its order (its ticket read of
+    parent P, the tracker key of lane key A, and its sub-issue; the teardown unit's PR list last),
     archives the lane, runs no step of the routine again, starts one transient unit through
-    systemd-run (octo-feather-teardown-gh10, its runtime limit, its stop hook, cwd the
+    systemd-run (octo-feather-teardown-A, its runtime limit, its stop hook, cwd the
     director's checkout) and exits. The unit closes the lane's own space (zt1, never zt2 or the
-    director's), removes the worktree and the local branch gh10 (never pushed: already gone from
+    director's), removes the worktree and the local branch A (never pushed: already gone from
     origin); then the director gets one message, after the space closed and the worktree is
     gone, carrying every close-report item: the routine's summary, the tickets done (the
     recorded parent's sub-issues, then the parent), left open nothing (the recorded PR list
     empty), the reflections' finding counts, the correction lanes, what is left on disk on
     purpose (nothing), the teardown line. Nothing else reached the director: no director command
-    ran. `post-merge --lane gh10` shows step 8 ok, the unit's success and the end told. The
+    ran. `post-merge --lane A` shows step 8 ok, the unit's success and the end told. The
     retarget of a PR left open, and a branch deleted from origin: torn_down (no_manager's,
     test_lane_archive_teardown_no_manager)."""
-    w = RealCase(s, *REALCASE_TAPES)
-    unit = "octo-feather-teardown-gh10"
-    merge_tape, archive_tape = REALCASE_TAPES
-    pr = f"pr view 14 --json state,headRefOid -R {REALCASE}"
+    w = RealCase(s, *REMERGE_TAPES, case=REMERGE)
+    n, a, p = REMERGE.pr, REMERGE.lane, int(REMERGE.lane[2:])
+    unit = f"octo-feather-teardown-{a}"
+    merge_tape, archive_tape = REMERGE_TAPES
+    pr = f"pr view {n} --json state,headRefOid -R {REALCASE}"
     head = json.loads(recorded(merge_tape, pr))
-    view = "issue view 10 --json number,title,body,state,url,parent,subIssues,blockedBy"
+    view = f"issue view {p} --json number,title,body,state,url,parent,subIssues,blockedBy"
     parent = json.loads(recorded(archive_tape, view))  # the archive's ticket read
     kids = [x["number"] for x in parent["subIssues"]["nodes"]]
-    open_ = f"pr list --base gh10 --state open --json number,url -R {REALCASE}"
+    open_ = f"pr list --base {a} --state open --json number,url -R {REALCASE}"
     assert json.loads(recorded(archive_tape, open_)) == [], "the recorded archive left a PR open"
     wt = s.root / "wt"
-    s.git(w.checkout, "worktree", "add", "-q", "-b", "gh10", str(wt), head["headRefOid"])
+    s.git(w.checkout, "worktree", "add", "-q", "-b", a, str(wt), head["headRefOid"])
     syslog = systemd(s)
-    w.lane("merge", "14", head["headRefOid"][:12], "--repo", REALCASE)
+    w.lane("merge", str(n), head["headRefOid"][:12], "--repo", REALCASE)
     merged = len(s.gh.log())
     (w.herdr / "prompt-watch").write_text(str(wt))
-    r = w.lane("archive", "gh10", cwd=wt)
-    assert f"archived: {w.lanes}/archive/gh10.toml sha256=" in r.out, r.out
+    r = w.lane("archive", a, cwd=wt)
+    assert f"archived: {w.lanes}/archive/{a}.toml sha256=" in r.out, r.out
     assert not [x for x in r.out.split("\n") if x.startswith("step ")], f"routine rerun: {r.out}"
     assert r.out.split("\n")[-1].startswith(
         f"teardown: started unit {unit} (systemd-run --user, cwd {w.checkout}, "
     ), r.out
     ended(syslog, unit)
-    sys.stdout.write(text(w.top / "post-merge" / "gh10.teardown.log"))
+    sys.stdout.write(text(w.top / "post-merge" / f"{a}.teardown.log"))
     calls = [x for x in text(syslog).splitlines() if x.startswith("systemd-run")]
     assert len(calls) == 1, calls
     for part in (
@@ -288,7 +289,7 @@ def archive_tears_down(s: Scratch) -> None:
     archive = [str(x["request"]) for x in recordings(archive_tape)]
     assert s.gh.log()[merged:] == archive, f"gh calls, want the recorded archive's: {s.gh.log()}"
     assert not wt.exists(), "worktree kept"
-    branch = ["rev-parse", "-q", "--verify", "refs/heads/gh10"]
+    branch = ["rev-parse", "-q", "--verify", f"refs/heads/{a}"]
     for repo in (w.checkout, w.origin):  # gone: rev-parse finds no such ref, exit 1
         s.run(["git", "-C", str(repo), *branch], want=1)
     log = lines(w.herdr / "log")
@@ -301,20 +302,20 @@ def archive_tears_down(s: Scratch) -> None:
     assert lines(w.herdr / "watched")[-1] == "no", "message sent while the worktree was there"
     ok = "; ".join(f"step {n} {x} ok" for n, x in enumerate(STEPS, 1))
     items = (
-        f"lane gh10 closed: PR #14 merged as {w.merge[:12]}; post-merge {ok}",
+        f"lane {a} closed: PR #{n} merged as {w.merge[:12]}; post-merge {ok}",
         f"tickets done: {', '.join(str(k) for k in [*kids, parent['number']])}",
         "left open: nothing",
-        "reflection findings: lane gh10: 0 findings; director: 0 findings",
+        f"reflection findings: lane {a}: 0 findings; director: 0 findings",
         "correction lanes: none filed or commented",
         "left on disk on purpose: nothing",
         (
             f"teardown: space zt1 closed; worktree {wt} removed (0 mise config links into it "
-            "pruned); no open PR based on gh10; local branch gh10 deleted; remote branch gh10 "
+            f"pruned); no open PR based on {a}; local branch {a} deleted; remote branch {a} "
             "already deleted from origin"
         ),
     )
     assert said[0].split(" | ") == list(items), f"message: {said[0]}"
-    shown = w.lane("post-merge", "--lane", "gh10").out.split("\n")
+    shown = w.lane("post-merge", "--lane", a).out.split("\n")
     assert any(x.startswith("step 8 teardown: ok at ") for x in shown), shown
     started = f"teardown unit {unit} (systemd-run --user): started "
     assert any(x.startswith(started) and x.endswith(": success (exited 0)") for x in shown), shown
