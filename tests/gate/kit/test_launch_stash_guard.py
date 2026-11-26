@@ -4,7 +4,7 @@ docstring), each run as that file's command through `case` (tests/gate/kit/conft
 from collections.abc import Callable
 
 import pytest
-from launch_stash_guard import private_path, refused, unchanged, untrusted
+from launch_stash_guard import blind_count, private_path, refused, unchanged, untrusted
 
 Case = Callable[..., None]
 SOURCE = "tests/gate/kit/launch_stash_guard.py"
@@ -28,3 +28,8 @@ def test_private_path(case: Case) -> None:
 @pytest.mark.criterion("roles#acceptance-stash-guard-private-path", source=SOURCE)
 def test_untrusted(case: Case) -> None:
     case(untrusted)
+
+
+@pytest.mark.criterion("roles#acceptance-stash-guard-private-path", source=SOURCE)
+def test_blind_count(case: Case) -> None:
+    case(blind_count)
