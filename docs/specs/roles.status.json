@@ -170,6 +170,10 @@
       "tests": [
         "tests/gate/kit/launch_stash_guard.py"
       ]
+    },
+    "acceptance-stash-guard-private-path": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
