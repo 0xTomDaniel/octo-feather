@@ -84,8 +84,87 @@ def test_follow_up(tmp_path: Path) -> None:
         f"octo-feather-slot: the heavy slot is granted to lane gh8 until {until} (lane gh7's run "
         f"ended, no run within the {grace} s grace); run your heavy run now."
     )
-    passed = "octo-feather-slot: heavy slot passed from lane gh7 to lane gh8; queue left: none."
-    assert notices(o) == [Notice("w8:p1", "default", told), Notice("w1:p1", "default", passed)]
+    assert notices(o) == [Notice("w8:p1", "default", told)]  # the director: the log line only
+    assert q.status()[-1] == (
+        "  last: 2027-01-15T08:00:05Z heavy: passed from lane gh7 to lane gh8; queue left: none"
+    )
+
+
+def test_self_grant_ends(tmp_path: Path) -> None:
+    """A self-grant with nobody queued ends a grace after its run ended (#1327): another lane's run
+    then takes the free slot at once; a self-grant whose hold was killed (no end recorded) ends at
+    the next check. Nobody told; a log line each."""
+    grace = 60
+    q, clock, lanes = world(tmp_path, grace, 1200)
+    q.release(take_self(q, lanes))
+    clock.now += grace * 1000 - 1  # inside the grace: it keeps the slot
+    assert q.settle(quiet=True).steps == ()
+    assert q.status()[1].startswith("  holder: gh7 (granted "), q.status()
+    clock.now += 1
+    o = q.settle(quiet=True)
+    assert o.steps == (
+        Line(
+            "2027-01-15T08:01:00Z settle heavy: lane gh7's self-grant ended (its run ended, no run "
+            "within the 60 s grace)"
+        ),
+    ), o
+    assert q.status()[1] == "  holder: none", q.status()
+    killed = take_self(q, lanes, "gh8", "w8:p3")
+    killed.f.close()  # its hold killed: the lock freed, no end recorded
+    clock.now += 1000
+    o = q.settle(quiet=True)
+    assert o.steps == (
+        Line(
+            "2027-01-15T08:01:01Z settle heavy: lane gh8's self-grant ended (no run holds it and "
+            "none recorded its end)"
+        ),
+    ), o
+    assert notices(o) == []
+    st = q.status()
+    assert st[1] == "  holder: none", st
+    assert st[-1] == (
+        "  last: 2027-01-15T08:01:01Z heavy: lane gh8's self-grant ended (no run holds it and "
+        "none recorded its end)"
+    ), st
+    q.release(take_self(q, lanes))
+
+
+def test_director_grant_kept(tmp_path: Path) -> None:
+    """A director's grant with nobody queued keeps its hours after its run ended (#1327)."""
+    q, clock, _lanes = world(tmp_path, 1, 2)
+    q.grant("gh7", "w1:p1", 2.0)
+    q.release(take(q))
+    clock.now += 3000
+    assert q.settle(quiet=True).steps == ()
+    assert q.status()[1].startswith("  holder: gh7 (granted 2027-01-15T08:00:00Z by w1:p1")
+
+
+def test_archived_dropped(tmp_path: Path) -> None:
+    """A queued lane whose lane record is gone is dropped at the check, never granted; a log line
+    (#1327)."""
+    q, clock, lanes = world(tmp_path, 1, 1200)
+    q.grant("gh7", "w1:p1", 2.0)
+    q.queue("gh8", "w1:p1", lanes, "default")
+    q.release(take(q))
+    (lanes / "gh8.toml").unlink()
+    clock.now += 2000
+    o = q.settle(quiet=True)
+    gone = lanes / "gh8.toml"
+    assert o.steps == (
+        Line(f"2027-01-15T08:00:02Z settle heavy: lane gh8 dropped from the queue: {gone} gone"),
+    ), o
+    st = q.status()
+    assert st[1].startswith("  holder: gh7 (granted "), st
+    assert st[3] == "  queue: none", st
+    assert st[-1] == f"  last: {o.steps[0].text.replace(' settle heavy:', ' heavy:')}", st
+
+
+def take_self(q: SlotQueue, lanes: Path, lane: str = "gh7", pane: str = "w9:p3") -> Taken:
+    """LANE's run from PANE granted the free slot at once."""
+    got = ask(q, lanes, lane, pane)
+    assert isinstance(got, Taken), got
+    assert got.held.endswith("(granted at once: the heavy slot free, queue empty)"), got.held
+    return got
 
 
 def test_regranted(tmp_path: Path) -> None:

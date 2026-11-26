@@ -3315,15 +3315,16 @@ def drive_template_edge(f: Feature) -> None:
 def drive_run_slots(f: Feature) -> None:
     """The box's heavy-run slot (octo-feather-slot --help) as a lane's implementer and the director meet it, in
     scratch box state: a lane gh7 whose implementer's `just test` over a 31-item scratch suite, the slot free and
-    nobody queued, is granted the slot at once for its lane and runs, nobody told (#1326); the implementer's own grant
-    refused; the director's grant; status naming
+    nobody queued, is granted the slot at once for its lane and runs, nobody told (#1326); its next run, red, then a
+    grace with no run: its self-grant ends and gh8's implementer's run is granted the slot at once (#1327); the
+    implementer's own grant refused; the director's grant; status naming
     the holder; the same run then holding the slot and passing; the lock released after it. The queue: gh8 queued
     onto gh7's slot, nothing passed before gh7 ran, the slot passed to gh8 a grace after gh7's run ended with gh8's
-    supervisor and the director told (a stand-in herdr-say records each message), gh7's next run then queuing gh7
+    supervisor told, the director not (a stand-in herdr-say records each message), gh7's next run then queuing gh7
     itself and saying its place, gh7's supervisor told it and the director nothing, and a
     lane queued onto a free kind granted at once. Manual moves and pass-over (#977): a revoke frees the slot, the
-    head granted only after the grace; a revoke then a grant by hand inside the grace keeps the director's choice;
-    that hand-granted lane, starting no run within the bound, passed over to the head. herdr-say is the checkout's own; Herdr (`herdr`) is a stand-in first on
+    head granted only after the grace, the director not told; a revoke then a grant by hand inside the grace keeps the director's choice;
+    that hand-granted lane, starting no run within the bound, passed over to the head, the director told once. herdr-say is the checkout's own; Herdr (`herdr`) is a stand-in first on
     PATH recording each prompt, also behind the justfile's PATH, which puts the kit's herdr-say first. Cases:
     features/run-slots.md."""
     sc = RUN_DIR / "scratch" / "run-slots"
@@ -3341,6 +3342,9 @@ def drive_run_slots(f: Feature) -> None:
     (sc / "suite").mkdir()
     (sc / "suite" / "pytest.ini").write_text("[pytest]\naddopts = -p no:cacheprovider\n")
     (sc / "suite" / "test_many.py").write_text("import pytest\n@pytest.mark.parametrize('n', range(31))\ndef test_n(n): pass\n")
+    shutil.copytree(sc / "suite", sc / "red")  # the same, and one failing test: a red run
+    (sc / "red" / "test_red.py").write_text("def test_red():\n    assert False\n")
+    log = sc / "state" / "octo-feather" / "slots" / "heavy.log"  # the slot log (octo-feather-slot --help, Files)
     grace = 2  # the queue's grace, shortened through its knob (octo-feather-slot --help)
     bound = 6  # the bound, shortened likewise, for the manual-move cases; 30 before them
     box = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "default",   # scratch slots and lane records
@@ -3348,6 +3352,7 @@ def drive_run_slots(f: Feature) -> None:
            "PATH": f"{sc / 'bin'}{os.pathsep}{os.environ['PATH']}"}
     agent = {**box, "OCTO_FEATHER_ROLE": "implementer", "HERDR_PANE_ID": "w9:p3", "OCTO_FEATHER_PARENT": "w9:p1",
              "HERDR_WORKSPACE_ID": "w9"}
+    agent8 = {**agent, "HERDR_PANE_ID": "w8:p3", "OCTO_FEATHER_PARENT": "w8:p1", "HERDR_WORKSPACE_ID": "w8"}
     director = {**box, "OCTO_FEATHER_ROLE": "director", "HERDR_PANE_ID": "w1:p1"}
     gate = ("just", "--justfile", f"{f.s.repo}/justfile", "test", str(sc / "suite"))
     f.env = agent
@@ -3361,7 +3366,20 @@ def drive_run_slots(f: Feature) -> None:
     f.run("self-grant-status", "octo-feather-slot", "status")
     f.check("self-grant-status", lambda c: c.code == 0 and " by self w9:p3, expires " in c.out
             and "  last: " in c.out and " heavy: lane gh7 granted at once, by self w9:p3" in c.out)
-    subprocess.run(["sleep", "1.1"], check=False)  # the director's grant below: a fresh since, no run under it
+    f.run("self-red", "just", "--justfile", f"{f.s.repo}/justfile", "test", str(sc / "red"))
+    f.check("self-red", lambda c: c.code != 0 and "heavy slot: held: the heavy slot for lane gh7, run pid " in c.out
+            and "granted at once" not in c.out and "1 failed" in c.out)
+    subprocess.run(["sleep", str(grace + 0.5)], check=False)  # the grace after gh7's red run, no run of gh7 since
+    f.env = agent8
+    f.run("self-ended", *gate)
+    f.obs("self-ended", "said", said.read_text() if said.exists() else "")
+    f.obs("self-ended", "log", log.read_text())
+    f.check("self-ended", lambda c: c.code == 0 and "heavy slot: held: the heavy slot for lane gh8, run pid " in c.out
+            and "(granted at once: the heavy slot free, queue empty)" in c.out and "31 passed" in c.out
+            and c.o["said"] == "" and (
+                f"heavy: lane gh7's self-grant ended (its run ended, no run within the {grace} s grace)\n") in c.o["log"]
+            and c.o["log"].endswith(" heavy: lane gh8 granted at once, by self w8:p3\n"))
+    subprocess.run(["sleep", str(grace + 0.5)], check=False)  # gh8's self-grant ends too: the director's grant fits
     f.env = director
     f.run("grant", "octo-feather-slot", "grant", "gh7", "--kind", "heavy")
     f.check("grant", lambda c: c.code == 0 and c.out.startswith("granted: heavy slot to lane gh7 (granted ") and "by w1:p1, expires " in c.out)
@@ -3394,8 +3412,7 @@ def drive_run_slots(f: Feature) -> None:
         "agent prompt w8:p1 octo-feather-slot: the heavy slot is granted to lane gh8 until "
         f"{c.out.split('holder: gh8 (granted ', 1)[1].split(', expires ', 1)[1].split(')', 1)[0]} "
         f"(lane gh7's run ended, no run within the {grace} s grace); run your heavy run now.{wait}"
-        f"agent prompt w1:p1 octo-feather-slot: heavy slot passed from lane gh7 to lane gh8; queue left: none.{wait}"
-    ) == c.o["said"])
+    ) == c.o["said"] and " heavy: passed from lane gh7 to lane gh8; queue left: none" in c.out)
     told = said.read_text()
     f.run("self-queue", *gate)
     f.obs("self-queue", "said-since", said.read_text()[len(told):])
@@ -3423,15 +3440,13 @@ def drive_run_slots(f: Feature) -> None:
                 break
             subprocess.run(["sleep", "0.5"], check=False)
 
-    def last(n: int) -> str:
-        return "".join(said.read_text().splitlines(keepends=True)[-n:])
-
     def expires(out: str, lane: str) -> str:
         return heavy(out).split(f"holder: {lane} (granted ", 1)[1].split(", expires ", 1)[1].split(")", 1)[0]
 
     f.run("queue-behind", "octo-feather-slot", "queue", "gh7", "--kind", "heavy")
     f.check("queue-behind", lambda c: c.code == 0
             and c.out == "gh7 is already queued for the heavy slot, position 1; nothing changed\n")
+    told = said.read_text()
     f.run("revoke", "octo-feather-slot", "revoke", "gh8", "--kind", "heavy")
     f.check("revoke", lambda c: c.code == 0 and c.out == (
         f"revoked: heavy slot of lane gh8\nthe heavy slot passes to lane gh7 after the {grace} s grace\n"))
@@ -3440,13 +3455,11 @@ def drive_run_slots(f: Feature) -> None:
             and "  queue: 1. gh7 (queued " in c.out and f"to the queue's head after the {grace} s grace" in c.out)
     until_holds("gh7")
     f.run("freed-handed", "octo-feather-slot", "status")
-    f.obs("freed-handed", "said", last(2))
+    f.obs("freed-handed", "said-since", said.read_text()[len(told):])
     f.check("freed-handed", lambda c: c.code == 0 and "  holder: gh7 (granted " in heavy(c.out) and " by queue, " in c.out and (
         f"agent prompt w9:p1 octo-feather-slot: the heavy slot is granted to lane gh7 until {expires(c.out, 'gh7')} "
         f"(the slot free for the {grace} s grace); run your heavy run now.{wait}"
-        f"agent prompt w1:p1 octo-feather-slot: heavy slot free for the {grace} s grace, granted to lane gh7; queue "
-        f"left: none.{wait}"
-    ) == c.o["said"])
+    ) == c.o["said-since"])
     box |= {"OCTO_FEATHER_SLOT_BOUND": str(bound)}
     director |= {"OCTO_FEATHER_SLOT_BOUND": str(bound)}
     f.env = director
@@ -3464,12 +3477,12 @@ def drive_run_slots(f: Feature) -> None:
             and "  queue: 1. gh8 (queued " in c.out and c.o["said-since"] == "")
     until_holds("gh8")
     f.run("passed-over", "octo-feather-slot", "status")
-    f.obs("passed-over", "said", last(3))
+    f.obs("passed-over", "said", said.read_text()[len(told):])
     f.check("passed-over", lambda c: c.code == 0 and "  holder: gh8 (granted " in c.out and (
         f"agent prompt w8:p1 octo-feather-slot: the heavy slot is granted to lane gh8 until {expires(c.out, 'gh8')} "
         f"(lane gh6 started no heavy run within the {bound} s bound); run your heavy run now.{wait}"
         f"agent prompt w6:p1 octo-feather-slot: lane gh6's heavy grant passed to lane gh8: no heavy run started under "
-        f"it within the {bound} s bound; to run, ask the director: octo-feather-slot queue gh6 --kind heavy.{wait}"
+        f"it within the {bound} s bound; your lane's next heavy run queues it again.{wait}"
         f"agent prompt w1:p1 octo-feather-slot: heavy slot passed over lane gh6 (no run within the {bound} s bound) to "
         f"lane gh8; queue left: none.{wait}"
     ) == c.o["said"])
