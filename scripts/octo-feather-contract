@@ -11,9 +11,12 @@ The schema is enforced by jsonschema (python-jsonschema, every keyword of the dr
 schema's $schema names), pinned in the kit's pyproject.toml and uv.lock. Run from any
 python without it (PATH in a target repo, the qc sandbox, CI), this script re-runs itself
 in the kit's project environment: `uv run --project <kit> --locked --offline --no-dev`, the
-locked dependencies from the uv cache or the kit's synced .venv, never the network.
+locked dependencies from the uv cache or the kit's synced .venv, never the network. uv starts in
+the kit, so a mise shim resolves the kit's own uv pin (mise.toml) wherever the caller runs, a
+target pinning no uv included, and --directory runs the script from the caller's directory.
 """
 import glob, json, os, re, sys, tomllib
+from pathlib import Path
 
 ME = "octo-feather-contract"
 KIT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -28,9 +31,10 @@ except ImportError:
         sys.exit(2)
     env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
     env[REEXEC] = "1"
-    cmd = ["uv", "run", "--project", KIT, "--locked", "--offline", "--no-dev", "--quiet",
+    cmd = ["uv", "run", "--directory", str(Path.cwd()), "--project", KIT, "--locked", "--offline", "--no-dev", "--quiet",
            "python", os.path.abspath(__file__), *sys.argv[1:]]
     try:
+        os.chdir(KIT)
         os.execvpe("uv", cmd, env)
     except OSError as e:
         print(f"{ME}: cannot run uv for the kit's locked jsonschema ({e}); install uv, then: uv sync --locked --project {KIT}", file=sys.stderr)
