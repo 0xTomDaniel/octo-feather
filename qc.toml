@@ -71,8 +71,8 @@ covers = ["scripts/octo-feather-qc-sandbox", "package.json", "pnpm-lock.yaml", "
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-advisory"
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qa", "evals/judgment-criterion-evidence", "tests/fixtures/classify-stub/pi"]
 
+# No command: tests/qc-fallback.sh, tagged with it, proves it (quality spec #qc-contract).
 [demo."quality#acceptance-qc-fallback"]
-command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-fallback"
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-lane"]
 
 [demo."quality#acceptance-built-links"]
@@ -295,8 +295,8 @@ covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-qc", "scripts/
 # testkit's Herdr stand-in: a worker's --parent completion while its supervisor compacts is never resent, delivered once
 # after compaction (delivered 1, attempts 1); compaction past the bound leaves it queued, not resent. The worker half (#883),
 # a worker sending once on that uncertain result, is a model eval, not a qc demo (the eval slot, 18 runs of minutes each):
-# scripts/octo-feather-qa --suite worker-uncertain-send --runs 3 --baseline origin/main, read by the agent fallback judge in
-# evidence/2026-11-13-gh840-worker-uncertain-send.md (pass rates on both kits).
+# scripts/octo-feather-qa --suite worker-uncertain-send --runs 3 --baseline origin/main, run in
+# evidence/2026-11-13-gh840-worker-uncertain-send.md (pass rates on both kits). No proof yet: planned (ADR 0035).
 [demo."comms#acceptance-queued-completion"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 queued-completion"
 covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-queued", "tests/gate/kit/testkit/herdr.py", "agents/implementer.md", "agents/code-reviewer.md", "evals/worker-uncertain-send", "evidence/2026-11-13-gh840-worker-uncertain-send.md"]
@@ -316,8 +316,8 @@ command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --
 covers = ["scripts/octo-feather-handoff", "agents/supervisor.md", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/result-missing.md"]
 
 # No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-delegation --runs 3 --baseline
-# origin/main), which needs the eval slot and a real model route: not a qc demo. The agent fallback judge reads its run
-# in evidence/2026-11-13-gh840-supervisor-delegation.md (pass rates on both kits).
+# origin/main), which needs the eval slot and a real model route: not a qc demo. Its run is
+# in evidence/2026-11-13-gh840-supervisor-delegation.md (pass rates on both kits). No proof yet: planned (ADR 0035).
 [demo."roles#acceptance-supervisor-delegates-execution"]
 covers = ["agents/supervisor.md", "agents/implementer.md", "evals/supervisor-delegation", "evals/fixtures/lane-shout-qc-red", "evals/fixtures/lane-shout-qc-red-lane", "evals/fixtures/lane-shout-qc-repaired", "evals/fixtures/lane-shout-qc-fixed", "evidence/2026-11-13-gh840-supervisor-delegation.md"]
 
@@ -326,8 +326,9 @@ covers = ["agents/supervisor.md", "agents/implementer.md", "evals/supervisor-del
 covers = ["agents/supervisor.md", "evals/supervisor-delegation", "evals/supervisor-notifications", "evals/fixtures/lane-shout-base", "evals/fixtures/lane-shout-names", "evals/fixtures/lane-shout-qc-fixed", "evals/fixtures/lane-shout-merged", "evals/fixtures/lane-shout-integrated", "scripts/octo-feather-qa", "evidence/2026-11-13-gh840-supervisor-delegation.md"]
 
 # No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-autonomy --runs 3 --baseline
-# origin/main), which needs the eval slot and a real model route: not a qc demo. The agent fallback judge reads its run in
-# evidence/2026-11-13-gh840-supervisor-autonomy.md (pass rates on both kits, director messages, hand-off log lines).
+# origin/main), which needs the eval slot and a real model route: not a qc demo. Its run is in
+# evidence/2026-11-13-gh840-supervisor-autonomy.md (pass rates on both kits, director messages, hand-off log lines). No
+# proof yet: planned (ADR 0035).
 [demo."comms#acceptance-autonomous-local"]
 covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11-13-gh840-supervisor-autonomy.md"]
 

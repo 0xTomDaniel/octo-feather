@@ -369,7 +369,7 @@ class Box:
         return (d / "demo.stdout").read_text() + (d / "demo.stderr").read_text()
 
     def copycase(self, mode: str, *gone: str) -> None:
-        """One judge in MODE, its credential copies GONE gone, the worktree pristine and no Pi
+        """One demo run in MODE, its credential copies GONE gone, the worktree pristine and no Pi
         credential left (tests/qc-copies.sh, tests/qc-oauth.sh)."""
         self.run(0, mode, STATUS, "5", "acceptance-a")
         for f in gone:

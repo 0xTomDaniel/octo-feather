@@ -40,13 +40,12 @@ that end's snapshot: no call's command runs before the snapshot of the call befo
 (schema.md, Before targets, stated limit: exact while turns separate calls).
 
 FAKE_QC set: the qc sandbox items' Pi instead (tests/qc*.sh, their box testkit/qc_box.py: its
-declared demo `pi qc-demo`, and the advisory's classify run), a print-mode run answering per brief: `--version` exits 0; LINEAR_API_KEY in its env prints LINEAR
-KEY IN JUDGE ENV; then the mode's turn (QC_TURNS, run as its bash tool would), and its report on
-the brief's head (`head <sha>` in its argv): dup, head, mixed, garbage, argv, hang (sleeps,
-FAKE_QC_TOK in its argv) and writes answer their own way, every other mode acceptance-a passed
-(rewrite only when its turn exits 0). creds (tests/qc-creds.sh): a Pi that reaches the model only with both of
-$HOME/.pi/agent's auth.json and models.json holding a key (else exit 9), its classify path (-e)
-the testkit's classifier stub (tests/fixtures/classify-stub/pi), its judge acceptance-b passed.
+declared demo `pi qc-demo`, and the advisory's classify run): `--version` exits 0; LINEAR_API_KEY
+in its env prints LINEAR KEY IN JUDGE ENV; then the mode's turn (QC_TURNS, run as its bash tool
+would; a mode with none, such as mixed or plain, runs nothing), exit 0. creds (tests/qc-creds.sh):
+a Pi that reaches the model only with both of $HOME/.pi/agent's auth.json and models.json holding
+a key (else exit 9), its classify path (-e) the testkit's classifier stub
+(tests/fixtures/classify-stub/pi).
 """
 
 # ruff: noqa: E501, S606, S607
@@ -77,9 +76,6 @@ QC_TURNS = {
     # uv add's reinstall: remove an ignored nested dir the real worktree holds, then recreate it
     "venv": r'''rm -rf .venv 2>&1; echo "VENV rm exit $?"
 mkdir -p .venv/lib/x.dist-info && echo judge > .venv/lib/x.dist-info/RECORD && echo "VENV recreated"''',
-    # a tracked dir replaced: opaque in the upper
-    "opaque": r"""rm -rf docs && mkdir -p docs/specs && echo x > docs/specs/other.html""",
-    "tracked": r"""echo hacked >> .gitignore; rm docs/specs/demo.spec.html""",
     "copycreds": r"""mkdir -p scratch; cp -p "$HOME/.pi/agent/auth.json" scratch/a; cp -p "$HOME/.pi/agent/models.json" .git/m""",
     "bigcopy": r"""mkdir -p scratch; cp "$HOME/.pi/agent/auth.json" scratch/big; truncate -s 67108865 scratch/big""",
     # auth A becomes B, keep B, B becomes C (a refresh between two judge copies), and stash into HOME
@@ -129,7 +125,7 @@ unshare -rm sh -c 'mount -o remount,bind,rw "$1" && touch "$1/judge2"' _ "$vc" 2
     "nested": r'''h="$(mktemp -d)"; git clone -q "$PWD" "$h/repo"   # its own worktree: the outer overlay is covered there
 # The judge's PATH as is: `herdr` there is the outer sandbox's shim; the nested run wraps the real (fake) binary.
 o="$(cd "$h/repo" && env -u XDG_STATE_HOME -u HERDR_SESSION -u HERDR_SOCKET_PATH -u HERDR_BIN_PATH HOME="$h" PATH="${0%/pi}:$PATH" \
-  FAKE_QC=garbage octo-feather-qc docs/specs/demo.status.json 5 acceptance-a 2>&1)"; echo "NESTED exit $?"
+  FAKE_QC=plain octo-feather-qc docs/specs/demo.status.json 5 acceptance-a 2>&1)"; echo "NESTED exit $?"
 grep -q 'qc sandbox: ok   writable persistent paths: none$' <<< "$o" && grep -q 'qc sandbox: ok   [1-9][0-9]* writable mounts covered' <<< "$o" \
   || echo "MISSING nested proof: $o"
 grep -q 'qc sandbox: ok   live Herdr unreachable: raw herdr --session default workspace list exits 1$' <<< "$o" \
@@ -181,39 +177,9 @@ pi --version""",
 }
 
 
-def qc_report(h: str, *criteria: dict[str, str], pre: str = "") -> str:
-    """A judge's report on head H: its json block, PRE before it."""
-    return f"{pre}```json\n{json.dumps({'head': h, 'criteria': list(criteria)})}\n```\n"
-
-
-def qc_c(i: str, verdict: str, command: str, output: str, why: str = "") -> dict[str, str]:
-    d = {"id": i, "verdict": verdict, "command": command, "output": output}
-    return d | ({"why": why} if why else {})
-
-
-def qc_replies(said: str, h: str) -> dict[str, str]:
-    """Each mode's reply on head H, SAID its brief (docstring)."""
-    ok = qc_c("acceptance-a", "pass", "app a --json", "ok", "shown")
-    b = qc_c("acceptance-b", "fail", "app b --json", "error", "no b")
-    a_ok = qc_c("acceptance-a", "pass", "app a --json", '{"ok": true}', "shown")
-    dup = (qc_c("acceptance-a", "pass", "a", "ok"), qc_c("acceptance-a", "fail", "a", "no"))
-    why = "model reached: auth.json and models.json copies"
-    return {
-        **dict.fromkeys(QC_TURNS, qc_report(h, ok)),
-        "creds": qc_report(h, qc_c("acceptance-b", "pass", "judge b", "ok", why)),
-        "dup": qc_report(h, *dup, qc_c("acceptance-b", "pass", "b", "ok")),
-        "head": qc_report("0" * 40, ok),
-        # one judge per criterion: answer the one the brief names
-        "mixed": qc_report(h, b if "- acceptance-b:" in said else a_ok, pre="done\n"),
-        "garbage": "I think it works.\n",
-        "argv": f"ARGV {json.dumps(a)}\n{qc_report(h, ok)}",
-        "writes": "```json\n" + json.dumps({"criteria": []}) + "\n```\n",
-    }
-
-
-def qc_creds() -> str:
+def qc_creds() -> NoReturn:
     """creds: model access only with both credential files; the classify path (-e) the testkit's
-    classifier stub. The judge's brief, its last argument."""
+    classifier stub."""
     for f in ("auth.json", "models.json"):
         p = Path.home() / ".pi" / "agent" / f
         if not (p.is_file() and "SECRET-pi" in p.read_text()):
@@ -222,34 +188,26 @@ def qc_creds() -> str:
     if "-e" in a:
         stub = Path(__file__).resolve().parents[3] / "fixtures" / "classify-stub" / "pi"
         os.execv(stub, [str(stub), *a])
-    return a[-1]
+    sys.exit(0)
 
 
-def qc_judge() -> NoReturn:
-    """The qc judge's run in FAKE_QC's mode (docstring)."""
+def qc_pi() -> NoReturn:
+    """The qc sandbox items' Pi in FAKE_QC's mode (docstring)."""
     mode = os.environ["FAKE_QC"]
     if a == ["--version"]:
         sys.exit(0)
-    said = qc_creds() if mode == "creds" else " ".join(a)
-    if mode != "creds" and "LINEAR_API_KEY" in os.environ:  # remote#acceptance-linear-key-qc
+    if mode == "creds":
+        qc_creds()
+    if "LINEAR_API_KEY" in os.environ:  # remote#acceptance-linear-key-qc
         sys.stdout.write("LINEAR KEY IN JUDGE ENV\n")
         sys.stdout.flush()
-    m = re.search(r"head ([0-9a-f]{40})", said)
-    if mode == "hang":
-        os.execvp("sleep", ["sleep", f"3040{os.environ.get('FAKE_QC_TOK', '')}"])
-    if mode == "writes":
-        Path("judge-was-here").write_text("hacked\n")
-        Path("scratch").mkdir(exist_ok=True)
-        Path("scratch/fine").write_text("ignored\n")
-    turn = ["bash", "-c", QC_TURNS.get(mode, ""), sys.argv[0]]
-    if mode in QC_TURNS and subprocess.run(turn, check=False).returncode and mode == "rewrite":
-        sys.exit(0)  # its copies not writable: no report
-    sys.stdout.write(qc_replies(said, m.group(1) if m else "").get(mode, ""))
+    if mode in QC_TURNS:
+        subprocess.run(["bash", "-c", QC_TURNS[mode], sys.argv[0]], check=False)
     sys.exit(0)
 
 
 if os.environ.get("FAKE_QC"):
-    qc_judge()
+    qc_pi()
 if "-p" in a and "--mode" not in a and "-e" not in a:  # print mode (docstring)
     i = a.index("-p") + 1
     prompt = a[i] if i < len(a) else sys.stdin.read()

@@ -849,7 +849,7 @@ start cwd=invocation_directory():
 supervise issue cwd=invocation_directory():
     octo-feather-start --issue "$1" --cwd "$2"
 
-# Product QC (docs/adr/0022, octo-feather-qc): each claimed criterion its qc.toml declares a demo for is captured and decided by the demo's checks; the rest a fresh cross-family judge; passed ones become built. Never inside `just check`.
+# Product QC (docs/adr/0022, octo-feather-qc): each claimed criterion its qc.toml declares a demo for is captured and decided by the demo's checks, a tagged test's from the gate's record; one with neither gets insufficient evidence (ADR 0035); passed ones become built. Never inside `just check`.
 # Arguments reach bash as "$@" and exported variables, never as interpolated source (#30, #61).
 [no-cd]
 qc $status $pr +$ids:

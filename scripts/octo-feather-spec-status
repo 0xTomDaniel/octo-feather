@@ -553,7 +553,7 @@ def _changes(top: Path, commit: str, paths: list[str]) -> tuple[list[str], list[
 
 
 def _demo(top: Path, commit: str, cid: str) -> Entry | None:
-    """The demo qc.toml at the repo root declared for criterion id CID at COMMIT, or None (the agent fallback's)."""
+    """The demo qc.toml at the repo root declared for criterion id CID at COMMIT, or None (no declared demo)."""
     rc, shown = _run(top, "show", f"{commit}:qc.toml")
     try:
         demos: dict[str, Any] = tomllib.loads(shown).get("demo", {}) if not rc else {}
@@ -563,7 +563,7 @@ def _demo(top: Path, commit: str, cid: str) -> Entry | None:
 
 
 def covered(top: Path, commit: str, cid: str) -> list[str]:
-    """The paths CID's demo at COMMIT covers (_demo): none for the agent fallback's."""
+    """The paths CID's demo at COMMIT covers (_demo): none with no declared demo."""
     demo = _demo(top, commit, cid)
     return [str(x) for x in cast("list[object]", demo.get("covers", []))] if demo else []
 
