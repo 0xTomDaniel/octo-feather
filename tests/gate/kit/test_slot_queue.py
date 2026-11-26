@@ -5,13 +5,14 @@ of gh7 inside the grace keeps the slot; it passes after that run ends. regranted
 recorded against the grant it started under, never a later grant of its lane (#977). self_grant
 and self_queue: a run of a lane holding no grant takes a free slot for its lane at once, or
 queues its lane and says its place, the director told nothing (quality #recipes-static-first,
-#1326)."""
+#1326). In-process, so untagged: qc captures only a case that runs a command
+(tests/gate/conftest.py, qc_command); the criteria's tagged case is tests/gate/kit/test_slot.py's
+test_self_asked."""
 
 import json
 import os
 from pathlib import Path
 
-import pytest
 from slot_queue import Caller, Line, Notice, Outcome, Rule, SlotQueue, Taken
 
 T0 = 1_800_000_000_000  # 2027-01-15T08:00:00Z, in ms
@@ -189,7 +190,6 @@ def test_regranted(tmp_path: Path) -> None:
     assert o.steps == (), o
 
 
-@pytest.mark.criterion("quality#acceptance-slot-self-grant")
 def test_self_grant(tmp_path: Path) -> None:
     """The slot free, the queue empty: gh7's run is granted it at once (by self, its pane) and
     holds its lock; the director told nothing; the slot log's line shown by status."""
@@ -209,7 +209,6 @@ def test_self_grant(tmp_path: Path) -> None:
     q.release(got)
 
 
-@pytest.mark.criterion("quality#acceptance-slot-self-queue")
 def test_self_queue(tmp_path: Path) -> None:
     """gh8's run holds the slot: gh7's run, a worker's, queues gh7 once and is refused (75) with
     its place as the queue file holds it, gh7's supervisor told the place, the director nothing;
