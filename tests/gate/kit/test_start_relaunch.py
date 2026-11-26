@@ -10,9 +10,11 @@ import pytest
 from start_relaunch import (
     relaunch_busy,
     relaunch_own_scope,
+    relaunch_report,
     relaunch_short_wait,
     replace_none,
     replace_outgoing,
+    replace_report,
     resume_same_session,
 )
 
@@ -49,3 +51,13 @@ def test_replace_outgoing(case: Case) -> None:
 @pytest.mark.criterion("comms#acceptance-director-replace-outgoing")
 def test_replace_none(case: Case) -> None:
     case(replace_none)
+
+
+@pytest.mark.criterion("comms#acceptance-director-relaunch")
+def test_relaunch_report(case: Case) -> None:
+    case(relaunch_report)
+
+
+@pytest.mark.criterion("comms#acceptance-director-replace")
+def test_replace_report(case: Case) -> None:
+    case(replace_report)
