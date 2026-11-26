@@ -69,7 +69,7 @@ def test_checkout_follows_main(world: World) -> None:
 
 def test_merge_starts_routine(world: World) -> None:
     """The routine after the merge: the kit install and the director's checkout at M, lane gh8's
-    supervisor told main moved (not gh7's own), steps 1-6 ok and step 7 pending in the record (the
+    supervisor told main moved (not gh7's own), steps 1-7 ok and step 8 pending in the record (the
     lane not archived), code 3, the summary last."""
     lane, m = world.lane, world.lane.m
     shown, ran = routine(world)
@@ -79,7 +79,8 @@ def test_merge_starts_routine(world: World) -> None:
     assert [x.split("\t")[0] for x in told] == ["zt2:p1"], f"told: {told}"
     assert told[0].startswith(f"zt2:p1\tmain moved to {m[:12]} (#7 Add foo); "), told
     got = [(s.number, s.name, s.outcome) for s in ran.record.steps]
-    names = ("merged", "main CI", "kit refresh", "checkout", "stale agents", "tell supervisors")
-    assert got == [*((n, x, "ok") for n, x in enumerate(names, 1)), (7, "teardown", "pending")]
+    names = ("merged", "main CI", "kit refresh", "checkout", "coverage map", "stale agents")
+    names += ("tell supervisors",)
+    assert got == [*((n, x, "ok") for n, x in enumerate(names, 1)), (8, "teardown", "pending")]
     assert ran.code == 3, f"exit {ran.code}: {shown}"
-    assert shown[-1].endswith("step 6 tell supervisors ok; step 7 teardown pending"), shown
+    assert shown[-1].endswith("step 7 tell supervisors ok; step 8 teardown pending"), shown

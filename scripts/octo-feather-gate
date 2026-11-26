@@ -26,11 +26,15 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
       collects them (tests/gate/kit/). The selection reads the coverage map (below) and the list;
       an item without recorded coverage always runs; a tests/*.sh whose own header has the line
       `# gate: e2e`, or a pytest item carrying pytest's e2e marker, is end-to-end. A pytest item's
-      file is the file its node id names. Changed files count from the diff
-      base, the newer of the map head and the latest commit of HEAD's history with a recorded full
-      pass on a clean tree (record); a test item changed since the map head always runs. A changed
-      file no recorded coverage reaches that the list names, or that is absent at the map head (the
-      map cannot know it), runs every non-e2e item.
+      file is the file its node id names. Changed files count from the diff base, the newest of
+      the map head, the latest commit of HEAD's history with a recorded full pass on a clean tree
+      (record), and HEAD's merge base with the default branch as `changed` finds it (why: quality
+      #recipe-fast), each descending from the map head; a test item changed since the map head
+      always runs. A changed file no recorded coverage reaches that the list names, or that is
+      absent at the map head (the map cannot know it), runs every non-e2e item. When main's
+      newest map (the map nearest main's tip, main the default branch as `changed` finds it)
+      holds main commits the map used lacks, one line names the map used and how many;
+      selection goes on from it, never waiting or failing.
   octo-feather-gate changed
       The test items the change adds or changes, one pytest argument per line: a tests/*.sh as its
       test_gate.py node id, any other changed file as its path (a pytest item's file); test_gate.py
@@ -44,17 +48,26 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
       too: the change's net changes, so a file changed and restored is none, the same on CI (a
       checkout with the default branch's history). The default branch from local refs, no
       network: origin/HEAD; else origin/<name>, then the local <name>, for init.defaultBranch,
-      main, master. None found: none judged. Where from on stderr. Not select's diff base, which
-      is for selection. The gate's per-test CPU budget reads it (tests/gate/conftest.py; quality
+      main, master. None found: none judged. Where from on stderr. Select's diff base can be
+      newer (select). The gate's per-test CPU budget reads it (tests/gate/conftest.py; quality
       #acceptance-test-cpu-budget).
-  octo-feather-gate map DATA_DIR --junit FILE
+  octo-feather-gate changed --since-map
+      As changed, from the head of the newest map from HEAD or an ancestor (select's) instead of
+      the merge base, naming only test items still in the tree (a tests/*.sh, a test_*.py file):
+      what `just fast-map --since-newest` re-maps. No such map: exit 1, naming a full fast-map.
+  octo-feather-gate map DATA_DIR --junit FILE [--onto-newest]
       In the kit, under its uv venv (coverage): writes the coverage map from a mapping run's data
       (just fast-map), one coverage data dir per gate item, DATA_DIR/<item>/ (<item> GATE_ITEM: a
       tests/*.sh path, or a pytest node id, its `/` and `::` kept); files measured under
       /tmp copies of the kit map back to tracked files by their longest shared path suffix. FILE is
       the run's pytest junit xml: only an item it reports passed is mapped; a failed or skipped one
-      is left out and named in the map as not passed. An item with no data (not run, or no Python
-      measured) is left out of the map too.
+      is left out and named in the map as not passed. An item that passed with no data (no Python
+      measured) or with a data file coverage cannot read is left out of the map too; each left out
+      is named on stdout, always selected. --onto-newest (`just fast-map --since-newest`): the
+      map written is the newest map from HEAD or an ancestor (select's) with every entry of a
+      file whose items this run reports (FILE) replaced by this run's, the rest kept; no FILE, no
+      item ran, that map as it is, for HEAD; no such map: exit 1, nothing written. A map is
+      written whole (a temp file renamed over it), never half.
   octo-feather-gate untouched save FILE [--mise-state DIR] [--run-tmp TMP]
   octo-feather-gate untouched check FILE
       A gate run leaves the caller's mise state and its repo's git config as it found them (owner
@@ -345,8 +358,10 @@ def is_e2e(root: Path, item: str) -> bool:
 
 
 def diff_base(at: str) -> str:
-    """The newer of the map head AT and the latest commit of HEAD's history descending from it
-    with a recorded full pass on a clean tree (record): what that pass gated needs no selection."""
+    """The newest of the map head AT, the latest commit of HEAD's history descending from it
+    with a recorded full pass on a clean tree (record): what that pass gated needs no selection,
+    and HEAD's merge base with the default branch (main_base) descending from AT: main's own
+    changes before the branch left it are not the branch's."""
     best: tuple[int, str] = (int(git("rev-list", "--count", f"{at}..HEAD")), at)
     for rec in records():
         head = rec.get("head")
@@ -356,6 +371,18 @@ def diff_base(at: str) -> str:
             "merge-base", "--is-ancestor", head, "HEAD"
         ):
             best = min(best, (int(git("rev-list", "--count", f"{head}..HEAD")), head))
+    ref, base = main_base()
+    if base and ok("merge-base", "--is-ancestor", at, base):
+        n = int(git("rev-list", "--count", f"{base}..HEAD"))
+        if n < best[0]:
+            name = (ref or "").removeprefix("refs/heads/").removeprefix("refs/remotes/")
+            say(
+                f"diff base: {base[:12]}, HEAD's merge base with {name}",
+                f"newer than the map at {at[:12]}"
+                f"{'' if best[1] == at else f' and the full pass at {best[1][:12]}'}"
+                ": what main changed before the branch left it does not select",
+            )
+            return base
     if best[1] != at:
         say(
             f"diff base: {best[1][:12]}, the latest recorded full pass on HEAD's history",
@@ -408,10 +435,27 @@ def imported(root: Path, test: str, dirs: list[str]) -> set[str]:
     return out
 
 
-def changed_items() -> None:
-    """The test items the change adds or changes (--help, changed), as pytest arguments."""
+def main_base() -> tuple[str | None, str]:
+    """The default branch's ref (default_branch) and HEAD's merge base with it, empty when there
+    is no HEAD, no default branch or no merge base."""
     ref = default_branch() if ok("rev-parse", "--verify", "-q", "HEAD") else None
-    base = git("merge-base", "HEAD", ref, check=False).strip() if ref else ""
+    return ref, git("merge-base", "HEAD", ref, check=False).strip() if ref else ""
+
+
+def changed_items(*, since_map: bool = False) -> None:
+    """The test items the change adds or changes (--help, changed), as pytest arguments; with
+    SINCE_MAP those since the newest map's head, test items only."""
+    if since_map:
+        m = newest_map(git("rev-parse", "HEAD").strip())
+        if m is None:
+            sys.exit(
+                "octo-feather-gate changed --since-map: no coverage map from HEAD or an ancestor:"
+                " build a full one (just fast-map)"
+            )
+        base = str(m["head"])
+        ref = f"the map at {base[:12]}"
+    else:
+        ref, base = main_base()
     if not base:
         sys.stderr.write("changed: none judged: no default branch or no merge base with it\n")
         return
@@ -423,12 +467,17 @@ def changed_items() -> None:
         {str(Path(f).parent) for f in listed if re.fullmatch(r"(.*/)?(test_|conftest)[^/]*\.py", f)}
     )
     files |= {t for t in tests if (root / t).is_file() and imported(root, t, dirs) & files}
-    out = [
-        f"{NODE}test_script[{f}]" if re.fullmatch(r"tests/[^/]*\.sh", f) else f
-        for f in sorted(files)
-    ]
-    sys.stderr.write(f"changed: {len(out)} files since {base[:12]}, the merge base with {ref}\n")
+    if since_map:  # test items only, those still there: each a pytest argument a run can take
+        files = {f for f in files if (root / f).is_file() and (f in tests or is_script(f))}
+    out = [f"{NODE}test_script[{f}]" if is_script(f) else f for f in sorted(files)]
+    what = ref if since_map else f"the merge base with {ref}"
+    sys.stderr.write(f"changed: {len(out)} files since {base[:12]}, {what}\n")
     sys.stdout.write("".join(f"{i}\n" for i in out))
+
+
+def is_script(f: str) -> bool:
+    """Whether F is a tests/*.sh test item (its test_gate.py item)."""
+    return re.fullmatch(r"tests/[^/]*\.sh", f) is not None
 
 
 def beyond_map(at: str, base: str, unreached: list[str]) -> str:
@@ -441,6 +490,23 @@ def beyond_map(at: str, base: str, unreached: list[str]) -> str:
     why = [f"{', '.join(residual)} on {LIST}"] if residual else []
     why += [f"{', '.join(unknown)} absent at the map head {at[:12]}"] if unknown else []
     return "; ".join(why)
+
+
+def behind_main(at: str) -> None:
+    """Names the map at AT when main's newest map holds main commits AT lacks: how many."""
+    ref = default_branch()
+    newest = newest_map(git("rev-parse", ref).strip()) if ref else None
+    if ref is None or newest is None:
+        return
+    tip = str(newest["head"])
+    n = int(git("rev-list", "--count", f"{at}..{tip}"))
+    if n:
+        name = ref.removeprefix("refs/heads/").removeprefix("refs/remotes/")
+        say(
+            f"map at {at[:12]}",
+            f"{n} main commit{'s' * (n != 1)} behind main's newest map at {tip[:12]} ({name}):"
+            " more items may be selected; merge main for a newer map",
+        )
 
 
 def choose(root: Path, items: list[str], native_e2e: set[str]) -> set[str]:
@@ -456,6 +522,7 @@ def choose(root: Path, items: list[str], native_e2e: set[str]) -> set[str]:
         )
         return set(items)
     at = str(m["head"])
+    behind_main(at)
     cover: dict[str, list[str]] = m["items"]  # pyright: ignore[reportAssignmentType]
     failed: list[str] = m.get("not_passed", [])  # pyright: ignore[reportAssignmentType]
     base = diff_base(at)
@@ -532,6 +599,18 @@ def junit_key(item: str) -> str:
     return ".".join([path.removesuffix(".py").replace("/", "."), *rest[:-1]]) + "::" + rest[-1]
 
 
+def node_id(key: str, files: set[str]) -> str:
+    """A pytest junit key (junit_key) as its node id: the longest leading dotted path that is a
+    tracked PATH.py, the rest its classes; the key itself when none is."""
+    mod, _, name = key.partition("::")
+    parts = mod.split(".")
+    for n in range(len(parts), 0, -1):
+        path = "/".join(parts[:n]) + ".py"
+        if path in files:
+            return "::".join([path, *parts[n:], name])
+    return key
+
+
 def outcomes(junit: Path) -> dict[str, bool]:
     """Each test item in a pytest junit xml report (junit_key): whether it passed (no failure,
     error, skip)."""
@@ -552,14 +631,58 @@ def outcomes(junit: Path) -> dict[str, bool]:
     return out
 
 
-def build_map(data: Path, junit: Path) -> None:
+def write_map(
+    head: str,
+    items: dict[str, list[str]],
+    not_passed: list[str],
+    base: dict[str, object] | None,
+    redone: list[str],
+) -> list[str]:
+    """The map for HEAD written whole (a temp file renamed over it, so select never reads half a
+    map and a run killed while writing leaves none): ITEMS and NOT_PASSED, onto BASE (map
+    --onto-newest) with BASE's entries of the files of REDONE (the items this run reports)
+    replaced; its line on stdout. This run's not passed."""
+    said = f"{len(items)} test items mapped at {head[:12]}"
+    every, failed = items, not_passed
+    if base is not None:
+        kept = cast("dict[str, list[str]]", base["items"])
+        files = {source(i) for i in redone}
+        every = {i: f for i, f in kept.items() if source(i) not in files} | items
+        was = cast("list[str]", base.get("not_passed", []))
+        failed = sorted({i for i in was if source(i) not in files} | set(not_passed))
+        said = (
+            f"{len(redone)} test items re-mapped at {head[:12]} onto the map at"
+            f" {str(base['head'])[:12]} ({len(every)} in the map)"
+        )
+    out = map_dir() / f"{head}.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=out.parent, prefix=f".{head}.", suffix=".tmp")
+    with os.fdopen(fd, "w") as f:
+        f.write(json.dumps({"head": head, "items": every, "not_passed": failed}, indent=1) + "\n")
+    Path(tmp).replace(out)
+    sys.stdout.write(f"fast-map: {said}: {out}\n")
+    return not_passed
+
+
+def build_map(data: Path, junit: Path | None, *, onto: bool = False) -> None:
     import coverage  # noqa: PLC0415  # only map needs it: the kit's uv venv has it (pyproject.toml)
 
-    if not junit.is_file():
+    head = git("rev-parse", "HEAD").strip()
+    base = newest_map(head) if onto else None
+    if onto and base is None:
+        sys.exit(
+            "octo-feather-gate map --onto-newest: no coverage map from HEAD or an ancestor to"
+            " build onto: build a full one (just fast-map)"
+        )
+    if junit is None and not onto:
+        sys.exit("octo-feather-gate map: --junit FILE is needed: which items passed, unknown")
+    if junit is not None and not junit.is_file():
         sys.exit(f"octo-feather-gate map: no junit report at {junit}: which items passed, unknown")
-    ran = outcomes(junit)
+    ran = outcomes(junit) if junit is not None else {}
     tracked = Tracked()
     items: dict[str, list[str]] = {}
+    unread: list[str] = []
+    no_data: list[str] = []
     # The pytest items: each data dir named by a node id (GATE_ITEM holds its `/` and `::`).
     native = {f.parent.relative_to(data).as_posix() for f in data.rglob("cov*") if f.is_file()}
     native = {i for i in native if "::" in i}
@@ -574,24 +697,31 @@ def build_map(data: Path, junit: Path) -> None:
         if not ran.get(junit_key(i)):  # not run, or did not pass: partial coverage, always selected
             continue
         runs = list((data / i).glob("cov*"))
-        if not runs:  # not run, or no Python measured: no recorded coverage, so always selected
+        if not runs:  # no Python measured: no recorded coverage, so always selected
+            no_data.append(i)
             continue
         files: set[str] = set()
-        for f in runs:
-            cd = coverage.CoverageData(basename=str(f))
-            cd.read()
-            for m in cd.measured_files():
-                files |= tracked.source(m)
+        try:
+            for f in runs:
+                cd = coverage.CoverageData(basename=str(f))
+                cd.read()
+                for m in cd.measured_files():
+                    files |= tracked.source(m)
+        except coverage.CoverageException as e:  # a data file left unwritten: coverage unknown
+            unread.append(f"{i} ({e})")
+            continue
         items[i] = sorted(files)
-    head = git("rev-parse", "HEAD").strip()
-    out = map_dir() / f"{head}.json"
-    out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(
-        json.dumps({"head": head, "items": items, "not_passed": not_passed}, indent=1) + "\n"
-    )
-    sys.stdout.write(f"fast-map: {len(items)} test items mapped at {head[:12]}: {out}\n")
-    for i in not_passed:
-        sys.stdout.write(f"fast-map: {i} did not pass: left out of the map, always selected\n")
+    # A pytest item that passed and measured no Python has no data dir: named from the junit report.
+    seen = {junit_key(i) for i in scripts | native}
+    no_data += [
+        node_id(k, tracked.files) for k, good in sorted(ran.items()) if good and k not in seen
+    ]
+    redone = [node_id(k, tracked.files) for k in ran]
+    not_passed = write_map(head, items, not_passed, base, redone)
+    why = [f"{i} did not pass" for i in not_passed]
+    why += [f"{i}: no coverage data" for i in sorted(no_data)]
+    why += [f"{i}: coverage unreadable" for i in unread]
+    sys.stdout.write("".join(f"fast-map: {w}: left out of the map, always selected\n" for w in why))
 
 
 MISE_DIRS = ("tracked-configs", "trusted-configs")
@@ -760,10 +890,12 @@ def main() -> int:
     g = sub.add_parser("config")
     g.add_argument("rev", nargs="?", default="HEAD")
     sub.add_parser("select")
-    sub.add_parser("changed")
+    ch = sub.add_parser("changed")
+    ch.add_argument("--since-map", action="store_true")
     m = sub.add_parser("map")
     m.add_argument("data", type=Path)
-    m.add_argument("--junit", type=Path, required=True)
+    m.add_argument("--junit", type=Path)
+    m.add_argument("--onto-newest", action="store_true")
     u = sub.add_parser("untouched")
     u.add_argument("action", choices=("save", "check"))
     u.add_argument("file", type=Path)
@@ -785,9 +917,9 @@ def main() -> int:
     elif a.cmd == "select":
         select()
     elif a.cmd == "changed":
-        changed_items()
+        changed_items(since_map=a.since_map)
     else:
-        build_map(a.data, a.junit)
+        build_map(a.data, a.junit, onto=a.onto_newest)
     return 0
 
 
