@@ -28,6 +28,7 @@ scripts/octo-feather-integrate shell
 scripts/octo-feather-new-repo shell
 scripts/octo-feather-spec-chat shell
 scripts/octo-feather-start shell
+scripts/stash-guard/git shell
 scripts/octo-feather-state shell
 tests/fixtures/herdr-say/herdr shell
 tests/fixtures/herdr-spawn/herdr shell
