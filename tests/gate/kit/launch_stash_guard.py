@@ -201,9 +201,8 @@ def private_path(s: Scratch) -> None:
 
 
 def untrusted(s: Scratch) -> None:
-    """The trust rule (pi-role --help, Stash guard): with no git after the guard on the agent's
-    PATH, an OCTO_FEATHER_GIT that is the guard (its own path, a link to it, a copy of it), a
-    relative path or no executable file is not run: exit 127, naming it and why."""
+    """The trust rule for OCTO_FEATHER_GIT, as pi-role --help (Stash guard) states it, for each
+    value below: exit 127, naming the value and why."""
     _, second = two_worktrees(s)
     guard = ROOT / "scripts" / "stash-guard" / "git"
     (s.root / "link").symlink_to(guard)
@@ -222,5 +221,36 @@ def untrusted(s: Scratch) -> None:
         assert f"OCTO_FEATHER_GIT={value} {why}" in ran.err, (value, ran.err)
 
 
+# A git that answers every call by the real git but cannot list worktrees ($1: fails, or lists
+# none), so a stash write's worktree count fails.
+BLIND = '#!/bin/sh\ncase " $* " in *" worktree "*) {how} ;; esac\nexec {git} "$@"\n'
+
+
+def blind_count(s: Scratch) -> None:
+    """A stash write whose worktree count fails or lists none is refused, never run (fail closed;
+    which calls: scripts/stash_guard.py): from the second worktree, with python3 on the private
+    PATH so the linked guard runs its checker, the git it runs a stand-in that fails `worktree`
+    (exit 1) or lists none (exit 0, no output), reached as OCTO_FEATHER_GIT and as the next git
+    on PATH after the guard: git stash drop is refused naming a work-in-progress commit, and the
+    entry stays."""
+    first, second = two_worktrees(s)
+    entry = s.git(first, "stash", "list")
+    real = s.run(["sh", "-c", "command -v git"]).out
+    pre = 'ln -s "$(command -v python3)" "$d/python3"; '
+    for name, how in (("fails", "exit 1"), ("none", "exit 0")):
+        stand_in = s.root / name
+        stand_in.mkdir()
+        (stand_in / "git").write_text(BLIND.format(how=how, git=real))
+        (stand_in / "git").chmod(0o755)
+        for call in (
+            f"OCTO_FEATHER_GIT={stand_in}/git; export OCTO_FEATHER_GIT; git stash drop",
+            f'PATH="$d:{stand_in}"; export PATH; git stash drop',
+        ):
+            ran = agent(s, second, private(call, pre=pre), want=1)
+            assert WIP in ran.err, (name, call, ran.err)
+            assert "cannot tell whether another worktree" in ran.err, (name, call, ran.err)
+            assert s.git(first, "stash", "list") == entry, (name, call)
+
+
 if __name__ == "__main__":
-    main(refused, unchanged, private_path, untrusted)
+    main(refused, unchanged, private_path, untrusted, blind_count)
