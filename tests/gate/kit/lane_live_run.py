@@ -1,6 +1,6 @@
 """The scenarios of tests/gate/kit/test_lane_live_run.py (its items), this file their command
 (testkit.main): the live-run rule of issue-lifecycle #gates-main-moved (issue 1136) in the
-post-merge routine's kit refresh (step 3) and teardown (step 7), offline. Runs are the box's slot
+post-merge routine's kit refresh (step 3) and teardown (step 8), offline. Runs are the box's slot
 runs, taken by the kit's own `octo-feather-slot hold` (granted by `grant` as the director) under
 a scratch XDG_STATE_HOME, never the real one: each hold's recorded process (its parent) is a
 stand-in shell working in a chosen directory, which holds the lock while its stdin stays open.
@@ -11,7 +11,7 @@ another directory, `merge 7 H --repo o/r --wait 0` (the ticket's demo, printed) 
 stops naming the eval run, the install unmoved; `post-merge --wait 60` reruns step 3, waits while
 the eval run lives (it ends 2 s in), then moves the install to the merge commit while the heavy
 run still lives. teardown_waits: in
-lane_post_merge_teardown.py's world, a live heavy run working in the lane's worktree stops step 7,
+lane_post_merge_teardown.py's world, a live heavy run working in the lane's worktree stops step 8,
 nothing closed or removed; with it ended, a rerun tears down.
 """
 
@@ -104,7 +104,7 @@ def teardown_waits(s: Scratch) -> None:
     try:
         r, s7 = w.run(1)
         want = (
-            f"step 7 teardown: stopped: teardown waits: {run.named(w.wt)}; nothing closed or "
+            f"step 8 teardown: stopped: teardown waits: {run.named(w.wt)}; nothing closed or "
             "removed: rerun once it ends"
         )
         assert s7 == want, r.out
@@ -113,7 +113,7 @@ def teardown_waits(s: Scratch) -> None:
     finally:
         run.end()
     _, s7 = w.run(0)
-    assert s7.startswith("step 7 teardown: ok: space zt5 closed; "), s7
+    assert s7.startswith("step 8 teardown: ok: space zt5 closed; "), s7
     assert not w.wt.is_dir(), "worktree kept"
 
 

@@ -11,9 +11,15 @@ LANES/*.handoffs.jsonl and the director log beside LANES (director.handoffs.json
 stem), and one without a name is the supervisor: the lane's name. A director line names its
 own general worker and gains no lane.
 
-resume-workspace reads a worker's parked line on stdin and prints the workspace it resumes in:
-its recorded parent's (`herdr agent get PARENT`) while that parent is live, else the caller's
-HERDR_WORKSPACE_ID (comms spec #roles-park); an empty line when neither.
+resume-workspace [--parent] reads a parked line on stdin, as `parked` prints it, and resolves
+the parent its agent resumes with now (comms spec #say-parent): as `parent` resolves it for the
+line's session and role (a line naming its lane is that lane's supervisor), the owner record of
+the log holding the line (its `lane`'s record `supervisor`, else director.toml `pane`) standing
+in for a spawn line when none names the session; the line's own `parent` when none of these
+names a pane. With --parent it prints that parent (herdr-say's resume passes it to herdr-spawn
+or octo-feather-start --parent); else the workspace a worker resumes in: that parent's (`herdr
+agent get PARENT`) while it is live, else the caller's HERDR_WORKSPACE_ID (comms spec
+#roles-park); an empty line when neither.
 
 spawn [--ticket T] [--caller PANE] reads herdr-spawn's printed line on stdin (name= role= tab=
 pane= cwd= contract= provider_session_id=) and prints one spawn line for redirection into the
@@ -43,8 +49,10 @@ parent PANE prints the caller's parent pane, resolved by identity at each call (
 #say-parent: the parent survives park, restart and resume): the hand-off log holding a spawn or
 worker-spawn line whose `session` is the caller's OCTO_FEATHER_SESSION_ID (lane logs first, then the
 director log) names it through its owner record, the lane record's `supervisor` or director.toml's
-`pane`, as that record reads now, so a hand edit is what the next call follows. PANE (the frozen
-OCTO_FEATHER_PARENT) when no such line or no such key. Whether that pane is live is herdr-say's.
+`pane`, as that record reads now, so a hand edit is what the next call follows. No such line: a
+caller whose OCTO_FEATHER_ROLE is supervisor faces the director (docs/adr/0015), director.toml's
+`pane` as it reads now. PANE (the frozen OCTO_FEATHER_PARENT) when none of these names a pane.
+Whether that pane is live is herdr-say's.
 
 report reads a worker's report on stdin, for its `herdr-say --parent` (comms spec #notify-done):
 for a worker role (OCTO_FEATHER_ROLE implementer, code-reviewer, corrector or general-worker)
@@ -169,10 +177,12 @@ def owner_record(log: Path) -> tuple[Path, str]:
     return log.with_name(log.name.removesuffix(".handoffs.jsonl") + ".toml"), "supervisor"
 
 
-def own_spawn() -> tuple[Path, dict[str, object]] | None:
-    """The hand-off log holding the caller's spawn line (its `session` OCTO_FEATHER_SESSION_ID;
-    lane logs first, then the director log) and its latest such line, or None."""
-    session = os.environ.get("OCTO_FEATHER_SESSION_ID", "")
+def own_spawn(session: str | None = None) -> tuple[Path, dict[str, object]] | None:
+    """The hand-off log holding SESSION's spawn line (by default the caller's,
+    OCTO_FEATHER_SESSION_ID; lane logs first, then the director log) and its latest such line, or
+    None."""
+    if session is None:
+        session = os.environ.get("OCTO_FEATHER_SESSION_ID", "")
     if not session:
         return None
     state = state_dir()
@@ -185,13 +195,36 @@ def own_spawn() -> tuple[Path, dict[str, object]] | None:
     return None
 
 
+def resolve(session: str, role: str, pane: str, held_in: Path | None = None) -> str:
+    """The parent pane now of the agent with SESSION and ROLE (module docstring, parent): its
+    spawn line's log owner, a supervisor's director, else the owner of HELD_IN (the log holding
+    its parked line) when given, else PANE."""
+    found = own_spawn(session)
+    if found is not None:
+        return str(toml_key(*owner_record(found[0])) or pane)
+    if role == "supervisor":
+        return str(toml_key(state_dir() / "director.toml", "pane") or pane)
+    return str(toml_key(*owner_record(held_in)) or pane) if held_in is not None else pane
+
+
 def parent(args: argparse.Namespace) -> int:
     """Print the caller's parent pane (module docstring)."""
-    pane, found = cast("str", args.pane), own_spawn()
-    if found is not None:
-        pane = str(toml_key(*owner_record(found[0])) or pane)
-    sys.stdout.write(pane + "\n")
+    session = os.environ.get("OCTO_FEATHER_SESSION_ID", "")
+    role, pane = os.environ.get("OCTO_FEATHER_ROLE", ""), cast("str", args.pane)
+    sys.stdout.write(resolve(session, role, pane) + "\n")
     return 0
+
+
+def parked_parent(line: dict[str, object]) -> str:
+    """The parent now of the agent parked LINE (as `parked` prints it) names (module docstring,
+    resume-workspace): resolved as `parent` resolves it for that agent's session and role, the log
+    holding LINE (its `lane`'s, else the director log) standing in for a spawn line."""
+    state, lane = state_dir(), str(line.get("lane") or "")
+    held_in = state / "lanes" / f"{lane}.handoffs.jsonl" if lane else state / DIRECTOR_LOG
+    session, role = str(line.get("session") or ""), str(line.get("role") or "")
+    if lane and line.get("name") == lane:  # the lane's own supervisor (parked, above)
+        role = "supervisor"
+    return resolve(session, role, str(line.get("parent") or ""), held_in)
 
 
 def results_dir(log: Path) -> Path:
@@ -509,15 +542,19 @@ def ended_unreported(args: argparse.Namespace) -> int:
     return 0
 
 
-def resume_workspace(_: argparse.Namespace) -> int:
-    """Print the workspace a parked worker resumes in, or refuse (module docstring)."""
+def resume_workspace(args: argparse.Namespace) -> int:
+    """Print the workspace a parked worker resumes in, or with --parent the parent it resumes
+    with; or refuse (module docstring)."""
     try:
         line = json.loads(sys.stdin.read())
     except ValueError:
         line = None
     if not isinstance(line, dict):
         return refuse("stdin holds no parked JSON line", 65)
-    parent, space = str(cast("dict[str, object]", line).get("parent") or ""), ""
+    parent, space = parked_parent(cast("dict[str, object]", line)), ""
+    if args.parent:
+        sys.stdout.write(parent + "\n")
+        return 0
     if parent:
         get = ["herdr", "agent", "get", parent]
         try:
@@ -554,7 +591,7 @@ def main() -> int:  # noqa: C901 (encode and parked, then the levers' dispatch)
     parked = commands.add_parser("parked")
     parked.add_argument("target")
     parked.add_argument("lanes", type=Path)
-    commands.add_parser("resume-workspace")
+    commands.add_parser("resume-workspace").add_argument("--parent", action="store_true")
     commands.add_parser("parent").add_argument("pane")
     commands.add_parser("repoint").add_argument("name")
     commands.add_parser("report")

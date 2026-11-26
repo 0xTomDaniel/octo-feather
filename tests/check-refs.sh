@@ -27,7 +27,11 @@ grep -qF "docs/notes/y.md:1:" <<<"$out" && grep -qF "$words" <<<"$out" || { echo
 # the file. The copy keeps only this test of tests/*.sh, so the gate there starts no other test, and the guard
 # above stops this one if the planted word ever got past check-refs.
 # It selects only its own recipe item (PYTEST_ADDOPTS -k, pytest's own selection, #507), so no recipe before it runs.
-find "$t/tests" -maxdepth 1 -name '*.sh' ! -name check-refs.sh -delete; g add -A
+find "$t/tests" -maxdepth 1 -name '*.sh' ! -name check-refs.sh -delete
+# Nor any kit test module (its collection alone costs the nested pytest ~2 s CPU), nor the kit's packages: none
+# is needed there, so check-tests' pnpm install installs nothing (tests/lib/no-packages.py).
+find "$t/tests/gate" -name 'test_*.py' ! -path "$t/tests/gate/test_gate.py" -delete
+"$kit/tests/lib/no-packages.py" "$t"; g add -A
 printf '%s\n' "Merge once the ${hu}s agree." > "$t/docs/gate.md"; g add -f docs/gate.md
 set +e; out="$(cd "$t" && env -u CI CHECK_REFS_TEST_COPY=1 XDG_STATE_HOME="$t.home" PYTEST_ADDOPTS="--color=no -k 'test_recipe and check-refs'" just check 2>&1)"; rc=$?; set -e
 [[ "$rc" != 0 ]] || { echo "check-refs test: docs/gate.md with a retired word passed just check" >&2; exit 1; }
