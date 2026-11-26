@@ -1,16 +1,16 @@
 Seeded defect: ran ignores the fact's positional prefix, matching its flags anywhere.
 diff --git a/scripts/eval_grading.py b/scripts/eval_grading.py
-index 404ccdfd..55b59038 100755
+index 6ba0caa1..d49b809a 100755
 --- a/scripts/eval_grading.py
 +++ b/scripts/eval_grading.py
-@@ -630,9 +630,7 @@ def args_match(want: list[str], got: list[str], head: str | None) -> bool:
-     """Whether a recorded argv GOT holds a ran fact's arguments WANT, HEAD the case's sha (rule:
-     schema, Run record)."""
+@@ -672,9 +672,7 @@ def args_match(
+     (rule: schema, Run record)."""
      k = next((i for i, w in enumerate(want) if w.startswith("-")), len(want))
--    if len(got) < k or not all(
--        arg_matches(w, g, head) for w, g in zip(want[:k], got, strict=False)
+     lead = operands(program, got) if k else got
+-    if len(lead) < k or not all(
+-        arg_matches(w, g, head) for w, g in zip(want[:k], lead, strict=False)
 -    ):
-+    if len(got) < k:
++    if len(lead) < k:
          return False
+     start = 0 if lead is not got else k  # a PARSED program's options stand anywhere
      groups: list[list[str]] = []
-     for w in want[k:]:
