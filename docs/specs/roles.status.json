@@ -174,8 +174,8 @@
     "acceptance-stash-guard-private-path": {
       "status": "built",
       "pr": 1324,
-      "record": "20261126T080701Z-35390faa",
-      "commit": "2d6cc106ca9a4a031f556f6b25488f607cebb731",
+      "record": "20261126T084911Z-a7eda66f",
+      "commit": "4fb788c90b30ce3f38fb487574f33a89d83f8e4f",
       "tests": [
         "tests/gate/kit/launch_stash_guard.py"
       ]
