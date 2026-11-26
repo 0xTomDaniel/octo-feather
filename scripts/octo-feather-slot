@@ -116,7 +116,8 @@ beside it (default 1200, a whole number >= 1). OCTO_FEATHER_SLOT_GRACE and OCTO_
 (whole seconds) in the env of the command making the check override them, for a scratch drive or
 test that cannot wait.
 
-The caller's lane: the lane record whose `supervisor` is HERDR_PANE_ID, else OCTO_FEATHER_PARENT,
+The caller's lane: the lane record whose `supervisor` is HERDR_PANE_ID, else the caller's parent
+(the pane `octo-feather-handoff parent` names now, never the OCTO_FEATHER_PARENT frozen at launch),
 else the one whose supervisor pane is in the caller's Herdr space (HERDR_WORKSPACE_ID, or
 OCTO_FEATHER_SPEND_SPACE for a headless run: a lane's agents run in their supervisor's space, as
 spec spend#rule-lane finds a lane), else `director` for the director.
@@ -226,8 +227,7 @@ def supervisors() -> dict[str, str]:
 def caller_lane() -> str | None:
     """The caller's lane (this file's docstring), or None."""
     sups = supervisors()
-    for var in ("HERDR_PANE_ID", "OCTO_FEATHER_PARENT"):
-        pane = os.environ.get(var, "")
+    for pane in caller_panes():
         for lane, sup in sups.items():
             if pane and sup == pane:
                 return lane
@@ -236,6 +236,15 @@ def caller_lane() -> str | None:
         if space and sup.split(":", 1)[0] == space:
             return lane
     return "director" if os.environ.get("OCTO_FEATHER_ROLE") == "director" else None
+
+
+def caller_panes() -> Iterator[str]:
+    """HERDR_PANE_ID, then the caller's parent as `octo-feather-handoff parent` resolves it now."""
+    yield os.environ.get("HERDR_PANE_ID", "")
+    frozen = os.environ.get("OCTO_FEATHER_PARENT", "")
+    resolve = [str(KIT / "scripts" / "octo-feather-handoff"), "parent", frozen]
+    got = subprocess.run(resolve, capture_output=True, text=True, check=False)
+    yield got.stdout.strip() if got.returncode == 0 else frozen
 
 
 def in_agent() -> bool:

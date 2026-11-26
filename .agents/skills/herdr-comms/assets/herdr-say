@@ -30,7 +30,8 @@
 # A target Herdr does not find may be parked (comms spec #roles-park): its line
 # comes from `octo-feather-handoff parked` (that command's docstring owns which
 # line counts). A live agent under the line's name gets the message; otherwise
-# the agent is resumed first, with the line's role, session and parent: a
+# the agent is resumed first, with the line's role and session and the parent
+# `octo-feather-handoff resume-workspace --parent` resolves now (never the line's): a
 # supervisor through octo-feather-start (which owns its workspace), a worker
 # through herdr-spawn in the workspace `octo-feather-handoff resume-workspace` names.
 # Its new pane= is printed, and the message it receives starts
@@ -38,14 +39,16 @@
 # `herdr-say --parked TARGET` prints that line, or exits 1 when there is none.
 #
 # Up-chain accident guard (docs/adr/0015, not security): a kit agent may message
-# only up its own chain. `--parent` targets the caller's parent, the pane
-# `octo-feather-handoff parent` names at send time (its docstring); that pane, live
-# or not, then goes the way of any target (parked, resumed, or proven gone) and
-# stands as the parent below. A worker (implementer, code-reviewer, corrector,
-# general-worker) may reach only its parent, never the director unless it is
-# that parent; a supervisor only its parent, the director pane in director.toml,
-# agents in its own lane workspace, or a parked agent whose latest parked line
-# sits in its lane's hand-off log or names it as parent. Anything else exits 77.
+# only up its own chain. The caller's parent is the pane `octo-feather-handoff
+# parent` names at send time (its docstring), resolved once for every kit-agent
+# send, never the OCTO_FEATHER_PARENT frozen at launch: `--parent` targets it, and
+# the guard, its refusal and the parent-gone condition use it. That pane, live or
+# not, goes the way of any target (parked, resumed, or proven gone). A worker
+# (implementer, code-reviewer, corrector, general-worker) may reach only its
+# parent, never the director unless it is that parent; a supervisor only its
+# parent, the director pane in director.toml, agents in its own lane workspace, or a parked agent whose latest parked line
+# sits in its lane's hand-off log or whose parent, resolved now as on resume, is it.
+# Anything else exits 77.
 # The director and callers that are not kit agents (an owner shell, Spec Chat's
 # wake) are not limited.
 set -euo pipefail
@@ -66,15 +69,22 @@ while (($#)); do
     --timeout) [[ "${2:-}" =~ ^[1-9][0-9]*$ ]] || { echo "herdr-say: --timeout needs whole seconds, got ${2:-nothing}" >&2; exit 64; }
                bound="$2"; shift 2 ;;
     --parked) (($# == 2)) || { usage; exit 64; }; parked "$2"; exit ;;
-    --parent) [[ -n "${OCTO_FEATHER_PARENT:-}" ]] || { echo "herdr-say: no parent recorded for this pane" >&2; exit 64; }
-              resolved="$("$here/../../../../scripts/octo-feather-handoff" parent "$OCTO_FEATHER_PARENT")" &&
-                [[ -n "$resolved" ]] && OCTO_FEATHER_PARENT="$resolved"
-              to_parent=1; shift; set -- "$OCTO_FEATHER_PARENT" "$@"; break ;;
+    --parent) to_parent=1; shift; break ;;
     --) shift; break ;;
     -*) echo "herdr-say: unknown option $1" >&2; exit 64 ;;
     *) break ;;
   esac
 done
+# The caller's parent, resolved once (header): a kit agent's, or the one --parent asks for.
+parent="${OCTO_FEATHER_PARENT:-}" kit=""
+case "${OCTO_FEATHER_ROLE:-}" in implementer|code-reviewer|corrector|general-worker|supervisor) kit=1 ;; esac
+if [[ -n "$kit${to_parent:-}" ]]; then
+  parent="$("$here/../../../../scripts/octo-feather-handoff" parent "$parent")" || parent="${OCTO_FEATHER_PARENT:-}"
+fi
+if [[ -n "${to_parent:-}" ]]; then
+  [[ -n "$parent" ]] || { echo "herdr-say: no parent recorded for this pane" >&2; exit 64; }
+  set -- "$parent" "$@"
+fi
 (($# == 2)) || { usage; exit 64; }
 target="$1"; message="$2"; bound="${bound:-900}"
 # A worker's --parent report goes to its result file before any prompt, and the parent gets the
@@ -86,9 +96,9 @@ fi
 
 # The up-chain guard. Resolves TARGET to a pane and workspace through Herdr.
 allowed() {
-  local role="${OCTO_FEATHER_ROLE:-}" parent="${OCTO_FEATHER_PARENT:-}" info pane space director line lane
+  local role="${OCTO_FEATHER_ROLE:-}" info pane space director line lane
   looked=""
-  case "$role" in implementer|code-reviewer|corrector|general-worker|supervisor) ;; *) return 0 ;; esac
+  [[ -n "$kit" ]] || return 0
   [[ -n "$parent" && "$target" == "$parent" ]] && return 0
   info="$(herdr agent get "$target" 2>&1)" && looked="" || looked="$(tail -1 <<<"$info")"
   pane="$(jq -r '.result.agent.pane_id // empty' <<<"$info" 2>/dev/null || true)"
@@ -99,9 +109,10 @@ allowed() {
   [[ "$role" == supervisor && -n "$director" && ( "$target" == "$director" || "$pane" == "$director" ) ]] && return 0
   [[ "$role" == supervisor && -n "$space" && "$space" == "${HERDR_WORKSPACE_ID:-}" ]] && return 0
   # A supervisor's own parked agent: not live, its latest parked line in the
-  # caller's lane log (the caller's agent name) or naming the caller as parent.
+  # caller's lane log (the caller's agent name) or naming the caller as the parent
+  # resolved now (octo-feather-handoff resume-workspace --parent), never the line's.
   if [[ "$role" == supervisor && -z "$pane" && -n "${HERDR_PANE_ID:-}" ]] && line="$(parked "$target")"; then
-    [[ "$(jq -r '.parent // empty' <<<"$line")" == "$HERDR_PANE_ID" ]] && return 0
+    [[ "$("$here/../../../../scripts/octo-feather-handoff" resume-workspace --parent <<<"$line")" == "$HERDR_PANE_ID" ]] && return 0
     lane="$(herdr agent get "$HERDR_PANE_ID" 2>/dev/null | jq -r '.result.agent.name // empty' 2>/dev/null || true)"
     [[ -n "$lane" && "$(jq -r .lane <<<"$line")" == "$lane" ]] && return 0
   fi
@@ -113,7 +124,7 @@ allowed() {
   fi
   return 1
 }
-allowed || { echo "herdr-say: $OCTO_FEATHER_ROLE may message only up its chain (its parent ${OCTO_FEATHER_PARENT:-none}; docs/adr/0015), not $target${looked:+ (herdr agent get: $looked)}" >&2; exit 77; }
+allowed || { echo "herdr-say: $OCTO_FEATHER_ROLE may message only up its chain (its parent ${parent:-none}; docs/adr/0015), not $target${looked:+ (herdr agent get: $looked)}" >&2; exit 77; }
 
 prompt() { rc=0; out="$(herdr agent prompt "$1" "$message" --wait --until working --until idle --timeout "$((bound * 1000))" 2>&1)" || rc=$?; }
 code() { jq -r '.error.code // empty' <<<"$out" 2>/dev/null || true; }
@@ -130,7 +141,7 @@ if [[ "$rc" != 0 && "$(code)" == agent_not_found && -z "$gone" && "$lrc" == 0 ]]
   name="$(jq -r .name <<<"$line")"
   if ! herdr agent get "$name" >/dev/null 2>&1; then
     resume=(--cwd "$(jq -r .cwd <<<"$line")" --name "$name" --resume "$(jq -r .session <<<"$line")"
-      --parent "$(jq -r '.parent // empty' <<<"$line")")
+      --parent "$("$here/../../../../scripts/octo-feather-handoff" resume-workspace --parent <<<"$line")")
     if [[ "$name" == "$(jq -r .lane <<<"$line")" ]]; then
       started="$("$here/../../../../scripts/octo-feather-start" "${resume[@]}")"
     else
@@ -154,9 +165,10 @@ fi
 printf '%s\n' "$out" >&2
 # A worker's own parent proven gone: comms spec #say-parent-gone.
 case "${OCTO_FEATHER_ROLE:-}" in implementer|code-reviewer|corrector|general-worker)
-  [[ -n "$gone" && "$target" == "${OCTO_FEATHER_PARENT:-}" ]] &&
+  [[ -n "$gone" && "$target" == "$parent" ]] &&
     exec "$here/../../../../scripts/octo-feather-parent-gone" "$target" "$bound" ;;
 esac
+[[ -z "$gone" ]] || echo "herdr-say: $target is gone (agent_not_found, no parked line names it): not delivered" >&2
 # Stalled or still unconfirmed at the bound: loud, naming the pane and its state.
 case "$(code)" in
   agent_prompt_stalled|timeout)
