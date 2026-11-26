@@ -7,6 +7,7 @@
   octo-feather-spec-status built STATUS PR ID...   flip the named criteria to built in PR
   octo-feather-spec-status built STATUS PR ID --record RECORD --commit SHA [--test TEST]...
                                                    flip ID to built in PR with its evidence link
+  octo-feather-spec-status planned STATUS ID...    put the named built criteria back to planned (docs/adr/0035)
   octo-feather-spec-status show [DIR|STATUS...]    each criterion's status, each built one current or stale
   octo-feather-spec-status calls [--since REF] [DIR...]
                                                    list the calls added since REF (default: the merge
@@ -30,6 +31,12 @@ The spec HTML is never edited.
 SPEC's order. It refuses, naming the problem and writing nothing, when the existing file is not JSON or a
 row fails the rules `check` applies to a row (status, pr, evidence link), when SPEC cannot be read or a
 criterion has no or a duplicate id, or when COMMIT is no commit sha.
+
+`planned` puts each named built criterion back to planned, its PR and evidence link dropped (docs/adr/0035: a
+criterion with neither a tagged test nor a declared demo reads planned). It touches only the ids it is given, every
+other row kept byte for byte as this script writes rows, and has no all or wildcard mode. It refuses, naming the
+problem and writing nothing, an id not in STATUS, an id already planned, or a STATUS that is not JSON or has a row
+failing the rules `check` applies to a row.
 
 `show` is read-only and git-only, never part of `check` (a stale criterion stays
 built until a lane's just qc judges it again, quality #qc-stale). Per status file
@@ -661,6 +668,24 @@ def built_link(args: list[str]) -> tuple[list[str], Entry | None, str | None]:
     return rest, link, f"built: {bad}" if bad else None
 
 
+def planned(status: Path, ids: list[str]) -> int:
+    """Put each of IDS in STATUS back to planned, or refuse, writing nothing (docs/adr/0035)."""
+    rows, errs = existing_rows(status)
+    if not errs and not status.exists():
+        errs = [f"{status}: no status file"]
+    for i in dict.fromkeys(() if errs else ids):
+        if i not in rows:
+            errs.append(f"no criterion {i} in {status}")
+        elif cast("Entry", rows[i])["status"] == "planned":
+            errs.append(f"{status}: {i} is already planned")
+    if errs:
+        print("\n".join(errs + [f"planned: nothing written to {status}"]), file=sys.stderr); return 1
+    data: Entry = json.loads(status.read_text(encoding="utf-8"))
+    for i in ids:
+        data["criteria"][i] = {"status": "planned", "pr": None}
+    write(status, data); return 0
+
+
 def write(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
@@ -709,6 +734,8 @@ def main(argv: list[str]) -> int:
                 print(f"no criterion {i} in {status}", file=sys.stderr); return 1
             data["criteria"][i] = {"status": "built", "pr": int(args[1])} | (link or {})
         write(status, data); return 0
+    if cmd == "planned" and len(args) >= 2:
+        return planned(Path(args[0]), args[1:])
     print(__doc__.strip(), file=sys.stderr); return 64
 
 
