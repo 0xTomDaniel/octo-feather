@@ -112,25 +112,6 @@
       }
     ]
   },
-  "qc-judge-demo-path": {
-    "facts": [
-      {
-        "fact": "skill_read_before",
-        "skill": "principle-prove-it-works",
-        "before": "final_message"
-      },
-      {
-        "fact": "declared_includes",
-        "field": "criteria",
-        "items": [
-          {
-            "id": "hello-shout",
-            "verdict": "pass"
-          }
-        ]
-      }
-    ]
-  },
   "director-file-parent": {
     "facts": [
       {
@@ -151,40 +132,6 @@
         "fact": "skill_read_before",
         "skill": "github-pr",
         "before": "gh_call"
-      }
-    ]
-  },
-  "qc-judge-no-reviewer-skills": {
-    "facts": [
-      {
-        "fact": "skill_not_read",
-        "skill": "code-review"
-      },
-      {
-        "fact": "skill_not_read",
-        "skill": "blast-radius"
-      },
-      {
-        "fact": "skill_not_read",
-        "skill": "github-pr"
-      },
-      {
-        "fact": "declared_includes",
-        "field": "criteria",
-        "items": [
-          {
-            "id": "hello-plain",
-            "verdict": "pass"
-          },
-          {
-            "id": "hello-shout",
-            "verdict": "pass"
-          },
-          {
-            "id": "hello-wave",
-            "verdict": "fail"
-          }
-        ]
       }
     ]
   },
@@ -297,33 +244,6 @@
       {
         "fact": "skill_read",
         "skill": "principle-encode-lessons-in-structure"
-      }
-    ]
-  },
-  "qc-judge-drives-app": {
-    "facts": [
-      {
-        "fact": "skill_read",
-        "skill": "verify-app"
-      },
-      {
-        "fact": "skill_read_before",
-        "skill": "principle-prove-it-works",
-        "before": "final_message"
-      },
-      {
-        "fact": "declared_includes",
-        "field": "criteria",
-        "items": [
-          {
-            "id": "hello-json",
-            "verdict": "pass"
-          },
-          {
-            "id": "hello-blank",
-            "verdict": "pass"
-          }
-        ]
       }
     ]
   },

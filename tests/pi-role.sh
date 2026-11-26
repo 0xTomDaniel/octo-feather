@@ -51,7 +51,7 @@ grep -qxF "PATH=$t/bin:$g:/usr/bin:/bin" "$t/env.nomise" || { echo "pi-role test
 # #262 (roles#launch-web): a web role's tab args add the kit's two web servers and drop --no-mcp.
 ro=read,grep,find,ls,bash,codemode; rw=read,grep,find,ls,bash,edit,write,codemode
 web=',mcp__parallel__*,mcp__exa__*;web'
-for rt in "director:$ro$web" "code-reviewer:$ro$web" "qc-judge:$ro;--no-mcp" "supervisor:$rw;--no-mcp" "implementer:$rw$web" "general-worker:$rw$web" "corrector:$rw$web" "shaper:read,grep,find,ls,bash,edit,write,codemode$web"; do
+for rt in "director:$ro$web" "code-reviewer:$ro$web" "supervisor:$rw;--no-mcp" "implementer:$rw$web" "general-worker:$rw$web" "corrector:$rw$web" "shaper:read,grep,find,ls,bash,edit,write,codemode$web"; do
   role="${rt%%:*}"; want="${rt#*:}"
   got="$(cd "$t/gh1" && "$kit/scripts/pi-role" --json "$kit/agents/$role.md" 2>/dev/null | python3 -c 'import json,sys; a=json.load(sys.stdin)["args"]; print((a[a.index("--tools")+1] if "--tools" in a else "none") + ";" + ("--no-mcp" if "--no-mcp" in a else "web" if a[a.index("--octo-feather-web-servers")+1].endswith("/web-mcp.json") else "?"))')"
   [[ "$got" == "$want" ]] || { echo "pi-role test: $role --tools is $got, want $want" >&2; exit 1; }
@@ -68,14 +68,14 @@ grep -q 'agents/director.md: .*`codemode`.*pi-role adds it' "$t/cr" || { echo "p
 # #829: check-roles counts general-worker among its roles, and still refuses a role file not in ROLES.
 cp "$kit/agents/director.md" "$t/kit/agents/director.md"
 out="$("$t/kit/scripts/check-roles" 2>"$t/cr")" || { echo "pi-role test: check-roles refused the kit's roles: $(cat "$t/cr")" >&2; exit 1; }
-[[ "$out" == "roles: ok (9 role files"* ]] || { echo "pi-role test: check-roles did not count 9 roles: $out" >&2; exit 1; }
+[[ "$out" == "roles: ok (8 role files"* ]] || { echo "pi-role test: check-roles did not count 8 roles: $out" >&2; exit 1; }
 sed 's/^name: .*/name: stray/' "$kit/agents/general-worker.md" > "$t/kit/agents/stray.md"
 if "$t/kit/scripts/check-roles" >/dev/null 2>"$t/cr"; then echo "pi-role test: check-roles passed a role file not in ROLES" >&2; exit 1; fi
 grep -qF "agents/: role files ['stray'] are not in ROLES" "$t/cr" || { echo "pi-role test: check-roles did not name the stray role file: $(cat "$t/cr")" >&2; exit 1; }
 # roles#fm-extensions: a role's own extensions on top of every role's; only director and supervisor load results-on-wake.ts.
 rm "$t/kit/agents/stray.md"
 every="resume-on-error.ts spend-ledger.ts skills-loaded.ts"
-for role in director supervisor implementer code-reviewer corrector general-worker reflector shaper qc-judge; do
+for role in director supervisor implementer code-reviewer corrector general-worker reflector shaper; do
   got="$(cd "$t/gh1" && "$kit/scripts/pi-role" --json "$kit/agents/$role.md" 2>/dev/null | python3 -c 'import json,os,sys; a=json.load(sys.stdin)["args"]; print(" ".join(sorted(os.path.basename(a[i+1]) for i,x in enumerate(a) if x=="--extension" and os.path.basename(a[i+1]) != "web-servers.ts")))')"
   case "$role" in director|supervisor) want="$every results-on-wake.ts" ;; *) want="$every" ;; esac
   want="$(tr ' ' '\n' <<<"$want" | sort | tr '\n' ' ' | sed 's/ $//')"

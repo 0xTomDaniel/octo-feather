@@ -69,8 +69,8 @@ from pathlib import Path
 from typing import NoReturn, cast
 
 a = sys.argv[1:]
-# The qc sandbox items' judge (FAKE_QC, docstring): each mode's turn, a shell command its bash tool
-# runs in the judge's cwd ($0 this stub), before the reply; QC_REPLY names the modes whose reply is
+# The qc sandbox items' demo Pi (FAKE_QC, docstring): each mode's turn, a shell command its bash tool
+# runs in the demo's cwd ($0 this stub), before the reply; QC_REPLY names the modes whose reply is
 # their own.
 QC_TURNS = {
     # uv add's reinstall: remove an ignored nested dir the real worktree holds, then recreate it

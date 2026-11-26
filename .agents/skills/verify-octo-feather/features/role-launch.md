@@ -14,7 +14,7 @@ Drive criterion: `roles#acceptance-web-list-once`
 
 ## Sub-features
 
-- `<role>` each role's launch: `director`, `supervisor`, `implementer`, `general-worker`, `corrector`, `code-reviewer`, `qc-judge`, `shaper`.
+- `<role>` each role's launch: `director`, `supervisor`, `implementer`, `general-worker`, `corrector`, `code-reviewer`, `shaper`.
 - `other-mcp-<role>` the implementer's and the supervisor's launch in a target whose user and project Pi config each name another MCP server.
 - `list-once-<role>` each role's launch from a scratch copy of the kit whose web server list has one more server, no role file changed.
 - `identity-unset`, `identity-unset-general-worker`, `identity-set`, `identity-applied` the factory commit identity every launch applies (#665; `pi-role --help`, Commit identity), in scratch state dirs.

@@ -67,7 +67,7 @@ qcrun() { set +e; out="$(timeout -k 5 120 just --justfile "$kit/justfile" qc doc
 neither() {   # $1 the run: acceptance-b's result in its stdout, its report's results and no judge's trace
   grep -A2 '^INSUFFICIENT EVIDENCE acceptance-b: ' <<< "$out" | grep -A1 '^  missing: no tagged acceptance test and no declared demo$' \
     | grep -qx '  evidence incomplete; decision none; record none' || fail "$1: acceptance-b not insufficient evidence naming neither: $out $(tail -20 "$t/err")"
-  ! grep -q 'pi-role\|qc-judge\|agent fallback' "$t/err" || fail "$1: a judge was started: $(cat "$t/err")"
+  ! grep -q 'pi-role\|agent fallback' "$t/err" || fail "$1: a judge was started: $(cat "$t/err")"
   rep="$(ls -t "$XDG_STATE_HOME"/octo-feather/qc/"$head"-*.json | head -1)"
   python3 - "$rep" "$head" <<'EOF' || fail "$1: report: $(cat "$rep")"
 import json, sys

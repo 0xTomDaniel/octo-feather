@@ -78,7 +78,7 @@ for n in 1 2; do
   a="$(grep -A2 '^PASS acceptance-a: \$ echo "a checks pass in \$QC_REPO"$' <<< "$out" | sed -nE "s/^  evidence complete; decision demo checks; record ($rid)$/\1/p")"
   b="$(grep -A2 '^FAIL acceptance-b: \$ echo b checks fail >&2; exit 3$' <<< "$out" | sed -nE "s/^  evidence complete; decision demo checks; record ($rid)$/\1/p")"
   [[ -n "$a" && -n "$b" ]] || fail "run $n: want PASS acceptance-a and FAIL acceptance-b, evidence complete, decision demo checks, each naming its record: $out"
-  ! grep -q 'pi-role\|qc-judge' "$t/err" || fail "run $n: a judge started with every criterion declared: $(cat "$t/err")"
+  ! grep -q 'pi-role' "$t/err" || fail "run $n: a judge started with every criterion declared: $(cat "$t/err")"
   ids+=("$a" "$b")
   st="$(git show HEAD:docs/specs/demo.status.json)"
   [[ "$(git log -1 --format=%s)" == "qc: built acceptance-a (judged ${head:0:12})" ]] \
@@ -126,7 +126,7 @@ grep -A2 '^PASS acceptance-a: ' <<< "$out" | grep -qE "^  evidence complete; dec
   && grep -A2 '^INSUFFICIENT EVIDENCE acceptance-b: ' <<< "$out" | grep -A1 '^  missing: no tagged acceptance test and no declared demo$' \
   | grep -qx '  evidence incomplete; decision none; record none' \
   || fail "mixed run: want acceptance-a from its demo and acceptance-b insufficient evidence naming neither: $out"
-! grep -q 'pi-role\|qc-judge' "$t/err" || fail "mixed run: a judge started: $(cat "$t/err")"
+! grep -q 'pi-role' "$t/err" || fail "mixed run: a judge started: $(cat "$t/err")"
 # The built entry names its record, the commit it was captured at and its demo's tests (#acceptance-built-links); acceptance-b planned.
 python3 - "$(git show HEAD:docs/specs/demo.status.json)" "$out" "$(git rev-parse HEAD~1)" <<'EOF' || fail "mixed run: status links: $(git show HEAD:docs/specs/demo.status.json)"
 import json, re, sys
