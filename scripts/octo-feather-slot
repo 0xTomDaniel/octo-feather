@@ -130,10 +130,10 @@ the queue while the queue is non-empty starts one (S the bound); `queue` behind 
 started under starts one (due at that grant's since + the bound); a revoke freeing a slot, or a
 check first seeing one free, while the queue is non-empty starts one (S the grace). With the queue
 empty only the release's starts: it ends a self-grant. Each notice is sent through herdr-say in the
-Herdr session the head was queued from (KIND.queue.json records it with the entry: HERDR_SESSION set to it, or
-unset for the default session), whoever's command made the check, and without the caller's
-OCTO_FEATHER_ROLE and OCTO_FEATHER_PARENT: the notice is the slot rule's, sent for the director,
-not the caller agent's own message up its chain.
+Herdr session the head was queued from (KIND.queue.json records it with the entry: HERDR_SESSION set
+to it, or unset for the default session), whoever's command made the check, and without the caller's
+OCTO_FEATHER_ROLE and OCTO_FEATHER_PARENT: the notice is the slot rule's, sent for the director, not
+the caller agent's own message up its chain.
 The grace: slot_grace_seconds in gate-budget.toml (default 60). The bound: slot_bound_seconds
 beside it (default 1200, a whole number >= 1). OCTO_FEATHER_SLOT_GRACE and OCTO_FEATHER_SLOT_BOUND
 (whole seconds) in the env of the command making the check override them, for a scratch drive or
