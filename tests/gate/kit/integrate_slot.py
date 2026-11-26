@@ -4,10 +4,10 @@ target whose lane gh7's gate (`just check`) runs the kit's gate plugin over its 
 (end-to-end by pytest's e2e marker, so it asks the slot: quality #recipes-static-first), as an
 implementer of gh7 with a scratch box state dir.
 
-refused: without gh7's heavy grant the gate is refused before any item runs: integrate prints
-`refused: no heavy slot, nothing ran` with the slot's refusal, never a `red:` line, resets the lane
-and exits 75. red: with the grant, a worker adding a failing test makes the gate run red: `red:`,
-exit 2, the lane reset as before."""
+refused: without gh7's heavy grant, gh8 holding it, the gate queues gh7 and is refused before
+any item runs: integrate prints `refused: no heavy slot, nothing ran` with the slot's refusal (gh7
+queued, its place), never a `red:` line, resets the lane and exits 75. red: with the grant, a
+worker adding a failing test makes the gate run red: `red:`, exit 2, the lane reset as before."""
 
 from __future__ import annotations
 
@@ -37,8 +37,11 @@ MANY = (
 )
 SLOT_REFUSAL = (
     "octo-feather-slot: refused, nothing ran: this heavy run selects 31 items, over heavy_items 30"
-    " (gate-budget.toml), and lane gh7 holds no heavy grant; current holder: none; ask the "
-    "director: octo-feather-slot grant gh7 --kind heavy"
+    " (gate-budget.toml), and lane gh7 holds no heavy grant; current holder: gh8 (granted "
+)
+SLOT_QUEUED = (
+    "; lane gh7 queued for the heavy slot, position 1, by self w9:p3; the slot passes to it as "
+    "the queue rule says (octo-feather-slot --help) and its supervisor is told then"
 )
 
 
@@ -49,6 +52,7 @@ def world(s: Scratch) -> tuple[Path, Path]:
     lanes = s.root / "state" / "octo-feather" / "lanes"
     lanes.mkdir(parents=True)
     (lanes / "gh7.toml").write_text('supervisor = "w9:p1"\n')
+    (lanes / "gh8.toml").write_text('supervisor = "w8:p1"\n')
     s.env = {k: v for k, v in s.env.items() if k not in PANE}
     s.env |= {"XDG_STATE_HOME": str(s.root / "state")}
     r, lane = s.root / "repo", s.root / "lane"
@@ -84,12 +88,14 @@ def integrate(s: Scratch, repo: Path, ref: str, want: int) -> str:
 
 def refused(s: Scratch) -> None:
     repo, lane = world(s)
+    s.run([kit("octo-feather-slot"), "grant", "gh8", "--kind", "heavy"], env=DIRECTOR)
     start = s.git(lane, "rev-parse", "HEAD")
     out = integrate(s, repo, "w1", REFUSED)
     want = "refused: no heavy slot, nothing ran: just check, the full tier "
     lines = [ln for ln in out.splitlines() if ln.startswith(want)]
     assert lines, out
-    assert lines[0].endswith(SLOT_REFUSAL), out
+    assert SLOT_REFUSAL in lines[0], out
+    assert lines[0].endswith(SLOT_QUEUED), out
     assert "red:" not in out, out
     assert s.git(lane, "rev-parse", "HEAD") == start, f"{lane} not reset"
 

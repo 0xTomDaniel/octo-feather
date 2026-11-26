@@ -162,7 +162,9 @@ def _ask(config: pytest.Config, items: int, *, if_granted: bool = False) -> None
     if said.startswith(("held:", "free:", "nested:")):
         config.get_terminal_writer().line(f"heavy slot: {said}")
         return
-    said += p.stdout.read()
+    rest = p.stdout.read().rstrip("\n")  # lines after the refusal (a notice told)
+    if rest:
+        said += "\n" + rest
     if _run.left is not None and not if_granted:
         said += "\n(the static checks ran first, green; no other item ran)"
     dsession = cast("_DSession | None", config.pluginmanager.getplugin("dsession"))
