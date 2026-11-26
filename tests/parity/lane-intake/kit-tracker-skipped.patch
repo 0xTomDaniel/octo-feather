@@ -1,14 +1,14 @@
 Seeded defect: intake searches only the lanes' trackers, never the kit's own (spec comms #reflection-correction).
 diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
-index a9b3c986..1987af4c 100755
+index 8925cb5f..ece68135 100755
 --- a/scripts/octo-feather-lane
 +++ b/scripts/octo-feather-lane
-@@ -780,8 +780,6 @@ def cmd_intake(args: list[str]) -> int:
+@@ -1047,8 +1047,6 @@ def cmd_intake(args: list[str]) -> int:
              continue
          if isinstance(repo, str) and repo and repo not in repos:
              repos.append(repo)
--    if r.KIT_REPO not in repos:
--        repos.append(r.KIT_REPO)
-     mark = re.compile(r"\[" + re.escape(r.MARK_WORD) + r" ([^\]]+)\]")
+-    if KIT_REPO not in repos:
+-        repos.append(KIT_REPO)
+     mark = re.compile(r"\[" + re.escape(MARK_WORD) + r" ([^\]]+)\]")
      by: dict[str, list[tuple[str, str, dict[str, object]]]] = {}
      for repo in repos:
