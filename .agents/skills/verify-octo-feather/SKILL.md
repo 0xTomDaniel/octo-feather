@@ -65,7 +65,7 @@ Proof standards:
 - Exercise the kit's commands as a user types them, through the contract's entry; never source a script or call its functions.
 - Capture the action (`.cmd`) and the resulting state (stdout, stderr, exit code, observed facts), not just a PASS line.
 - Check side effects: the files a command wrote where it should (the new repo's commit, files and status), nothing in its cwd, no change to the kit's `git status`.
-- No mocks, but for the faked tracker, the stub qc judge, the faked classifier, the shape drive's fake provider, the queued-completion, parent-resumed, result-file, result-missing and lane-start drives' Herdr stand-in above, the lane-start drive's fake gh and the run-slots drive's stand-in `herdr` (first on PATH, recording each call's arguments; features/run-slots.md). The network is cut with a namespace, not stubbed: install-check's real `gh` runs and reports what it sees offline.
+- No mocks, but for the faked tracker, the faked classifier, the shape drive's fake provider, the queued-completion, parent-resumed, result-file, result-missing and lane-start drives' Herdr stand-in above, the lane-start drive's fake gh and the run-slots drive's stand-in `herdr` (first on PATH, recording each call's arguments; features/run-slots.md). The network is cut with a namespace, not stubbed: install-check's real `gh` runs and reports what it sees offline.
 - Report a skipped case as skipped, never as proved through a different case.
 
 Evidence lives at `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR`: `doctor.txt` (from `run`) and one folder per driven feature. That folder is scratch: the next drive of the feature replaces it.

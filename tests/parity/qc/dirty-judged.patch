@@ -1,4 +1,4 @@
-Seeded defect: qc judges a dirty worktree instead of refusing it (exit 65: QC judges a committed head).
+Seeded defect: `just qc` judges a dirty worktree instead of refusing it (exit 65: QC judges a committed head).
 diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
 index ce0774ba..a5c7e2fb 100755
 --- a/scripts/octo-feather-qc

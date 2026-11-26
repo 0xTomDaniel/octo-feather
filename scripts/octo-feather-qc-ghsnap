@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
-"""octo-feather-qc-ghsnap REPO DIR [ISSUE...]   read-only GitHub snapshot for the qc judge (docs/adr/0022)
+"""octo-feather-qc-ghsnap REPO DIR [ISSUE...]   read-only GitHub snapshot for the qc sandbox (docs/adr/0022)
 
-Not run by hand: octo-feather-qc runs it before every judge, outside the sandbox,
+Not run by hand: octo-feather-qc's github_snapshot() runs it (a merge ask's replay), outside the sandbox,
 with the caller's gh auth, into a new per-run DIR that the sandbox binds
 read-only and the github-pr skill's scripts/gh (the offline gh) serves. REPO is owner/name.
 Lists, all states: issues (500), PRs (500), workflow runs (200). Full views for

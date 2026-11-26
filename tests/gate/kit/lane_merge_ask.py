@@ -7,7 +7,7 @@ fake gh (testkit/gh.py), the only stand-in. `verdict` creates the one marker com
 in place, and refuses a wrong head, a report with no verdict or no check classes (docs/adr/0008),
 a proxy check with a clear verdict and a failed write, leaving no comment behind. `merge-ask`
 passes a complete section and prints it with each row's decision source (quality
-#acceptance-qc-fallback), also through the qc judge's offline gh; fails PR #16's real body
+#acceptance-qc-fallback), also through the qc sandbox's offline gh; fails PR #16's real body
 (fixture) naming each missing item; the Checks rules' reads and output (no_ci). The parent
 line, Head, the Checks rules (--help, merge-ask Checks line; the projection aside), criterion
 rows, Built, Failed, the review verdict link, qc's evidence, one judged head (spec
@@ -339,8 +339,8 @@ class Lane:
         return r
 
     def at(self, sha: str, subject: str) -> tuple[list[Edit], dict[str, str]]:
-        """PR #7 at SHA, a commit SUBJECT the review and qc judged in its place: the edits and
-        the body lines."""
+        """PR #7 at SHA, a commit SUBJECT the review and `just qc` judged in its place: the edits
+        and the body lines."""
         edits = [pr_head(sha, subject), verdict_says(f"Head: {self.j}", f"Head: {sha}")]
         lines = {
             "head": sha[:12],
@@ -510,7 +510,7 @@ def verdict_write_fails(s: Scratch) -> None:
 
 
 def offline_gh(s: Scratch) -> None:
-    """The same PR through the qc judge's offline gh (snapshot layout of octo-feather-qc-ghsnap):
+    """The same PR through the qc sandbox's offline gh (snapshot layout of octo-feather-qc-ghsnap):
     merge-ask passes, verdict refuses to write."""
     ln = Lane(s)
     ln.setpr()

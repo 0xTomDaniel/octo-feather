@@ -3,7 +3,7 @@
 #acceptance-tracer-tickets; rules: octo-feather-lane --help (ticket)), no network. `tickets`
 reads tickets only through the target's tracker skill's issue-view (comms
 #octo-lane-record-tickets). GitHub is a snapshot octo-feather-qc-ghsnap takes of the testkit's
-fake gh (testkit/gh.py) and the qc judge's offline gh serves
+fake gh (testkit/gh.py) and the qc sandbox's offline gh serves
 (.agents/skills/github-pr/scripts/gh), so the check is proven to work under it and to ask only
 fields the snapshot stores; a Linear target (tracker = "linear") reads the same through the
 testkit's Linear stand-in (testkit/linear.py) replaying a tape built here (tape). The target
@@ -450,7 +450,7 @@ def tickets_github(s: Scratch) -> None:
     name and path, `uv run app`, a justfile recipe plus curl, playwright; an Expand-contract
     ticket without a demo; a rule ticket); #10's real body fails layer-only-ticket naming the
     fix; each failing class (no criterion, unknown anchor or spec, gate-only demo, demo not last,
-    bad Expand-contract, the qc judge's printf, test-script and inline-python drafts, a story
+    bad Expand-contract, gh47 qc's printf, test-script and inline-python drafts, a story
     anchor as criterion, a factory recipe), the judge's persistence-only draft passing the facts;
     a parent with no sub-issues."""
     lt = Lt(s)
@@ -481,7 +481,7 @@ def tickets_github(s: Scratch) -> None:
         "25: class: layer-only-ticket: last acceptance item is not a `demo: ` line",
         "26: class: layer-only-ticket: last acceptance item is not a `demo: ` line",
         "27: class: layer-only-ticket: Expand-contract line names `maybe`",
-        # The qc judge's drafts (gh47 qc at 294ac1d, 4a95d10, 23f1a7a), verbatim but for SK.
+        # gh47 qc's drafts (at 294ac1d, 4a95d10, 23f1a7a), verbatim but for SK.
         f'28: {surface} (`printf "schema ready\\n"`: printf is not a program the repo declares)',
         "fix: make the demo a backticked command through the repo's own public surface (ADR 0009)",
         f"33: {surface} (`tests/demo.sh`: tests/demo.sh is a test or hook",

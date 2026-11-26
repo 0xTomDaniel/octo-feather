@@ -58,8 +58,9 @@ def copies(s: Scratch) -> None:
     )
 
 
-def judge(s: Scratch) -> None:
-    """tests/qc-judge.sh: what of it holds with no judge (ADR 0035), through the declared demos."""
+def status(s: Scratch) -> None:
+    """tests/qc-status.sh: --no-sandbox, and the status file's one commit, through the declared
+    demos (ADR 0035)."""
     with Box(s) as b:
         before = b.git("rev-parse", "HEAD")
         # --no-sandbox: printed, report written, status never changes.
@@ -72,7 +73,7 @@ def judge(s: Scratch) -> None:
             fail("--no-sandbox report must record sandbox false")
         flipped(b, before)
     say(
-        "qc-judge: ok (--no-sandbox, pass flips built, fail stays planned, status-only commit; "
+        "qc-status: ok (--no-sandbox, pass flips built, fail stays planned, status-only commit; "
         "offline, runs bounded)"
     )
 
@@ -181,7 +182,7 @@ def uv_cache(s: Scratch) -> None:
         if not m0:
             fail("empty host uv cache")
         b.run(0, "uvcache", STATUS, *A, env={"QC_UVP": str(pj)})
-        j = b.judge()
+        j = b.demo_out()
         if not all(x in j.splitlines() for x in ("UVSYNC exit 0", "UVIMPORT 1", "UVWRITE exit 0")):
             fail(f"in the sandbox: want an offline uv sync from the cache and a write into it: {j}")
         rx = (
@@ -210,7 +211,7 @@ def mise(s: Scratch) -> None:
         # mise in the sandbox (#437, docs/adr/0022): a bare just call through mise's shim with HOME
         # moved runs, the caller's first pi beating ~/.local/bin's.
         b.run(0, "misepath", STATUS, *A)
-        j = b.judge()
+        j = b.demo_out()
         if not (has("MISEPATH exit 0", j) and has("MISEPATH stub first", j)):
             fail(f"mise's just shim in the sandbox: {j}")
         # The tools judged, each dir's own config only: the test repo pins none, the kit its
@@ -225,7 +226,7 @@ def mise(s: Scratch) -> None:
             fail(f"no mise proof: {b.out}")
         # A tool not installed fails at its shim with no install.
         b.run(0, "misemissing", STATUS, *A)
-        j = b.judge()
+        j = b.demo_out()
         if has("ESCAPE|MISSING", j):
             fail(f"missing mise tool: {j}")
         if not has("NOTINSTALLED exit [1-9]", j):
@@ -295,7 +296,7 @@ def venv(b: Box) -> None:
     (r / ".venv" / "lib" / "x.dist-info").mkdir(parents=True)
     (r / ".venv" / "lib" / "x.dist-info" / "RECORD").write_text("real\n")
     b.run(0, "venv", STATUS, *A)
-    j = b.judge()
+    j = b.demo_out()
     if not (has("VENV rm exit 0", j) and has("VENV recreated", j)):
         fail(f"venv: removing an ignored lower dir failed in the sandbox: {j}")
     dw = b.jr("discarded_writes")
@@ -321,7 +322,7 @@ def vendored(s: Scratch) -> None:
         s.run(["cp", "-a", str(b.vc0), str(vc)])
         v0 = tree(vc)
         b.run(0, "vendored", STATUS, *A)
-        j = b.judge()
+        j = b.demo_out()
         if has("ESCAPE|MISSING", j):
             fail(f"vendored cache: {j}")
         if "VENDORED green" not in j:
@@ -350,7 +351,7 @@ def trust(b: Box) -> None:
     (ms / "trusted-configs").mkdir(parents=True)
     (ms / "trusted-configs" / "src-sib-0123456789abcdef").symlink_to(b.home / "src" / "sib")
     b.run(0, "newrepo", STATUS, *A, env={"MISE_STATE_DIR": str(ms)})
-    j = b.judge()
+    j = b.demo_out()
     if not (has("NEWREPO exit 0", j) and has(r"mise\.toml trusted \(that file only\)", j)):
         fail(f"new-repo in the sandbox: {j}")
     rx = r"qc sandbox: ok   mise state dir per-run: /tmp/.* started empty: 0 entries"
@@ -599,7 +600,7 @@ def nested(b: Box) -> None:
     """A qc sandbox nested in a demo's (outer /proc submounts covered by its own /proc) passes
     its proof."""
     b.run(0, "nested", STATUS, *A)
-    j = b.judge()
+    j = b.demo_out()
     if has("ESCAPE|MISSING", j):
         fail(f"nested qc: {j}")
     if "NESTED exit 0" not in j:
@@ -675,7 +676,7 @@ def every_escape(b: Box) -> None:
     """Every escape fails; leftovers killed, agents counted, credential copies gone, live
     records untouched."""
     b.run(0, "escape", STATUS, *A)
-    j = b.judge()
+    j = b.demo_out()
     if has("ESCAPE|MISSING|LINEAR KEY", j):
         fail(f"sandbox escape: {j}")
     o, h = b.out, str(b.home)
@@ -758,7 +759,7 @@ def pane(b: Box) -> None:
         path = b.base
         live_session(b)
     b.run(0, "pane", STATUS, *A, env={"PATH": path} if path else None)
-    j, m = b.judge(), b.mode
+    j, m = b.demo_out(), b.mode
     if has("ESCAPE|MISSING", j):
         fail(f"sandbox pane escape ({m} herdr): {j}")
     if "PANE done" not in j:
@@ -821,4 +822,4 @@ if __name__ == "__main__":
     ):  # creds runs no offline(): its own skip, as tests/qc-creds.sh had
         say("qc-creds: skipped, not on macOS (just qc needs Linux; CI runs it)")
         sys.exit(0)
-    main(qc, namespace, copies, judge, uv_cache, mise, oauth, vendored, escapes, creds)
+    main(qc, namespace, copies, status, uv_cache, mise, oauth, vendored, escapes, creds)

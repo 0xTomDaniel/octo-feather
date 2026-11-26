@@ -238,9 +238,7 @@ def judged_from_records(s: Scratch) -> None:
         f"qc ran a demo or the fallback: {q.err}"
     )
     log = s.root / "pi.log"
-    assert not (log.exists() and "qc-judge" in log.read_text()), (
-        f"an agent judge ran: {log.read_text()}"
-    )
+    assert not log.exists(), f"a model was called: {log.read_text()}"
     rep = json.loads(Path(ls[-1].rpartition("; report ")[2]).read_text())
     assert rep["captures"] == [], rep
     assert "fallback" not in rep, rep
@@ -450,7 +448,7 @@ def two_specs(s: Scratch) -> None:
     assert len(records(s)) == 3, "qc reran something"
     assert not re.search(r"agent fallback|qc: demo ", q.err), q.err
     log = s.root / "pi.log"
-    assert not (log.exists() and "qc-judge" in log.read_text()), log.read_text()
+    assert not log.exists(), log.read_text()
     reps = [
         json.loads(Path(x.rpartition("; report ")[2]).read_text())
         for x in ls

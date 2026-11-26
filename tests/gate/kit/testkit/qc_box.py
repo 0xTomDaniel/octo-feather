@@ -353,7 +353,7 @@ class Box:
         ran = caps != [] and self.report("captures", 0, "exit") is not None
         return isinstance(caps, list) and ran
 
-    def judge(self) -> str:
+    def demo_out(self) -> str:
         """The demo's stdout and stderr, from its evidence record (the newest report names it)."""
         rid = self.report("captures", 0, "record")
         ev = [

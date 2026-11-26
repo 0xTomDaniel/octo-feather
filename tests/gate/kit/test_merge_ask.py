@@ -383,7 +383,7 @@ def test_merge_ask_judged_rows() -> None:
     assert gaps_of(old) == [
         (
             "criterion table: no judged column; add `| criterion | qc verdict | judged | evidence "
-            "|` with one row per claimed criterion, judged naming the head just qc judged"
+            "|` with one row per claimed criterion, judged naming the head `just qc` judged"
         )
     ]
     qx = sha("7")
@@ -817,7 +817,7 @@ def test_merge_ask_criterion_claimed() -> None:
             "no rows; add one per claimed criterion"
             if tbl
             else "missing; add `| criterion | qc verdict | judged | evidence |` with one row per "
-            "claimed criterion, judged naming the head just qc judged"
+            "claimed criterion, judged naming the head `just qc` judged"
         )
         for claimed in (
             pr8(nq, (nq, "qc: built acceptance-a (judged 0123456789ab)"), table=tbl),

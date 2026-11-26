@@ -56,7 +56,7 @@ gitenv=(GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTE
 # writer): 8, the spend-ledger.sh cases agents to zero-priced (gh149 implementer: fake/fake 100 in 20 out $0.14,
 # 150 in 10 out $0.17 three times, tool/nested_work 7 in 3 out $0.004, fake/free 150 in 10 out unknown cost; no lane:
 # agent and code-reviewer, fake/fake 150 in 10 out $0.17 each); 10, then two more under gh149 (a judge call and one
-# purposed qc-judge, as a ledger written before ADR 0035 holds).
+# purposed by a role the kit no longer has, as a ledger written before ADR 0035 holds).
 seed() {
   local m='"model":"fake/fake"' u='"input_tokens":150,"output_tokens":10,"cost_usd":0.17'
   printf '%s\n' "{$m,\"purpose\":\"implementer\",\"input_tokens\":100,\"output_tokens\":20,\"cost_usd\":0.14}" \
@@ -68,7 +68,7 @@ seed() {
     env -i PATH="$PATH" HOME="$t/home" XDG_STATE_HOME="$t/state" "$L" spend record
   if [[ "$1" == 10 ]]; then
     printf '%s\n' '{"model":"openrouter/typesafe/jev-1.13","purpose":"judge","input_tokens":500,"output_tokens":40,"cost_usd":0.0001}' \
-      "{$m,\"purpose\":\"qc-judge\",$u}" | env -i PATH="$PATH" HOME="$t/home" XDG_STATE_HOME="$t/state" "$L" spend record --lane gh149
+      "{$m,\"purpose\":\"retired-role\",$u}" | env -i PATH="$PATH" HOME="$t/home" XDG_STATE_HOME="$t/state" "$L" spend record --lane gh149
   fi
   calls "$1"
 }

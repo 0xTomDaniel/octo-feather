@@ -8,7 +8,7 @@
 # ruff: noqa: PTH101, PTH116, PTH102, PTH103, PTH108, PTH109, PTH110, PTH112, PTH113, PTH114, PTH115, PTH118, PTH119
 # ruff: noqa: PTH120, PTH123, PTH207, PTH208, SIM115, S108, N806, S607, PLW1510, T201, E501, C901, PLR0912, PLR0915
 # ruff: noqa: S103, PERF203
-"""octo-feather-qc-sandbox [--] JUDGE_CMD...   the qc judge's sandbox (docs/adr/0022, the sandbox paragraph)
+"""octo-feather-qc-sandbox [--] JUDGE_CMD...   the qc sandbox (docs/adr/0022, the sandbox paragraph)
 
 The judge runs inside anthropics/sandbox-runtime (srt, @anthropic-ai/sandbox-runtime pinned exact in the kit's
 package.json and pnpm-lock.yaml, run from the kit's node_modules: `pnpm install --frozen-lockfile`; it drives bubblewrap): srt gives the judge its own user, mount, PID and network
