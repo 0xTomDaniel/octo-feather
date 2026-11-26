@@ -73,7 +73,7 @@ covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qa", "evals/judgment-
 
 [demo."quality#acceptance-qc-fallback"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-fallback"
-covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "tests/fixtures/qc-judge/pi"]
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-lane"]
 
 [demo."quality#acceptance-built-links"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-stale"

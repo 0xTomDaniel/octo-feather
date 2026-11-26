@@ -478,12 +478,12 @@ def test_merge_ask_passes() -> None:
     report = f"{J}-20261029T090000Z-src123.json"
     qc = {
         "demo#acceptance-a": ({"id": "acceptance-a", "decision": "tagged test assertions"}, report),
-        "demo#acceptance-b": ({"id": "acceptance-b", "decision": "agent fallback"}, report),
+        "demo#acceptance-b": ({"id": "acceptance-b", "decision": "demo checks"}, report),
     }
     assert ask(replace(LANE, qc={J: qc})).sources == [
         src,
         "- demo#acceptance-a: tagged test assertions",
-        "- demo#acceptance-b: agent fallback",
+        "- demo#acceptance-b: demo checks",
     ]
 
 
