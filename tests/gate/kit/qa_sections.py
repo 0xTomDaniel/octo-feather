@@ -1613,6 +1613,7 @@ def ran(s: Scratch) -> None:
     )
     suite(d, "ran", "stub ran", 10, 60)
     stands: dict[str, object] = {"herdr-say": [{"args": ["--parent"], "argc": 2, "stdout": "delivered\n", "exit": 0},
+                            {"args": ["--timeout"], "stdout": "delivered\n", "exit": 0},
                             {"args": ["--parent"], "stdout": "usage: herdr-say\n", "exit": 64}],
               "herdr": [{"args": ["agent", "get", "p1"], "stdout": "gone\n", "exit": 1, "after": ["herdr-close", "p1"]},
                         {"args": ["agent", "get", "p1"], "stdout": "up in {repo}\n", "exit": 0},
@@ -1629,7 +1630,7 @@ def ran(s: Scratch) -> None:
         # s2: count.
         ["bash", f"runme --role two{nul}runme --role two{nul}true"],
         # s3: stand_ins (schema.md, Case).
-        ["bash", ("herdr-say --parent 'hi there' < /dev/null; echo say1=$?; herdr-say --parent < /dev/null; echo say2=$?; herdr-say other x < /dev/null; echo say3=$?; "
+        ["bash", ("herdr-say --parent 'hi there' < /dev/null; echo say1=$?; herdr-say --parent < /dev/null; echo say2=$?; herdr-say other x < /dev/null; echo say3=$?; herdr-say --timeout 20 w3:p5 'it waits' < /dev/null; "
                   "herdr agent get p1; echo get1=$?; herdr-close p1; herdr agent get p1; echo get2=$?; echo REPO=$PWD; herdr pane read p1; echo HEAD=$(git rev-parse HEAD); echo SHORT=$(git rev-parse --short=12 HEAD)")],
         # s4: fake_qa: the role's own octo-feather-qa call, answered with no case run.
         ["bash", "octo-feather-qa --case c1 --runs 3 --baseline main < /dev/null; echo rc=$?; octo-feather-qa --help | head -1"],
@@ -1652,6 +1653,10 @@ def ran(s: Scratch) -> None:
         ({"program": "herdr-say", "args": ["--parent", "hi there"], "count": 1}, "pass", r"^ran herdr-say --parent hi there count 1: 1 matching runs: herdr-say --parent hi there \(exit 0\)"),
         # exit: only the run that exited 64 counts, not the --parent run that exited 0.
         ({"program": "herdr-say", "args": ["--parent"], "exit": 64, "count": 1}, "pass", r"^ran herdr-say --parent exit 64 count 1: 1 matching runs: herdr-say --parent \(exit 64\)"),
+        # herdr-say read as its parser reads it (rule: schema.md, Run record).
+        ({"program": "herdr-say", "args": ["w3:p5"]}, "pass", r"^ran herdr-say w3:p5: recorded run herdr-say --timeout 20 w3:p5 it waits \(exit 0\)$"),
+        ({"program": "herdr-say", "args": ["20"], "count": 0}, "pass", r"^ran herdr-say 20 count 0: 0 matching runs \("),
+        ({"program": "herdr-say", "args": ["w3:p5", "--timeout", "20"], "count": 1}, "pass", r"^ran herdr-say w3:p5 --timeout 20 count 1: 1 matching runs: "),
         ({"program": "octo-feather-qa", "args": ["--baseline"]}, "pass", f"^ran octo-feather-qa --baseline: {rq}$"),
         ({"program": "octo-feather-qa", "args": ["--runs"]}, "pass", f"^ran octo-feather-qa --runs: {rq}$"),
         # A run count and a bare flag together: --runs 3 --baseline holds for `--runs 3 --baseline

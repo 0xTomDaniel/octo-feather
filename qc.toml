@@ -199,6 +199,13 @@ covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.to
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 merge-ask-proof"
 covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.toml"]
 
+# Judged from a pinned stored eval run (rule: scripts/octo-feather-qa --help, Verdict): a real headless director handed
+# realcase PR #1's recorded tier 3 merge ask (evals/director-tier-relay). The run's generated evidence:
+# evidence/2026-11-25-gh1284-merge-tiers.md.
+[demo."issue-lifecycle#acceptance-tier-three-waits"]
+command = "scripts/octo-feather-qa --verdict 20261126T064835Z-939595/director-tier-relay/tier-three-waits-for-owner"
+covers = ["agents/director.md", "evals/director-tier-relay", "evals/fixtures/python-app", "scripts/octo-feather-qa", "scripts/eval_grading.py", "evidence/2026-11-25-gh1284-merge-tiers.md"]
+
 # Proven by its tagged test, tests/web-tools.sh (headless roles and herdr-spawn tab launches, real Pi, codemode).
 [demo."roles#acceptance-codemode-every-role"]
 covers = ["scripts/pi-role", ".agents/skills/herdr-comms/assets/herdr-spawn", "agents/director.md", "agents/supervisor.md", "agents/general-worker.md", "agents/implementer.md", "agents/corrector.md", "agents/code-reviewer.md", "agents/qc-judge.md", "extensions/web-servers.ts", "web-mcp.json", "pi-version"]

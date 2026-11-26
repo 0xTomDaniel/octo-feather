@@ -1,0 +1,45 @@
+{
+  "tier-three-waits-for-owner": {
+    "facts": [
+      {
+        "fact": "declared",
+        "field": "waits_for",
+        "in": [
+          "the owner"
+        ]
+      },
+      {
+        "fact": "declared_includes",
+        "field": "reasons",
+        "items": [
+          {
+            "kind": "failed criterion",
+            "subject": "demo#acceptance-c"
+          }
+        ]
+      },
+      {
+        "fact": "declared",
+        "field": "relay",
+        "in": [
+          "none"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "octo-feather-lane",
+        "args": [
+          "relay"
+        ],
+        "count": 0
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "w3:p5"
+        ]
+      }
+    ]
+  }
+}
