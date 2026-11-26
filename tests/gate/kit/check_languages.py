@@ -105,15 +105,12 @@ def scc_silent(s: Scratch) -> None:
 
 
 def check_ts_current(s: Scratch) -> None:
-    """`just check-ts` on a current node_modules (installed first, as check-tests does) passes and
-    leaves its tsc launcher the same file: no install rewrote it under a concurrent reader. One
-    small file in tsconfig.json, so tsc and eslint stay cheap."""
-    c = Copy(s)
-    s.run([tool("pnpm"), "install", "--offline", "--frozen-lockfile"], cwd=c.dir)
-    cfg = c.dir / "tsconfig.json"
-    text = cfg.read_text()
-    assert '"include": ["**/*"]' in text, f"no include in {cfg}"
-    cfg.write_text(text.replace('"include": ["**/*"]', '"include": ["eslint.config.js"]'))
+    """`just check-ts` on a current node_modules (installed first, as check-tests does: testkit
+    installed_kit) passes and leaves its tsc launcher the same file: no install rewrote it under a
+    concurrent reader. One one-line file in tsconfig.json, so tsc and eslint stay cheap."""
+    c = Copy(s, installed=True)
+    (c.dir / "probe.ts").write_text("export const probe = 1;\n")
+    c.only("probe.ts")
     tsc = c.dir / "node_modules" / ".bin" / "tsc"
     before = tsc.stat()
     got = c.check_ts()

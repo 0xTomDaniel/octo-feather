@@ -1,0 +1,14 @@
+Seeded defect: just check-ts says ok without the files it checked.
+diff --git a/justfile b/justfile
+index af3486fb..a63d0107 100644
+--- a/justfile
++++ b/justfile
+@@ -209,7 +209,7 @@ check-ts:
+     pnpm exec tsc || { bad=1; echo "check-ts: fix each tsc error above at its file(line,col)" >&2; }
+     pnpm exec eslint --max-warnings 0 -- "${files[@]}" || { bad=1
+       echo "check-ts: fix each eslint finding above at its file, line:col; rule docs: https://typescript-eslint.io/rules/<rule> or https://eslint.org/docs/latest/rules/<rule> (an exception: // eslint-disable-next-line <rule> -- <reason>, on its line). Never add to eslint-suppressions.json; an unused entry there is pruned: pnpm exec eslint --prune-suppressions -- ${files[*]}" >&2; }
+-    [[ "$bad" == 0 ]] && echo "ts: ok (${#files[@]} files: tsc, eslint)"
++    [[ "$bad" == 0 ]] && echo "ts: ok"
+     exit "$bad"
+ 
+ # Every template wires the same gate and pins its tools with mise at the kit's versions (rules: the head of

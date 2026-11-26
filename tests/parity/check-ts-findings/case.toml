@@ -1,0 +1,12 @@
+# The parity lever's case for test_findings, moved to the shared installed kit copy (testkit installed_kit) and a smaller
+# fixture: a new file and baselined nested-tool.ts, tsconfig.json narrowed to them (#1289; tests/parity/lever.py --help).
+old = "tests/gate/kit/test_check_ts.py::test_findings"
+old_at = "32130e87"
+# The old item's scenario file and the testkit it imports.
+needs = ["tests/gate/kit/check_ts.py", "tests/gate/kit/testkit/__init__.py"]
+new = "tests/gate/kit/test_check_ts.py::test_findings"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): run: the justfile is no program: just
+# reads it to run the recipe; coverage.py cannot see it.
+[ran]
+"justfile" = "run just check-ts"
