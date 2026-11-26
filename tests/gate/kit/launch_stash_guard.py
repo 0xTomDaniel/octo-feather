@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -164,5 +165,62 @@ def unchanged(s: Scratch) -> None:
     assert s.git(r, "stash", "list") == ""
 
 
+def private(call: str, *, make: str = "ln -s", pre: str = "") -> str:
+    """The agent's shell narrowing PATH to a dir of its own holding its git (MAKE: ln -s or cp),
+    the tests' pattern (#1322), then, after PRE, running CALL there."""
+    narrow = f'{pre}PATH="$d"; export PATH; {call}'
+    return f'd="$(mktemp -d)"; {make} "$(command -v git)" "$d/git"; {narrow}'
+
+
+def private_path(s: Scratch) -> None:
+    """roles#acceptance-stash-guard-private-path: from the second worktree, an agent whose PATH
+    is a dir of its own holding a link to, then a copy of, its git (the guard) and nothing else:
+    git status shows the status, git stash drop is refused naming a work-in-progress commit, and
+    the entry stays (what a link or a copy does: pi-role --help, Stash guard)."""
+    first, second = two_worktrees(s)
+    entry = s.git(first, "stash", "list")
+    (second / "new").write_text("x\n")
+    for make in ("ln -s", "cp"):
+        ran = agent(s, second, private("git status --short", make=make), want=0)
+        assert ran.out == "?? new", (make, ran.out, ran.err)
+        ran = agent(s, second, private("git stash drop", make=make), want=1)
+        assert WIP in ran.err, (make, ran.err)
+        assert "git reset --soft HEAD~1" in ran.err, (make, ran.err)
+        assert s.git(first, "stash", "list") == entry
+    # With python3 there too, the linked guard runs its checker: the list reads, the drop refused.
+    pre = 'ln -s "$(command -v python3)" "$d/python3"; '
+    ran = agent(
+        s,
+        second,
+        private("git stash list; git stash drop", pre=pre),
+        want=1,
+    )
+    assert ran.out == entry, ran.out
+    assert WIP in ran.err, ran.err
+    assert s.git(first, "stash", "list") == entry
+
+
+def untrusted(s: Scratch) -> None:
+    """The trust rule (pi-role --help, Stash guard): with no git after the guard on the agent's
+    PATH, an OCTO_FEATHER_GIT that is the guard (its own path, a link to it, a copy of it), a
+    relative path or no executable file is not run: exit 127, naming it and why."""
+    _, second = two_worktrees(s)
+    guard = ROOT / "scripts" / "stash-guard" / "git"
+    (s.root / "link").symlink_to(guard)
+    shutil.copy2(guard, s.root / "copy")
+    (s.root / "plain").write_text("not a program\n")
+    for value, why in (
+        (str(guard), "is this stash guard"),
+        (str(s.root / "link"), "is this stash guard"),
+        (str(s.root / "copy"), "is this stash guard"),
+        ("bin/git", "is no absolute path"),
+        (str(s.root / "plain"), "is no executable file"),
+    ):
+        call = f"OCTO_FEATHER_GIT='{value}'; export OCTO_FEATHER_GIT; git status"
+        ran = agent(s, second, private(call), want=127)
+        assert "no git on PATH after this guard" in ran.err, (value, ran.err)
+        assert f"OCTO_FEATHER_GIT={value} {why}" in ran.err, (value, ran.err)
+
+
 if __name__ == "__main__":
-    main(refused, unchanged)
+    main(refused, unchanged, private_path, untrusted)

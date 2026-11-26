@@ -41,7 +41,9 @@ done
 shims="$(mise doctor --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["dirs"]["shims"])')"; g="$kit/scripts/stash-guard"
 mkdir -p "$t/mbin"; ln -s "$(command -v mise)" "$t/mbin/mise"
 grep -qF ":$g:" "$t/env.pane" || { echo "pi-role test: child PATH in a repo without mise.toml lacks the stash guard $g: $(grep ^PATH= "$t/env.pane")" >&2; exit 1; }
-grep -qxF "PATH=$t/bin:$PATH" <(sed "s|:$g:|:|" "$t/env.pane") || { echo "pi-role test: child PATH in a repo without mise.toml changed: $(grep ^PATH= "$t/env.pane")" >&2; exit 1; }
+# A caller PATH that already holds $g (a gate under an agent's launch PATH: CI's) has it moved, not added (#1322).
+bare=":$PATH:"; bare="${bare//:$g:/:}"; bare="${bare#:}"; bare="${bare%:}"
+grep -qxF "PATH=$t/bin:$bare" <(sed "s|:$g:|:|" "$t/env.pane") || { echo "pi-role test: child PATH in a repo without mise.toml changed: $(grep ^PATH= "$t/env.pane")" >&2; exit 1; }
 git init -q "$t/made"; printf '[tools]\n' >"$t/made/mise.toml"
 (cd "$t/made" && env PATH="$t/bin:$t/mbin:/usr/local/bin:/usr/bin:/bin" PI_ENV_OUT="$t/env.made" "$kit/scripts/pi-role" "$kit/agents/implementer.md" 2>/dev/null)
 grep -qxF "PATH=$t/bin:$t/mbin:$g:$shims:/usr/local/bin:/usr/bin:/bin" "$t/env.made" || { echo "pi-role test: child PATH in a mise.toml repo lacks mise's shims $shims before the system dirs, after the caller's: $(grep ^PATH= "$t/env.made")" >&2; exit 1; }

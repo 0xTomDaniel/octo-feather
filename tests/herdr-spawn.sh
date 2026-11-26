@@ -97,7 +97,9 @@ filed="$(echo body | env -i "${tabenv[@]}" PATH="$t/key:$(sed -n 's/^PATH=//p' "
 shims="$(mise doctor --json | jq -r .dirs.shims)"; g="$kit/scripts/stash-guard"
 kitpath="$kit/.agents/skills/herdr-comms/assets:$kit/scripts"; ub="$HOME/.local/bin"   # ub: the fallback, last
 grep -qF ":$g:" "$t/ok/tab-env" || fail "tab PATH in a repo without mise.toml lacks the stash guard $g: $(grep ^PATH= "$t/ok/tab-env")"
-grep -qxF "PATH=$kitpath:$t/bin:$PATH:$ub" <(sed "s|:$g:|:|" "$t/ok/tab-env") || fail "tab PATH in a repo without mise.toml changed: $(grep ^PATH= "$t/ok/tab-env")"
+# A caller PATH that already holds $g (a gate under an agent's launch PATH: CI's) has it moved, not added (#1322).
+bare=":$PATH:"; bare="${bare//:$g:/:}"; bare="${bare#:}"; bare="${bare%:}"
+grep -qxF "PATH=$kitpath:$t/bin:$bare:$ub" <(sed "s|:$g:|:|" "$t/ok/tab-env") || fail "tab PATH in a repo without mise.toml changed: $(grep ^PATH= "$t/ok/tab-env")"
 mkdir -p "$t/mbin"; ln -sf "$(command -v mise)" "$t/mbin/mise"; ln -sf "$(command -v jq)" "$t/mbin/jq"
 printf '[tools]\n' >"$t/cwd/mise.toml"
 spawn made PATH="$t/bin:$t/mbin:/usr/local/bin:/usr/bin:/bin"
