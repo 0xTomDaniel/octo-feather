@@ -172,8 +172,13 @@
       ]
     },
     "acceptance-stash-guard-private-path": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1324,
+      "record": "20261126T080701Z-35390faa",
+      "commit": "2d6cc106ca9a4a031f556f6b25488f607cebb731",
+      "tests": [
+        "tests/gate/kit/launch_stash_guard.py"
+      ]
     }
   }
 }
