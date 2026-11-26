@@ -1,0 +1,14 @@
+Seeded defect: The trend line records a -k run as full: a keyword is not counted as narrowing.
+diff --git a/tests/gate/conftest.py b/tests/gate/conftest.py
+index 40cbbf1c..05fc7441 100644
+--- a/tests/gate/conftest.py
++++ b/tests/gate/conftest.py
+@@ -143,7 +143,7 @@ def _static_short(root: Path) -> bool:
+ 
+ def _tier(config: pytest.Config) -> str:
+     o = config.option
+-    narrowed = (config.args_source == pytest.Config.ArgsSource.ARGS, o.keyword, o.markexpr, getattr(o, "lf", False),
++    narrowed = (config.args_source == pytest.Config.ArgsSource.ARGS, o.markexpr, getattr(o, "lf", False),
+                 getattr(o, "stepwise", False), o.deselect, o.ignore, o.ignore_glob)
+     return "subset" if any(narrowed) or _static_short(config.rootpath) else "full"
+ 

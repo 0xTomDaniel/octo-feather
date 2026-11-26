@@ -1,0 +1,14 @@
+Seeded defect: just check-ts suppresses every new no-explicit-any into eslint-suppressions.json: the baseline grows, the new `any` passes unnamed.
+diff --git a/justfile b/justfile
+index af3486fb..959bc9f9 100644
+--- a/justfile
++++ b/justfile
+@@ -207,7 +207,7 @@ check-ts:
+     (( ${#files[@]} )) || { echo "check-ts: tsconfig.json lists no files" >&2; exit 1; }
+     bad=0
+     pnpm exec tsc || { bad=1; echo "check-ts: fix each tsc error above at its file(line,col)" >&2; }
+-    pnpm exec eslint --max-warnings 0 -- "${files[@]}" || { bad=1
++    pnpm exec eslint --max-warnings 0 --suppress-rule @typescript-eslint/no-explicit-any -- "${files[@]}" || { bad=1
+       echo "check-ts: fix each eslint finding above at its file, line:col; rule docs: https://typescript-eslint.io/rules/<rule> or https://eslint.org/docs/latest/rules/<rule> (an exception: // eslint-disable-next-line <rule> -- <reason>, on its line). Never add to eslint-suppressions.json; an unused entry there is pruned: pnpm exec eslint --prune-suppressions -- ${files[*]}" >&2; }
+     [[ "$bad" == 0 ]] && echo "ts: ok (${#files[@]} files: tsc, eslint)"
+     exit "$bad"

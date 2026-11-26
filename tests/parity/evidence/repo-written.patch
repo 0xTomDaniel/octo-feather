@@ -1,0 +1,14 @@
+Seeded defect: append leaves the last record id in the repo, .evidence-last: a drive changes the repo's git status.
+diff --git a/scripts/octo-feather-evidence b/scripts/octo-feather-evidence
+index 20344c5a..6d6700c7 100755
+--- a/scripts/octo-feather-evidence
++++ b/scripts/octo-feather-evidence
+@@ -200,6 +200,8 @@ def append(a):
+     finally:
+         if os.path.exists(stage):
+             shutil.rmtree(stage)
++    with open(os.path.join(repo, ".evidence-last"), "w") as fh:
++        fh.write(rid + "\n")
+     print(rid)
+ 
+ 

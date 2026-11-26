@@ -1,0 +1,14 @@
+Seeded defect: The trend line records a run without the justfile's GATE_RECIPES as full: the gate's static steps unchecked.
+diff --git a/tests/gate/conftest.py b/tests/gate/conftest.py
+index 40cbbf1c..56a310ed 100644
+--- a/tests/gate/conftest.py
++++ b/tests/gate/conftest.py
+@@ -145,7 +145,7 @@ def _tier(config: pytest.Config) -> str:
+     o = config.option
+     narrowed = (config.args_source == pytest.Config.ArgsSource.ARGS, o.keyword, o.markexpr, getattr(o, "lf", False),
+                 getattr(o, "stepwise", False), o.deselect, o.ignore, o.ignore_glob)
+-    return "subset" if any(narrowed) or _static_short(config.rootpath) else "full"
++    return "subset" if any(narrowed) else "full"
+ 
+ 
+ def _entry(xml_path, status, tier: str):
