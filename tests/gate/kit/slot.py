@@ -17,6 +17,10 @@ implementer, no grant, the slot free and nobody queued: its run says the slot wa
 at once and runs its tests. While gh7's run holds it, gh8's implementer's run stops after its
 green static check (exit 75, no other item run) saying gh8 queued and its place, which the queue
 file holds; gh8's supervisor is told the place, the director's pane nothing.
+self_grant_ends (quality #acceptance-slot-self-grant-ends, #1327): through `just test`, gh7's
+implementer's run, granted at once, ends red; a grace later gh8's implementer's run is granted
+the slot at once and runs its tests; after gh7's hold, granted at once, is killed (no end
+recorded), gh8's next run is granted at once with no grace waited; nobody told.
 sandboxed: a 31-item run inside the qc sandbox (a `just qc` demo, as qa runs its cases there)
 from that same ungranted agent runs.
 
@@ -25,8 +29,9 @@ message (testkit/argv_recorder.sh), the grace shortened through OCTO_FEATHER_SLO
 queued: queue is the director's and checks its lane; gh8 queued once onto gh7's full heavy slot,
 status lists it; nothing passes before a run started under gh7's grant, nor while its run holds
 past the grace; after the run ends and the grace passes gh8 holds it, off the queue, and its
-supervisor and the director were told. queue_free: queued onto a free kind, granted at once and
-told. The hand-over's follow_up and regranted: in-process, tests/gate/kit/test_slot_queue.py.
+supervisor was told, the director not (#1327). queue_free: queued onto a free kind, granted
+at once and told. The hand-over's follow_up and regranted: in-process,
+tests/gate/kit/test_slot_queue.py.
 back_to_back (quality #recipes-static-first, #1113, #1163): two gates of gh7 through the plugin,
 one after the other on a grace of WAIT_S, gh8 queued, so no check passes the slot while a gate
 starts. The grace is shown over by a check whose own grace is 0 (OCTO_FEATHER_SLOT_GRACE in its
@@ -34,7 +39,7 @@ env: octo-feather-slot --help, the grace), never by a sleep: during the second g
 check a grace-0 status still shows gh7 holding (its second gate took its slot before it, `hold
 --if-granted`), its run holding the lock, gh8 queued, nobody told; after it ends a status at the
 long grace, once heavy's own run line says none, keeps gh7, and a grace-0 settle hands to gh8
-and tells it and the director.
+and tells it, the director not.
 
 Compatibility with the reader every unmerged worktree on the box still runs against the one slots
 dir: main's octo-feather-slot at 53dacfca (gh906's base, the last commit before the queue), its
@@ -261,7 +266,6 @@ TOLD = (
     "octo-feather-slot: the heavy slot is granted to lane gh8 until {until} (lane gh7's run "
     f"ended, no run within the {GRACE} s grace); run your heavy run now."
 )
-PASSED = "octo-feather-slot: heavy slot passed from lane gh7 to lane gh8; queue left: none."
 
 
 def records(s: Scratch) -> list[list[str]]:
@@ -276,11 +280,13 @@ def said(s: Scratch) -> list[list[str]]:
     return [r[2:] for r in records(s)]
 
 
-def said_n(s: Scratch, n: int) -> list[list[str]]:
-    """The herdr-say calls, once N were made (within WAIT_S)."""
+def said_n(s: Scratch, n: int, still: float = 0.0) -> list[list[str]]:
+    """The herdr-say calls, once N were made (within WAIT_S) and STILL seconds more passed, so a
+    call past the N shows."""
     stop = time.time() + WAIT_S
     while len(said(s)) < n and time.time() < stop:
         time.sleep(0.2)
+    time.sleep(still)
     return said(s)
 
 
@@ -340,14 +346,6 @@ def sent(pane: str, msg: str) -> list[str]:
     return ["--timeout", "60", pane, msg]
 
 
-def freed_to(grace: int, lane: str = "gh8") -> str:
-    """The director's notice of a free slot granted to LANE, the queue then empty."""
-    return (
-        f"octo-feather-slot: heavy slot free for the {grace} s grace, granted to lane {lane}; "
-        "queue left: none."
-    )
-
-
 def granted_to(lane: str, kind: str, expires: str, why: str) -> str:
     return (
         f"octo-feather-slot: the {kind} slot is granted to lane {lane} until {expires} ({why}); "
@@ -381,13 +379,11 @@ def queued(s: Scratch) -> None:
     st = passed(s)
     assert "  queue: none" in st, st
     until = st.split(", expires ", 1)[1].split(")", 1)[0]
-    want = [
-        ["--timeout", "60", "w8:p1", TOLD.format(until=until)],
-        ["--timeout", "60", "w1:p1", PASSED],
-    ]
+    want = [["--timeout", "60", "w8:p1", TOLD.format(until=until)]]  # the director: none (#1327)
     stop = time.time() + WAIT_S
     while len(said(s)) < len(want) and time.time() < stop:
         time.sleep(0.2)
+    time.sleep(0.5)  # nothing more follows
     assert said(s) == want, said(s)
 
 
@@ -503,11 +499,8 @@ def new_reads_old(s: Scratch) -> None:
     s.run([SLOT, "status"])  # first seen free: the grace starts
     st = passed(s)
     why = f"the slot free for the {grace} s grace"
-    want = [
-        sent("w8:p1", granted_to("gh8", "heavy", until(st), why)),
-        sent("w1:p1", freed_to(grace)),
-    ]
-    assert said_n(s, 2) == want, said(s)
+    want = [sent("w8:p1", granted_to("gh8", "heavy", until(st), why))]  # the director: none
+    assert said_n(s, 1, still=1.0) == want, said(s)
 
 
 def passed_over(s: Scratch) -> None:
@@ -527,8 +520,7 @@ def passed_over(s: Scratch) -> None:
     over = f"lane gh7 started no heavy run within the {bound} s bound"
     told_over = (
         f"octo-feather-slot: lane gh7's heavy grant passed to lane gh8: no heavy run started under "
-        f"it within the {bound} s bound; to run, ask the director: octo-feather-slot queue gh7 "
-        "--kind heavy."
+        f"it within the {bound} s bound; your lane's next heavy run queues it again."
     )
     moved = (
         f"octo-feather-slot: heavy slot passed over lane gh7 (no run within the {bound} s bound) "
@@ -580,11 +572,8 @@ def revoked(s: Scratch) -> None:
     assert time.time() - t0 >= GRACE - 1, "granted before the grace"
     assert "  queue: none" in st, st
     why = f"the slot free for the {GRACE} s grace"
-    want = [
-        sent("w8:p1", granted_to("gh8", "heavy", until(st), why)),
-        sent("w1:p1", freed_to(GRACE)),
-    ]
-    assert said_n(s, 2) == want, said(s)
+    want = [sent("w8:p1", granted_to("gh8", "heavy", until(st), why))]  # the director: none
+    assert said_n(s, 1, still=1.0) == want, said(s)
     s.run([SLOT, "queue", "gh7", "--kind", "heavy"], env=DIRECTOR)
     s.run([SLOT, "revoke", "gh8", "--kind", "heavy"], env=DIRECTOR)
     out = s.run([SLOT, "grant", "gh6", "--kind", "heavy"], env=DIRECTOR).out  # inside the grace
@@ -594,7 +583,7 @@ def revoked(s: Scratch) -> None:
     st = holder(s)
     assert "holder: gh6 (granted " in st, st  # the director's choice kept
     assert "  queue: 1. gh7 (queued " in st, st
-    assert len(said(s)) == 2, said(s)
+    assert len(said(s)) == 1, said(s)
 
 
 def queued_late(s: Scratch) -> None:
@@ -685,8 +674,8 @@ def back_to_back(s: Scratch) -> None:
     assert "holder: gh8 (granted " in st, st
     assert "  queue: none" in st, st
     why = "lane gh7's run ended, no run within the 0 s grace"
-    want = [sent("w8:p1", granted_to("gh8", "heavy", until(st), why)), sent("w1:p1", PASSED)]
-    assert said_n(s, 2) == want, said(s)
+    want = [sent("w8:p1", granted_to("gh8", "heavy", until(st), why))]  # the director: none
+    assert said_n(s, 1, still=1.0) == want, said(s)
 
 
 # One green static check, as the gate's node id (tests/gate/heavy_slot.py's STATIC).
@@ -698,18 +687,26 @@ def test_recipe(name):
 """
 
 
-def self_asked(s: Scratch) -> None:
-    world(s)
-    s.env |= tool_homes() | {"npm_config_store_dir": pnpm_store()}  # `just test`: uv, pnpm
-    # The justfile puts the kit's own herdr-say first on its recipes' PATH: Herdr's stand-in is
-    # `herdr` here, recording each call's arguments, as SAY does.
-    (s.bin / "herdr").unlink()  # the testkit's fake, a link: replaced, never written through
-    (s.bin / "herdr").write_text(SAY.replace("herdr-say", "herdr"))
-    (s.bin / "herdr").chmod(0o755)
-    big = suite(s, "big", 31)
+def just_test(s: Scratch, name: str, extra: str = "") -> list[str]:
+    """`just test` over S's suite NAME: one green static check (the gate's node id), 31 items and
+    EXTRA as one more test file; the scratch set for it (uv, pnpm) and Herdr's stand-in in place.
+    The justfile puts the kit's own herdr-say first on its recipes' PATH: Herdr's stand-in is
+    `herdr` here, recording each call's arguments, as SAY does."""
+    s.env |= tool_homes() | {"npm_config_store_dir": pnpm_store()}
+    if (s.bin / "herdr").is_symlink():  # the testkit's fake, a link: replaced, not written through
+        (s.bin / "herdr").unlink()
+        (s.bin / "herdr").write_text(SAY.replace("herdr-say", "herdr"))
+        (s.bin / "herdr").chmod(0o755)
+    big = suite(s, name, 31, extra)
     (big / "tests" / "gate").mkdir(parents=True)
     (big / "tests" / "gate" / "test_gate.py").write_text(GREEN)
-    gate_ = ["just", "--justfile", str(ROOT / "justfile"), "test", str(big)]
+    return ["just", "--justfile", str(ROOT / "justfile"), "test", str(big)]
+
+
+def self_asked(s: Scratch) -> None:
+    world(s)
+    s.env |= {"OCTO_FEATHER_SLOT_GRACE": str(WAIT_S)}  # gh7's self-grant outlives its run here
+    gate_ = just_test(s, "big")
     ran = s.run(gate_, env={**AGENT, "GATE_WORKERS": "2"})
     out = ran.out + ran.err
     assert "heavy slot: held: the heavy slot for lane gh7, run pid " in out, out
@@ -749,6 +746,37 @@ def self_asked(s: Scratch) -> None:
     assert said(s) == want, said(s)
 
 
+RED = "def test_red():\n    assert False\n"
+
+
+def self_grant_ends(s: Scratch) -> None:
+    world(s)
+    s.env |= {"OCTO_FEATHER_SLOT_GRACE": str(GRACE)}
+    red, green = just_test(s, "red", RED), just_test(s, "green")
+    at_once = "(granted at once: the heavy slot free, queue empty)"
+    ran = s.run(red, want=1, env={**AGENT, "GATE_WORKERS": "2"})
+    out = ran.out + ran.err
+    assert "heavy slot: held: the heavy slot for lane gh7, run pid " in out, out
+    assert at_once in out, out
+    assert "1 failed" in out, out  # red: the gate stops at its first failure
+    time.sleep(GRACE + 0.5)  # the grace after gh7's red run, no run of gh7 since
+
+    def takes_at_once(lane: str, env: dict[str, str]) -> None:
+        ran = s.run(green, env={**env, "GATE_WORKERS": "2"})
+        out = ran.out + ran.err
+        assert f"heavy slot: held: the heavy slot for lane {lane}, run pid " in out, out
+        assert at_once in out, out
+        assert "32 passed" in out, out
+
+    takes_at_once("gh8", AGENT8)
+    time.sleep(GRACE + 0.5)  # gh8's self-grant ends too
+    killed = holding(s)  # gh7's run granted at once, then its hold killed: no end recorded
+    killed.kill()
+    killed.wait(timeout=WAIT_S)
+    takes_at_once("gh8", AGENT8)  # at once, no grace waited
+    assert said(s) == [], said(s)  # nobody told, the director's pane included
+
+
 def two_sessions(s: Scratch) -> None:
     """Holder gh7 in the default session, gh8 queued from session sb: both notices go to sb."""
     world(s)
@@ -761,12 +789,9 @@ def two_sessions(s: Scratch) -> None:
     s.run([SLOT, "queue", "gh8", "--kind", "heavy"], env={**DIRECTOR, "HERDR_SESSION": "sb"})
     end(holding(s))
     st = passed(s)
-    said_n(s, 2)
-    assert [r[1] for r in records(s)] == ["sb", "sb"], records(s)
-    assert said(s) == [
-        ["--timeout", "60", "w8:p1", TOLD.format(until=until(st))],
-        ["--timeout", "60", "w2:p1", PASSED],
-    ], said(s)
+    said_n(s, 1, still=1.0)
+    assert [r[1] for r in records(s)] == ["sb"], records(s)
+    assert said(s) == [["--timeout", "60", "w8:p1", TOLD.format(until=until(st))]], said(s)
 
 
 if __name__ == "__main__":
@@ -786,4 +811,5 @@ if __name__ == "__main__":
         two_sessions,
         back_to_back,
         self_asked,
+        self_grant_ends,
     )

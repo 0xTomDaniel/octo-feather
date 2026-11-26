@@ -75,12 +75,24 @@ The queue (owner ruling 2026-11-14 #906, #976). The director queues lanes for a 
 holder's run ends (a `hold` of that lane under its grant released its lock) and no run of that
 lane takes the kind's slot again within the grace, the holder's grant passes to the queue's head:
 the holder's grant is removed, the head granted for the `grant` default hours and taken off the
-queue, and through `herdr-say --timeout 60` the head's supervisor (its lane record's `supervisor`)
-and the director (director.toml's `pane`, both in the Herdr session it was queued from) are told:
+queue, and through `herdr-say --timeout 60` the head's supervisor (its lane record's `supervisor`,
+in the Herdr session it was queued from) is told:
   octo-feather-slot: the KIND slot is granted to lane HEAD until EXPIRES (lane HOLDER's run
   ended, no run within the GRACE s grace); run your KIND run now.
-  octo-feather-slot: KIND slot passed from lane HOLDER to lane HEAD; queue left: LANES|none.
+The director is not told (#1327): KIND.log gets `TIME KIND: passed from lane HOLDER to lane HEAD;
+queue left: LANES|none`, and status shows it as `  last:`.
 A lane granted at once by `queue` gets the first line, its reason `queued onto a free slot`.
+A grant a run made for its own lane (by `self PANE`, hold above) ends with its run (quality
+#acceptance-slot-self-grant-ends): once its last run's end is a grace old and no run of its lane
+holds the slot, a check removes it, the queue empty or not (with a queue, the hand-over above);
+one with no run holding it and no end recorded (its `hold` killed before recording) is removed at
+the next check, handed over as above (its reason `lane HOLDER's run gone, its end unrecorded`) when
+a lane waits. Nobody is told; KIND.log gets `TIME KIND: lane LANE's self-grant ended (its run
+ended, no run within the GRACE s grace)`, or `(no run holds it and none recorded its end)`. A
+grant made by the director or by the queue keeps its hours.
+A queued lane whose lane record (LANE.toml in the lanes dir it was queued from) is gone (the lane
+archived) is dropped from the queue at the next check, never granted; KIND.log gets `TIME KIND:
+lane LANE dropped from the queue: RECORD gone`.
 A grant hands over this way only after a run started and ended under it (KIND.runs.json records
 when the last run under each grant ended, by the grant's lane and since: a grant made again is a
 fresh grant, with no run seen). A follow-up run inside the grace keeps the slot: while it holds
@@ -92,20 +104,20 @@ head granted as above, and told: the head (the first line above, its reason `lan
 no KIND run within the BOUND s bound`), the passed-over lane's supervisor (its lane record in
 the head's session):
   octo-feather-slot: lane HOLDER's KIND grant passed to lane HEAD: no KIND run started under it
-  within the BOUND s bound; to run, ask the director: octo-feather-slot queue HOLDER --kind KIND.
-and the director:
+  within the BOUND s bound; your lane's next KIND run queues it again.
+and the director (director.toml's `pane` in that session), once; KIND.log gets `TIME KIND: passed
+over lane HOLDER to lane HEAD; queue left: LANES|none`:
   octo-feather-slot: KIND slot passed over lane HOLDER (no run within the BOUND s bound) to lane
   HEAD; queue left: LANES|none.
-With the queue empty nothing changes, however long a grant goes unused.
+With the queue empty a grant by the director or the queue stays, however long it goes unused.
 Manual moves: a lane granted by hand leaves the queue (at the next check, which every command
 makes first). `revoke LANE` drops LANE's grant and its queue place. A free slot (fewer grants than
 the kind's count) with the queue non-empty passes to the head a grace after it was freed by a
 revoke, or first seen free by a check (a grant expired, or revoked by an older copy):
 KIND.queue.json records since when. A grant by hand inside that grace fills it, and the head stays
-queued. The head (the first line above, its reason `the slot free for the GRACE s grace`) and the
-director are told:
-  octo-feather-slot: KIND slot free for the GRACE s grace, granted to lane HEAD; queue left:
-  LANES|none.
+queued. The head is told (the first line above, its reason `the slot free for the GRACE s
+grace`), the director not; KIND.log gets `TIME KIND: free slot to lane HEAD; queue left:
+LANES|none`.
 A grant made by hand or by the queue has its own since, so its own run and bound window: no
 earlier run's end hands it away.
 Settle on every command: every octo-feather-slot command but --help first settles both kinds (the
@@ -117,11 +129,11 @@ releasing its lock records the run's end and starts one (S the grace); a grant m
 the queue while the queue is non-empty starts one (S the bound); `queue` behind a holder no run has
 started under starts one (due at that grant's since + the bound); a revoke freeing a slot, or a
 check first seeing one free, while the queue is non-empty starts one (S the grace). With the queue
-empty none starts: nothing could pass. Each notice is sent through herdr-say in the Herdr session
-the head was queued from (KIND.queue.json records it with the entry: HERDR_SESSION set to it, or
-unset for the default session), whoever's command made the check, and without the caller's
-OCTO_FEATHER_ROLE and OCTO_FEATHER_PARENT: the notice is the slot rule's, sent for the director,
-not the caller agent's own message up its chain.
+empty only the release's starts: it ends a self-grant. Each notice is sent through herdr-say in the
+Herdr session the head was queued from (KIND.queue.json records it with the entry: HERDR_SESSION set
+to it, or unset for the default session), whoever's command made the check, and without the caller's
+OCTO_FEATHER_ROLE and OCTO_FEATHER_PARENT: the notice is the slot rule's, sent for the director, not
+the caller agent's own message up its chain.
 The grace: slot_grace_seconds in gate-budget.toml (default 60). The bound: slot_bound_seconds
 beside it (default 1200, a whole number >= 1). OCTO_FEATHER_SLOT_GRACE and OCTO_FEATHER_SLOT_BOUND
 (whole seconds) in the env of the command making the check override them, for a scratch drive or
@@ -145,14 +157,16 @@ KIND.json, KIND.queue.json and KIND.runs.json by this command holds) and KIND.se
 settle check's output). KIND.json and KIND-I.run.json keep the shape every older
 octo-feather-slot reads and writes ({"grants": [{lane, since, expires, by}]}; {pid, lane, since,
 items}): every worktree on the box runs its own copy against these one files. KIND.json is
-written only to grant or revoke (a hand-over or pass-over is both, a free slot's grant one); with
-an empty queue, nothing but `grant` and `revoke` writes it, and a check writes nothing. An older
+written only to grant or revoke (a hand-over or pass-over is both, a free slot's grant one, a
+self-grant ended a revoke); with an empty queue, nothing but `grant`, `revoke`, a run's grant at
+once and a self-grant's end writes it, and a check that ends none writes nothing. An older
 copy's grant and revoke take no files lock: what they write is read fresh by the next check, a
 grant they removed never written back. Also there, never opened by this command: the gate's
 fast-run turns, fast-I.lock and fast-I.run.json (fast_runs; tests/gate/heavy_slot.py).
 And KIND.log, which older copies never open: one line appended per grant at once or queue a run
 made for its own lane (`TIME KIND: lane LANE granted at once, by self PANE`, `TIME KIND: lane LANE
-queued, position N, by self PANE`); `status` prints its last line as `  last: ...`.
+queued, position N, by self PANE`), and per hand-over, pass-over, free slot granted, self-grant
+ended and queued lane dropped (the queue above); `status` prints its last line as `  last: ...`.
 """
 
 from __future__ import annotations
