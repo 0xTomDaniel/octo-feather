@@ -114,7 +114,7 @@ GRACE_ENV = "OCTO_FEATHER_SLOT_GRACE"
 BOUND_ENV = "OCTO_FEATHER_SLOT_BOUND"
 BUDGET_NAME = "gate-budget.toml"
 WHAT = {
-    "heavy": "gate runs over heavy_items items, fast-map, timing",
+    "heavy": "gate runs over heavy_items items, timing",
     "eval": "model evals through octo-feather-qa",
 }
 EPOCH = dt.datetime(1970, 1, 1, tzinfo=dt.UTC)

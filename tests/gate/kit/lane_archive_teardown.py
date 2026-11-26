@@ -181,7 +181,7 @@ def torn_down(lane: Lane, how: str) -> None:
     retargeted PR #9; then the director got one message, after the space closed and the worktree
     is gone, carrying every close-report item: the routine's summary, the tickets done, what is
     left open and where (PR #9), the reflections' finding counts, the correction lanes, what is
-    left on disk on purpose (nothing), the teardown line. `post-merge --lane gh7` shows step 7 ok,
+    left on disk on purpose (nothing), the teardown line. `post-merge --lane gh7` shows step 8 ok,
     the unit's success (started HOW) and the end told."""
     t = lane
     assert not t.wt.exists(), "worktree kept"
@@ -205,6 +205,7 @@ def torn_down(lane: Lane, how: str) -> None:
                 "main CI",
                 "kit refresh",
                 "checkout",
+                "coverage map",
                 "stale agents",
                 "tell supervisors",
                 "teardown",
@@ -227,7 +228,7 @@ def torn_down(lane: Lane, how: str) -> None:
     )
     assert msg.split(" | ") == list(items), f"message: {msg}"
     shown = t.run(0, "post-merge", "--lane", "gh7", cwd="t").out.split("\n")
-    assert any(x.startswith("step 7 teardown: ok at ") for x in shown), shown
+    assert any(x.startswith("step 8 teardown: ok at ") for x in shown), shown
     unit = f"teardown unit {UNIT} ({how}): started "
     assert any(x.startswith(unit) and x.endswith(": success (exited 0)") for x in shown), shown
     assert shown[-1] == "director told: end", shown
@@ -236,7 +237,7 @@ def torn_down(lane: Lane, how: str) -> None:
 def archive_tears_down(s: Scratch) -> None:
     """issue-lifecycle#acceptance-archive-tears-down, comms#acceptance-close-message (the ticket's
     demo) on gh1249's real case (testkit.realcase, both tapes): after supervisor A's
-    `merge 14 7d7155984818 --repo REALCASE` (steps 1-6 ok), its `archive gh10` from its worktree
+    `merge 14 7d7155984818 --repo REALCASE` (steps 1-7 ok), its `archive gh10` from its worktree
     asks gh exactly the recorded archive's calls, in its order (its ticket read of parent 10,
     the tracker key of lane key gh10, and its sub-issue; the teardown unit's PR list last),
     archives the lane, runs no step of the routine again, starts one transient unit through
@@ -248,7 +249,7 @@ def archive_tears_down(s: Scratch) -> None:
     recorded parent's sub-issues, then the parent), left open nothing (the recorded PR list
     empty), the reflections' finding counts, the correction lanes, what is left on disk on
     purpose (nothing), the teardown line. Nothing else reached the director: no director command
-    ran. `post-merge --lane gh10` shows step 7 ok, the unit's success and the end told. The
+    ran. `post-merge --lane gh10` shows step 8 ok, the unit's success and the end told. The
     retarget of a PR left open, and a branch deleted from origin: torn_down (no_manager's,
     test_lane_archive_teardown_no_manager)."""
     w = RealCase(s, *REALCASE_TAPES)
@@ -314,7 +315,7 @@ def archive_tears_down(s: Scratch) -> None:
     )
     assert said[0].split(" | ") == list(items), f"message: {said[0]}"
     shown = w.lane("post-merge", "--lane", "gh10").out.split("\n")
-    assert any(x.startswith("step 7 teardown: ok at ") for x in shown), shown
+    assert any(x.startswith("step 8 teardown: ok at ") for x in shown), shown
     started = f"teardown unit {unit} (systemd-run --user): started "
     assert any(x.startswith(started) and x.endswith(": success (exited 0)") for x in shown), shown
     assert shown[-1] == "director told: end", shown
@@ -322,7 +323,7 @@ def archive_tears_down(s: Scratch) -> None:
 
 def shared_supervisor_kept(s: Scratch) -> None:
     """comms#acceptance-shared-supervisor-kept (#892): lanes gh7 and gh8 open, both records naming
-    supervisor zt1:p1, which works in gh7's worktree (Herdr's agent cwd). gh7 merges: step 6
+    supervisor zt1:p1, which works in gh7's worktree (Herdr's agent cwd). gh7 merges: step 7
     sends nothing to zt1:p1, the merging supervisor (mid-turn, a send to it would time out),
     listing gh8 told as its lane. Then its supervisor archives it: the teardown unit closes no
     space or tab (zt1:p1's tab stays open), keeps gh7's worktree and its branch gh70 (zt1:p1
@@ -337,7 +338,7 @@ def shared_supervisor_kept(s: Scratch) -> None:
     gh8 = t.w.lanes / "gh8.toml"
     before = gh8.read_bytes()
     r = t.run(0, "merge", "7", H, "--repo", "o/r", cwd="t")
-    s6 = next(x for x in r.out.split("\n") if x.startswith("step 6 tell supervisors: "))
+    s6 = next(x for x in r.out.split("\n") if x.startswith("step 7 tell supervisors: "))
     assert "; told: gh8 zt1:p1 (the merging supervisor); " in s6, s6
     sent = [x for x in lines(t.w.herdr / "prompts") if x.startswith("zt1:p1\t")]
     assert not sent, f"sent to the merging supervisor: {sent}"
@@ -415,7 +416,7 @@ def red_main(s: Scratch) -> None:
     `archive` reruns step 2: refused, `archive waits: step 2 main CI stopped: ...`, every lane file
     in place, no unit, the director not told again; the same with a later push run on main
     containing the merge still red. Once gh lists a later green push run of that workflow
-    containing the merge, `archive` passes steps 2-6 (step 2 naming the red run and the green
+    containing the merge, `archive` passes steps 2-7 (step 2 naming the red run and the green
     one), archives and starts the teardown; the director's next message is the end."""
     t = Lane(s)
     m = t.w.lane.m
@@ -451,7 +452,8 @@ def red_main(s: Scratch) -> None:
         f"https://github.com/o/r/actions/runs/13 on {sb[:12]} (contains {m12})"
     )
     assert green in r.out.split("\n"), r.out
-    for n, name in enumerate(("kit refresh", "checkout", "stale agents", "tell supervisors"), 3):
+    steps = ("kit refresh", "checkout", "coverage map", "stale agents", "tell supervisors")
+    for n, name in enumerate(steps, 3):
         assert any(x.startswith(f"step {n} {name}: ok: ") for x in r.out.split("\n")), r.out
     assert f"archived: {t.w.lanes}/archive/gh7.toml sha256=" in r.out, r.out
     assert r.out.split("\n")[-1].startswith(f"teardown: started unit {UNIT} "), r.out
@@ -506,7 +508,7 @@ def watch_gh_gone(s: Scratch) -> None:
 
 
 def unit_fails(s: Scratch, how: str = "fails") -> None:
-    """A unit that fails (the worktree dirty: step 7 stops, the unit exits 1) or is killed at its
+    """A unit that fails (the worktree dirty: step 8 stops, the unit exits 1) or is killed at its
     runtime limit (`killed`): its end recorded by its stop hook, as `post-merge --lane gh7` shows;
     the director told the stop once: a failed routine tells it, and the stop hook, telling the
     same stop, sends nothing."""
@@ -523,8 +525,8 @@ def unit_fails(s: Scratch, how: str = "fails") -> None:
     if how == "fails":
         assert unit.endswith(": exit-code (exited 1)"), unit
         log = t.text(t.records / "gh7.teardown.log")
-        assert "director already told (step 7 teardown stopped: " in log, log
-        assert said[0].startswith("post-merge gh7 PR #7 stopped: step 7 teardown stopped: "), said
+        assert "director already told (step 8 teardown stopped: " in log, log
+        assert said[0].startswith("post-merge gh7 PR #7 stopped: step 8 teardown stopped: "), said
         assert "not removed" in said[0], said
         assert t.wt.exists(), "dirty worktree removed"
     else:

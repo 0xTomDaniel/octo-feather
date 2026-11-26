@@ -38,6 +38,7 @@ STEPS = (
     "main CI",
     "kit refresh",
     "checkout",
+    "coverage map",
     "stale agents",
     "tell supervisors",
     "teardown",
@@ -160,13 +161,13 @@ def merge_starts_routine(s: Scratch) -> None:
     calls, in its order, each answered by its recording: the PR read, the merge pinned to the
     PR's recorded head, done on parent 10, the tracker key of the record's lane key gh10
     (sub-issue 11 closed, then 10, each read back), then the routine's. It prints the merge, the
-    recorded parent's sub-issues then the parent done, steps 1-6 ok and step 7 pending, exit 0;
+    recorded parent's sub-issues then the parent done, steps 1-7 ok and step 8 pending, exit 0;
     leaves the kit install (another repo's, as the recorded repo views name) unfetched and the
     director's checkout on main at the recorded merge commit; tells lane gh12's supervisor main
     moved (not gh10's own) through the guard of A's environment, naming the recorded PR title,
     its line and its prod line in the director log naming the post-merge routine of lane gh10 as
     sender. `post-merge --lane gh10` then prints the record: PR, head and merge commit, steps
-    1-6 ok and step 7 pending, no gh call. The guard still holds for the supervisor's own send:
+    1-7 ok and step 8 pending, no gh call. The guard still holds for the supervisor's own send:
     its `herdr-say zt2:p1 ...` exits 77, nothing delivered."""
     w = RealCase(s, TAPE)
     calls = [str(x["request"]) for x in recordings(TAPE)]
@@ -185,14 +186,14 @@ def merge_starts_routine(s: Scratch) -> None:
     out = r.out.split("\n")
     done = [f"{k}: done" for k in [*kids, p]] + [f"{p}: parent and {len(kids)} tickets done"]
     assert out[: 1 + len(done)] == [f"merged: PR #14 at head {h[:12]} (lane gh10)", *done], r.out
-    for n, name in enumerate(STEPS[:6], 1):
+    for n, name in enumerate(STEPS[:7], 1):
         assert any(x.startswith(f"step {n} {name}: ok: ") for x in out), f"step {n}: {r.out}"
     kept = f"step 3 kit refresh: ok: kit install unchanged: PR in {pr_repo}, install is {kit_repo}"
     assert kept in out, r.out
     assert not s.git(w.kit, "for-each-ref"), "kit install fetched"
-    pending = "step 7 teardown: pending: lane gh10 not archived; its archive starts this step"
+    pending = "step 8 teardown: pending: lane gh10 not archived; its archive starts this step"
     assert pending in out, r.out
-    assert out[-1].endswith("step 6 tell supervisors ok; step 7 teardown pending"), r.out
+    assert out[-1].endswith("step 7 tell supervisors ok; step 8 teardown pending"), r.out
     where = s.git(w.checkout, "rev-parse", "HEAD"), s.git(w.checkout, "branch", "--show-current")
     assert where == (m, w.base), f"checkout at {where}"
     sender = "(from the post-merge routine of lane gh10)"
@@ -208,8 +209,8 @@ def merge_starts_routine(s: Scratch) -> None:
     record = w.top / "post-merge" / "gh10.json"
     want = f"post-merge record gh10: PR #14, head {h[:12]}, merge commit {m} ({record})"
     assert shown[0] == want, shown[0]
-    ok = [f"{n} {name} ok" for n, name in enumerate(STEPS[:6], 1)]
-    assert outcomes(shown[1:]) == [*ok, "7 teardown pending"], shown
+    ok = [f"{n} {name} ok" for n, name in enumerate(STEPS[:7], 1)]
+    assert outcomes(shown[1:]) == [*ok, "8 teardown pending"], shown
     assert s.gh.log() == calls, f"the record's read asked gh: {s.gh.log()}"
 
 
@@ -219,7 +220,7 @@ def resume(s: Scratch) -> None:
     gh70): merged, its done step refuses naming both keys, closing nothing, and step 3 stops before
     the install moves, exit 1. Cleaned, `post-merge 7 H --lane gh7` resumes at step 3: steps 1 and 2
     print their recorded lines, not rerun (no PR read for step 1, no run list for step 2 in the
-    fake gh's log), steps 3-6 run, step 7 pending, exit 3; the record shows 1-6 ok, 7 pending."""
+    fake gh's log), steps 3-7 run, step 8 pending, exit 3; the record shows 1-7 ok, 8 pending."""
     w = World(s)
     lane = w.lane
     t = lane.target
@@ -247,8 +248,8 @@ def resume(s: Scratch) -> None:
     assert not [x for x in log if x.startswith(("pr view 7 --json state,", "run "))], log
     assert any(x.startswith("step 3 kit refresh: ok: kit install ") for x in out), r.out
     assert lane.head() == lane.m, "install not moved on the resume"
-    ok = [f"{n} {name} ok" for n, name in enumerate(STEPS[:6], 1)]
-    assert outcomes(w.shown()) == [*ok, "7 teardown pending"], w.shown()
+    ok = [f"{n} {name} ok" for n, name in enumerate(STEPS[:7], 1)]
+    assert outcomes(w.shown()) == [*ok, "8 teardown pending"], w.shown()
 
 
 def refused(s: Scratch) -> None:

@@ -48,7 +48,7 @@
 
 The rule (owner ruling #660 2026-11-06, director design, #668). Two independent kinds, each with
 its own grants and locks; they may run together:
-  heavy  a gate run selecting more than heavy_items items (fast-map and timing are full runs);
+  heavy  a gate run selecting more than heavy_items items (timing is a full run);
          the runs it exempts: quality #recipes-static-first (tests/gate/heavy_slot.py).
   eval   model evals through octo-feather-qa.
 Counts: heavy_slots, eval_slots and heavy_items in the kit's gate-budget.toml (defaults 1, 1 and
