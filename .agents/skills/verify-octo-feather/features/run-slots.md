@@ -11,7 +11,7 @@ Drive criterion: `quality#acceptance-verify-map-current`
 - `grant-not-director` an implementer's `octo-feather-slot grant` refused (exit 77).
 - `self-grant` a lane implementer's `just test` over 31 items without its lane's grant, the slot free and nobody queued: granted to its lane at once and run, nobody told.
 - `self-grant-status` `octo-feather-slot status`: gh7 the holder `by self w9:p3`, and the slot log's last line.
-- `self-red` gh7's `just test` again, over a suite with one failing test, inside the grace: it holds gh7's self-grant and ends red.
+- `self-red` gh7's `just test` again, over a suite with one failing test: it holds the slot for gh7 and ends red.
 - `self-ended` a grace later (no run of gh7 since), gh8's implementer's `just test`: gh7's self-grant ended, gh8 granted at once and run, nobody told; the slot log records both.
 - `grant` a grace later (gh8's self-grant ended too), the director's `octo-feather-slot grant gh7 --kind heavy`.
 - `status` `octo-feather-slot status` naming gh7 the heavy holder, and the eval kind.
@@ -53,7 +53,7 @@ The drive makes scratch box state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_
 - **Not the director** (`grant-not-director`). As the implementer, run `octo-feather-slot grant gh7 --kind heavy`. Observe exit 77 and `grant is the director's` on stderr.
 - **Granted at once** (`self-grant`). As the implementer, run `just --justfile <kit>/justfile test <scratch suite>`. Observe exit 0, `heavy slot: held: the heavy slot for lane gh7, run pid <pid> ... (granted at once: the heavy slot free, queue empty)`, `31 passed`, and the `said` observation empty: no prompt, to the director's pane or any.
 - **Granted at once, status** (`self-grant-status`). `octo-feather-slot status`. Observe the heavy holder `gh7 (granted <time> by self w9:p3, expires <time>)` and `  last: <time> heavy: lane gh7 granted at once, by self w9:p3`.
-- **Red, under its self-grant** (`self-red`). As the implementer, at once, `just --justfile <kit>/justfile test <red suite>`. Observe a non-zero exit, `heavy slot: held: the heavy slot for lane gh7, run pid ...` without `granted at once` (its self-grant still held), and `1 failed`.
+- **Red, its own grant** (`self-red`). As the implementer, `just --justfile <kit>/justfile test <red suite>`. Observe a non-zero exit, `heavy slot: held: the heavy slot for lane gh7, run pid ...` (under the first run's self-grant, or granted at once again when that one ended first) and `1 failed`.
 - **Self-grant ended, next lane at once** (`self-ended`). After the grace plus 0.5 s, as gh8's implementer, `just test` over the scratch suite. Observe exit 0, `heavy slot: held: the heavy slot for lane gh8, run pid <pid> ... (granted at once: the heavy slot free, queue empty)`, `31 passed`, the `said` observation empty, and the `log` observation (`slots/heavy.log`) holding `<time> heavy: lane gh7's self-grant ended (its run ended, no run within the 2 s grace)` and ending `<time> heavy: lane gh8 granted at once, by self w8:p3`.
 - **Grant** (`grant`). After the grace plus 0.5 s (gh8's self-grant ended), as the director, run `octo-feather-slot grant gh7 --kind heavy`. Observe exit 0 and `granted: heavy slot to lane gh7 (granted <time> by w1:p1, expires <time>)`.
 - **Status** (`status`). Run `octo-feather-slot status`. Observe `  holder: gh7 (granted ...` under heavy, and the eval kind's lines.

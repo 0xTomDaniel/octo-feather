@@ -3368,7 +3368,7 @@ def drive_run_slots(f: Feature) -> None:
             and "  last: " in c.out and " heavy: lane gh7 granted at once, by self w9:p3" in c.out)
     f.run("self-red", "just", "--justfile", f"{f.s.repo}/justfile", "test", str(sc / "red"))
     f.check("self-red", lambda c: c.code != 0 and "heavy slot: held: the heavy slot for lane gh7, run pid " in c.out
-            and "granted at once" not in c.out and "1 failed" in c.out)
+            and "1 failed" in c.out)
     subprocess.run(["sleep", str(grace + 0.5)], check=False)  # the grace after gh7's red run, no run of gh7 since
     f.env = agent8
     f.run("self-ended", *gate)
