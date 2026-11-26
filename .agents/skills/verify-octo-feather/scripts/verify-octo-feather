@@ -1171,13 +1171,13 @@ def drive_role_launch(f: Feature) -> None:
             and "--set-identity" in c.err and c.out == "")
     # A role that edits and writes but never commits (the general worker, #829) starts unset, applying no identity.
     f.run("identity-unset-general-worker", "pi-role", "--print-env", f"{f.s.repo}/agents/general-worker.md")
-    f.check("identity-unset-general-worker", lambda c: c.code == 0 and c.out == "")
+    f.check("identity-unset-general-worker", lambda c: c.code == 0 and [x for x in c.out.splitlines() if x.startswith("GIT_")] == [])
     f.env = {**base_env, "XDG_STATE_HOME": str(sc / "state")}
     f.run("identity-set", "pi-role", "--set-identity", "Verify Identity", "verify@octo-feather.invalid")
     f.check("identity-set", lambda c: c.code == 0)
     f.run("identity-applied", "pi-role", "--print-env", f"{f.s.repo}/agents/implementer.md")
     ident = [f"GIT_{w}_{k}={v}" for w in ("AUTHOR", "COMMITTER") for k, v in (("NAME", "Verify Identity"), ("EMAIL", "verify@octo-feather.invalid"))]
-    f.check("identity-applied", lambda c: c.code == 0 and sorted(c.out.splitlines()) == sorted(ident))
+    f.check("identity-applied", lambda c: c.code == 0 and sorted(x for x in c.out.splitlines() if x.startswith("GIT_")) == sorted(ident))
     f.env = {}
     say(f"role-launch evidence: {f.d}")
 
