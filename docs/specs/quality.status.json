@@ -87,6 +87,18 @@
         "tests/gate/kit/test_fast_slot_free.py"
       ]
     },
+    "acceptance-slot-self-queue": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-slot-self-grant": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-slot-self-grant-ends": {
+      "status": "planned",
+      "pr": null
+    },
     "acceptance-fast-hook": {
       "status": "built",
       "pr": 1212,
