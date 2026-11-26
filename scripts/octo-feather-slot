@@ -129,8 +129,8 @@ releasing its lock records the run's end and starts one (S the grace); a grant m
 the queue while the queue is non-empty starts one (S the bound); `queue` behind a holder no run has
 started under starts one (due at that grant's since + the bound); a revoke freeing a slot, or a
 check first seeing one free, while the queue is non-empty starts one (S the grace). With the queue
-empty only the release's starts: it ends a self-grant. Each notice is sent through herdr-say in the Herdr session
-the head was queued from (KIND.queue.json records it with the entry: HERDR_SESSION set to it, or
+empty only the release's starts: it ends a self-grant. Each notice is sent through herdr-say in the
+Herdr session the head was queued from (KIND.queue.json records it with the entry: HERDR_SESSION set to it, or
 unset for the default session), whoever's command made the check, and without the caller's
 OCTO_FEATHER_ROLE and OCTO_FEATHER_PARENT: the notice is the slot rule's, sent for the director,
 not the caller agent's own message up its chain.
