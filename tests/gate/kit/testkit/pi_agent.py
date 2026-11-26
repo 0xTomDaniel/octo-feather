@@ -39,8 +39,8 @@ pump's buffer holds nothing after it, and the next event drains only through a r
 that end's snapshot: no call's command runs before the snapshot of the call before it
 (schema.md, Before targets, stated limit: exact while turns separate calls).
 
-FAKE_QC set: the qc sandbox items' judge instead (tests/qc*.sh, their box testkit/qc_box.py), a
-print-mode run answering per brief: `--version` exits 0; LINEAR_API_KEY in its env prints LINEAR
+FAKE_QC set: the qc sandbox items' Pi instead (tests/qc*.sh, their box testkit/qc_box.py: its
+declared demo `pi qc-demo`, and the advisory's classify run), a print-mode run answering per brief: `--version` exits 0; LINEAR_API_KEY in its env prints LINEAR
 KEY IN JUDGE ENV; then the mode's turn (QC_TURNS, run as its bash tool would), and its report on
 the brief's head (`head <sha>` in its argv): dup, head, mixed, garbage, argv, hang (sleeps,
 FAKE_QC_TOK in its argv) and writes answer their own way, every other mode acceptance-a passed
@@ -125,7 +125,7 @@ unshare -rm sh -c 'mount -o remount,bind,rw "$1" && touch "$1/judge2"' _ "$vc" 2
     # the kit's new-repo (its `mise trust` included) in the sandbox, mise's dirs as the caller pinned them (#428)
     "newrepo": r'''kit="$(dirname "$(command -v octo-feather-state)")/.."; d="$(mktemp -d /tmp/qc-nr-XXXXXX)"
 (cd "$d" && just --justfile "$kit/justfile" new-repo python "$d/app" --no-spec-chat 2>&1); echo "NEWREPO exit $?"''',
-    # `just check` in the sandbox runs this test (fresh HOME, its own state): a sandboxed qc inside the judge's gets past its proof
+    # `just check` in the sandbox runs this test (fresh HOME, its own state): a sandboxed qc inside the demo's gets past its proof
     "nested": r'''h="$(mktemp -d)"; git clone -q "$PWD" "$h/repo"   # its own worktree: the outer overlay is covered there
 # The judge's PATH as is: `herdr` there is the outer sandbox's shim; the nested run wraps the real (fake) binary.
 o="$(cd "$h/repo" && env -u XDG_STATE_HOME -u HERDR_SESSION -u HERDR_SOCKET_PATH -u HERDR_BIN_PATH HOME="$h" PATH="${0%/pi}:$PATH" \
