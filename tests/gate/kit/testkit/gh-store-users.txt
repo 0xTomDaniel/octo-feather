@@ -70,6 +70,9 @@ tests/gate/kit/test_lane_post_merge.py::test_lane_post_merge_main_ci
 tests/gate/kit/test_lane_post_merge.py::test_lane_post_merge_merged_step
 tests/gate/kit/test_lane_post_merge.py::test_lane_post_merge_no_ci
 tests/gate/kit/test_lane_post_merge.py::test_lane_post_merge_superseded
+tests/gate/kit/test_lane_post_merge_map.py::test_post_merge_map_build_failed
+tests/gate/kit/test_lane_post_merge_map.py::test_post_merge_maps_full_daily
+tests/gate/kit/test_lane_post_merge_map.py::test_post_merge_maps_the_merge
 tests/gate/kit/test_lane_post_merge_teardown.py::test_lane_post_merge_teardown_kept
 tests/gate/kit/test_lane_post_merge_teardown.py::test_lane_post_merge_teardown_no_ci
 tests/gate/kit/test_lane_post_merge_teardown.py::test_lane_post_merge_teardown_not_archived
