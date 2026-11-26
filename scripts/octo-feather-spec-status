@@ -17,7 +17,7 @@ A status file `<slug>.status.json` sits beside `<slug>.spec.html`:
    "criteria": {"<id>": {"status": "planned" | "built", "pr": <N or null>}}}
 A built criterion `just qc` passed also names its evidence link (quality #qc-results):
   "record": "<evidence record id>", "commit": "<sha it was captured at>",
-  "tests": ["<each test its demo declares>"...]   (empty for an agent fallback result)
+  "tests": ["<each test its demo declares>"...]   (empty with no declared demo)
 A criterion id is the `data-anchor` of each `data-acceptance-criterion` element
 (Spec Chat's shaped-sections-v1 contract). `check` fails on a missing spec, a
 missing, extra or duplicate id, a status other than planned/built, a planned
@@ -39,8 +39,8 @@ captured at. Stale: the criterion's element differs from the spec at that commit
 a path its demo covers (qc.toml at the repo root, at that commit) differs at HEAD,
 named with the commits that changed it; or the file of a test it names (a test
 id `path::name` by its path) differs at HEAD, edited or gone, named likewise, or is
-not at HEAD. A criterion with no demo at that commit was
-judged by the agent fallback: no covers or tests, so only its text makes it stale.
+not at HEAD. A criterion with no declared demo at that commit (a row built before ADR
+0035, or in another target) has no covers or tests, so only its text makes it stale.
 
 A call log `<slug>.calls.jsonl` sits beside them (issue-lifecycle #gates-spec-calls),
 append-only, one judgement call per line:
@@ -553,7 +553,7 @@ def _changes(top: Path, commit: str, paths: list[str]) -> tuple[list[str], list[
 
 
 def _demo(top: Path, commit: str, cid: str) -> Entry | None:
-    """The demo qc.toml at the repo root declared for criterion id CID at COMMIT, or None (the agent fallback's)."""
+    """The demo qc.toml at the repo root declared for criterion id CID at COMMIT, or None (no declared demo)."""
     rc, shown = _run(top, "show", f"{commit}:qc.toml")
     try:
         demos: dict[str, Any] = tomllib.loads(shown).get("demo", {}) if not rc else {}
@@ -563,7 +563,7 @@ def _demo(top: Path, commit: str, cid: str) -> Entry | None:
 
 
 def covered(top: Path, commit: str, cid: str) -> list[str]:
-    """The paths CID's demo at COMMIT covers (_demo): none for the agent fallback's."""
+    """The paths CID's demo at COMMIT covers (_demo): none with no declared demo."""
     demo = _demo(top, commit, cid)
     return [str(x) for x in cast("list[object]", demo.get("covers", []))] if demo else []
 
@@ -596,7 +596,7 @@ def stale(spec: Path, k: str, v: Entry, top: Path, now: dict[str, str]) -> tuple
     if why:
         return "stale", f"STALE: {head}; {'; '.join(why)}"
     if demo is None:
-        return "current", (f"current: {head} by the agent fallback (no declared demo: no covers or tests, so only "
+        return "current", (f"current: {head}, no declared demo (no covers or tests, so only "
                            f"a change to its text makes it stale)")
     return "current", f"current: {head}, tests {', '.join(tests) or 'none'}, covers {', '.join(covers)}"
 

@@ -125,15 +125,15 @@ if [[ "${1:-}" == --gate ]]; then shift   # #493 AC1: the gate, or chosen items,
   cd "$K" && exec "$t/user" env GATE_WORKERS="${GATE_WORKERS:-1}" just check-tests "$@"
 fi
 
-# Test doubles for the qc runs (check.py's sandbox()): the stub judge ($t/judge/pi) first runs, as tests/qc.sh's
-# misemissing judge, a tool not installed through its mise shim (a link to mise named just, in a dir pinning just
-# 0.0.1): it must fail, try no install and write nothing to mise's data or cache dir (one PROBE line); then the kit's
-# stub judge (tests/fixtures/qc-judge/pi) reports on the brief's criterion. A fake herdr; and mise whose doctor prints
-# no JSON ($t/nojson) or JSON without dirs ($t/nodirs), the rest the real mise.
+# Test doubles for the qc runs (check.py's sandbox()): the target's declared demo, $t/judge/qc-probe, runs, as
+# tests/qc.sh's misemissing turn, a tool not installed through its mise shim (a link to mise named just, in a dir
+# pinning just 0.0.1): it must fail, try no install and write nothing to mise's data or cache dir (one PROBE line).
+# $t/judge/pi a Pi that reaches no model (the advisory's). A fake herdr; and mise whose doctor prints no JSON
+# ($t/nojson) or JSON without dirs ($t/nodirs), the rest the real mise.
 mkdir -p "$t/fake" "$t/judge" "$t/nojson" "$t/nodirs"
-cat >"$t/judge/pi" <<'EOF'
+printf '#!/bin/sh\n[ "$1" = --version ] && exit 0\necho "stub pi: no model here" >&2; exit 9\n' >"$t/judge/pi"
+cat >"$t/judge/qc-probe" <<'EOF'
 #!/usr/bin/env bash
-[[ "${1:-}" == --version ]] && exit 0
 d="$(mktemp -d)"; mkdir "$d/shim"; ln -s "$(command -v mise)" "$d/shim/just"; printf '[tools]\njust = "0.0.1"\n' > "$d/mise.toml"
 ls0="$(find "$MISE_DATA_DIR" "$MISE_CACHE_DIR" 2>/dev/null | sort | md5sum)"
 o="$(cd "$d" && "$d/shim/just" --version 2>&1)"; rc=$?
@@ -141,9 +141,7 @@ if [[ "$rc" == 0 ]]; then echo "PROBE ESCAPE the shim of a tool not installed ra
 elif grep -qiE 'installing|failed to install' <<< "$o"; then echo "PROBE ESCAPE mise tried to install: $o"
 elif [[ "$(find "$MISE_DATA_DIR" "$MISE_CACHE_DIR" 2>/dev/null | sort | md5sum)" != "$ls0" ]]; then echo "PROBE ESCAPE mise wrote to its data or cache dir"
 else echo "PROBE ok shim of a tool not installed: exit $rc, no install, nothing written"; fi
-exec @KIT@/tests/fixtures/qc-judge/pi "$@"
 EOF
-sed -i "s#@KIT@#$K#" "$t/judge/pi"
 cat >"$t/fake/herdr" <<'EOF'
 #!/usr/bin/env bash
 C="${XDG_CONFIG_HOME:-$HOME/.config}/herdr"; s=default; a=()
@@ -160,5 +158,5 @@ echo "{\"session\":\"$(cat "$sock")\"}"
 EOF
 printf '#!/bin/sh\n[ "$1" = doctor ] && exit 1\nexec %q "$@"\n' "$H/.local/bin/mise" >"$t/nojson/mise"
 printf '#!/bin/sh\n[ "$1" = doctor ] && { echo "{\\"errors\\": []}"; exit 1; }\nexec %q "$@"\n' "$H/.local/bin/mise" >"$t/nodirs/mise"
-chmod +x "$t/judge/pi" "$t/fake/herdr" "$t/nojson/mise" "$t/nodirs/mise"
+chmod +x "$t/judge/pi" "$t/judge/qc-probe" "$t/fake/herdr" "$t/nojson/mise" "$t/nodirs/mise"
 exec "$USER_MISE_GATE_PY" "$K/tests/fixtures/user-mise/check.py" assert "$USER_MISE_SECTION"

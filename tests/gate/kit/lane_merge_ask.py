@@ -584,10 +584,10 @@ def merge_ask_passes(s: Scratch) -> None:
     none = "no qc result at the judged head"
     assert sources(out) == [f"- demo#acceptance-a: {none}", f"- demo#acceptance-b: {none}"], out
     tagged = "tagged test assertions"
-    a, b = ("acceptance-a", "pass", tagged), ("acceptance-b", "pass", "agent fallback")
+    a, b = ("acceptance-a", "pass", tagged), ("acceptance-b", "pass", "demo checks")
     qc_report(ln, "20261029T090000Z-src123", [a, b])
     out = ln.ask().out
-    assert sources(out) == [f"- demo#acceptance-a: {tagged}", "- demo#acceptance-b: agent fallback"]
+    assert sources(out) == [f"- demo#acceptance-a: {tagged}", "- demo#acceptance-b: demo checks"]
     qc_report(ln, "20261029T100000Z-src124", [("acceptance-b", "pass", "a rerun")])
     out = ln.ask().out
     assert sources(out) == [f"- demo#acceptance-a: {tagged}", "- demo#acceptance-b: a rerun"]

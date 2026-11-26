@@ -2299,9 +2299,9 @@ def drive_qa_history(f: Feature) -> None:
 
 
 def drive_qc_fallback(f: Feature) -> None:
-    """`just qc` on a scratch target whose qc.toml declares a demo for acceptance-a and none for acceptance-b: acceptance-a
-    decided by its demo's checks, acceptance-b by the agent fallback, a fresh qc judge (the kit's stub judge,
-    tests/fixtures/qc-judge/pi, as pi: SKILL.md) under the time cap, its report read back as acceptance-b's record."""
+    """`just qc` on a scratch target whose qc.toml declares a demo for acceptance-a and none for acceptance-b (no tagged test
+    either): acceptance-b alone gets insufficient evidence naming that it has neither, with no sandbox, judge or model
+    started (ADR 0035); beside acceptance-a, the demo's pass and the same insufficient evidence; no record for acceptance-b."""
     v = f.s.contract.values
     if "qc_demo_pass" not in v:
         die("qc.toml [values] needs qc_demo_pass: the qc-fallback drive's scratch demo")
@@ -2310,6 +2310,11 @@ def drive_qc_fallback(f: Feature) -> None:
     shutil.rmtree(sc, ignore_errors=True)
     (r / "docs" / "specs").mkdir(parents=True)
     (sc / "state").mkdir()
+    (sc / "stub").mkdir()
+    # A Pi that reaches no model, first on the sandbox's PATH (OCTO_FEATHER_QC_PATH: a plain PATH entry loses to the Pi a
+    # mise-shimmed `just` puts ahead of it, #261): the advisory on acceptance-a's record asks it and gets no answer.
+    (sc / "stub" / "pi").write_text('#!/bin/sh\necho "verify stub pi: no model here" >&2; exit 9\n')
+    (sc / "stub" / "pi").chmod(0o755)
 
     def git(*args: str) -> str:
         return subprocess.run(["git", "-C", str(r), *args], check=True, capture_output=True, text=True).stdout.strip()
@@ -2330,38 +2335,37 @@ def drive_qc_fallback(f: Feature) -> None:
     git("add", "-A")
     git("commit", "-q", "-m", "contract: a demo for acceptance-a, none for acceptance-b")
     head = git("rev-parse", "HEAD")
-    # Scratch box state (qc's reports, the scratch target's evidence store); the kit's stub judge first on the sandbox's
-    # PATH (OCTO_FEATHER_QC_PATH: a plain PATH entry loses to the Pi a mise-shimmed `just` puts ahead of it, #261).
-    f.env = {"XDG_STATE_HOME": str(sc / "state"), "OCTO_FEATHER_QC_PATH": f"{f.s.repo}/tests/fixtures/qc-judge"}
-    f.pre = ["env", "-C", str(r)]   # just qc runs where the supervisor stands: the target's worktree
-    f.run("qc", "just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a", "acceptance-b")
-    f.pre = []
-    f.obs("qc", "report", json.dumps(qc_report(f, "qc")))
-    f.obs("qc", "store", output([f.s.kit, "octo-feather-evidence", "read", "--repo", str(r), "--criterion", "demo#acceptance-b", "--commit", head, "--json"],
-                                env=case_env(f.env))[1])
-    st = json.loads(git("show", "HEAD:docs/specs/demo.status.json"))["criteria"]
-    f.obs("qc", "built", f"{st['acceptance-a']['status']} {st['acceptance-b']['status']}\n")
-    rid = r"([0-9]{8}T[0-9]{6}Z-[0-9a-f]{8})"
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "OCTO_FEATHER_QC_PATH": str(sc / "stub")}
+    neither = "\n  missing: no tagged acceptance test and no declared demo\n  evidence incomplete; decision none; record none\n"
 
-    def holds(c: Case) -> bool:
-        a = re.search(r"(?m)^PASS acceptance-a: \$ .*\n  demo exit status 0\n  evidence complete; decision demo checks; record " + rid + "$", c.out)
-        b = re.search(r"(?m)^PASS acceptance-b: \$ judge acceptance-b\n  why acceptance-b\n  evidence complete; decision agent fallback; record " + rid + "$", c.out)
-        rep = json.loads(c.o["report"])
-        run = rep.get("fallback", {}).get("acceptance-b", {})
-        brief = [ln for ln in run.get("stdout", "").splitlines() if ln.startswith("BRIEF ")]
-        rec = [x for x in json.loads(c.o["store"]) if b and x["record"]["id"] == b.group(1)]
-        if c.code != 0 or not a or not rec or sorted(rep.get("fallback", {})) != ["acceptance-b"] or c.o["built"] != "built built\n":
-            return False
-        stored = json.loads(Path(rec[0]["dir"], "outputs", "judge.report.json").read_text())
-        cap = rep.get("cap_s")   # the fixed cap qc states (its FALLBACK_CAP_S): the judge's parent is timeout at it
-        return (isinstance(cap, int) and cap > 0 and f"qc: agent fallback demo#acceptance-b: a fresh qc judge, time cap {cap} s" in c.err
-                and run.get("stdout", "").startswith(f"PARENT timeout --foreground -k 10 {cap} ") and len(brief) == 1
-                and brief[0].startswith("BRIEF - acceptance-b: ") and rec[0]["record"]["revision"] == head
-                and stored["criteria"] == [{"id": "acceptance-b", "verdict": "pass", "command": "judge acceptance-b",
-                                            "output": "out acceptance-b", "why": "why acceptance-b"}])
-    f.check("qc", holds)
-    f.run("read", "octo-feather-evidence", "read", "--repo", str(r), "--criterion", "demo#acceptance-b", "--commit", head)
-    f.check("read", lambda c: c.code == 0 and "1 record(s)" in c.out and "judge.report.json (" in c.out)
+    def statuses() -> str:
+        st = json.loads(git("show", "HEAD:docs/specs/demo.status.json"))["criteria"]
+        return f"{st['acceptance-a']['status']} {st['acceptance-b']['status']} {git('rev-parse', 'HEAD')}\n"
+
+    def ran(name: str, *ids: str) -> None:   # just qc where the supervisor stands: the target's worktree
+        f.pre = ["env", "-C", str(r)]
+        f.run(name, "just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", *ids)
+        f.pre = []
+        f.obs(name, "report", json.dumps(qc_report(f, name)))
+        f.obs(name, "built", statuses())
+
+    def short(c: Case) -> bool:   # acceptance-b: insufficient evidence naming neither, nothing judged, no fallback key
+        rep: dict[str, Any] = json.loads(c.o["report"])
+        results: list[dict[str, Any]] = rep.get("results", [])
+        none: dict[str, Any] = {}
+        b = next((x for x in results if x.get("id") == "acceptance-b"), none)
+        return (c.code == 2 and re.search(r"(?m)^INSUFFICIENT EVIDENCE acceptance-b: .*" + re.escape(neither), c.out + "\n") is not None
+                and not re.search(r"pi-role|qc-judge|agent fallback", c.err) and "fallback" not in rep and "cap_s" not in rep
+                and b.get("record") is None and b.get("missing") == ["no tagged acceptance test and no declared demo"])
+
+    ran("neither", "acceptance-b")
+    f.check("neither", lambda c: short(c) and "qc sandbox" not in c.err and c.o["built"] == f"planned planned {head}\n")
+    ran("mixed", "acceptance-a", "acceptance-b")
+    rid = r"[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}"
+    f.check("mixed", lambda c: short(c) and c.o["built"].startswith("built planned ") and re.search(
+        r"(?m)^PASS acceptance-a: \$ .*\n  demo exit status 0\n  evidence complete; decision demo checks; record " + rid + "$", c.out) is not None)
+    f.run("read", "octo-feather-evidence", "read", "--repo", str(r), "--criterion", "demo#acceptance-b", "--commit", head, "--json")
+    f.check("read", lambda c: c.code == 0 and json.loads(c.out) == [])
     f.env = {}
     say(f"qc-fallback evidence: {f.d}")
 
