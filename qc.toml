@@ -428,3 +428,36 @@ covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/tracker
 [demo."issue-lifecycle#acceptance-lane-start-current-kit"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
 covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
+
+# Lane gh1234's criteria, each proven by its tagged tests (tests/gate/kit/test_fast_map.py,
+# tests/gate/kit/test_lane_post_merge_map.py); covers: the tracked files those items' coverage map entries name (a
+# just fast-map of them at 46d6e852), the testkit, gate plugin and conftest every item reaches left out.
+# The map misses scripts/octo-feather-gate and the justfile: this criterion's tests run them as commands in the kit
+# copy (just fast-map, fast-list, fast), through just with the system python3, which coverage does not measure;
+# they are what the criterion is about, so they are named by hand.
+[demo."quality#acceptance-fast-map-slot-free"]
+covers = ["scripts/octo-feather-gate", "justfile", "scripts/octo-feather-slot", "scripts/slot_queue.py", "tests/gate/kit/fast_map.py", "tests/gate/kit/fast_slot_free.py", "tests/gate/kit/gate_recipes_first.py"]
+
+# The map misses scripts/octo-feather-gate and the justfile: this criterion's tests run them as commands in the kit
+# copy (just fast-map, fast-list, fast), through just with the system python3, which coverage does not measure;
+# they are what the criterion is about, so they are named by hand.
+[demo."quality#acceptance-fast-map-behind"]
+covers = ["scripts/octo-feather-gate", "justfile", "tests/gate/kit/fast_map.py", "tests/gate/kit/fast_slot_free.py", "tests/gate/kit/gate_recipes_first.py"]
+
+# The map misses scripts/octo-feather-gate and the justfile: this criterion's tests run them as commands in the kit
+# copy (just fast-map, fast-list, fast), through just with the system python3, which coverage does not measure;
+# they are what the criterion is about, so they are named by hand.
+[demo."quality#acceptance-fast-diff-base"]
+covers = ["scripts/octo-feather-gate", "justfile", "tests/gate/kit/fast_map.py", "tests/gate/kit/fast_slot_free.py", "tests/gate/kit/gate_recipes_first.py"]
+
+# The map misses scripts/octo-feather-gate and the justfile: this criterion's tests run them as commands in the kit
+# copy (just fast-map, fast-list, fast), through just with the system python3, which coverage does not measure;
+# they are what the criterion is about, so they are named by hand.
+[demo."quality#acceptance-map-after-merge"]
+covers = ["scripts/octo-feather-gate", "justfile", "scripts/post_merge.py", "scripts/octo-feather-lane", "scripts/tracker_calls.py", "scripts/slot_queue.py", "scripts/handoff_log.py", "scripts/correction_lanes.py", "scripts/merge_ask.py", "scripts/eval_grading.py", "scripts/pi-role", ".agents/skills/herdr-comms/assets/herdr_scope.py", "tests/gate/kit/lane_post_merge_map.py", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/fast_map.py", "tests/gate/kit/fast_slot_free.py", "tests/gate/kit/gate_recipes_first.py"]
+
+[demo."quality#acceptance-map-full-daily"]
+covers = ["scripts/post_merge.py", "scripts/octo-feather-lane", "scripts/tracker_calls.py", "scripts/slot_queue.py", "scripts/handoff_log.py", "scripts/correction_lanes.py", "scripts/merge_ask.py", "scripts/eval_grading.py", "scripts/pi-role", ".agents/skills/herdr-comms/assets/herdr_scope.py", "tests/gate/kit/lane_post_merge_map.py", "tests/gate/kit/herdr_messaging.py"]
+
+[demo."quality#acceptance-map-build-failed"]
+covers = ["scripts/post_merge.py", "scripts/octo-feather-lane", "scripts/tracker_calls.py", "scripts/slot_queue.py", "scripts/handoff_log.py", "scripts/correction_lanes.py", "scripts/merge_ask.py", "scripts/eval_grading.py", "scripts/pi-role", ".agents/skills/herdr-comms/assets/herdr_scope.py", "tests/gate/kit/lane_post_merge_map.py", "tests/gate/kit/herdr_messaging.py"]

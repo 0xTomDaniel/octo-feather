@@ -1,6 +1,6 @@
 """The gate runs its static checks first (quality #recipes-static-first,
 #acceptance-gate-recipes-first; #1019), through `just fast` and `just check` in a throwaway git
-copy of the kit's tracked files without its tests, as tests/fast.sh builds one. The copy's
+copy of the kit's tracked files without its tests. The copy's
 justfile declares two static checks, GATE_RECIPES "check-dashes check-probe" (check-probe, added
 to it, logs its name), and its test items are tests/a.sh and tests/b.sh, each logging its name,
 tests/a.sh end-to-end by its header (`# gate: e2e`), so `just check` asks the slot and `just fast`
