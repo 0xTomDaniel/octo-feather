@@ -460,8 +460,8 @@ def park(pane: str) -> int:
     fields = {"at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()), "kind": "parked"}
     fields |= {"pane": pane, "name": name, "role": env.get("OCTO_FEATHER_ROLE", "")}
     fields |= {"cwd": pi.cwd, "session": session, "label": label}
-    fields |= {"parent": env.get("OCTO_FEATHER_PARENT", "")}
     encode = [str(Path(__file__).resolve().parents[4] / "scripts" / "octo-feather-handoff")]
+    fields |= {"parent": parent_now(encode[0], env, session)}
     encode += ["encode", *(x for k, v in fields.items() for x in ("--field", k, v))]
     line = subprocess.run(encode, capture_output=True, text=True, check=True).stdout
     rc = close(workspace if only else me.tab_id, sys.stderr)
@@ -482,6 +482,16 @@ def park(pane: str) -> int:
             " parked line:\n" + line
         )
     return rc
+
+
+def parent_now(handoff: str, env: dict[str, str], session: str) -> str:
+    """The parked Pi's parent (herdr-comms SKILL.md, Park an idle agent): HANDOFF's `parent` run
+    with its SESSION and ENV's role; ENV's OCTO_FEATHER_PARENT when that fails."""
+    frozen = env.get("OCTO_FEATHER_PARENT", "")
+    me = {"OCTO_FEATHER_SESSION_ID": session, "OCTO_FEATHER_ROLE": env.get("OCTO_FEATHER_ROLE", "")}
+    call = [handoff, "parent", frozen]
+    got = subprocess.run(call, capture_output=True, text=True, check=False, env=os.environ | me)
+    return got.stdout.strip() if got.returncode == 0 and got.stdout.strip() else frozen
 
 
 def agent_name(pane: str) -> str:

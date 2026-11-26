@@ -4,9 +4,10 @@ template's repo (testkit/template.py, its own copy of the run's one package inst
 
 tsc a stand-in at node_modules/.bin/tsc (what `pnpm exec tsc` runs) exiting 0 with empty stdout, or
 no tsc at all (none on PATH either, asserted first: check_languages.no_tsc; the real pnpm prints
-"Command tsc not found" on stdout, exit 254), eslint a stand-in crashing (exit 2, its own stderr),
-scc a stand-in first on PATH printing no JSON, only its own stderr: each is named with the command,
-its exit code and what it printed, never a JSON parse error. The template's check-ts installs
+"Command tsc not found" on stdout, exit 254), scc a stand-in first on PATH printing no JSON, only
+its own stderr: each is named with the command, its exit code and what it printed; the real eslint
+failing on a crashing eslint.config.js is named with the eslint step and its error; never a JSON
+parse error. The template's check-ts installs
 nothing, so the kit's install race (#548) has no counterpart here.
 """
 
@@ -55,11 +56,10 @@ def tsc_absent(s: Scratch) -> None:
 
 def eslint_crash(s: Scratch) -> None:
     r = Repo(s, "typescript")
-    stand_in(r, "eslint", "echo 'eslint stand-in: config crashed' >&2; exit 2")
+    r.write("eslint.config.js", 'throw new Error("fixture eslint config crashed");\n')
     languages(
         r,
-        "eslint-files: pnpm exec eslint --format json . exited 2;"
-        " stderr: eslint stand-in: config crashed; stdout: (empty)",
+        "eslint-files: eslint Node API lintFiles(['.']) failed; fixture eslint config crashed",
     )
 
 

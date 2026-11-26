@@ -1,0 +1,14 @@
+Seeded defect: just check-ts installs on every run, even on a current node_modules, rewriting node_modules/.bin/tsc under a concurrent reader (#548).
+diff --git a/justfile b/justfile
+index af3486fb..05025821 100644
+--- a/justfile
++++ b/justfile
+@@ -200,7 +200,7 @@ check-ts:
+     #!/usr/bin/env bash
+     set -euo pipefail
+     cd "$root"
+-    pnpm --config.verify-deps-before-run=error exec true >/dev/null 2>&1 || err="$(pnpm install --offline --frozen-lockfile 2>&1)" || { printf '%s\n' "$err" >&2
++    false || err="$(pnpm install --offline --frozen-lockfile 2>&1)" || { printf '%s\n' "$err" >&2
+       echo "check-ts: tsc and eslint (pnpm-lock.yaml) are not in the pnpm store; fetch them once, with network: pnpm install --frozen-lockfile --dir $root" >&2; exit 1; }
+     cfg="$(pnpm exec tsc --showConfig)" || { printf '%s\n' "$cfg" >&2; echo "check-ts: tsc cannot read tsconfig.json (error above)" >&2; exit 1; }
+     mapfile -t files < <(python3 -c 'import json, sys; sys.stdout.writelines(f + "\n" for f in json.load(sys.stdin).get("files", []))' <<<"$cfg")

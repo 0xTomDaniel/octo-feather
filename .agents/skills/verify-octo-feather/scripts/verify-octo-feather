@@ -2669,8 +2669,11 @@ def drive_gate_tiers(f: Feature) -> None:
     ran = sc / "ran"
     f.env = {"XDG_STATE_HOME": str(sc / "state"), "FAST_RAN": str(ran),
              "UV_PROJECT_ENVIRONMENT": os.path.realpath(Path(f.s.repo) / ".venv")}
+    ran.write_text("")
     f.run("fast-map", "env", "-C", str(k), "just", "fast-map", RUNNER)
-    f.check("fast-map", lambda c: c.code == 0 and "fast-map: 3 test items mapped at " in c.out)
+    f.obs("fast-map", "ran", "".join(sorted(ran.read_text().splitlines(keepends=True))))
+    f.check("fast-map", lambda c: c.code == 0 and "fast-map: 2 test items mapped at " in c.out
+            and "heavy slot: not needed: fast tier, " in c.out and c.o["ran"] == "a\nb\nd\n")
     with (k / "scripts" / "fixture-a").open("a") as fh:
         fh.write("# one-script change\n")
     ran.write_text("")
@@ -2699,7 +2702,7 @@ def drive_gate_tiers(f: Feature) -> None:
     git(k, "add", "-A")
     git(k, "commit", "-q", "-m", "a red item")
     f.run("fast-map-red", "env", "-C", str(k), "just", "fast-map", RUNNER)
-    f.check("fast-map-red", lambda c: c.code != 0 and "fast-map: 3 test items mapped at " in c.out
+    f.check("fast-map-red", lambda c: c.code != 0 and "fast-map: 2 test items mapped at " in c.out
             and "fast-map: tests/e.sh did not pass: left out of the map, always selected" in c.out)
     f.run("fast-list-red", "env", "-C", str(k), "just", "--set", "GATE_RECIPES", "check-dashes", "fast-list")
     f.check("fast-list-red", lambda c: c.code == 0
