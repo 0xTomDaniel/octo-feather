@@ -128,7 +128,7 @@ def test_retired_words_fail(tmp_path: Path) -> None:
 
 def test_exemptions_pass(tmp_path: Path) -> None:
     """The SPOOL_SIDE value in its two files; the judgment suites' label data; a word character
-    before the word (no boundary, as grep's in C.UTF-8); a binary file, pinned not fixed (#1117)."""
+    before the word (no boundary, as grep's in C.UTF-8)."""
     labels = ("cases.json", "reference/expectations.json", "REPORT.md")
     allow(
         tmp_path,
@@ -158,9 +158,15 @@ def test_exemptions_pass(tmp_path: Path) -> None:
             ("docs/x.md", f"caf\u00e9{OP}\n".encode(), 0),
         ],
     )
-    binary = Report((("err", b"check-refs: docs/x.md: binary file matches"), *ok(0).lines), 0)
-    for i, text in enumerate([b"caf\xff: the " + OP.encode() + b"\n", f"the {OP}\0\n".encode()]):
-        assert check(tmp_path / f"binary{i}", {"docs/x.md": text}) == binary, text
+
+
+def test_binary_file_with_retired_word_fails(tmp_path: Path) -> None:
+    """A retired word in a file grep calls binary (a NUL byte, or invalid UTF-8) fails, the file
+    refused by name, never passed silently (#1353, #1117)."""
+    for i, text in enumerate([f"the {OP}\0\n".encode(), b"caf\xff: the " + HU.encode() + b"\n"]):
+        found = check(tmp_path / str(i), {"agents/x.md": text})
+        named = b"check-refs: agents/x.md: binary file matches"
+        assert found == Report((("err", named), ("err", WORDS)), 1), text
 
 
 def test_unreadable_file_fails_closed(tmp_path: Path) -> None:
