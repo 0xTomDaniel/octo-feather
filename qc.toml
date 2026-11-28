@@ -436,6 +436,38 @@ covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/tracker
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
 covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
 
+# Proven by their tagged tests (tests/gate/kit/test_start_relaunch.py): octo-feather-start --director
+# --relaunch / --resume against the testkit's Herdr stand-in, real processes as the director's shell and Pi. Busy: a
+# working director and --wait 1, then an idle one and --wait 31 (no full gap for the fourth read): exit 75, nothing
+# changed. Own scope: a detached job in the director's real agent scope (a new one where a user manager answers, else
+# the agent scope the run already sits in: start_relaunch.py relaunch_own_scope), then HERDR_PANE_ID the director's
+# pane: exit 64, nothing changed. Same session: --director --resume beside the live director on it: exit 73. The verify
+# drive (features/director-relaunch.md) drives all of it on a real scratch Herdr session.
+[demo."comms#acceptance-director-relaunch-busy"]
+covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/test_start_relaunch.py", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/director-relaunch.md"]
+
+[demo."comms#acceptance-director-relaunch-own-scope"]
+covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/test_start_relaunch.py", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/director-relaunch.md"]
+
+[demo."comms#acceptance-director-relaunch-same-session"]
+covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/test_start_relaunch.py", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/director-relaunch.md"]
+
+# Proven by its tagged tests (tests/gate/kit/test_start_relaunch.py, replace_outgoing and replace_none): octo-feather-start
+# --director --replace against the testkit's Herdr stand-in, the old director's Pi a real process. The verify drive
+# (features/director-relaunch.md) drives it on a real scratch Herdr session.
+[demo."comms#acceptance-director-replace-outgoing"]
+covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/test_start_relaunch.py", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/director-relaunch.md"]
+
+# Proven by their tagged tests (tests/gate/kit/test_start_relaunch.py, relaunch_report and replace_report): a supervisor
+# the director started (octo-feather-start --issue from the director's pane), then octo-feather-start --director
+# --relaunch, or --replace, against the testkit's Herdr stand-in; the supervisor's herdr-say --parent reaches the new
+# pane alone. The verify drive (features/director-relaunch.md, report cases) drives it on a real scratch Herdr session.
+[demo."comms#acceptance-director-relaunch"]
+covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "scripts/octo-feather-handoff", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/test_start_relaunch.py", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/director-relaunch.md"]
+
+[demo."comms#acceptance-director-replace"]
+covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "scripts/octo-feather-handoff", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/test_start_relaunch.py", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/director-relaunch.md"]
+
 # Lane gh1234's criteria, each proven by its tagged tests (tests/gate/kit/test_fast_map.py,
 # tests/gate/kit/test_lane_post_merge_map.py); covers: the tracked files those items' coverage map entries name (a
 # just fast-map of them at 46d6e852), the testkit, gate plugin and conftest every item reaches left out.
