@@ -14,13 +14,21 @@ One mechanism: the coverage is the fast map's (`just fast-map`, `octo-feather-ga
   - else its demo `command`, run as `just qc` runs it (sh in the repo, QC_REPO set), under that configuration, read
     likewise;
   - else (a model eval, no command, no test) or when no run passed: its covers stay as declared, and say so.
-Coverage sees Python only: what it reports is the covers, nothing named by hand.
+Coverage sees Python only, so covers = the Python files coverage names plus every declared path it cannot see (any
+non-Python file or a directory: bash scripts, role, skill and feature md, justfile, toml), kept as declared; a declared
+Python file coverage does not name is dropped. write ends with check, which fails loud if a criterion lost one.
 
 Subcommands:
   measure TREE OUT [--map FILE]   TREE's coverage per tagged item and per demo command into OUT (JSON). The map: FILE,
                                   else the newest fast map from TREE's HEAD or an ancestor (octo-feather-gate select's).
-  write MEASURE [--qc FILE]       rewrite FILE's (default ./qc.toml) covers lines from MEASURE; prints each change.
-  regen [--map FILE]              measure on this tree into covers/measure-<head12>.json, then write ./qc.toml: the one
+  write MEASURE [--qc FILE] [--declared REF]
+                                  rewrite FILE's (default ./qc.toml) covers lines from MEASURE, the declared covers
+                                  read from qc.toml at REF (default: FILE); prints each change; then check.
+  check [--qc FILE] [--declared REF]
+                                  exit 1 naming each declared path coverage cannot see (any non-Python file or dir:
+                                  bash, md, justfile, toml) that a criterion's covers in FILE no longer name.
+  regen [--map FILE] [--declared REF]
+                                  measure on this tree into covers/measure-<head12>.json, then write ./qc.toml: the one
                                   command; a second run changes nothing.
   fetch-prs OUT [--repo DIR]      the last 60 merged PRs as of now: number, mergedAt, merge commit.
   counts --main REF --b MEASURE --c MEASURE --split REF --prs FILE --pr N
@@ -43,7 +51,33 @@ import sys
 import tempfile
 import tomllib
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict, cast
+
+
+class Extra(TypedDict):
+    """A tagged item run outside the map: whether it passed, the tracked files its coverage names."""
+
+    passed: bool
+    files: list[str] | None
+
+
+class Demo(TypedDict):
+    """A demo command run under coverage: its exit, the tracked files, the output tail of a failed run."""
+
+    exit: int
+    files: list[str] | None
+    tail: str
+
+
+class Measure(TypedDict):
+    """measure's output: the tree, its map's head, criterion -> tagged items, and each item's and demo's files."""
+
+    tree: str
+    map: str
+    tags: dict[str, list[str]]
+    map_items: dict[str, list[str]]
+    extra_items: dict[str, Extra]
+    demos: dict[str, Demo]
 
 HERE = Path(__file__).resolve().parent
 SCRIPT = "tests/gate/test_gate.py::test_script["
@@ -113,7 +147,7 @@ def read_data(g: Any, tracked: Any, d: Path) -> list[str] | None:
     return sorted(files)
 
 
-def run_items(tree: Path, items: list[str], g: Any, tracked: Any) -> dict[str, Any]:
+def run_items(tree: Path, items: list[str], g: Any, tracked: Any) -> dict[str, Extra]:
     """Each tagged item the map lacks, run under the mapping run's configuration (just fast-map's command line, e2e
     allowed): item -> {passed, files}."""
     if not items:
@@ -126,8 +160,8 @@ def run_items(tree: Path, items: list[str], g: Any, tracked: Any) -> dict[str, A
                             *[node_of(i) for i in items]], cwd=tree, env=env, capture_output=True, text=True,
                            stdin=subprocess.DEVNULL)
         sys.stderr.write(f"covers: {len(items)} tagged items outside the map ran: exit {p.returncode}\n")
-        ran = g.outcomes(junit) if junit.is_file() else {}
-        out: dict[str, Any] = {}
+        ran = cast("dict[str, bool]", g.outcomes(junit)) if junit.is_file() else {}
+        out: dict[str, Extra] = {}
         for i in items:
             good = bool(ran.get(g.junit_key(i)))
             files = read_data(g, tracked, data / i) if good else None
@@ -135,7 +169,7 @@ def run_items(tree: Path, items: list[str], g: Any, tracked: Any) -> dict[str, A
         return out
 
 
-def run_demo(tree: Path, n: int, command: str, g: Any, tracked: Any) -> dict[str, Any]:
+def run_demo(tree: Path, n: int, command: str, g: Any, tracked: Any) -> Demo:
     """One demo command as `just qc` runs it (sh in the repo, QC_REPO set) under coverage: {exit, files}."""
     with tempfile.TemporaryDirectory(prefix=f"covers-demo{n}-") as d:
         data = Path(d, "data")
@@ -169,7 +203,8 @@ def measure(tree: Path, out: Path, map_file: Path | None) -> None:
     extra = run_items(tree, wanted, g, tracked)
     commands = sorted({str(e["command"]) for c, e in qc.items() if "command" in e and c not in by})
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
-        demos = dict(zip(commands, pool.map(lambda nc: run_demo(tree, nc[0], nc[1], g, tracked), enumerate(commands))))
+        runs = [pool.submit(run_demo, tree, n, c, g, tracked) for n, c in enumerate(commands)]
+        demos = {c: r.result() for c, r in zip(commands, runs, strict=True)}
     out.write_text(json.dumps({"tree": head, "map": fmap["head"], "tags": {c: by[c] for c in sorted(by) if c in qc},
                                "map_items": {i: mapped[i] for i in sorted({i for c in qc if c in by for i in by[c]})
                                              if i in mapped},
@@ -177,36 +212,95 @@ def measure(tree: Path, out: Path, map_file: Path | None) -> None:
     print(f"covers: measured {head[:12]} (map {str(fmap['head'])[:12]}): {out}")
 
 
-def computed(m: dict[str, Any], qc: dict[str, Any]) -> dict[str, tuple[list[str], str]]:
-    """criterion -> (covers, how) for each [demo] entry of QC with covers, from measure M."""
+class Seen:
+    """Whether coverage can see a path: a Python file (*.py, or a python shebang) at REF in REPO, or in the working
+    tree with no REF. A directory, a missing path or any other file (bash, md, justfile, toml) it cannot see: such a
+    declared path stays in covers."""
+
+    def __init__(self, repo: Path, ref: str | None = None) -> None:
+        self.repo, self.ref, self.memo = repo, ref, dict[str, bool]()
+
+    def head(self, path: str) -> str | None:
+        if self.ref is None:
+            f = self.repo / path
+            return f.read_text(errors="replace")[:200] if f.is_file() else None
+        kind = subprocess.run(["git", "cat-file", "-t", f"{self.ref}:{path}"], cwd=self.repo, capture_output=True,
+                              text=True, check=False).stdout.strip()
+        return git(self.repo, "show", f"{self.ref}:{path}")[:200] if kind == "blob" else None
+
+    def __call__(self, path: str) -> bool:
+        if path not in self.memo:
+            top = self.head(path)
+            first = top.splitlines()[0] if top else ""
+            self.memo[path] = top is not None and (path.endswith(".py") or (first.startswith("#!") and "python" in first))
+        return self.memo[path]
+
+
+def computed(m: Measure, qc: dict[str, Any], seen: Seen) -> dict[str, tuple[list[str], str]]:
+    """criterion -> (covers, how) for each [demo] entry of QC with covers, from measure M: the Python files coverage
+    names, plus every declared path coverage cannot see (SEEN)."""
     res: dict[str, tuple[list[str], str]] = {}
     for c, e in qc.items():
         if "covers" not in e:
             continue
         declared = [str(x) for x in e["covers"]]
+        unseen = {x for x in declared if not seen(x)}
         if c in m["tags"]:
             items = m["tags"][c]
-            got = [m["map_items"].get(i) or (m["extra_items"].get(i) or {}).get("files") for i in items]
-            files = sorted({f for x in got if x for f in x})
-            res[c] = (files, f"tests {' '.join(items)}") if files else (declared, "kept: no tagged item measured")
+            got: list[list[str] | None] = []
+            for i in items:
+                extra = m["extra_items"].get(i)
+                got.append(m["map_items"].get(i) or (extra["files"] if extra else None))
+            files = {f for x in got if x for f in x}
+            res[c] = (sorted(files | unseen), f"tests {' '.join(items)}") if files else (declared, "kept: no tagged item measured")
         elif "command" in e:
             d = m["demos"].get(str(e["command"]))
-            ok = d is not None and d["exit"] in (0, 77) and d["files"]
-            res[c] = (sorted(d["files"]), f"demo exit {d['exit']}") if ok else (declared, "kept: demo run failed")
+            if d is not None and d["exit"] in (0, 77) and d["files"]:
+                res[c] = (sorted(set(d["files"]) | unseen), f"demo exit {d['exit']}")
+            else:
+                res[c] = (declared, "kept: demo run failed")
         else:
             res[c] = (declared, "kept: no command, no tagged test (a model eval)")
     return res
 
 
-def write(measure_file: Path, qc_file: Path) -> None:
-    m = json.loads(measure_file.read_text())
+def lost(declared: dict[str, Any], now: dict[str, Any], seen: Seen) -> list[str]:
+    """Each declared path coverage cannot see (SEEN) that a criterion's covers in NOW no longer name."""
+    out: list[str] = []
+    for c, e in declared.items():
+        have = {str(x) for x in now.get(c, {}).get("covers", [])}
+        out += [f"{c}: {x}" for x in e.get("covers", []) if not seen(str(x)) and str(x) not in have]
+    return out
+
+
+def declared_qc(root: Path, ref: str | None, qc_file: Path) -> dict[str, Any]:
+    text = git(root, "show", f"{ref}:qc.toml") if ref else qc_file.read_text()
+    return cast("dict[str, Any]", tomllib.loads(text)["demo"])
+
+
+def check(root: Path, ref: str | None, qc_file: Path) -> None:
+    """Fail loud (exit 1) when a criterion in qc.toml at REF (default: QC_FILE itself) lost a declared path
+    coverage cannot see."""
+    seen = Seen(root)
+    bad = lost(declared_qc(root, ref, qc_file), tomllib.loads(qc_file.read_text())["demo"], seen)
+    if bad:
+        sys.exit("covers: FAIL: non-Python declared paths lost from covers (coverage cannot see them):\n  "
+                 + "\n  ".join(bad))
+    print(f"covers: check ok: no criterion lost a non-Python declared path (declared: {ref or qc_file})")
+
+
+def write(measure_file: Path, qc_file: Path, ref: str | None = None) -> None:
+    """Rewrite QC_FILE's covers lines from MEASURE_FILE, declared paths read from qc.toml at REF (default: QC_FILE),
+    then check() against the same."""
+    m = cast("Measure", json.loads(measure_file.read_text()))
+    root = qc_file.resolve().parent
     text = qc_file.read_text()
-    res = computed(m, tomllib.loads(text)["demo"])
+    res = computed(m, declared_qc(root, ref, qc_file), Seen(root))
     lines, cur, changed = text.splitlines(keepends=True), None, 0
     for n, ln in enumerate(lines):
         if hit := COVERS.match(ln.rstrip("\n")):
             cur = hit.group(1)
-        elif ln.startswith("[") :
+        elif ln.startswith("["):
             cur = None
         elif cur and ln.startswith("covers = ") and cur in res:
             new = "covers = " + json.dumps(res[cur][0]) + "\n"
@@ -216,6 +310,7 @@ def write(measure_file: Path, qc_file: Path) -> None:
             print(f"{cur}: {len(res[cur][0])} files ({res[cur][1]}){'' if new == ln else ' CHANGED'}")
     qc_file.write_text("".join(lines))
     print(f"covers: {changed} covers lines changed in {qc_file}")
+    check(root, ref, qc_file)
 
 
 # ---- counts ----
@@ -229,7 +324,7 @@ def hit(path: str, cov: str) -> bool:   # git pathspec as octo-feather-spec-stat
 
 
 def built(repo: Path, ref: str) -> set[str]:
-    out = set()
+    out: set[str] = set()
     for f in git(repo, "ls-tree", "--name-only", ref, "docs/specs/").split():
         if f.endswith(".status.json"):
             slug = f.split("/")[-1].removesuffix(".status.json")
@@ -240,6 +335,7 @@ def built(repo: Path, ref: str) -> set[str]:
 
 
 HUB = "scripts/octo-feather-lane"
+NEAR_LINES = 40
 
 
 class Split:
@@ -284,13 +380,17 @@ class Split:
         return [(n.lineno - len(n.decorator_list), n.end_lineno or n.lineno, n.name) for n in body
                 if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
 
-    def place(self, commit: str) -> set[str]:
-        """The split files COMMIT's change to the hub (commit^1..commit) lands in."""
-        old = run(["git", "show", f"{commit}^1:{HUB}"], self.repo, check=False)
+    def place(self, commit: str, near: bool = False, base: str | None = None) -> set[str]:
+        """The split files COMMIT's change to the hub (BASE, default commit^1, ..commit) lands in. A hunk none of whose lines is
+        placed goes to the dispatcher; with NEAR (c''), instead to the file holding the nearest unchanged line around
+        it in the pre-image (up to NEAR_LINES each way) that exactly one split file holds: the module header or
+        help chunk it sits in; none found, the hunk is dropped."""
+        base = base or f"{commit}^1"
+        old = run(["git", "show", f"{base}:{HUB}"], self.repo, check=False)
         new = run(["git", "show", f"{commit}:{HUB}"], self.repo, check=False)
         od, nd = self.defs(old), self.defs(new)
         ol, nl = old.splitlines(), new.splitlines()
-        diff = git(self.repo, "diff", "-U0", f"{commit}^1", commit, "--", HUB)
+        diff = git(self.repo, "diff", "-U0", base, commit, "--", HUB)
         out: set[str] = set()
 
         def at(defs: list[tuple[int, int, str]], line: int) -> str | None:
@@ -305,10 +405,19 @@ class Split:
 
         for h in re.finditer(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", diff, re.M):
             a, an, b, bn = int(h[1]), int(h[2] or 1), int(h[3]), int(h[4] or 1)
-            placed = set().union(*(put(od, ol, k) for k in range(a, a + an)),
+            placed: set[str] = set[str]().union(*(put(od, ol, k) for k in range(a, a + an)),
                                  *(put(nd, nl, k) for k in range(b, b + bn)))
-            out |= placed or {HUB}
-        return out or {HUB}
+            if placed or not near:
+                out |= placed or {HUB}
+                continue
+            for d in range(1, NEAR_LINES + 1):
+                hold = [self.lines.get(ol[k - 1].strip(), set()) for k in (a - d, a + an - 1 + d)
+                        if 0 < k <= len(ol) and len(ol[k - 1].strip()) > 3]
+                one = [h for h in hold if len(h) == 1]
+                if one:
+                    out |= one[0]
+                    break
+        return out if near else (out or {HUB})
 
 
 def changed(repo: Path, commit: str) -> list[str]:
@@ -324,10 +433,17 @@ def q(xs: list[int], p: float) -> int:   # nearest rank, as the w1 survey's
     return xs[min(len(xs) - 1, max(0, round(p * (len(xs) - 1))))]
 
 
+LANE_BEFORE = {HUB, "scripts/post_merge.py", "scripts/merge_ask.py", "scripts/start_lane.py"}
+
+
+def hits(cov: list[str], files: list[str]) -> list[str]:
+    return [f for f in files if any(hit(f, c) for c in cov)]
+
+
 def counts(a: argparse.Namespace) -> None:
     repo = Path.cwd()
-    prs = json.loads(Path(a.prs).read_text())
-    pr = json.loads(run(["gh", "pr", "view", str(a.pr), "--json", "number,mergeCommit"], repo))
+    prs = cast("list[dict[str, Any]]", json.loads(Path(a.prs).read_text()))
+    pr = cast("dict[str, Any]", json.loads(run(["gh", "pr", "view", str(a.pr), "--json", "number,mergeCommit"], repo)))
     qc_main = tomllib.loads(git(repo, "show", f"{a.main}:qc.toml"))["demo"]
     sets: dict[str, dict[str, list[str]]] = {}
     for name, ref, mfile in (("a", a.main, None), ("b", a.main, a.b), ("c", a.split, a.c)):
@@ -336,44 +452,82 @@ def counts(a: argparse.Namespace) -> None:
         if mfile is None:
             cov = {c: [str(x) for x in e["covers"]] for c, e in qc.items() if "covers" in e}
         else:
-            cov = {c: v[0] for c, v in computed(json.loads(Path(mfile).read_text()), qc).items()}
+            m = cast("Measure", json.loads(Path(mfile).read_text()))
+            cov = {c: v[0] for c, v in computed(m, qc, Seen(repo, ref)).items()}
         sets[name] = {c: v for c, v in cov.items() if c in b}
     split = Split(repo, a.split)
+    lane_after = {HUB, *[f"scripts/{m}.py" for m in split.modules()]}
 
-    def files_of(commit: str, translate: bool) -> list[str]:
+    def files_of(commit: str, mode: str) -> list[str]:
         fs = changed(repo, commit)
-        return sorted({x for f in fs for x in (split.place(commit) if translate and f == HUB else {f})})
+        if mode == "raw" or HUB not in fs:
+            return fs
+        return sorted({x for f in fs for x in (split.place(commit, near=mode == "near") if f == HUB else {f})})
 
-    rows = []
-    cols = [("a", False), ("b", False), ("c", False), ("c", True)]
-    for p in [pr, *prs]:
-        oid = p["mergeCommit"]["oid"]
-        rows.append([p["number"]] + [stale(sets[s], files_of(oid, t)) for s, t in cols])
-    head = ["(a) declared, main", "(b) coverage, main tree", "(c) coverage, split tree",
-            "(c') coverage, split tree, hub hunks placed"]
+    cols = [("(a) declared, main", "a", "raw", LANE_BEFORE), ("(b) coverage, main tree", "b", "raw", LANE_BEFORE),
+            ("(c) coverage, split tree", "c", "raw", lane_after),
+            ("(c') split tree, hub hunks placed, unplaced to the dispatcher", "c", "placed", lane_after),
+            ("(c'') split tree, hub hunks placed, unplaced by nearest context or dropped", "c", "near", lane_after)]
+    every = [pr, *prs]
+    rows: list[list[int]] = [[int(p["number"])] for p in every]
+    per_col: list[dict[str, Any]] = []
+    for _h, s, mode, lane in cols:
+        pairs = alone = 0
+        trig: dict[str, int] = {}
+        sole: dict[str, int] = {}
+        changes: dict[str, int] = {}
+        for n, p in enumerate(every):
+            files = files_of(p["mergeCommit"]["oid"], mode)
+            if n:
+                for f in files:
+                    changes[f] = changes.get(f, 0) + 1
+            k = 0
+            for cov in sets[s].values():
+                h = hits(cov, files)
+                if not h:
+                    continue
+                k += 1
+                if n:
+                    pairs += 1
+                    alone += set(h) <= lane
+                    for f in h:
+                        trig[f] = trig.get(f, 0) + 1
+                    if len(h) == 1:
+                        sole[h[0]] = sole.get(h[0], 0) + 1
+            rows[n].append(k)
+        per_col.append({"pairs": pairs, "alone": alone, "trig": trig, "sole": sole, "changes": changes, "set": s})
     print(f"Built criteria with covers: (a) {len(sets['a'])}, (b) {len(sets['b'])}, (c) {len(sets['c'])}. "
           f"PRs: {len(prs)} merged, #{prs[-1]['number']}..#{prs[0]['number']}, "
           f"{prs[-1]['mergedAt'][:10]}..{prs[0]['mergedAt'][:10]}.\n")
-    print(f"| covers set | PR #{a.pr} (lane gh1234) | median | p90 | max |")
-    print("|---|---|---|---|---|")
-    for k, h in enumerate(head, 1):
+    print(f"| covers set | PR #{a.pr} (lane gh1234) | median | p90 | max | stale (PR, criterion) pairs | "
+          "of them through lane-command files alone |")
+    print("|---|---|---|---|---|---|---|")
+    for k, (h, *_x) in enumerate(cols, 1):
         xs = [r[k] for r in rows[1:]]
-        print(f"| {h} | {rows[0][k]} | {statistics.median(xs):g} | {q(xs, .9)} | {max(xs)} |")
-    for s in ("a", "b", "c"):
-        per: dict[str, int] = {}
+        c = per_col[k - 1]
+        share = f"{c['alone']} ({100 * c['alone'] / c['pairs']:.0f}%)" if c["pairs"] else "0"
+        print(f"| {h} | {rows[0][k]} | {statistics.median(xs):g} | {q(xs, .9)} | {max(xs)} | {c['pairs']} | {share} |")
+    print(f"\nLane-command files: before the split {', '.join(sorted(LANE_BEFORE))}; after it the hub and "
+          f"{', '.join(sorted(lane_after - {HUB}))}. A pair counts when every changed file reaching its covers is one.")
+    for k, (h, s, _m, _l) in enumerate(cols):
+        c = per_col[k]
+        ncrit: dict[str, int] = {}
         for cov in sets[s].values():
             for f in set(cov):
-                per[f] = per.get(f, 0) + 1
-        top = sorted(per.items(), key=lambda kv: (-kv[1], kv[0]))[:12]
-        print(f"\nPaths in the most built criteria's covers, ({s}): " + ", ".join(f"{f} {n}" for f, n in top))
-    print("\nPer PR: number, (a), (b), (c), (c')")
+                ncrit[f] = ncrit.get(f, 0) + 1
+        top = sorted(c["trig"].items(), key=lambda kv: (-kv[1], kv[0]))[:15]
+        print(f"\n{h}: top triggers. | file | criteria listing it | PRs changing it (of {len(prs)}) | stale pairs it "
+              "reaches | pairs it alone reaches |\n|---|---|---|---|---|")
+        for f, n in top:
+            print(f"| {f} | {ncrit.get(f, 0)} | {c['changes'].get(f, 0)} | {n} | {c['sole'].get(f, 0)} |")
+    print("\nPer PR: number, " + ", ".join(h.split(" ")[0] for h, *_x in cols))
     for r in rows:
         print(" ".join(map(str, r)))
 
 
 def fetch(out: Path, repo: Path) -> None:
-    prs = json.loads(run(["gh", "pr", "list", "--state", "merged", "--limit", "60", "--json",
-                          "number,mergedAt,mergeCommit"], repo))
+    prs = cast("list[dict[str, str]]", json.loads(run(["gh", "pr", "list", "--state", "merged", "--limit", "60",
+                                                       "--json", "number,mergedAt,mergeCommit"], repo)))
     prs.sort(key=lambda p: p["mergedAt"], reverse=True)
     out.write_text(json.dumps(prs, indent=1) + "\n")
     print(f"covers: {len(prs)} PRs into {out}")
@@ -389,7 +543,12 @@ def main() -> None:
     s = sub.add_parser("write")
     s.add_argument("measure", type=Path)
     s.add_argument("--qc", type=Path, default=Path("qc.toml"))
+    s.add_argument("--declared")
+    s = sub.add_parser("check")
+    s.add_argument("--qc", type=Path, default=Path("qc.toml"))
+    s.add_argument("--declared")
     s = sub.add_parser("regen")
+    s.add_argument("--declared")
     s.add_argument("--map", type=Path)
     s = sub.add_parser("fetch-prs")
     s.add_argument("out", type=Path)
@@ -402,13 +561,15 @@ def main() -> None:
     if a.cmd == "measure":
         measure(a.tree, a.out.resolve(), a.map)
     elif a.cmd == "write":
-        write(a.measure, a.qc)
+        write(a.measure, a.qc, a.declared)
+    elif a.cmd == "check":
+        check(a.qc.resolve().parent, a.declared, a.qc)
     elif a.cmd == "regen":
         root = Path(run(["git", "rev-parse", "--show-toplevel"], Path.cwd()).strip())
         head = run(["git", "rev-parse", "HEAD"], root).strip()
         out = HERE / f"measure-{head[:12]}.json"
         measure(root, out, a.map)
-        write(out, root / "qc.toml")
+        write(out, root / "qc.toml", a.declared)
     elif a.cmd == "fetch-prs":
         fetch(a.out, a.repo)
     else:
