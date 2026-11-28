@@ -40,6 +40,7 @@ def test_lane_start_unicode_title(case: Case) -> None:
 @pytest.mark.criterion(
     "issue-lifecycle#acceptance-lane-start-usage",
     "issue-lifecycle#acceptance-lane-start-carried",
+    "issue-lifecycle#acceptance-lane-start-room",
     source="tests/gate/kit/lane_start.py",
 )
 def test_lane_start_refused(case: Case) -> None:

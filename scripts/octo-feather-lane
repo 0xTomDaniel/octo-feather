@@ -869,8 +869,14 @@ is refused as any existing lane.
 
 The brake (spec issue-lifecycle #lanes-start, #boundary-lane-start-brake) runs once the kit, the director pane and
 the repository are read, before the ticket is read or filed, on every start but the rerun of a stopped one (its
-lanes/<key>.start.json there). It reads the Claude account's weekly use from the box's model route: Pi's config
-($PI_CODING_AGENT_DIR, else ~/.pi/agent), models.json providers.anthropic baseUrl and apiKey, the key resolved as Pi
+lanes/<key>.start.json there). First the room, before any read: the open lanes, each lane record not archived
+(lanes/*.toml in ${XDG_STATE_HOME:-~/.local/state}/octo-feather and in each of its sessions/*/lanes/), against
+lane_limit in the kit install's gate-budget.toml (7 when unset); at or over it the start is refused, exit 1, in one
+line, `refused (room): <n> of <limit> lanes open (lane_limit <limit>, <install>/gate-budget.toml): <each open lane's
+key, a session's named>; nothing made: archive a lane (octo-feather-lane archive NAME) or raise lane_limit in
+<install>/gate-budget.toml, then rerun`. Else
+it prints `room: <n> of <limit> lanes open`, then reads the Claude account's weekly use from the box's model route:
+Pi's config ($PI_CODING_AGENT_DIR, else ~/.pi/agent), models.json providers.anthropic baseUrl and apiKey, the key resolved as Pi
 resolves it (a leading `!` runs the rest in the shell, its stdout trimmed; else a literal with $NAME and ${NAME} from
 the environment), never printed, logged or stored; then GET <baseUrl>/v1/models and one POST <baseUrl>/v1/messages,
 max_tokens 1, on the newest listed model whose id holds haiku (else the newest listed), 20 s each. The reading is that
@@ -900,7 +906,7 @@ brake did not stop this start`. Now, with no answer had, is the box's clock, or 
 unless it says so) when set, and said: the line begins with `clock overridden: OCTO_FEATHER_NOW=<value>`. With an
 answer had, its Date is now: the override is ignored, the line begins with `clock overridden: OCTO_FEATHER_NOW=<value>
 ignored, the answer's Date is now` and the stored line also records that, as its clock. Whatever the brake cannot read,
-the start is refused only on a course over the line, and otherwise the start goes on.
+the start is refused only on the room or a course over the line, and otherwise the start goes on.
 
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """

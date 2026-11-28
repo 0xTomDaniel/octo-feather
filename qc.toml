@@ -470,6 +470,15 @@ covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/lane_br
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
 covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/lane_brake.py", "gate-budget.toml", "tests/gate/kit/testkit/provider.py", "tests/gate/kit/fixtures/lane-brake/v1-messages.json", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
 
+# Proven by tests/gate/kit/test_lane_start.py's refused item; the demo is the lane-start drive's `room` case: seven
+# open lane records in the scratch state (the top dir, session s2's and the director's session's), `octo-feather-lane
+# start 910 ...` exits 1 on the room before the usage, naming the count, the limit (no lane_limit in the scratch kit
+# install's gate-budget.toml, so 7), each open lane's key and the fix; the replaying provider asked nothing, no ticket
+# read, nothing made.
+[demo."issue-lifecycle#acceptance-lane-start-room"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
+covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/lane_brake.py", "gate-budget.toml", "tests/gate/kit/testkit/provider.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
+
 # Proven by their tagged tests (tests/gate/kit/test_start_relaunch.py): octo-feather-start --director
 # --relaunch / --resume against the testkit's Herdr stand-in, real processes as the director's shell and Pi. Busy: a
 # working director and --wait 1, then an idle one and --wait 31 (no full gap for the fourth read): exit 75, nothing

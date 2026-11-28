@@ -110,6 +110,20 @@ the ticket is read.
            override, then the last reading, its time and the course carried from it at its burn
            then (62%, over 50%), why it was not read now and the reset to wait for (CARRIED);
            nothing made, no supervisor, nothing more stored; the key nowhere.
+
+Seam (ticket #1347, recorded before any test): issue-lifecycle#acceptance-lane-start-room,
+`octo-feather-lane start`, the same stand-ins; the limit lane_limit in the scratch kit install's
+gate-budget.toml, none there (usage_carried's usage_reserve alone), so 7.
+
+  started  six open lane records there before (lanes(): four in the top state dir, two in a
+           session's, beside an archived one and a stopped start's file, neither open): `room: 6
+           of 7 lanes open` printed first, then the usage line, and the lane starts.
+  refused  last, seven open lane records (lanes(): five in the top dir, two in session s2's),
+           the route the replaying provider logging each request (full): exit 1 naming the
+           count, the limit, gate-budget.toml, each open lane's key and the fix, though the usage
+           would refuse too (room first); nothing printed on stdout, no request to the provider,
+           nothing more stored, no gh call but the repository's (no ticket read, the stored
+           issue still the malformed one), no Herdr call, nothing made.
 """
 
 from __future__ import annotations
@@ -269,12 +283,35 @@ def keyless(s: Scratch, *outs: str) -> None:
     show(f"the key in no output and none of {len(files)} state and Herdr files")
 
 
+ROOM = "room: {n} of 7 lanes open"
+
+
+def lanes(s: Scratch, n: int) -> list[str]:
+    """N open lane records in S's state (all but two in the top dir's lanes/, two in session s2's),
+    beside an archived record and a stopped start's file, neither open; each open lane as the
+    refusal names it."""
+    state = s.home / ".local" / "state" / "octo-feather"
+    top, session = state / "lanes", state / "sessions" / "s2" / "lanes"
+    for d in (top / "archive", session):
+        d.mkdir(parents=True, exist_ok=True)
+    (top / "archive" / "gh1.toml").write_text('supervisor = "w9:p1"\n')
+    (top / "gh2.start.json").write_text("{}")
+    keys = [f"gh{10 + i}" for i in range(n - 2)]
+    for k in keys:
+        (top / f"{k}.toml").write_text('supervisor = "w9:p2"\n')
+    for k in ("gh50", "gh51"):
+        (session / f"{k}.toml").write_text('supervisor = "w9:p3"\n')
+    return [*keys, "gh50 (session s2)", "gh51 (session s2)"]
+
+
 def clear(s: Scratch, r: Ran, host: str) -> str:
-    """R, a start on the replayed recording at HOST, printed the usage line (CLEAR) first and
-    stored that one reading, the key nowhere; its other line."""
-    usage, out = r.out.split("\n")
+    """R, a start on the replayed recording at HOST, six lanes open, printed the room line, then
+    the usage line (CLEAR), and stored that one reading, the key nowhere; its other line."""
+    room, usage, out = r.out.split("\n")
+    assert room == ROOM.format(n=6), room
+    show(f"printed first: {room}")
     assert usage == CLEAR.format(host=host), usage
-    show(f"printed first: {usage}")
+    show(f"then: {usage}")
     stored = [json.loads(x) for x in readings(s).read_text().splitlines()]
     window = {"used": 0.19, "reset": "2026-12-03T03:00:00Z"}
     assert stored == [{"at": "2026-11-28T06:19:36Z", "windows": {"7d": window}}], stored
@@ -285,6 +322,7 @@ def clear(s: Scratch, r: Ran, host: str) -> str:
 
 def started(s: Scratch) -> None:
     d, checkout, main_ = world(s)
+    lanes(s, 6)
     brief = s.root / "brief.md"
     brief.write_text(BRIEF)
     cmd = [kit("octo-feather-lane"), "start", "905", "--goal", TITLE, "--outcome", OUTCOME]
@@ -359,8 +397,8 @@ def unicode_title(s: Scratch) -> None:
     host = closed(s)
     r = s.run([*cmd, "--outcome", OUTCOME, "905"], cwd=checkout, env=DIRECTOR)
     why = f"GET {host}/v1/models: [Errno 111] Connection refused"
-    assert r.out.split("\n")[0] == NOT_READ.format(why=why), r.out
-    assert re.fullmatch(r"key=gh905 pane=\S+ issue=905", r.out.split("\n")[1]), r.out
+    assert r.out.split("\n")[:2] == [ROOM.format(n=0), NOT_READ.format(why=why)], r.out
+    assert re.fullmatch(r"key=gh905 pane=\S+ issue=905", r.out.split("\n")[2]), r.out
     assert not readings(s).exists()
     show(f"route at a closed port: printed {r.out!r}, nothing stored")
     keyless(s, r.out, r.err)
@@ -406,6 +444,7 @@ def refused(s: Scratch) -> None:
     nothing_made(s, d, checkout)
     show(f"issue-view malformed: exit 1, {err}")
     usage_carried(s, d, checkout)
+    full(s, d, checkout, cmd)
 
 
 NEW = "Scratch lane"
@@ -432,10 +471,10 @@ def files(s: Scratch) -> None:
     with replaying(s, RECORDED / "unauthorized") as host:
         r = s.run(cmd, cwd=checkout, env=DIRECTOR)
     out = r.out.splitlines()
-    assert out[0] == NOT_READ.format(why=f"GET {host}/v1/models answered 401"), out
-    assert out[1] == "filed=906", out
-    assert re.fullmatch(r"key=gh906 pane=\S+ issue=906", out[2]), out
-    assert len(out) == 3, out
+    assert out[:2] == [ROOM.format(n=0), NOT_READ.format(why=f"GET {host}/v1/models answered 401")]
+    assert out[2] == "filed=906", out
+    assert re.fullmatch(r"key=gh906 pane=\S+ issue=906", out[3]), out
+    assert len(out) == 4, out
     assert not readings(s).exists()
     show(f"printed: {out}")
     keyless(s, r.out, r.err)
@@ -463,7 +502,7 @@ def filed_stopped(s: Scratch) -> None:
     with replaying(s, RECORDED / "unauthorized", "--truncated") as host:
         r = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1)
     why = f"GET {host}/v1/models: IncompleteRead(27 bytes read, 100 more expected)"
-    assert r.out.split("\n") == [NOT_READ.format(why=why), "filed=906"], r.out
+    assert r.out.split("\n") == [ROOM.format(n=0), NOT_READ.format(why=why), "filed=906"], r.out
     assert "step goal (made so far: " in r.err, r.err
     show(f"the 401's body cut short: printed {r.out!r}, supervisor {supervised(d, 'gh906')}")
     assert not readings(s).exists()
@@ -488,11 +527,37 @@ def sub_issue(s: Scratch) -> None:
     cmd = [kit("octo-feather-lane"), "start", "907", "--goal", "A child", "--outcome", OUTCOME]
     r = s.run([*cmd, "--brief-file", str(brief)], cwd=checkout, env=DIRECTOR, want=1)
     assert "ticket 907 is a sub-issue of 905" in r.err, r.err
-    assert r.out.startswith("usage: not read ("), r.out
-    assert "\n" not in r.out, r.out
+    room, usage = r.out.split("\n")
+    assert room == ROOM.format(n=0), r.out
+    assert usage.startswith("usage: not read ("), r.out
     nothing_made(s, d, checkout, "gh907")
     assert not creates(s), s.gh.log()
     show(f"sub-issue 907: exit 1, {r.err}")
+
+
+def full(s: Scratch, d: Path, checkout: Path, cmd: list[str]) -> None:
+    """CMD, a start of 905 in CHECKOUT (Herdr world D), refused at seven open lanes (the module's
+    docstring, refused)."""
+    keys, budget = lanes(s, 7), s.root / "kit-install" / "gate-budget.toml"
+    asked, calls, before = s.root / "provider.log", len(s.gh.log()), readings(s).read_text()
+    with replaying(s, RECORDED, "--log", str(asked)):
+        r = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1)
+    want = (
+        f"refused (room): 7 of 7 lanes open (lane_limit 7, {budget}): {', '.join(keys)}; nothing"
+        " made: archive a lane (octo-feather-lane archive NAME) or raise lane_limit in"
+        f" {budget}, then rerun"
+    )
+    assert want in r.err, r.err
+    assert "\n" not in r.err.strip(), r.err
+    assert r.out == "", r.out
+    show(f"seven lanes open: exit 1, {r.err.strip()}")
+    assert not asked.exists(), asked.read_text()
+    assert readings(s).read_text() == before
+    show("the provider received no request; nothing more stored")
+    assert s.gh.log()[calls:] == ["repo view --json nameWithOwner"], s.gh.log()  # no ticket read
+    nothing_made(s, d, checkout)
+    assert not (d / "log").exists(), (d / "log").read_text()
+    show("no ticket read or filed, no herdr call; no worktree, branch, workspace, record or prompt")
 
 
 def no_supervisor(d: Path) -> None:
@@ -571,7 +636,7 @@ def rerun(s: Scratch) -> None:
     route(s, "not-a-url")
     r = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1)
     why = "GET not-a-url/v1/models: unknown url type: 'not-a-url/v1/models'"
-    assert r.out == NOT_READ.format(why=why), r.out
+    assert r.out == f"{ROOM.format(n=0)}\n{NOT_READ.format(why=why)}", r.out
     show(f"baseUrl not-a-url: printed {r.out!r}, supervisor {supervised(d, 'gh905')}")
     keyless(s, r.out, r.err)
     err = r.err
@@ -769,6 +834,9 @@ def help_(s: Scratch) -> None:
         "`refused (usage,",
         "OCTO_FEATHER_NOW (an ISO time",
         "the override is ignored",
+        "lane_limit in the kit install's gate-budget.toml (7 when unset)",
+        "`room: <n> of <limit> lanes open`",
+        "`refused (room): ",
     )
     for flag in ("--help", "-h"):
         out = s.run([kit("octo-feather-lane"), "start", flag], cwd=checkout, env=DIRECTOR).out
