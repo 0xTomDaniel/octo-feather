@@ -589,7 +589,8 @@ full runs before the latest make the trend; 5 shown with no file); optional test
 per-test CPU budget the gate's runner reads, tests/gate/conftest.py; not read here); optional heavy_items,
 heavy_slots, eval_slots, slot_grace_seconds, slot_bound_seconds (the box's run slots: octo-feather-slot --help;
 not read here); optional fast_workers and fast_runs (the fast tier's worker count and how many fast-tier
-runs run at once on the box: tests/gate/heavy_slot.py; not read here).
+runs run at once on the box: tests/gate/heavy_slot.py; not read here); optional parity_pass_period_days,
+parity_pass_wall_seconds and parity_pass_cpu_seconds (the post-merge parity pass: post-merge step 5; not read here).
 Anything else is `unread: gate-budget.toml (<repo>)`.
 
 Every time prints as its UTC instant and `(<age> ago)` at the report's instant. A source it cannot
@@ -647,7 +648,8 @@ proves the director's relay, not the owner's word. Exit 0 recorded; 1 refused or
                                    director told (below)
   octo-feather-lane post-merge --map-job [--unit-run]
   octo-feather-lane post-merge --map-end
-                                   step 5's map job, run in its unit, and its stop hook (step 5, below)
+                                   step 5's map job, run in its unit, and its stop hook (step 5, below); its
+                                   parity pass's unit runs scripts/post_merge.py (step 5, below)
 
 `post-merge` is the routine after a lane merges (owner ruling 2026-10-29 on issue 206; docs/adr/0008 Duties): `merge`
 (above) runs it; `archive` (above) runs it for step 8 in its teardown unit; the director reruns it after a stop. The
@@ -745,7 +747,47 @@ before its end) and `director told: <each>`; exit 0, 1 with no or an unreadable 
                    lane's director once (`coverage map build for <m> (lane <lane>, PR #<n>) failed: <why>;
                    ...`, as the routine's stops are told); a unit ended while building has that recorded
                    by its stop hook, its scratch worktree removed and the queued merge dropped. Always ok:
-                   it never stops the routine
+                   it never stops the routine.
+                   Then the parity pass (#1363; quality #acceptance-parity-pass-due, #acceptance-parity-pass-capped,
+                   #acceptance-parity-pass-told, #acceptance-parity-network-free), its line after the map's, `; `
+                   between: where the merge commit holds no tests/parity/lever.py, `parity pass: skipped: <checkout>
+                   has no parity lever (tests/parity/lever.py) at <m>` (a repo without parity cases); its period and
+                   caps are the merge commit's gate-budget.toml parity_pass_period_days, parity_pass_wall_seconds and
+                   parity_pass_cpu_seconds (one missing or not a number > 0: `skipped: gate-budget.toml at <m> sets
+                   no <key> ...`). Due when the record holds no pass begun or the last one began more than the period
+                   before (the first merge past it starts one; no timer, no loop); inside it `not due: the last began
+                   <time>, <d> days ago (period <p> days)`; while one runs `already running: unit <unit> began <time>
+                   at <m>`; else `started: unit <unit> (<how>, wall cap <w>s, CPU cap <c>s, limit <l>s, its lines in
+                   <pass dir>/pass.log) runs the <n> cases at <m>, oldest proof first, <k> owed (not run since the
+                   last pass began) first; the routine goes on without it`, or `not started: ...; the next merge
+                   starts it`. The pass dir, <git common dir>/octo-feather/parity-pass/, holds its record, pass.json
+                   (its form: scripts/post_merge.py, step 5's parity pass), under pass.lock, and each case's last
+                   lever output, logs/<case>.log. The pass is one transient unit per clone of its own,
+                   octo-feather-parity-pass-<clone id>, never the map job's, so a pass of hours holds up no map build
+                   (the map job's start, with RuntimeMaxSec the wall cap + 300 and ExecStopPost
+                   `scripts/post_merge.py --pass-end <lanes dir>`; without a manager its own session,
+                   `scripts/post_merge.py --pass-job <lanes dir> --unit-run <limit>`), cwd the checkout, running
+                   `scripts/post_merge.py --pass-job <lanes dir>`: at the lowest processor and disk priority (nice
+                   19, ionice idle), in a scratch worktree at the merge commit (removed at its end), every case's
+                   `tests/parity/lever.py CASE`, one at a time, oldest proof first (a case never run first, then by
+                   its last run's time, so the cases a capped pass did not reach run first in the next), each only
+                   once a fast-run turn is free (as the map job), with no Herdr agent identity (HERDR_PANE_ID,
+                   OCTO_FEATHER_ROLE, OCTO_FEATHER_PARENT unset), so no run of it asks the heavy slot
+                   (octo-feather-slot --help). Every lever run reaches no host by the lever's own isolation (lever.py
+                   --help, No network). Each case's result goes in the record as it ends (pass exit 0, fails exit 1
+                   or another, refused exit 2; its lever line, its last; the merge, when, its log and the lever's log
+                   dir). The wall cap counts from the pass's start, waiting included: a lever run still going at it
+                   is stopped (SIGINT to its group, SIGKILL 30 s later) and its case stays owed; the CPU cap (the
+                   pass's children's CPU) is checked before each case. At either cap the pass stops, every case not
+                   run owed (last: result capped, why, ran, owed, wall, CPU). When the pass ends with dead cases
+                   (fails or refused) the director gets one message for the pass, as the routine's stops are told
+                   (once, the merge's lane): `parity pass at <m> (lane <lane>, PR #<n>, began <time>): <k> dead
+                   cases, ... | <case>: <result> (exit <rc>): <lever line> (log <log>); suspect merges since its last
+                   pass at <m>: <sha> <subject>, ...|none | ... | owed to the next pass: <cases>|none`, the suspects
+                   the first-parent commits since the case's last pass whose diff touches a file its patches change,
+                   its old test or its needs; none dead, nothing sent. A unit ended while the pass ran has that
+                   recorded (failed) by its stop hook, its worktree removed, and the dead cases found so far told.
+                   Always ok: it never stops the routine
   step 6 stale agents  `stale`'s report (below), its lines joined by `; `; always ok: it never stops the routine,
                    and a Herdr it cannot read is named in its line (`stale agents: not read: ...`)
   step 7 tell supervisors  each open lane record but --lane's, of the PR's repo (every lane when the PR is the kit

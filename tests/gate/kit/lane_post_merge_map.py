@@ -38,10 +38,14 @@ import os
 import re
 import sys
 import time
+from typing import TYPE_CHECKING
 
 import tomllib
 from herdr_messaging import ASSETS, agent, herdr_world, lines
 from testkit import HERE, ROOT, Ran, Scratch, kit, main
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 H = "1234567890abcdef1234567890abcdef12345678"  # each PR's pinned head
 DIRECTOR = "w9:p99"
@@ -65,9 +69,11 @@ d.mkdir(parents=True, exist_ok=True)
 (d / (head + ".json")).write_text(json.dumps({"head": head, "items": {}, "not_passed": []}))
 print("fast-map: 0 test items re-mapped at " + head[:12])
 """
+NO_LEVER = "; parity pass: skipped: {top} has no parity lever (tests/parity/lever.py) at {m}"
 STEP5 = (
     "step 5 coverage map: ok: coverage map: started: unit {unit} (systemd-run --user, limit 3600s,"
     " its lines in {maps}/build.log) builds the map for {m}; the routine goes on without it"
+    + NO_LEVER
 )
 UNIT = "octo-feather-fast-map-"  # the job unit's name, its clone id after it (--help, step 5)
 GREEN = (
@@ -200,13 +206,13 @@ class World:
 
 
 class Turns:
-    """Every fast-run turn of the box (fast_runs, the kit's gate-budget.toml) held, as live fast
-    runs hold them (tests/gate/heavy_slot.py), until release."""
+    """Every fast-run turn of the box (fast_runs, the kit's gate-budget.toml) in the state dir
+    STATE held, as live fast runs hold them (tests/gate/heavy_slot.py), until release."""
 
-    def __init__(self, w: World) -> None:
+    def __init__(self, state: Path) -> None:
         budget = tomllib.loads((ROOT / "gate-budget.toml").read_text())
         n = int(budget["fast_runs"])
-        slots = w.state / "octo-feather" / "slots"
+        slots = state / "octo-feather" / "slots"
         self.held = [(slots / f"fast-{i}.lock").open("a") for i in range(n)]
         for f in self.held:
             fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
@@ -222,6 +228,7 @@ def started(w: World, r: Ran, m: str) -> None:
     line = w.step5(r)
     pattern = re.escape(STEP5).replace(re.escape("{unit}"), f"({re.escape(UNIT)}\\S+)")
     pattern = pattern.replace(re.escape("{maps}"), re.escape(str(w.maps)))
+    pattern = pattern.replace(re.escape("{top}"), re.escape(str(w.t)))
     got = re.fullmatch(pattern.replace(re.escape("{m}"), m[:12]), line)
     assert got, f"want the job started for {m[:12]}: {r.out}"
     w.unit = w.unit or got[1]
@@ -231,17 +238,19 @@ def started(w: World, r: Ran, m: str) -> None:
 def after_merge(s: Scratch) -> None:
     w = World(s)
     m1, m2, m3 = w.m
-    turns = Turns(w)
+    turns = Turns(w.state)
     try:
         started(w, w.post_merge(7), m1)
         assert not (w.maps / f"{m1}.json").exists(), "the routine waited for the map"
         r = w.post_merge(8)
         want = f"step 5 coverage map: ok: coverage map: queued: {m2[:12]}, after unit {w.unit}'s"
-        assert w.step5(r) == f"{want} build of {m1[:12]}", r.out
+        lever = NO_LEVER.format(top=w.t, m=m2[:12])
+        assert w.step5(r) == f"{want} build of {m1[:12]}{lever}", r.out
         r = w.post_merge(9)
         want = f"step 5 coverage map: ok: coverage map: queued: {m3[:12]}, after unit {w.unit}'s"
         gone = f", replacing queued {m2[:12]}, never mapped"
-        assert w.step5(r) == f"{want} build of {m1[:12]}{gone}", r.out
+        lever = NO_LEVER.format(top=w.t, m=m3[:12])
+        assert w.step5(r) == f"{want} build of {m1[:12]}{gone}{lever}", r.out
         w.waiting()  # the job says it waits for a turn: every turn is still held
         assert w.calls() == [], f"a build ran while every fast-run turn was held: {w.calls()}"
     finally:

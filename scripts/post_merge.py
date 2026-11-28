@@ -28,6 +28,10 @@ Interface:
         Whether a systemd user manager answers; RUN started in one finite transient unit, its stop
         hook HOOK, or FALLBACK in its own session where no manager answers, "" when started; the
         fallback's bounded run of RUN and its end as systemd names it.
+    pass_job(lanes, show) -> code, pass_end(lanes, result, status, show) -> code
+        Step 5's parity pass, run in its own unit, and that unit's stop hook (octo-feather-lane
+        --help, step 5); this file run as a script is the unit's command (_main: --pass-job,
+        --pass-end), so the pass needs no subcommand of octo-feather-lane.
     run(lane, pm, steps, show, records) -> Record
         STEPS the routine's (name, function) pairs in order; each function takes PM (its pr, head,
         merge and base) and returns its outcome (ok, stopped or pending) and its line. Under the
@@ -926,6 +930,7 @@ MAP_LIMIT = 3600  # s: the map job's runtime limit (systemd RuntimeMaxSec; the f
 MAP_FULL_AGE = 86400  # s: a last full map older than this makes the next build a full one
 MAP_POLL = 1  # s between tries of the fast-run turns while the job waits for one free
 MAP_RECORD = "build.json"
+MAP_FIELDS = ("running", "queued", "last", "full")
 
 
 def map_dir(at: Path) -> Path:
@@ -942,11 +947,14 @@ def _map_unit(maps: Path) -> str:
 
 
 @contextlib.contextmanager
-def _build_locked(maps: Path) -> Generator[dict[str, Any]]:
-    """The clone's build record, read under its lock and written whole when the block ends."""
+def _build_locked(
+    maps: Path, name: str = MAP_RECORD, fields: tuple[str, ...] = MAP_FIELDS
+) -> Generator[dict[str, Any]]:
+    """The clone's build record (or the parity pass's: NAME in its dir, its FIELDS), read under
+    its lock (NAME's stem .lock beside it) and written whole when the block ends."""
     maps.mkdir(parents=True, exist_ok=True)
-    path = maps / MAP_RECORD
-    with (maps / "build.lock").open("a") as f:
+    path = maps / name
+    with (maps / f"{Path(name).stem}.lock").open("a") as f:
         fcntl.flock(f, fcntl.LOCK_EX)
         try:
             raw: object = json.loads(path.read_text(encoding="utf-8")) if path.exists() else {}
@@ -956,9 +964,9 @@ def _build_locked(maps: Path) -> Generator[dict[str, Any]]:
         if not isinstance(raw, dict):
             msg = f"build record {path} is no JSON object: remove it, then rerun"
             raise Refused(msg)
-        b = {k: cast("dict[str, Any]", raw).get(k) for k in ("running", "queued", "last", "full")}
+        b = {k: cast("dict[str, Any]", raw).get(k) for k in fields}
         yield b
-        fd, tmp = tempfile.mkstemp(dir=maps, prefix=".build.", suffix=".tmp")
+        fd, tmp = tempfile.mkstemp(dir=maps, prefix=f".{Path(name).stem}.", suffix=".tmp")
         with os.fdopen(fd, "w", encoding="utf-8") as out:
             json.dump(b, out, indent=1)
             out.write("\n")
@@ -1223,6 +1231,354 @@ def map_end(lanes: Path, result: str, status: str, show: Callable[[str], None]) 
     if q:
         why += f"; queued {str(q.get('merge'))[:12]} not built (the next merge's routine builds)"
     return _map_told(lanes, r, why, show)
+
+
+# Step 5's parity pass (issue 1363; quality #acceptance-parity-pass-due,
+# #acceptance-parity-pass-capped, #acceptance-parity-pass-told, #acceptance-parity-network-free):
+# --help, step 5. Where the merge commit holds a parity lever (LEVER), every parity case's lever
+# run, by one job per clone in a transient unit of its own (transient), never waited for: its own
+# limit, past the map job's hour, and its own record, so a pass of hours holds up no map build. Its
+# record, pass.json in the pass dir (pass_dir) under pass.lock beside it: began (when the last pass
+# began, null before the first), running (the unit's pass: merge, lane, pr, unit, how, began, wall
+# and cpu its caps, tree, dead: each dead case's part of the director's message), last (the last
+# pass's end: merge, lane, pr, began, ended, result done|capped|failed, why, ran, owed: the cases it
+# did not reach, wall, cpu) and cases (each case's last run: result pass|fails|refused, exit, line,
+# merge, at, log, logs: the lever's own log dir), each null until known.
+PARITY_KEYS = ("parity_pass_period_days", "parity_pass_wall_seconds", "parity_pass_cpu_seconds")
+PARITY_GRACE = 300  # s past the wall cap: the unit's limit, the pass's end (record, message) in it
+PARITY_STOP = 30  # s a lever run stopped at the wall cap has after SIGINT, then SIGKILL
+PARITY_RECORD = "pass.json"
+PARITY_FIELDS = ("began", "running", "last", "cases")
+LEVER = "tests/parity/lever.py"  # the repo's parity lever, run as `tests/parity/lever.py CASE`
+DEAD = {1: "fails", 2: "refused"}  # a lever exit as its case's result (another non-zero: fails)
+
+
+def pass_dir(at: Path) -> Path:
+    """The parity pass's dir of the clone AT is in: <git common dir>/octo-feather/parity-pass."""
+    return map_dir(at).parent / "parity-pass"
+
+
+def _pass_unit(d: Path) -> str:
+    """The clone's one parity pass unit: octo-feather-parity-pass-<clone id>, as _map_unit's."""
+    clone = hashlib.sha256(os.path.realpath(d.parent.parent).encode()).hexdigest()[:12]
+    return f"octo-feather-parity-pass-{clone}"
+
+
+def _pass_budget(at: Path, m: str) -> tuple[float, float, float] | str:
+    """The pass's period, wall cap and CPU cap, in seconds, from gate-budget.toml at merge M (the
+    repo's own, as the cases are), else why not."""
+    code, text = _git(at, "show", f"{m}:gate-budget.toml", ok=(0, 128), what="clone")
+    if code:
+        return f"no gate-budget.toml at {m[:12]}"
+    try:
+        d = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as e:
+        return f"gate-budget.toml at {m[:12]} unreadable ({e})"
+    got = [d.get(k) for k in PARITY_KEYS]
+    bad = [
+        k
+        for k, v in zip(PARITY_KEYS, got, strict=True)
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or v <= 0
+    ]
+    if bad:
+        return f"gate-budget.toml at {m[:12]} sets no {', '.join(bad)} (a number > 0)"
+    period, wall, cpu = (float(cast("float", v)) for v in got)
+    return period * 86400, wall, cpu
+
+
+def _cases(at: Path, m: str) -> list[str]:
+    """The parity cases at merge M: each dir tests/parity/CASE holding a case.toml."""
+    out = _git(at, "ls-tree", "-r", "--name-only", m, "--", "tests/parity", what="clone")[1]
+    want = re.compile(r"tests/parity/([^/]+)/case\.toml")
+    return sorted(g[1] for p in out.splitlines() if (g := want.fullmatch(p)))
+
+
+def _oldest_first(cases: list[str], seen: dict[str, Any]) -> list[str]:
+    """CASES, oldest proof first: a case never run first, then by its last run's time, so the cases
+    a capped pass did not reach come first in the next."""
+
+    def at(c: str) -> str:
+        e = seen.get(c)
+        return str(cast("dict[str, Any]", e).get("at") or "") if isinstance(e, dict) else ""
+
+    return sorted(cases, key=lambda c: (at(c), c))
+
+
+def _owed(cases: list[str], seen: dict[str, Any], began: str) -> list[str]:
+    """The CASES not run in the pass that began at BEGAN, oldest proof first."""
+
+    def at(c: str) -> str:
+        e = seen.get(c)
+        return str(cast("dict[str, Any]", e).get("at") or "") if isinstance(e, dict) else ""
+
+    return [c for c in _oldest_first(cases, seen) if at(c) < began]
+
+
+def _pass(pm: PostMerge) -> str:  # noqa: PLR0911 (one line per outcome)
+    """Step 5's parity pass (--help, step 5): started, already running, not due or skipped; its
+    line. Never a stop."""
+    m = pm.merge
+    try:
+        at = top()
+        if _git(at, "cat-file", "-e", f"{m}:{LEVER}", ok=(0, 128), what="clone")[0]:
+            return f"parity pass: skipped: {at} has no parity lever ({LEVER}) at {m[:12]}"
+        budget = _pass_budget(at, m)
+        if isinstance(budget, str):
+            return f"parity pass: skipped: {budget}"
+        period, wall, cpu = budget
+        d = pass_dir(at)
+        unit, log, limit, cases = (
+            _pass_unit(d),
+            d / "pass.log",
+            int(wall) + PARITY_GRACE,
+            _cases(at, m),
+        )
+        with _build_locked(d, PARITY_RECORD, PARITY_FIELDS) as b:
+            r, began = b["running"], b["began"]
+            if r and _since(r.get("began")) < float(r.get("wall") or 0) + PARITY_GRACE + 60:
+                r12 = str(r.get("merge"))[:12]
+                return f"parity pass: already running: unit {unit} began {r.get('began')} at {r12}"
+            if began and _since(began) < period:
+                return (
+                    f"parity pass: not due: the last began {began}, "
+                    f"{_since(began) / 86400:.1f} days ago (period {period / 86400:g} days)"
+                )
+            owed = _owed(cases, b["cases"] or {}, str(began or "")) if began else []
+            managed = manager()
+            how = "systemd-run --user" if managed else "start_new_session"
+            b["running"] = {"merge": m, "lane": pm.lane, "pr": pm.pr, "unit": unit, "how": how}
+            b["running"] |= {"began": now(), "wall": wall, "cpu": cpu, "tree": "", "dead": []}
+            me, lanes = str(Path(__file__).resolve()), str(pm.lanes)
+            job, end = [me, "--pass-job", lanes], [me, "--pass-end", lanes]
+            why = transient(
+                unit,
+                job,
+                hook=end,
+                fallback=[*job, "--unit-run", str(limit)],
+                cwd=at,
+                limit=limit,
+                log=log,
+                managed=managed,
+            )
+            if why:
+                b["running"] = None
+            else:
+                b["began"] = b["running"]["began"]
+    except Refused as e:
+        return f"parity pass: not started: {e}; the next merge starts it"
+    if why:
+        return f"parity pass: not started: unit {unit} ({why}); the next merge starts it"
+    return (
+        f"parity pass: started: unit {unit} ({how}, wall cap {wall:g}s, CPU cap {cpu:g}s, limit "
+        f"{limit}s, its lines in {log}) runs the {len(cases)} cases at {m[:12]}, oldest proof "
+        f"first, {len(owed)} owed (not run since the last pass began) first; the routine goes on "
+        "without it"
+    )
+
+
+def _maps(pm: PostMerge) -> str:
+    """Step 5 (--help, step 5): the coverage map's build, then the parity pass; its line, both."""
+    return f"{_map(pm)}; {_pass(pm)}"
+
+
+def _capped(t0: float, c0: float, wall: float, cpu: float) -> str:
+    """Which cap the pass that began at monotonic T0, its children's CPU then C0, has reached."""
+    if (spent := _children_cpu() - c0) >= cpu:
+        return f"the CPU cap, {cpu:g} s, reached ({spent:.1f} s)"
+    if (took := time.monotonic() - t0) >= wall:
+        return f"the wall cap, {wall:g} s, reached ({took:.0f} s)"
+    return ""
+
+
+def _lever(tree: Path, case: str, log: Path, left: float) -> tuple[int, str] | None:
+    """CASE's lever run in TREE, its lines to LOG, with no agent identity (so no run of it asks a
+    slot: octo-feather-slot --help), its group stopped past LEFT seconds (SIGINT, PARITY_STOP s,
+    SIGKILL): its exit and output, None when stopped."""
+    env = {k: v for k, v in os.environ.items() if k not in {*AGENT_VARS, "HERDR_PANE_ID"}}
+    env["PYTHONUNBUFFERED"] = "1"  # its lines in the order it wrote them, the refusal last
+    with log.open("w") as f:
+        try:
+            p = subprocess.Popen(
+                [str(tree / LEVER), case],
+                cwd=tree,
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=f,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        except OSError as e:
+            f.write(f"{LEVER} {case} not run: {e}\n")
+            return 126, f"{LEVER} {case} not run: {e}"
+        try:
+            rc = p.wait(max(left, 0.1))
+        except subprocess.TimeoutExpired:
+            for sig, grace in ((signal.SIGINT, PARITY_STOP), (signal.SIGKILL, None)):
+                with contextlib.suppress(ProcessLookupError):
+                    os.killpg(p.pid, sig)
+                with contextlib.suppress(subprocess.TimeoutExpired):
+                    p.wait(grace)
+                    break
+            return None
+    return rc, log.read_text(encoding="utf-8", errors="replace")
+
+
+def _suspects(at: Path, tree: Path, case: str, since: str, m: str) -> str:
+    """CASE's suspect merges: the first-parent commits after SINCE (its last pass's merge) up to M
+    whose diff touches a file its patches change, its old test or its needs."""
+    if not since:
+        return "suspect merges: none known (its first pass)"
+    cdir, paths = tree / "tests" / "parity" / case, set[str]()
+    for p in sorted(cdir.glob("*.patch")):
+        text = p.read_text(encoding="utf-8", errors="replace")
+        paths |= set(re.findall(r"^diff --git a/(\S+) b/", text, re.MULTILINE))
+    try:
+        c = tomllib.loads((cdir / "case.toml").read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        c = {}
+    if isinstance(old := c.get("old"), str):
+        paths.add(old.split("::", 1)[0])
+    if isinstance(needs := c.get("needs"), list):
+        paths |= {n for n in cast("list[object]", needs) if isinstance(n, str)}
+    head = f"suspect merges since its last pass at {since[:12]}"
+    if not paths:
+        return f"{head}: none (it names no file)"
+    code, out = _git(
+        at,
+        *("log", "--first-parent", "--format=%h %s", f"{since}..{m}", "--", *sorted(paths)),
+        ok=(0, 128),
+        what="clone",
+    )
+    if code:
+        return f"{head}: unread (git log exit {code})"
+    return f"{head}: {', '.join(out.splitlines()) or 'none'}"
+
+
+def _pass_told(lanes: Path, r: dict[str, Any], owed: list[str], show: Callable[[str], None]) -> int:
+    """The pass R's dead cases told its lane's director in one message (tell_director), once per
+    pass; nothing when none died."""
+    dead = [str(x) for x in cast("list[object]", r.get("dead") or [])]
+    if not dead:
+        return 0
+    m, began = str(r.get("merge")), str(r.get("began"))
+    msg = " | ".join(
+        [
+            (
+                f"parity pass at {m[:12]} (lane {r.get('lane')}, PR #{r.get('pr')}, "
+                f"began {began}): {len(dead)} dead case{'s' * (len(dead) != 1)}, each no longer "
+                "proving its new test"
+            ),
+            *dead,
+            f"owed to the next pass: {' '.join(owed) or 'none'}",
+        ]
+    )
+    return tell_director(lanes, str(r.get("lane")), f"parity pass {began}", msg, show)
+
+
+def pass_job(lanes: Path, show: Callable[[str], None]) -> int:  # noqa: PLR0915 (one pass, case by case)
+    """The clone's parity pass (--help, step 5), in its unit, cwd the clone's checkout: in a scratch
+    worktree at the running pass's merge, each case's lever run, oldest proof first, one at a
+    time, each once a fast-run turn is free, until every case ran or a cap is reached; each case's
+    result recorded as it ends; then the dead ones told (_pass_told). 0, or 1 when not told."""
+    _lowest()
+    at = top()
+    d = pass_dir(at)
+    with _build_locked(d, PARITY_RECORD, PARITY_FIELDS) as b:
+        r, seen = b["running"], dict(b["cases"] or {})
+    if not r:
+        return 0
+    m, wall, cpu, began = str(r["merge"]), float(r["wall"]), float(r["cpu"]), str(r["began"])
+    tree, logs = d / f"tree-{m[:12]}", d / "logs"
+    t0, c0 = time.monotonic(), _children_cpu()
+    order: list[str] = []
+    why = stop = ""
+    try:
+        _git(at, "worktree", "add", "--detach", "--force", str(tree), m, what="clone")
+        with _build_locked(d, PARITY_RECORD, PARITY_FIELDS) as b:
+            b["running"] = r = {**r, "tree": str(tree)}
+        order = _oldest_first(_cases(at, m), seen)
+        logs.mkdir(parents=True, exist_ok=True)
+        show(f"parity pass at {m[:12]}: {len(order)} cases, oldest proof first: {' '.join(order)}")
+        for case in order:
+            waited = False
+            while not (stop := _capped(t0, c0, wall, cpu)) and (held := _turn_free()):
+                if not waited:
+                    show(f"parity pass: waiting for a free fast-run turn (held: {held})")
+                    waited = True
+                time.sleep(MAP_POLL)
+            if stop:
+                break
+            show(f"parity pass: {case}: {LEVER} {case}")
+            got = _lever(tree, case, logs / f"{case}.log", wall - (time.monotonic() - t0))
+            if got is None:
+                stop = f"the wall cap, {wall:g} s, reached while {case} ran: stopped"
+                break
+            rc, out = got
+            said = [x for x in out.splitlines() if x.strip()]
+            line = said[-1][:500] if said else f"exit {rc}, no output"
+            kept = re.findall(r"logs: (\S+)$", out, re.MULTILINE)
+            result = "pass" if rc == 0 else DEAD.get(rc, "fails")
+            e = {"result": result, "exit": rc, "line": line, "merge": m, "at": now()}
+            e |= {"log": str(logs / f"{case}.log"), "logs": kept[-1] if kept else None}
+            dead = ""
+            if rc:
+                was = seen.get(case)
+                since = str(cast("dict[str, Any]", was).get("merge") or "") if was else ""
+                dead = f"{case}: {result} (exit {rc}): {line} (log {e['log']}); "
+                dead += _suspects(at, tree, case, since, m)
+            with _build_locked(d, PARITY_RECORD, PARITY_FIELDS) as b:
+                b["cases"] = {**(b["cases"] or {}), case: e}
+                if dead and b["running"]:
+                    b["running"] = r = {**b["running"], "dead": [*b["running"]["dead"], dead]}
+            show(f"parity pass: {case}: {result} (exit {rc}): {line}")
+    except (Refused, OSError) as e:
+        why = str(e)
+    finally:
+        _git(at, "worktree", "remove", "--force", str(tree), ok=(0, 128), what="clone")
+        _git(at, "worktree", "prune", ok=(0, 128), what="clone")
+    took, spent = time.monotonic() - t0, _children_cpu() - c0
+    with _build_locked(d, PARITY_RECORD, PARITY_FIELDS) as b:
+        owed = _owed(order, b["cases"] or {}, began)
+        r = b["running"] or r
+        result = "failed" if why else "capped" if stop else "done"
+        b["last"] = {"merge": m, "lane": r.get("lane"), "pr": r.get("pr"), "began": began}
+        b["last"] |= {"ended": now(), "result": result, "why": why or stop}
+        b["last"] |= {"ran": len(order) - len(owed), "owed": owed}
+        b["last"] |= {"wall": round(took, 1), "cpu": round(spent, 1)}
+        b["running"] = None
+    show(
+        f"parity pass at {m[:12]}: {result}"
+        + (f" ({why or stop})" if why or stop else "")
+        + f": {len(order) - len(owed)} cases run, {len(r.get('dead') or [])} dead, "
+        f"{len(owed)} owed: {' '.join(owed) or 'none'} ({took:.0f} s wall, {spent:.1f} s CPU)"
+    )
+    return _pass_told(lanes, r, owed, show)
+
+
+def pass_end(lanes: Path, result: str, status: str, show: Callable[[str], None]) -> int:
+    """The pass unit's stop hook (--help, step 5): a unit that ended with its pass still running
+    (killed, timed out, crashed) has that pass recorded failed, the cases it did not reach owed,
+    its scratch worktree removed, and the dead cases it found told (_pass_told); else nothing."""
+    at = top()
+    d = pass_dir(at)
+    unit, owed = _pass_unit(d), list[str]()
+    with _build_locked(d, PARITY_RECORD, PARITY_FIELDS) as b:
+        r = b["running"]
+        if r:
+            m, began = str(r.get("merge")), str(r.get("began"))
+            with contextlib.suppress(Refused):
+                owed = _owed(_cases(at, m), b["cases"] or {}, began)
+            b["last"] = {"merge": m, "lane": r.get("lane"), "pr": r.get("pr"), "began": began}
+            b["last"] |= {"ended": now(), "result": "failed", "owed": owed}
+            b["last"] |= {"why": f"unit {unit} ended {result} ({status}) while the pass ran"}
+            b["running"] = None
+    show(f"parity pass unit {unit} ended: {result} ({status})")
+    if not r:
+        return 0
+    if tree := r.get("tree"):
+        _git(at, "worktree", "remove", "--force", str(tree), ok=(0, 128), what="clone")
+        _git(at, "worktree", "prune", ok=(0, 128), what="clone")
+    return _pass_told(lanes, r, owed, show)
 
 
 # The live-run rule (issue 1136; issue-lifecycle #gates-main-moved; --help, steps 3 and 8).
@@ -2069,13 +2425,13 @@ def _teardown(pm: PostMerge) -> str:  # noqa: C901, PLR0912, PLR0915 (the step's
 
 
 # The routine's steps in order (#396 merged and main CI, #397 kit refresh, #1078 checkout, #1250
-# coverage map, #1079 stale agents, #398 tell supervisors, #399 teardown).
+# coverage map and #1363 parity pass, #1079 stale agents, #398 tell supervisors, #399 teardown).
 _STEPS: tuple[tuple[str, Callable[[PostMerge], str]], ...] = (
     ("merged", _merged),
     ("main CI", _ci),
     ("kit refresh", _kit),
     ("checkout", _checkout),
-    ("coverage map", _map),
+    ("coverage map", _maps),
     ("stale agents", _stale),
     ("tell supervisors", _tell),
     ("teardown", _teardown),
@@ -2445,3 +2801,40 @@ def _resend(pane: object, path: Path, msg: str) -> str:
         f"(`pane` in {path}, which the director writes at its launch; else the director's agent "
         "in herdr agent list)"
     )
+
+
+def _main(argv: list[str]) -> int:
+    """The parity pass unit's command (--help, step 5), this file run as a script: `--pass-job
+    LANES` the pass, `--pass-job LANES --unit-run LIMIT` the fallback unit's bounded run of it
+    then its end, `--pass-end LANES` its stop hook (SERVICE_RESULT, EXIT_CODE, EXIT_STATUS)."""
+
+    def show(line: str) -> None:
+        sys.stdout.write(line + "\n")
+        sys.stdout.flush()
+
+    try:
+        match argv:
+            case ["--pass-job", lanes]:
+                return pass_job(Path(lanes), show)
+            case ["--pass-job", lanes, "--unit-run", limit] if limit.isdigit():
+                me = str(Path(__file__).resolve())
+                result, status = bounded([me, "--pass-job", lanes], int(limit))
+                return pass_end(Path(lanes), result, status, show)
+            case ["--pass-end", lanes]:
+                e = os.environ
+                status = f"{e.get('EXIT_CODE', '')} {e.get('EXIT_STATUS', '')}".strip()
+                return pass_end(Path(lanes), e.get("SERVICE_RESULT", ""), status, show)
+            case _:
+                pass
+    except Refused as e:
+        sys.stderr.write(f"post_merge.py: {e}\n")
+        return 1
+    sys.stderr.write(
+        "usage: post_merge.py --pass-job LANES [--unit-run LIMIT] | --pass-end LANES "
+        "(the parity pass unit's: octo-feather-lane --help, post-merge step 5)\n"
+    )
+    return 2
+
+
+if __name__ == "__main__":
+    sys.exit(_main(sys.argv[1:]))
