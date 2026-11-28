@@ -371,6 +371,15 @@ def split(root: Path, baselines: bool, meta_path: Path = HERE / "rewrites.json")
         src_lines = src.splitlines()
         r = reads[n] if fn.origin == "octo-feather-lane" else global_reads(src, node, True)  # type: ignore[arg-type]
         fn_locals = local_names(node)
+        # design section 4.2: a moved function reading the hub's own identity outside the tables is refused, before
+        # any file is written (a moved __file__, __doc__ or sys.argv names the new module or process, not the hub)
+        if "__doc__" in r and n not in T.DOC_READERS:
+            refuse(f"{n} reads __doc__ and is not in the table (tables.py DOC_READERS)")
+        if any(isinstance(x, ast.Attribute) and x.attr == "argv" and isinstance(x.value, ast.Name)
+               and x.value.id == "sys" for x in ast.walk(node)):
+            refuse(f"{n} reads sys.argv and is not in the table")
+        if "__file__" in r and n not in T.LAUNCH and n not in T.DIR_READERS:
+            refuse(f"{n} reads __file__ and is not in the table (tables.py LAUNCH, DIR_READERS)")
         changes: list[tuple[int, int, int, str, str]] = []
         local_imports: dict[str, list[str]] = {}
         typed_local: list[str] = []

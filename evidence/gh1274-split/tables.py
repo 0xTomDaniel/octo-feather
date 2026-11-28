@@ -43,6 +43,10 @@ LAUNCH = ("pm_unit_start", "pm_unit_run", "cmd_post_merge")
 LAUNCH_FROM = "Path(__file__).resolve()"
 LAUNCH_TO = 'Path(__file__).resolve().parent / "octo-feather-lane"'
 
+# Reads __file__ for its directory only (Path(__file__).resolve().with_name/.parent): every new module sits beside
+# the hub in scripts/, so the value is the same; moved unchanged.
+DIR_READERS = ("lanes_dir",)
+
 # Section 3, the hub's own docstring: these read __doc__; the help is lane_cli.help_doc() (section 2).
 DOC_READERS = ("cmd_start",)
 
