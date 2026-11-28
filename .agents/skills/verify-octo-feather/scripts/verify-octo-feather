@@ -3183,8 +3183,73 @@ def drive_merge_tiers(f: Feature) -> None:
         x.startswith(f"relay carried: the director's relay of PR #36 at {fix[:12]} carries to {m2[:12]}: ")
         and f"clean merge of main {m2[:12]}: lane hunks identical" in x for x in c.out.splitlines()))
 
+    digest_cases(f, sc, rec, base, store, git, lane_cmd)
     f.env, f.pre = {}, []
     say(f"merge-tiers evidence: {f.d}")
+
+
+def digest_cases(f: Feature, sc: Path, rec: Path, base: dict[str, str], store: Path,  # noqa: PLR0913, PLR0917
+                 git: Callable[..., str], lane_cmd: Callable[..., None]) -> None:
+    """The merge digest (issue 1339) on the realcase's recorded day 2026-11-28 (tests/gate/kit/lane_digest.py's
+    world): lane gh49 merges PR #51 (tier 1), lane gh50 PR #52 (tier 2, one clarifies call), each through `merge` from
+    its supervisor's pane, then `digest 2026-11-28`; the testkit's gh answers only the three recordings, in run order.
+    origin.git's main is set where GitHub's stood before each merge (the fake gh's merge moves no git)."""
+    w = sc / "world-digest"
+    st = w / "state" / "octo-feather"
+    (st / "lanes").mkdir(parents=True)
+    panes = {"gh49": ("zt1:p1", 51), "gh50": ("zt2:p1", 52)}
+    for lane, (pane, pr) in panes.items():
+        (st / "lanes" / f"{lane}.toml").write_text(
+            f'supervisor = "{pane}"\nrepository = "{REALCASE}"\nissue = "{lane}"\n'
+            f'goal = "g"\nstarted_at = "2026-11-24T21:37:22Z"\nwaiting_on = ""\npr = {pr}\n')
+    (st / "director.toml").write_text('pane = "zd1:p1"\n')
+    (w / "herdr").mkdir()
+    agents = {p: {"name": n, "pane_id": p, "workspace_id": p.split(":")[0], "tab_id": p.split(":")[0] + ":t1",
+                  "agent_status": "idle", "ready_at": 0}
+              for n, p in (("director", "zd1:p1"), *((n, x[0]) for n, x in panes.items()))}
+    (w / "herdr" / "agents.json").write_text(json.dumps(agents))
+    ki, origin, repo = w / "kit", w / "origin.git", w / "repo"
+    for argv in (["git", "init", "-q", "-b", "main", str(ki)],
+                 ["git", "-C", str(ki), "remote", "add", "origin", "https://github.com/0xTomDaniel/octo-feather"],
+                 ["git", "clone", "-q", "--bare", str(rec / "realcase-gh1337.bundle"), str(origin)],
+                 ["git", "clone", "-q", str(origin), str(repo)]):
+        subprocess.run(argv, check=True, capture_output=True, env=case_env(base))
+    tapes = [r for t in ("lane-merge-digest-51", "lane-merge-digest-52", "lane-digest-1339")
+             for r in json.loads((rec / f"{t}.json").read_text())]
+    (store / "tape.json").write_text(json.dumps(tapes))
+    (store / "log").write_text("")
+
+    def merged(pr: int) -> str:   # the merge commit step 1's recorded read names
+        ask = f"pr view {pr} --json state,headRefOid,mergeCommit,baseRefName,headRefName -R {REALCASE}"
+        return str(json.loads(next(str(r["out"]) for r in tapes if r["request"] == ask))["mergeCommit"]["oid"])
+
+    m1, m2 = merged(51), merged(52)
+    git(repo, "checkout", "-q", "-B", "main", f"{m1}^1")
+    git(repo, "update-ref", "refs/remotes/origin/main", f"{m1}^1")
+    env = base | {"XDG_STATE_HOME": str(w / "state"), "OCTO_FEATHER_QC_DIR": str(w / "qc"),
+                  "OCTO_FEATHER_KIT_INSTALL": str(ki), "FAKE_HERDR": str(w / "herdr"), "HERDR_SESSION": ""}
+    for name, lane, pr, branch, at in (("digest-merge-tier1", "gh49", 51, "gh1337-tier1", m1),
+                                       ("digest-merge-tier2", "gh50", 52, "gh1337-tier2", m2)):
+        git(origin, "update-ref", "refs/heads/main", at)
+        head = git(repo, "rev-parse", f"origin/{branch}")
+        pane = panes[lane][0]
+        lane_cmd(name, repo, env | {"HERDR_WORKSPACE_ID": pane.split(":")[0]}, pane, "merge", str(pr), head[:12],
+                 "--repo", REALCASE)
+        f.check(name, lambda c, n=pr, h=head, ln=lane: c.code == 0 and c.o["gh-merges"].endswith(   # one log, both
+                f"pr merge {n} --merge --match-head-commit {h} -R {REALCASE}\n")
+                and f"merged: PR #{n} at head {h[:12]} (lane {ln})" in c.out.splitlines())
+    calls = len((store / "log").read_text().splitlines())
+    lane_cmd("digest", repo, env, "zd1:p1", "digest", "2026-11-28", "--repo", REALCASE)
+    f.obs("digest", "gh-calls", "".join(x + "\n" for x in (store / "log").read_text().splitlines()[calls:]))
+    call = json.loads(git(repo, "show", f"{m2}:docs/specs/gh1337-demo.calls.jsonl"))
+    full = [f"  spec call gh1337-demo clarifies at {call['at']} (lane gh50)", "  Tier: 2", "  Waits for: nobody",
+            *(f"    {k}: {call[k]}" for k in ("what", "why", "evidence", "role")), "    ruling: none"]
+    f.check("digest", lambda c: c.code == 0 and c.o["gh-calls"] == "".join(
+        str(r["request"]) + "\n" for r in tapes[-2:]) and any(
+        x.startswith("#51 ") and "(tier 1, merged 03:29Z) " in x for x in c.out.splitlines()) and any(
+        x.startswith("#52 ") and "(tier 2, merged 03:30Z) " in x for x in c.out.splitlines())
+        and all(x in c.out.splitlines() for x in full) and any(
+        x.startswith("#53 ") and "(tier not recorded: no merge record) " in x for x in c.out.splitlines()))
 
 
 def drive_pilot_pr(f: Feature) -> None:
