@@ -34,7 +34,16 @@ Setup (this process, outside the judge's namespaces):
      passes no --unshare-ipc. In it:
      1. a private /tmp (tmpfs) for this run's scratch, QC_KEEP paths (worktree, kit, PATH dirs) bound back;
         srt's own writable /tmp/claude and TMPDIR land there too, so they die with the run
-     2. the run tmpfs ($SCR/ov, under the private /tmp: srt masks /tmp from the judge): the worktree becomes an
+     2. the run tmpfs ($SCR/ov, under the private /tmp: srt masks /tmp from the judge): the kit under test becomes its
+        own read-only view, an overlay with no upper dir (lowerdir the kit and an empty dir there: overlayfs takes no
+        lone lowerdir), so its inodes are the run's own and a host process reading the live kit never reaches the open
+        record (R; a kit inside the worktree has the worktree's overlay, below, instead). Its cost per run, measured on
+        the factory box (kernel 6.12, the kit's 2,040 tracked files in 651 dirs, 20 runs): the mount 0.1 ms (median;
+        max 0.7), no disk (no copy, no upper dir; one empty dir), removed with the run as the run tmpfs is; the open
+        record's git ls-files 23 ms and its 651 watches 10 ms (median; max 19); a no-op judge's whole run unchanged
+        within its noise. Python's PYTHONPYCACHEPREFIX, an empty per-run dir for the judge only (step 8), costs each
+        module's first import in the run its compile: 0.35 s CPU and 2.2 MB on the private /tmp for octo-feather-qa's
+        imports, removed with the run. The worktree becomes an
         overlay whose upper and work dirs sit there (userxattr, #395: in a user namespace overlayfs cannot write
         trusted.overlay.* on a tmpfs upper, so removing a directory the lower holds failed with EIO; needs kernel
         >= 5.11 and tmpfs user xattrs >= 6.6, else exit 66); uv's cache (as `uv --color never cache dir` names it) the same
@@ -69,21 +78,27 @@ Setup (this process, outside the judge's namespaces):
      its entry is written. Senders: the herdr shim, the run shims, the git helper, the offline gh's refusals, and
      its own inotify watch on the tmpfs masks, reached through the inner's /proc/PID/root (gh config and ~/.ssh as
      credential, live lanes/ and sessions/ and Pi's sessions/ as lane_state, other repos as repo; file masks are not watchable exactly
-     and are not recorded). Only what arrives after the inner's go counts. The inner's first message gets the
-     proof, post and judge-stderr pipes (SCM_RIGHTS: srt passes only stdin, stdout and stderr); no later one does.
+     and are not recorded). Only what arrives after the inner's go counts. The same inotify fd keeps the open record
+     (schema.md, Open record): one IN_OPEN watch on each dir of the kit under test holding a git-tracked file (a kit
+     with no git, a --kit-ref export, every file it holds), through the same /proc root on the kit's own view (step 2),
+     so each git-tracked kit file and dir the run opens, reads, imports, runs or lists from the judge's start on is
+     recorded kit-relative; whole only when every watch was added and no event was lost (IN_Q_OVERFLOW), else why.
+     The inner's first message gets the proof, post and judge-stderr pipes (SCM_RIGHTS: srt passes only stdin, stdout and stderr); no later one does.
 Inner (`inner` mode, srt's command, the caller's uid, no capabilities; the judge runs as its child):
   7. starts the one fresh per-run Herdr server inside the PID namespace; pre-run proof: one ok/FAIL line per check on
      stderr and QC_FD_PROOF; any FAIL exits 66 (a mise tool not installed: 6b, judged from the worktree's and the
      kit's own mise config as scripts/octo-feather-mise-install --list names them; a repo masked at setup and gone
      since, no such path, counts hidden, named gone in its line); then go to the recorder
-  8. judge runs (stdout passes through, stderr to the QC_FD_ERR pipe)
+  8. judge runs (stdout passes through, stderr to the QC_FD_ERR pipe; PYTHONPYCACHEPREFIX an empty per-run dir, so
+     an existing __pycache__ hides no import from the open record), the recorder told first (the open record starts)
   9. post-run: wait up to 10 s for the spend ledger's detached writers, count agents, stop and delete the
      sandbox session, kill and count every other process in the PID namespace (srt's own bridges aside); one
      cleanup line on stderr and the record on QC_FD_POST; then the run's spend lines (the scratch ledger's
      spend.jsonl, {"spend": [...]}) and with QC_SHOTS=1 the files the run wrote to $QC_SCREENSHOTS ({"shots":
      [[name, base64]...]}); exiting makes the kernel kill anything left (bubblewrap's PID 1 ends the namespace)
 Then setup:
-  10. the recorder's line {attempts, recorded, gh_misses, gh_miss_log} (or {attempts_error}); the overlay upper dir
+  10. the recorder's line {attempts, recorded, gh_misses, gh_miss_log, opens} (or {attempts_error}), opens the open
+     record {whole: true, files, dirs} or {whole: false, why}; the overlay upper dir
      listed, {"upper": [[kind, path]...]} (new, changed or deleted; octo-feather-qc classifies them). The run tmpfs
      dies with the discard stage: nothing the judge wrote anywhere persists.
 Inputs (env, data only): QC_SESSION, QC_STATE caller's state dir, QC_WORKTREE, QC_KIT, QC_UID/QC_GID, QC_HERDR /
@@ -311,9 +326,22 @@ class Recorder:
     """The attempt record (R): one thread, outside the judge's namespaces; it alone writes $SCR/rec/attempts.jsonl."""
 
     def __init__(
-        self, rd: str, watch: list[tuple[str, str, list[str]]], session: str, fds: list[int]
+        self,
+        rd: str,
+        watch: list[tuple[str, str, list[str]]],
+        session: str,
+        fds: list[int],
+        kit: tuple[str, set[str], set[str]],
     ) -> None:
         self.S, self.watch, self.fds = session, watch, fds  # fds: handed once, to the inner's hello
+        # the open record: the kit under test, its tracked files and the dirs holding them ("" its top), kit-relative
+        self.kroot, self.kfiles, self.kdirs = kit
+        self.kwds: dict[int, str] = {}
+        self.kfail: list[str] = []
+        self.kf: set[str] = set()
+        self.kd: set[str] = set()
+        self.judging = False  # the open record counts from the judge's start (8) on
+        self.overflow = False
         self.out = os.fdopen(
             os.open(rd + "/attempts.jsonl", os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o444), "a"
         )
@@ -355,7 +383,36 @@ class Recorder:
                     n += 1
                 except OSError:
                     pass
+        for d in sorted(self.kdirs):  # the open record's watches, on the kit's own view (step 2)
+            p = f"/proc/{pid}/root{self.kroot}" + (f"/{d}" if d else "")
+            w = libc.inotify_add_watch(self.ino, p.encode(), 0x20) if self.ino >= 0 else -1
+            if w >= 0:
+                self.kwds[w] = d
+            else:
+                self.kfail.append(f"{d or '.'}/ ({os.strerror(ctypes.get_errno())})")
         return n
+
+    def open_record(self) -> dict[str, Any]:
+        """The open record (schema.md, Open record): whole, or why not, never a partial list read as whole."""
+        k = len(self.kdirs)
+        why = (
+            "inotify unavailable"
+            if self.ino < 0
+            else f"{len(self.kfail)} of {k} kit dir watches not added: {', '.join(self.kfail[:5])}"
+            if self.kfail
+            else "inotify queue overflowed (IN_Q_OVERFLOW): opens lost"
+            if self.overflow
+            else "the judge never started"
+            if not self.judging
+            else ""
+        )
+        if why:
+            return {"whole": False, "why": why}
+        return {
+            "whole": True,
+            "files": sorted(self.kf),
+            "dirs": sorted(f"{d}/" if d else "./" for d in self.kd),
+        }
 
     def emit(self, r: dict[str, Any], ok: bool | None = None) -> None:  # noqa: FBT001  # a call's own liveness
         if self.live if ok is None else ok:
@@ -418,11 +475,20 @@ class Recorder:
             self.hello = True
             pid = struct.unpack("3i", c.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))[0]
             n = self.watches(pid) if self.ino >= 0 else None
+            k = f"{len(self.kwds)} of {len(self.kdirs)} kit dirs (the open record)"
             socket.send_fds(
-                c, [(f"ready {n}" if n is not None else "ready no-inotify").encode()], self.fds
+                c,
+                [(f"ready {n} masks and {k}" if n is not None else "ready no-inotify").encode()],
+                self.fds,
             )
         elif t == "go" and not self.live and self.go is None:
             self.go = c
+        elif t == "judge" and self.live and not self.judging:
+            # the judge starts: the opens queued before it (the proof's own) dropped, the open record counts from here
+            self.opens()
+            self.judging = True
+            with contextlib.suppress(OSError):
+                c.send(b"open")
         elif t in ("herdr", "run") and "argv" not in st:
             st.update(t=t, program=m.get("program"), argv=m.get("argv"), live=self.live)
         elif t == "exit" and "argv" in st and "exit" not in st:
@@ -514,6 +580,20 @@ class Recorder:
                 w, mk, _, n = struct.unpack_from("iIII", b, i)
                 name = b[i + 16 : i + 16 + n].rstrip(b"\0").decode(errors="replace")
                 i += 16 + n
+                if mk & 0x4000:  # IN_Q_OVERFLOW: events lost, the open record not whole
+                    self.overflow = True
+                    continue
+                # the open record: a tracked file, or a tracked dir (IN_ISDIR), kit-relative
+                if w in self.kwds:
+                    if self.judging and mk & 0x20:
+                        d = self.kwds[w]
+                        rel = f"{d}/{name}" if d and name else (name or d)
+                        if mk & 0x40000000:
+                            if rel in self.kdirs:
+                                self.kd.add(rel)
+                        elif rel in self.kfiles:
+                            self.kf.add(rel)
+                    continue
                 if w not in self.wds or not mk & 0x20:
                     continue
                 kind, path, dfd, kept = self.wds[w]
@@ -573,6 +653,7 @@ class Recorder:
             "recorded": len(self.recs),
             "gh_misses": len(self.misses),
             "gh_miss_log": self.misses,
+            "opens": self.open_record(),
         }
 
 
@@ -769,6 +850,23 @@ def srt_log(p: subprocess.Popen[bytes], sock: str, early: list[str], rec: Record
             c.close()
 
 
+def tracked(kit: str) -> tuple[set[str], set[str]]:
+    """The open record's universe (R): the kit's git-tracked files and the dirs holding one ("" its top), kit-relative;
+    a kit with no git (a --kit-ref export: git archive writes only tracked files) every file it holds."""
+    r = run("git", "-C", kit, "ls-files", "-z") if os.path.lexists(kit + "/.git") else None
+    if r is not None and r.returncode == 0:
+        files = {f for f in r.stdout.split("\0") if f}
+    else:
+        files = {os.path.relpath(os.path.join(d, f), kit) for d, _, fs in os.walk(kit) for f in fs}
+    dirs = {""}
+    for f in files:
+        d = os.path.dirname(f)
+        while d and d not in dirs:
+            dirs.add(d)
+            d = os.path.dirname(d)
+    return files, {d for d in dirs if os.path.isdir(os.path.join(kit, d))}
+
+
 def setup(judge: list[str]) -> NoReturn:
     hand = "QC_SESSION" not in E  # by hand: every input defaulted
     S = E.get("QC_SESSION") or f"qc-hand-{secrets.token_hex(3)}"
@@ -814,6 +912,8 @@ def setup(judge: list[str]) -> NoReturn:
         wtp = os.path.realpath(WT, strict=True)
     except OSError as e:
         die(f"kit under test or worktree: {e}")
+    kfiles, kdirs = tracked(KUT)
+    kview = not within(KUT, wtp)  # a kit inside the worktree is seen through the worktree's overlay
     keep = [wtp, KUT]
     back = [wtp, KUT]
     for k in keep:
@@ -994,7 +1094,7 @@ def setup(judge: list[str]) -> NoReturn:
             die(f"uv cache dir {UC} holds , or : (overlay options)")
     os.makedirs(OV)
     mount("tmpfs", OV, "tmpfs", 0, "mode=700")
-    for d in ("u", "w", "uvu", "uvw", "pi"):
+    for d in ("u", "w", "uvu", "uvw", "pi", "k"):
         os.mkdir(f"{OV}/{d}")
     kreq = f"needs kernel >= 5.11 (overlay userxattr) and >= 6.6 (tmpfs user xattrs), this one {os.uname().release}"
     try:
@@ -1002,6 +1102,13 @@ def setup(judge: list[str]) -> NoReturn:
         os.removexattr(f"{OV}/u", "user.qc.probe")
     except OSError:
         die(f"run tmpfs takes no user.* xattrs: the worktree overlay {kreq}")
+    if kview:  # the kit's own read-only view (step 2), before the worktree overlay, which may lie inside it
+        if "," in KUT or ":" in KUT:
+            die(f"kit under test path {KUT} holds , or : (overlay options)")
+        try:
+            mount("overlay", KUT, "overlay", MS_RDONLY, f"lowerdir={KUT}:{OV}/k")
+        except OSError as e:
+            die(f"kit view: read-only overlay over {KUT} ({e})")
     try:
         mount(
             "overlay", WT, "overlay", 0, f"lowerdir={WT},upperdir={OV}/u,workdir={OV}/w,userxattr"
@@ -1042,6 +1149,8 @@ def setup(judge: list[str]) -> NoReturn:
     os.makedirs(f"{SCR}/bin")
     os.makedirs(f"{SCR}/rbin")
     os.makedirs(f"{SCR}/rec")
+    # the judge's PYTHONPYCACHEPREFIX (8), empty: on the private /tmp, dies with the run
+    os.makedirs(f"{SCR}/pyc")
     hist, hro = 0, cast("list[str]", [])
     try:
         if not nohist and os.path.isdir(f"{RS}/lanes/archive"):
@@ -1162,7 +1271,7 @@ def setup(judge: list[str]) -> NoReturn:
             allow_w += [f"{PI}/{n}" for n in pis]
     # srt's convenience write dirs: masks, never the real dirs
     deny += [f"{HOME}/.npm/_logs", f"{HOME}/.claude/debug"]
-    allow_w += [wtp] + ([UC] if UC else [])
+    allow_w += [wtp, f"{SCR}/pyc"] + ([UC] if UC else [])
     allow_r += [p for p in ro_binds if any(within(p, d) for d in deny)]
     hosts = [] if nopi else hosts_for_pi(PI)
     settings: dict[str, Any] = {
@@ -1286,6 +1395,8 @@ def setup(judge: list[str]) -> NoReturn:
         "qa": QA,
         "masked": masked,
         "repos": [[r, "/".join(nm)] for r, _, nm in rmask],
+        "kview": kview,
+        "pyc": f"{SCR}/pyc",
         "kept": [KUT, wtp, *sorted({b for _, bs, _ in rmask for b in bs}, key=back.index)],
         "robinds": ro_binds,
         "ghline": E.get("QC_GHSNAP_LINE", ""),
@@ -1312,7 +1423,7 @@ def setup(judge: list[str]) -> NoReturn:
     # init (the inner, the proof, the judge) is reaped, and that init would go to the box's init, its CPU counted by no
     # caller (quality #acceptance-qc-sandbox-cost: every process); here each orphan is reaped (orphans(), below).
     libc.prctl(36, 1, 0, 0, 0)  # PR_SET_CHILD_SUBREAPER
-    rec = Recorder(f"{SCR}/rec", watch, S, fds)
+    rec = Recorder(f"{SCR}/rec", watch, S, fds, (KUT, kfiles, kdirs))
     rec.th.start()
     os.makedirs(f"{SCR}/srt")
     # Node's own compile cache (module.enableCompileCache, NODE_COMPILE_CACHE) for srt's modules, setup-side under the
@@ -1363,6 +1474,12 @@ def setup(judge: list[str]) -> NoReturn:
         rc = 66
     post(fin)
     say(f"attempt record: {len(fin['attempts'])} entries; offline gh refusals {fin['gh_misses']}")
+    o = fin["opens"]
+    say(
+        f"open record: whole, {len(o['files'])} kit files and {len(o['dirs'])} kit dirs opened"
+        if o["whole"]
+        else f"open record: NOT whole ({o['why']})"
+    )
     post({"upper": upper(f"{OV}/u", f"/proc/self/fd/{wfd}")})
     left = orphans()
     if (
@@ -1674,7 +1791,7 @@ def inner(cfgp: str, judge: list[str]) -> NoReturn:
     if not ready.startswith("ready "):
         check(ok=False, m=f"attempt recorder did not start ({ready or 'no line'})")
     say(
-        f"ok   attempt record: kept setup-side, outside the judge's namespaces (the judge sees {SCR}/rec read-only); herdr shim, git credential helper, offline gh refusals, inotify on {ready[6:]} masks"
+        f"ok   attempt record: kept setup-side, outside the judge's namespaces (the judge sees {SCR}/rec read-only); herdr shim, git credential helper, offline gh refusals, inotify on {ready[6:]}"
     )
     if c["recs"]:
         say(
@@ -1761,6 +1878,20 @@ def inner(cfgp: str, judge: list[str]) -> NoReturn:
         f"worktree {wt} is an overlay, upper dir on the run tmpfs and hidden from the judge",
     )
     check(not pers, f"writable persistent paths: {' '.join(pers) or 'none'}")
+    kut = c["kept"][0]
+    if c["kview"]:
+        kv = last.get(kut)
+        check(
+            kv is not None
+            and kv[3] == "overlay"
+            and "ro" in kv[2].split(",")
+            and not touchable(f"{kut}/.qc-ro-{S}"),
+            f"kit under test {kut} is its own read-only view (an overlay with no upper dir): host reads of the live kit never reach the open record",
+        )
+    else:
+        say(
+            f"ok   kit under test {kut} inside the worktree: the worktree overlay is its own view for the open record"
+        )
     if uc:
         ucl = any(
             mp == uc and fs == "overlay" and f"upperdir={ucu}," in so + ","
@@ -2026,9 +2157,16 @@ def inner(cfgp: str, judge: list[str]) -> NoReturn:
         reap(base, HERDR, S)
         sys.exit(66)
 
-    # 8. the judge.
+    # 8. the judge, the recorder told first: the open record starts once it answers.
     try:
-        rc = subprocess.run(judge, stderr=OUT["err"]).returncode
+        sk.send(b'{"t": "judge"}')
+        sk.recv(16)
+    except OSError:
+        pass  # no answer: the open record reads not whole (the judge never started, for the recorder)
+    try:
+        rc = subprocess.run(
+            judge, stderr=OUT["err"], env={**os.environ, "PYTHONPYCACHEPREFIX": c["pyc"]}
+        ).returncode
     except OSError:
         rc = 127
     rc = 128 - rc if rc < 0 else rc
