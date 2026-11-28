@@ -64,7 +64,9 @@ def test_lane_start_filed_stopped(case: Case) -> None:
 
 
 @pytest.mark.criterion(
-    "issue-lifecycle#acceptance-lane-start-sub-issue", source="tests/gate/kit/lane_start.py"
+    "issue-lifecycle#acceptance-lane-start-sub-issue",
+    "issue-lifecycle#acceptance-lane-start-unread",
+    source="tests/gate/kit/lane_start.py",
 )
 def test_lane_start_sub_issue(case: Case) -> None:
     case(sub_issue)
@@ -87,7 +89,9 @@ def test_lane_start_rerun(case: Case) -> None:
 
 
 @pytest.mark.criterion(
-    "issue-lifecycle#acceptance-lane-start-rerun", source="tests/gate/kit/lane_start.py"
+    "issue-lifecycle#acceptance-lane-start-rerun",
+    "issue-lifecycle#acceptance-lane-start-unread",
+    source="tests/gate/kit/lane_start.py",
 )
 def test_lane_start_unknown_send(case: Case) -> None:
     case(unknown_send)
