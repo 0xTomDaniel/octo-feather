@@ -88,7 +88,12 @@ so. The brake's cases ride the scenarios above, adding no gh store entry:
            reading this week, then the lane starts; nothing stored.
   files    the route replaying the real recorded 401: `usage: not read (... answered 401)`, then
            filed=906 and the lane; nothing stored.
-  Each of the three: the dummy key in no output and no state or Herdr file.
+  rerun    its first run with baseUrl `not-a-url` (no request can be built): `usage: not read
+           (... unknown url type ...)`, the supervisor started (code review on c973ad51).
+  filed_stopped  its first run with the route replaying the recorded 401 cut short (provider.py
+           --truncated: the error body's read fails): `usage: not read (... IncompleteRead ...)`,
+           the supervisor started, nothing stored.
+  Each of these: the dummy key in no output and no state or Herdr file.
 
 Seams (ticket #1348, recorded before any test): issue-lifecycle#acceptance-lane-start-usage and
 #acceptance-lane-start-carried, `octo-feather-lane start`, the same stand-ins and scratch Pi config
@@ -231,12 +236,11 @@ def route(s: Scratch, base: str) -> None:
 
 
 @contextlib.contextmanager
-def replaying(s: Scratch, recorded: Path, log: Path | None = None) -> Generator[str]:
-    """The route at testkit/provider.py replaying RECORDED (route), each request in LOG when
-    named; its host while it serves."""
-    logs = ["--log", str(log)] if log else []
+def replaying(s: Scratch, recorded: Path, *flags: str) -> Generator[str]:
+    """The route at testkit/provider.py replaying RECORDED with FLAGS (its header; route); its host
+    while it serves."""
     p = subprocess.Popen(
-        [sys.executable, str(HERE / "provider.py"), "--replay", str(recorded), *logs],
+        [sys.executable, str(HERE / "provider.py"), "--replay", str(recorded), *flags],
         stdout=subprocess.PIPE,
         text=True,
     )
@@ -257,6 +261,14 @@ def closed(s: Scratch) -> str:
         host = f"127.0.0.1:{sock.getsockname()[1]}"
     route(s, f"http://{host}")
     return host
+
+
+def supervised(d: Path, key: str) -> str:
+    """The pane of the supervisor KEY the start started (testkit Herdr's agents), else fail."""
+    agents = json.loads((d / "agents.json").read_text())
+    panes = [p for p, g in agents.items() if g["name"] == key]
+    assert len(panes) == 1, agents
+    return panes[0]
 
 
 def readings(s: Scratch) -> Path:
@@ -487,9 +499,14 @@ def filed_stopped(s: Scratch) -> None:
     d, checkout, _ = world(s)
     cmd, _ = new_start(s)
     (d / "prompt-down").write_text("")
-    r = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1)
-    assert r.out.split("\n")[2:] == ["filed=906"], r.out
+    with replaying(s, RECORDED / "unauthorized", "--truncated") as host:
+        r = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1)
+    why = f"GET {host}/v1/models: IncompleteRead(27 bytes read, 100 more expected)"
+    assert r.out.split("\n") == [ROOM.format(n=0), NOT_READ.format(why=why), "filed=906"], r.out
     assert "step goal (made so far: " in r.err, r.err
+    show(f"the 401's body cut short: printed {r.out!r}, supervisor {supervised(d, 'gh906')}")
+    assert not readings(s).exists()
+    keyless(s, r.out, r.err)
     show(f"stopped after filing: exit 1, printed {r.out!r}, {r.err}")
     rerun = [kit("octo-feather-lane"), "start", "906", *cmd[cmd.index("--goal") :]]
     out = s.run(rerun, cwd=checkout, env=DIRECTOR).out
@@ -523,7 +540,7 @@ def full(s: Scratch, d: Path, checkout: Path, cmd: list[str]) -> None:
     docstring, refused)."""
     keys, budget = lanes(s, 7), s.root / "kit-install" / "gate-budget.toml"
     asked, calls, before = s.root / "provider.log", len(s.gh.log()), readings(s).read_text()
-    with replaying(s, RECORDED, asked):
+    with replaying(s, RECORDED, "--log", str(asked)):
         r = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1)
     want = (
         f"refused (room): 7 of 7 lanes open (lane_limit 7, {budget}): {', '.join(keys)}; nothing"
@@ -616,7 +633,13 @@ def rerun(s: Scratch) -> None:
     wt = checkout.with_name("target-gh905")
 
     (d / "prompt-down").write_text("")
-    err = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1).err
+    route(s, "not-a-url")
+    r = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1)
+    why = "GET not-a-url/v1/models: unknown url type: 'not-a-url/v1/models'"
+    assert r.out == f"{ROOM.format(n=0)}\n{NOT_READ.format(why=why)}", r.out
+    show(f"baseUrl not-a-url: printed {r.out!r}, supervisor {supervised(d, 'gh905')}")
+    keyless(s, r.out, r.err)
+    err = r.err
     assert "step goal (made so far: " in err, err
     assert " exit 75 (" in err, err
     assert "not delivered; rerun once the cause is fixed" in err, err

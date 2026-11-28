@@ -445,7 +445,8 @@ covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "tests/gate/kit/
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
 covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/lane_brake.py", "gate-budget.toml", "tests/gate/kit/testkit/provider.py", "tests/gate/kit/fixtures/lane-brake/v1-models.json", "tests/gate/kit/fixtures/lane-brake/v1-messages.json", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
 
-# Proven by tests/gate/kit/test_lane_start.py's unicode_title (a closed port) and files (the real recorded 401) items;
+# Proven by tests/gate/kit/test_lane_start.py's unicode_title (a closed port), files (the real recorded 401), rerun
+# (baseUrl not-a-url) and filed_stopped (the 401 cut short) items;
 # the demo is the lane-start drive's `files` case (brake-unread): the route at a closed port and no reading this week,
 # the start prints `usage: not read (...); no reading this week: the brake did not stop this start`, stores nothing,
 # files 907 and starts its supervisor.

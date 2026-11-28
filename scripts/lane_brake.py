@@ -214,16 +214,17 @@ def call(r: Route, method: str, path: str, body: bytes | None = None) -> Answer 
     headers = {"x-api-key": r.key, "anthropic-version": VERSION}
     if body is not None:
         headers["content-type"] = "application/json"
-    req = urllib.request.Request(r.base + path, data=body, headers=headers, method=method)  # noqa: S310 (Pi's own route)
-    try:
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:  # noqa: S310
-            got = _answer(resp.status, resp.headers.items(), resp.read())
-    except urllib.error.HTTPError as e:
-        got = _answer(e.code, e.headers.items(), e.read())
+    try:  # the request built, sent and every body read inside: none raises past here
+        req = urllib.request.Request(r.base + path, data=body, headers=headers, method=method)  # noqa: S310 (Pi's own route)
+        try:
+            with urllib.request.urlopen(req, timeout=TIMEOUT) as resp:  # noqa: S310
+                return _answer(resp.status, resp.headers.items(), resp.read())
+        except urllib.error.HTTPError as e:
+            with e:
+                return _answer(e.code, e.headers.items(), e.read())
     except (urllib.error.URLError, http.client.HTTPException, OSError, ValueError) as e:
         why = getattr(e, "reason", None) or e
         return NotRead(f"{method} {r.host}{path}: {why}")
-    return got
 
 
 def _answer(status: int, headers: list[tuple[str, str]], body: bytes) -> Answer:
@@ -519,9 +520,13 @@ def usage(env: Mapping[str, str], budget: Path) -> Verdict:
     past = stored(path)
     now, override = clock(env)
     r = route(env)
-    got = r if isinstance(r, NotRead) else read(r)[0]
+    try:
+        got = r if isinstance(r, NotRead) else read(r)[0]
+    except Exception as e:  # noqa: BLE001 (a failed reading never stops a start: #lanes-start)
+        got = NotRead(f"the read failed: {type(e).__name__}: {e}")
     if isinstance(got, NotRead):
-        why = got.why if isinstance(r, NotRead) else got.why.replace(r.key, "[key]")
+        key = "" if isinstance(r, NotRead) else r.key
+        why = got.why.replace(key, "[key]") if len(key) >= 8 else got.why  # noqa: PLR2004 (no real key is shorter)
         why = " ".join(why.split())[:300]  # one line, whatever the route said
         v = unread(why, past, now, reserve(budget), budget)
         return replace(v, line=f"clock overridden: {override}; {v.line}") if override else v
