@@ -32,13 +32,15 @@ import hashlib
 import json
 import re
 from dataclasses import dataclass, replace
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, TypedDict, cast
 
 import post_merge
 import tomllib  # stdlib since 3.11; ruff, at the 3.10 floor, sorts it as third-party
 from correction_lanes import DIRECTOR_LOG
 from handoff_log import encode, read_log
-from tracker_calls import gh
+from kit_env import kit_python
+from merge_ask import VALIDATE
+from tracker_calls import KIT, gh
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -63,9 +65,11 @@ HH:MMZ): owner approved, merged on the director's relay <at> <url>`. A PR with n
 (merged before the merge recorded one, outside `merge`, or its record replaced by a later merge
 of the lane) prints `#<n> <title> (tier not recorded: <why>) <url>, merge <sha>`: never a tier,
 and the merge ask check is never rerun for it. It reads only those two gh answers per day and the
-records. After the text, a blank line and `sha256 <its first 12 hex>`, the sha256 of the text
-above it (UTF-8). Exit 0; 1 refused (bad arguments, gh failing, a record or director-log line
-unreadable), naming the fix.
+records, each gh answer validated against its schema (schemas/gh-repo-default-branch.schema.json,
+schemas/gh-pr-merged.schema.json) before it is read. After the text, a blank line and `sha256
+<its first 12 hex>`, the sha256 of the text above it (UTF-8). Exit 0; 1 refused (bad arguments,
+gh failing or answering outside its schema, a record or director-log line unreadable), naming the
+fix or the field rejected.
 
 With no DAY (issue 1340) it prints every due day's digest, oldest first, one blank line apart,
 then the one sha256 line; none due, `No merge digest due (...)` and no sha256. A due day is a
@@ -102,6 +106,32 @@ FIELDS = "number,title,url,mergedAt,mergeCommit,headRefOid"
 LIMIT = 1000  # merged PRs in the three-day search window, gh paginating
 ONE = dt.timedelta(days=1)
 SHA12 = re.compile(r"[0-9a-f]{12,64}")
+# gh's two answers, validated once at the edge (quality spec #acceptance-edge-validated) by the
+# kit's locked jsonschema, as merge_ask.py validates its gh pr list (VALIDATE): every field typed,
+# no other key; then trusted as the TypedDicts below.
+BRANCH = KIT / "schemas" / "gh-repo-default-branch.schema.json"
+MERGED = KIT / "schemas" / "gh-pr-merged.schema.json"
+
+
+class _Commit(TypedDict):
+    oid: str
+
+
+class _GhMerged(TypedDict):
+    number: int
+    title: str
+    url: str
+    mergedAt: str  # gh's field
+    mergeCommit: _Commit  # gh's field
+    headRefOid: str  # gh's field
+
+
+class _Ref(TypedDict):
+    name: str
+
+
+class _GhRepo(TypedDict):
+    defaultBranchRef: _Ref  # gh's field
 
 
 @dataclass(frozen=True)
@@ -308,21 +338,33 @@ def _merged(day: dt.date, repo: str | None, err: type[Exception]) -> list[Merged
     """The PRs merged into the default branch on DAY, by GitHub's mergedAt, in merge order."""
     fix = "check gh auth status and the repository, then rerun; no digest printed"
     view = ["repo", "view", *([repo] if repo else []), "--json", "defaultBranchRef"]
-    base = str(json.loads(gh(view, fix, err=err))["defaultBranchRef"]["name"])
+    got = cast("_GhRepo", _valid(gh(view, fix, err=err), BRANCH, "gh repo view", err))
+    base = got["defaultBranchRef"]["name"]
     search = f"merged:{day - ONE}..{day + ONE}"
     ask = ["pr", "list", "--state", "merged", "--base", base, "--search", search]
     ask += ["--limit", str(LIMIT), "--json", FIELDS, *(["-R", repo] if repo else [])]
     start = dt.datetime(day.year, day.month, day.day, tzinfo=dt.timezone.utc)
     out: list[Merged] = []
-    for x in cast("list[dict[str, object]]", json.loads(gh(ask, fix, err=err))):
-        at = dt.datetime.fromisoformat(str(x["mergedAt"]).replace("Z", "+00:00"))
-        if not start <= at < start + ONE:
-            continue
-        mc = x.get("mergeCommit")
-        merge = str(cast("dict[str, object]", mc).get("oid", "")) if isinstance(mc, dict) else ""
-        n, head = cast("int", x["number"]), str(x["headRefOid"]).lower()
-        out.append(Merged(n, str(x["title"]), str(x["url"]), at, merge.lower(), head))
+    for x in cast("list[_GhMerged]", _valid(gh(ask, fix, err=err), MERGED, "gh pr list", err)):
+        at = dt.datetime.fromisoformat(x["mergedAt"].replace("Z", "+00:00"))
+        if start <= at < start + ONE:
+            m = x["mergeCommit"]["oid"]
+            out.append(Merged(x["number"], x["title"], x["url"], at, m, x["headRefOid"]))
     return sorted(out, key=lambda m: (m.at, m.number))
+
+
+def _valid(out: str, schema: Path, what: str, err: type[Exception]) -> object:
+    """OUT, WHAT's JSON answer, once SCHEMA holds for it; ERR naming the field it rejects."""
+    try:
+        p = kit_python("-c", VALIDATE, str(schema), stdin=out, capture=True)
+    except OSError as e:
+        msg = f"cannot run uv for the kit's locked jsonschema ({e}); no digest printed"
+        raise err(msg) from e
+    if p.returncode:
+        said = "; ".join(p.stderr.strip().splitlines())[:300] or f"exit {p.returncode}"
+        msg = f"{what}'s answer fails schemas/{schema.name} ({said}): no digest printed"
+        raise err(msg)
+    return json.loads(out)
 
 
 def _shown(p: Merged, rec: post_merge.Record | None) -> list[str]:

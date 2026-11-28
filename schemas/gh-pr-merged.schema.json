@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gh-pr-merged.schema.json",
+  "title": "gh pr list --state merged --json number,title,url,mergedAt,mergeCommit,headRefOid: the merged pull requests octo-feather-lane digest reads (issue-lifecycle spec #gates-digest)",
+  "description": "Validated by scripts/merge_digest.py (_merged) before it trusts the answer; gh prints exactly the fields asked, so no other key is allowed.",
+  "type": "array",
+  "items": {
+    "type": "object",
+    "required": ["number", "title", "url", "mergedAt", "mergeCommit", "headRefOid"],
+    "properties": {
+      "number": {"description": "The pull request's number", "type": "integer", "minimum": 1},
+      "title": {"description": "Its title", "type": "string"},
+      "url": {"description": "Its web URL", "type": "string", "pattern": "^https://"},
+      "mergedAt": {"description": "When it merged, UTC, as GitHub gives it", "type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"},
+      "mergeCommit": {
+        "description": "Its merge commit",
+        "type": "object",
+        "required": ["oid"],
+        "properties": {"oid": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}},
+        "additionalProperties": false
+      },
+      "headRefOid": {"description": "Its head commit, full", "type": "string", "pattern": "^[0-9a-f]{40,64}$"}
+    },
+    "additionalProperties": false
+  }
+}
