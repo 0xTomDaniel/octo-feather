@@ -25,7 +25,8 @@
 # Exit: 0 integrated and green; 1 conflict; 2 the gate (either tier) red; 75 the gate refused before running
 #       anything, its lane holding no heavy slot (octo-feather-slot --help): not red, nothing ran; 3 adds review
 #       state or factory recipes, or a justfile just cannot read; 64 usage, or TICKET has no lane key;
-#       65 lane worktree not clean; 66 no single lane worktree for the lane key.
+#       65 lane worktree not clean; 66 no single lane worktree for the lane key; 78 no git commit identity in the
+#       lane worktree (config or env, never a guessed one), refused before merging, naming how the factory supplies it.
 # Does not push.
 set -euo pipefail
 
@@ -55,6 +56,20 @@ fi
 wt="${lanes[0]%%$'\t'*}"; branch="${lanes[0]#*$'\t'}"
 cd "$wt"
 [[ -z "$(git status --porcelain)" ]] || { echo "octo-feather-integrate: $wt has uncommitted changes" >&2; exit 65; }
+# A commit identity git would not guess (user.useConfigOnly, as octo-feather-gate record asks), checked before any
+# merge, so its absence is never read as a conflict (#888); the refusal names pi-role's one identity mechanism.
+python3 -c 'import importlib.machinery as m, importlib.util as u, subprocess, sys
+l = m.SourceFileLoader("pi_role", sys.argv[1]); p = u.module_from_spec(u.spec_from_loader("pi_role", l)); l.exec_module(p)
+for who in ("author", "committer"):
+    r = subprocess.run(["git", "-c", "user.useConfigOnly=true", "var", f"GIT_{who.upper()}_IDENT"], capture_output=True, text=True)
+    if r.returncode:
+        why, keys = (r.stderr.strip().splitlines() or ["git var failed"])[-1], list(p.IDENTITY_ENV)
+        env = ", ".join(keys[:-1]) + " and " + keys[-1]
+        print(f"identity: refused before integrating, lane {sys.argv[2]}: no git commit identity for the {who} ({why}). "
+              f"The factory supplies it per process: every role launch (pi-role) sets {env} "
+              f"from [{p.IDENTITY}] name and email in the box onboarding file {p.onboarding_file()}. Set it once per box: "
+              f"{p.set_hint()}; then integrate from a pane launched after it, or with those four set in this process.", file=sys.stderr)
+        sys.exit(78)' "$root/scripts/pi-role" "$branch" || exit
 start="$(git rev-parse HEAD)"
 # Recipe names (imported ones included; aliases are no recipes) from this worktree's own
 # justfile (just would search parent directories); none without one. Fails, saying why, if just cannot read it.
