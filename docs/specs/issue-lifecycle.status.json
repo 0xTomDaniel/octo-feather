@@ -664,18 +664,28 @@
       ]
     },
     "acceptance-lane-start-usage": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1359,
+      "record": "20261128T113355Z-dcf191b6",
+      "commit": "7a5fad8df32bd04b1fd0346052d84e014eee4358",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
     },
     "acceptance-lane-start-room": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1359,
+      "record": "20261128T113356Z-084336fd",
+      "commit": "7a5fad8df32bd04b1fd0346052d84e014eee4358",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
     },
     "acceptance-lane-start-clear": {
       "status": "built",
       "pr": 1359,
-      "record": "20261128T083135Z-def856e5",
-      "commit": "c973ad51152e3625622f5de44dd7d1f9c39ece1d",
+      "record": "20261128T113356Z-e3cb0c12",
+      "commit": "7a5fad8df32bd04b1fd0346052d84e014eee4358",
       "tests": [
         "tests/gate/kit/lane_start.py"
       ]
@@ -683,15 +693,20 @@
     "acceptance-lane-start-unread": {
       "status": "built",
       "pr": 1359,
-      "record": "20261128T083135Z-d3a94da9",
-      "commit": "c973ad51152e3625622f5de44dd7d1f9c39ece1d",
+      "record": "20261128T113356Z-6fd765d3",
+      "commit": "7a5fad8df32bd04b1fd0346052d84e014eee4358",
       "tests": [
         "tests/gate/kit/lane_start.py"
       ]
     },
     "acceptance-lane-start-carried": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1359,
+      "record": "20261128T113356Z-6e6414ad",
+      "commit": "7a5fad8df32bd04b1fd0346052d84e014eee4358",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
     }
   }
 }
