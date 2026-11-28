@@ -22,12 +22,17 @@ Case = Callable[..., None]
 
 
 @pytest.mark.criterion(
-    "issue-lifecycle#acceptance-lane-start", source="tests/gate/kit/lane_start.py"
+    "issue-lifecycle#acceptance-lane-start",
+    "issue-lifecycle#acceptance-lane-start-clear",
+    source="tests/gate/kit/lane_start.py",
 )
 def test_lane_start_started(case: Case) -> None:
     case(started)
 
 
+@pytest.mark.criterion(
+    "issue-lifecycle#acceptance-lane-start-unread", source="tests/gate/kit/lane_start.py"
+)
 def test_lane_start_unicode_title(case: Case) -> None:
     case(unicode_title)
 
@@ -37,7 +42,9 @@ def test_lane_start_refused(case: Case) -> None:
 
 
 @pytest.mark.criterion(
-    "issue-lifecycle#acceptance-lane-start-files", source="tests/gate/kit/lane_start.py"
+    "issue-lifecycle#acceptance-lane-start-files",
+    "issue-lifecycle#acceptance-lane-start-unread",
+    source="tests/gate/kit/lane_start.py",
 )
 def test_lane_start_files(case: Case) -> None:
     case(files)
