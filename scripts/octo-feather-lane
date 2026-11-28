@@ -869,8 +869,12 @@ is refused as any existing lane.
 
 The brake (spec issue-lifecycle #lanes-start, #boundary-lane-start-brake) runs once the kit, the director pane and
 the repository are read, before the ticket is read or filed, on every start but the rerun of a stopped one (its
-lanes/<key>.start.json there). It reads the Claude account's weekly use from the box's model route: Pi's config
-($PI_CODING_AGENT_DIR, else ~/.pi/agent), models.json providers.anthropic baseUrl and apiKey, the key resolved as Pi
+lanes/<key>.start.json there). First the room, before any read: the open lanes, each lane record not archived
+(lanes/*.toml in ${XDG_STATE_HOME:-~/.local/state}/octo-feather and in each of its sessions/*/lanes/), against
+lane_limit in the kit's gate-budget.toml (7 when unset); at or over it the start is refused, exit 1, naming the count,
+the limit, that file, each open lane's key (a session's named) and the fix: archive a lane or raise lane_limit. Else
+it prints `room: <n> of <limit> lanes open`, then reads the Claude account's weekly use from the box's model route:
+Pi's config ($PI_CODING_AGENT_DIR, else ~/.pi/agent), models.json providers.anthropic baseUrl and apiKey, the key resolved as Pi
 resolves it (a leading `!` runs the rest in the shell, its stdout trimmed; else a literal with $NAME and ${NAME} from
 the environment), never printed, logged or stored; then GET <baseUrl>/v1/models and one POST <baseUrl>/v1/messages,
 max_tokens 1, on the newest listed model whose id holds haiku (else the newest listed), 20 s each. The reading is that

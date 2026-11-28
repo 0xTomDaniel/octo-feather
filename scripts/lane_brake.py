@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """The lane start's brake (issue-lifecycle spec #lanes-start, #boundary-lane-start-brake): the
-Claude account's weekly use, read from the box's model route, stored, and projected to the reset.
-What it reads, stores and prints: `octo-feather-lane --help`, start. `brake` is the lane start's
-one call (scripts/start_lane.py); its result is a Verdict, each kind one line to print.
+box's room for one more lane, then the Claude account's weekly use, read from the box's model route,
+stored, and projected to the reset. What it reads, stores and prints: `octo-feather-lane --help`,
+start. `brake` is the lane start's one call (scripts/start_lane.py); its result is a Verdict, each
+kind its lines to print: Full a refusal, the others the start's to print before it goes on.
 
   lane_brake.py record DIR   one read from the box's route through `read` below, each answer
                              written to DIR as tests/gate/kit/fixtures/lane-brake/ holds it (each
@@ -27,7 +28,7 @@ import sys
 import urllib.error
 import urllib.parse
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
@@ -38,11 +39,12 @@ if TYPE_CHECKING:
 
 # The interface: brake and its Verdict (the lane start's one call); `record` its command. All else
 # is the brake's own, free to change behind it (#1347 and #1348 add results, not calls).
-__all__ = ["Read", "Unread", "Verdict", "brake", "main"]
+__all__ = ["Full", "Read", "Unread", "Verdict", "brake", "main"]
 
 KIT = Path(__file__).resolve().parent.parent
 BUDGET = KIT / "gate-budget.toml"  # the box's settings, read from the kit as octo-feather-slot does
 RESERVE = 0.1  # the spec's default share kept back (#lanes-start)
+LIMIT = 7  # the spec's default lane limit (#lanes-start)
 WEEK = dt.timedelta(days=7)
 FLOOR = dt.timedelta(hours=6)  # the week's average taken over no less than its first six hours
 LAST = (dt.timedelta(hours=1), dt.timedelta(hours=6))  # the last hours' burn: a reading this old
@@ -116,7 +118,15 @@ class Unread:
     line: str
 
 
-Verdict = Read | Unread
+@dataclass(frozen=True)
+class Full:
+    """The box holds its limit of open lanes: the start is refused, nothing read or made
+    (#lanes-start); LINE names the count, the limit, each open lane and the fix."""
+
+    line: str
+
+
+Verdict = Read | Unread | Full
 # The stored readings (stored): each time, and its windows by (name, reset) to the share used.
 Past = list[tuple[dt.datetime, dict[tuple[str, dt.datetime], float]]]
 
@@ -410,8 +420,41 @@ def unread(why: str, past: Past) -> Unread:
     )
 
 
+def lane_limit() -> int:
+    """lane_limit from the box's settings (BUDGET), LIMIT when it has none or no count there."""
+    try:
+        v = tomllib.loads(BUDGET.read_text(encoding="utf-8")).get("lane_limit", LIMIT)
+    except (OSError, ValueError):
+        return LIMIT
+    return v if isinstance(v, int) and not isinstance(v, bool) and v >= 0 else LIMIT
+
+
+def open_lanes(env: Mapping[str, str]) -> list[str]:
+    """The box's open lanes (which: `octo-feather-lane --help`, start), each its record's key, a
+    session's named; the top state dir is store_path's."""
+    top = store_path(env).parent
+    keys = [p.stem for p in sorted((top / "lanes").glob("*.toml"))]
+    for d in sorted(top.glob("sessions/*/lanes")):
+        keys += [f"{p.stem} (session {d.parent.name})" for p in sorted(d.glob("*.toml"))]
+    return keys
+
+
 def brake(env: Mapping[str, str]) -> Verdict:
-    """The lane start's brake on ENV's route: a reading stored and projected (Read), else why not
+    """The lane start's brake on ENV: Full when the box holds its lane limit, before any read;
+    else the usage (usage), the room line before its line."""
+    keys, limit = open_lanes(env), lane_limit()
+    if len(keys) >= limit:
+        return Full(
+            f"no room: {len(keys)} of {limit} lanes open (lane_limit {limit}, {BUDGET}):"
+            f" {', '.join(keys) or 'none'}; nothing made: archive a lane (octo-feather-lane"
+            f" archive NAME) or raise lane_limit in {BUDGET}, then rerun"
+        )
+    verdict = usage(env)
+    return replace(verdict, line=f"room: {len(keys)} of {limit} lanes open\n{verdict.line}")
+
+
+def usage(env: Mapping[str, str]) -> Read | Unread:
+    """The usage on ENV's route: a reading stored and projected (Read), else why not
     (Unread)."""
     path = store_path(env)
     past = stored(path)

@@ -4140,7 +4140,7 @@ def drive_lane_start(f: Feature) -> None:
     pane = next((x.removeprefix("pane=") for x in out.split() if x.startswith("pane=")), "")
     readings = w.sc / "home" / ".local" / "state" / "octo-feather" / "usage-readings.jsonl"
     f.obs("start", "readings", readings.read_text() if readings.exists() else "")
-    f.check("start", lambda c: c.code == 0 and c.out == f"{LANE_CLEAR.format(host=host)}\nkey=gh905 pane={pane} issue=905\n"
+    f.check("start", lambda c: c.code == 0 and c.out == f"room: 0 of 7 lanes open\n{LANE_CLEAR.format(host=host)}\nkey=gh905 pane={pane} issue=905\n"
             and pane.startswith("w") and c.o["readings"] == LANE_STORED and LANE_KEY not in c.out + c.err)
     f.run("supervisor", "herdr", "agent", "get", "gh905")
     calls = (w.world / "log").read_text().splitlines()
@@ -4176,6 +4176,7 @@ def drive_lane_start(f: Feature) -> None:
     lane_start_files(f, w.sc, store, checkout, clean)
     lane_start_sub_issue(f, w, store, checkout)
     lane_start_unknown(f, w, store, str(checkout), str(brief))
+    lane_start_room(f, w, store, str(checkout), str(brief))
     f.env, f.pre = {}, []
     say(f"lane-start evidence: {f.d}")
 
@@ -4211,7 +4212,7 @@ def lane_start_exists(f: Feature, w: CommsWorld, checkout: str, brief: str) -> N
     f.obs("exists", "unchanged", " ".join(k for k in was if was[k] == now[k]))
     made = [x for x in (world / "log").read_text().splitlines()[calls:] if x.startswith(("workspace create", "tab create", "agent start"))]
     f.obs("exists", "made", "\n".join(made))
-    f.check("exists", lambda c: c.code == 1 and c.out.startswith("usage: ") and c.out.count("\n") == 1 and (
+    f.check("exists", lambda c: c.code == 1 and c.out.startswith("room: 1 of 7 lanes open\nusage: ") and c.out.count("\n") == 2 and (
         f"lane gh905 exists: lane record {record}, worktree {wt}, branch gh905, Herdr workspace gh905 (") in c.err
         and c.o["unchanged"] == "record prompts head agents" and c.o["made"] == "")
 
@@ -4287,6 +4288,43 @@ def lane_start_unknown(f: Feature, w: CommsWorld, store: Path, checkout: str, br
             and c.o["goals"] == "1" and c.o["briefs"] == "1")
 
 
+def lane_start_room(f: Feature, w: CommsWorld, store: Path, checkout: str, brief: str) -> None:
+    """issue-lifecycle#acceptance-lane-start-room: lanes gh905, gh906, gh907 and gh909 open in the director's session
+    (verify), one record in the top state dir and two in session s2's make seven, the kit's lane_limit (gate-budget.toml,
+    7): a start of 910 is refused naming the count, the limit, the file, each open lane and the fix; the route the
+    replaying provider logging each request: none; no ticket read, nothing made."""
+    top = w.sc / "home" / ".local" / "state" / "octo-feather"
+    (top / "lanes").mkdir(exist_ok=True)
+    (top / "lanes" / "gh920.toml").write_text('supervisor = "w9:p1"\n')
+    (top / "sessions" / "s2" / "lanes").mkdir(parents=True)
+    for k in ("gh921", "gh922"):
+        (top / "sessions" / "s2" / "lanes" / f"{k}.toml").write_text('supervisor = "w9:p2"\n')
+    asked, budget = w.sc / "room-provider.log", Path(f.s.repo) / "gate-budget.toml"
+    calls, gh = (w.world / "log").read_text(), (store / "log").read_text()
+    replay = subprocess.Popen([sys.executable, str(Path(f.s.repo) / "tests" / "gate" / "kit" / "testkit" / "provider.py"),
+                               "--replay", str(Path(f.s.repo) / LANE_RECORDED), "--log", str(asked)], stdout=subprocess.PIPE, text=True)
+    try:
+        host = f"127.0.0.1:{replay.stdout.readline().strip() if replay.stdout else ''}"
+        lane_route(w.sc, host)
+        say(f"seven open lane records (verify's gh905 gh906 gh907 gh909, the top's gh920, s2's gh921 gh922); brake route {host}, logging requests")
+        f.run("room", "sh", "-c", LANE_START, "sh", checkout, "910", LANE_TITLE, "a scratch proof", brief)
+    finally:
+        replay.kill()
+        replay.wait()
+    wt = Path(checkout).with_name("target-gh910")
+    made = [str(p) for p in (wt, w.state / "lanes" / "gh910.toml") if p.exists()]
+    made += output(["git", "-C", checkout, "branch", "--list", "gh910"])[1].split()
+    made += ["a herdr call"] if (w.world / "log").read_text() != calls else []
+    made += [x for x in (store / "log").read_text()[len(gh):].splitlines() if not x.startswith("repo view")]
+    made += [f"provider asked: {asked.read_text()}"] if asked.exists() else []
+    f.obs("room", "made", "\n".join(made))
+    keys = ("gh920, gh921 (session s2), gh922 (session s2), gh905 (session verify), gh906 (session verify), gh907 (session verify),"
+            " gh909 (session verify)")
+    f.check("room", lambda c: c.code == 1 and c.out == "" and (
+        f"step read: no room: 7 of 7 lanes open (lane_limit 7, {budget}): {keys}; nothing made: archive a lane"
+        f" (octo-feather-lane archive NAME) or raise lane_limit in {budget}, then rerun") in c.err and c.o["made"] == "")
+
+
 LANE_NEW = "Scratch lane"
 LANE_BODY = "The scratch lane's parent.\nIt has two lines.\n"
 
@@ -4314,10 +4352,10 @@ def lane_start_files(f: Feature, sc: Path, store: Path, checkout: Path, clean: d
         lines = c.out.splitlines()
         v = json.loads(c.o["issue-view-907"] or "{}")
         why = f"GET {host}/v1/models: [Errno 111] Connection refused"
-        return (c.code == 0 and len(lines) == 3 and lines[1] == "filed=907"
-                and lines[0] == f"usage: not read ({why}); no reading this week: the brake did not stop this start"
+        return (c.code == 0 and len(lines) == 4 and lines[2] == "filed=907" and lines[0] == "room: 2 of 7 lanes open"
+                and lines[1] == f"usage: not read ({why}); no reading this week: the brake did not stop this start"
                 and not readings.exists() and LANE_KEY not in c.out + c.err
-                and re.fullmatch(r"key=gh907 pane=w\S+ issue=907", lines[2]) is not None
+                and re.fullmatch(r"key=gh907 pane=w\S+ issue=907", lines[3]) is not None
                 and c.o["gh-creates"] == f"issue create --title {LANE_NEW} --body-file {body}"
                 and (v.get("title"), v.get("body"), v.get("parent")) == (LANE_NEW, LANE_BODY, None)
                 and c.o["worktree"].strip() == "gh907")
@@ -4342,7 +4380,8 @@ def lane_start_sub_issue(f: Feature, w: CommsWorld, store: Path, checkout: Path)
     made += [x for x in new_calls if x.startswith(("workspace create", "tab create"))]
     made += ["prompt"] if (w.world / "prompts").read_text() != prompts else []
     f.obs("sub-issue", "made", "\n".join(made))
-    f.check("sub-issue", lambda c: c.code == 1 and c.out.startswith("usage: ") and c.out.count("\n") == 1 and "ticket 908 is a sub-issue of 905" in c.err
+    f.check("sub-issue", lambda c: c.code == 1 and c.out.startswith("room: 3 of 7 lanes open\nusage: ") and c.out.count("\n") == 2
+            and "ticket 908 is a sub-issue of 905" in c.err
             and c.o["made"] == "")
 
 

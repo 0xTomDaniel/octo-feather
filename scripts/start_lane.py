@@ -309,7 +309,8 @@ def current_kit(kit: Path, err: type[Exception]) -> None:
 
 def read(ask: Ask, lanes: Path, err: type[Exception]) -> Lane:
     """Step 1: the lane's facts, each validated, nothing made; first the brake (lane_brake), its
-    line printed, unless a stopped start of the ticket is kept in LANES (a rerun, no new lane)."""
+    lines printed or its refusal raised, unless a stopped start of the ticket is kept in LANES (a
+    rerun, no new lane)."""
     director = os.environ.get("HERDR_PANE_ID", "")
     if not director:
         msg = "step read: no HERDR_PANE_ID: run the lane start from the director's pane"
@@ -321,7 +322,11 @@ def read(ask: Ask, lanes: Path, err: type[Exception]) -> Lane:
         and (lanes / f"{tracker('lane-key', ask.ticket, err=err).strip()}.start.json").exists()
     )
     if not rerun:
-        sys.stdout.write(lane_brake.brake(os.environ).line + "\n")
+        verdict = lane_brake.brake(os.environ)
+        if isinstance(verdict, lane_brake.Full):
+            msg = f"step read: {verdict.line}"
+            raise err(msg)
+        sys.stdout.write(verdict.line + "\n")
         sys.stdout.flush()
     ticket = ask.ticket if isinstance(ask.ticket, str) else file_parent(ask.ticket, err)
     key = tracker("lane-key", ticket, err=err).strip()

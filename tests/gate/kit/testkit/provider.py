@@ -5,11 +5,12 @@ OpenAI-compatible chat completions server on 127.0.0.1, for a models.json provid
 "models": [{"id": "fake"}]} (a "cost" there prices its calls in Pi).
 
   provider.py [--log FILE] [--answer TEXT] [--code CODE]
-  provider.py --replay DIR
+  provider.py --replay DIR [--log FILE]
 
 With --replay, a recorded Anthropic route instead (scripts/lane_brake.py record DIR): each GET or
 POST answered with the DIR/*.json whose request is its method and path, its status, headers (its
-recorded Date, no other) and body as recorded; one recorded for no request: 404, empty.
+recorded Date, no other) and body as recorded; one recorded for no request: 404, empty. Each
+request is appended to FILE as one JSON line, {"request": "<METHOD> <path>"}.
 
 Prints its port and a newline on stdout once it listens (the caller's readiness: wait for that
 line), then serves until killed. Each request body is appended to FILE as one JSON line. Every
@@ -70,6 +71,13 @@ def recordings(d: str | None) -> dict[str, tuple[int, dict[str, str], bytes]]:
     return out
 
 
+def append(log: str | None, rec: object) -> None:
+    """REC appended to LOG as one JSON line, when a LOG is named."""
+    if log:
+        with open(log, "a") as f:  # noqa: PTH123
+            f.write(json.dumps(rec) + "\n")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--log")
@@ -86,6 +94,7 @@ def main() -> None:
 
         def recorded(self) -> None:
             self.rfile.read(int(self.headers.get("content-length", 0)))
+            append(log, {"request": f"{self.command} {self.path}"})
             status, headers, body = replay.get(f"{self.command} {self.path}", (404, {}, b""))
             self.send_response_only(status)  # no Date of its own: the recorded one
             for k, v in headers.items():
@@ -102,9 +111,7 @@ def main() -> None:
                 self.recorded()
                 return
             body = self.rfile.read(int(self.headers.get("content-length", 0)))
-            if log:
-                with open(log, "a") as f:  # noqa: PTH123
-                    f.write(json.dumps(json.loads(body)) + "\n")
+            append(log, json.loads(body))
             self.send_response(200)
             self.send_header("content-type", "text/event-stream")
             self.end_headers()
