@@ -302,7 +302,10 @@ A review verdict on a head before the judged head (or, building no criterion, be
 same proof carries it there, with each main merge that resolved a conflict or changed anything beyond git's
 automatic merge allowed when a clear `verdict --resolution` comment names it, and only its resolution's files moved
 in the lane diff; the section then needs `Reviewed: <proof>`, the line the check prints, naming the reviewed head,
-each merge, its files and its resolution verdict's URL. Without it the check names the merge. A lane that claims any criterion (a Built or Failed id, a qc commit,
+each merge, its files and its resolution verdict's URL. Without it the check names the merge. Integrate's merge W
+of a worker branch whose tip is the worker's merge of main M counts as M under the conditions of spec
+issue-lifecycle #lanes-one-head; the proof then adds `; wrapper W of M carries it (tree equal)`, and a refusal
+names the condition that failed and the commits. A lane that claims any criterion (a Built or Failed id, a qc commit,
 a status entry built with the PR) with no row is refused naming the criterion table.
 
   octo-feather-lane tickets PARENT check every sub-issue of ticket PARENT as a tracer bullet
