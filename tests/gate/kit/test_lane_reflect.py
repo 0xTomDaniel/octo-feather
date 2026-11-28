@@ -3,7 +3,7 @@ docstring), each run as that file's command through `case` (tests/gate/kit/conft
 
 from collections.abc import Callable
 
-from lane_reflect import alone, archive_findings, refusals
+from lane_reflect import alone, archive_findings, malformed, refusals
 
 Case = Callable[..., None]
 
@@ -18,3 +18,7 @@ def test_lane_reflect_archive_findings(case: Case) -> None:
 
 def test_lane_reflect_refusals(case: Case) -> None:
     case(refusals)
+
+
+def test_lane_reflect_malformed(case: Case) -> None:
+    case(malformed)
