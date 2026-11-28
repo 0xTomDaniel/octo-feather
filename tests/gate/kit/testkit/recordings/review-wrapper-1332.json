@@ -1,0 +1,584 @@
+{
+ "wrapper_clean": [
+  {
+   "request": "pr view 48 --json headRefOid,baseRefName,comments",
+   "out": "{\"baseRefName\":\"gh1332-wrapper-base\",\"comments\":[],\"headRefOid\":\"1b0a8895973011468c460eee0bc79a584b9864a6\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh pr view 48 --json headRefOid,baseRefName,comments",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api -X POST repos/{owner}/{repo}/issues/48/comments --input {\"body\": \"<!-- octo-feather-review-verdict -->\\n## Code review verdict\\n\\nHead: 1b0a8895973011468c460eee0bc79a584b9864a6\\nPR head: 1b0a8895973011468c460eee0bc79a584b9864a6\\nVerdict: clear\\nChecks: none\\n\\n### Rounds\\n\\n- Round 1: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6, full, verdict clear\\n  - Checks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\nRange: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6\\n\"} --jq .html_url",
+   "out": "https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api -X POST repos/{owner}/{repo}/issues/48/comments --input /tmp/rec-wrapper_clean-19r7czcw/tmp/tmp2a_10zq1.json --jq .html_url",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "pr view 48 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments",
+   "out": "{\"baseRefName\":\"gh1332-wrapper-base\",\"body\":\"Closes #1332\\n\\n## Merge ask\\n\\nHead: 831ba8a95977\\nChecks: none reported on 831ba8a95977\\nReview verdict: https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\\nBuilt: none\\nFailed: none\\n\",\"comments\":[{\"id\":\"IC_kwDOV6oJUc8AAAABrxrDnw\",\"author\":{\"login\":\"0xTomDaniel\"},\"authorAssociation\":\"OWNER\",\"body\":\"<!-- octo-feather-review-verdict -->\\n## Code review verdict\\n\\nHead: 1b0a8895973011468c460eee0bc79a584b9864a6\\nPR head: 1b0a8895973011468c460eee0bc79a584b9864a6\\nVerdict: clear\\nChecks: none\\n\\n### Rounds\\n\\n- Round 1: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6, full, verdict clear\\n  - Checks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\nRange: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6\\n\",\"createdAt\":\"2026-11-28T03:00:35Z\",\"includesCreatedEdit\":false,\"isMinimized\":false,\"minimizedReason\":\"\",\"reactionGroups\":[],\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\",\"viewerDidAuthor\":true}],\"headRefName\":\"gh1332-wrapper\",\"headRefOid\":\"831ba8a95977ec0d422d4240dca10512766528b1\",\"statusCheckRollup\":[]}\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh pr view 48 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/git/trees/831ba8a95977ec0d422d4240dca10512766528b1",
+   "out": "{\"sha\":\"831ba8a95977ec0d422d4240dca10512766528b1\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/831ba8a95977ec0d422d4240dca10512766528b1\",\"tree\":[{\"path\":\"app.py\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"f79db4024dd95fc42727716e46762e26c781bd50\",\"size\":53,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/f79db4024dd95fc42727716e46762e26c781bd50\"},{\"path\":\"c.txt\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"f2ad6c76f0115a6ba5b00456a849810e7ec0af20\",\"size\":2,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/f2ad6c76f0115a6ba5b00456a849810e7ec0af20\"},{\"path\":\"notes.txt\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"bfa655111293037a5564088d1a9bbca4cbcf446b\",\"size\":6,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/bfa655111293037a5564088d1a9bbca4cbcf446b\"}],\"truncated\":false}",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/git/trees/831ba8a95977ec0d422d4240dca10512766528b1",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/branches/gh1332-wrapper-base",
+   "out": "{\"name\":\"gh1332-wrapper-base\",\"commit\":{\"sha\":\"eabdd34055caf292f7325246ce9c90e1972e74c6\",\"node_id\":\"C_kwDOV6oJUdoAKGVhYmRkMzQwNTVjYWYyOTJmNzMyNTI0NmNlOWM5MGUxOTcyZTc0YzY\",\"commit\":{\"author\":{\"name\":\"t\",\"email\":\"t@example.com\",\"date\":\"2026-11-28T00:00:00Z\"},\"committer\":{\"name\":\"t\",\"email\":\"t@example.com\",\"date\":\"2026-11-28T00:00:00Z\"},\"message\":\"base\",\"tree\":{\"sha\":\"8a6f2d5b2a9412efa4835f01d2c1e43928fdfa5a\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/8a6f2d5b2a9412efa4835f01d2c1e43928fdfa5a\"},\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/commits/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"comment_count\":0,\"verification\":{\"verified\":false,\"reason\":\"unsigned\",\"signature\":null,\"payload\":null,\"verified_at\":null}},\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/commits/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"html_url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/commit/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"comments_url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/commits/eabdd34055caf292f7325246ce9c90e1972e74c6/comments\",\"author\":{\"login\":\"tasdfds\",\"id\":110080105,\"node_id\":\"U_kgDOBo-waQ\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/110080105?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/tasdfds\",\"html_url\":\"https://github.com/tasdfds\",\"followers_url\":\"https://api.github.com/users/tasdfds/followers\",\"following_url\":\"https://api.github.com/users/tasdfds/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/tasdfds/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/tasdfds/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/tasdfds/subscriptions\",\"organizations_url\":\"https://api.github.com/users/tasdfds/orgs\",\"repos_url\":\"https://api.github.com/users/tasdfds/repos\",\"events_url\":\"https://api.github.com/users/tasdfds/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/tasdfds/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"committer\":{\"login\":\"tasdfds\",\"id\":110080105,\"node_id\":\"U_kgDOBo-waQ\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/110080105?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/tasdfds\",\"html_url\":\"https://github.com/tasdfds\",\"followers_url\":\"https://api.github.com/users/tasdfds/followers\",\"following_url\":\"https://api.github.com/users/tasdfds/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/tasdfds/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/tasdfds/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/tasdfds/subscriptions\",\"organizations_url\":\"https://api.github.com/users/tasdfds/orgs\",\"repos_url\":\"https://api.github.com/users/tasdfds/repos\",\"events_url\":\"https://api.github.com/users/tasdfds/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/tasdfds/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"parents\":[]},\"_links\":{\"self\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/branches/gh1332-wrapper-base\",\"html\":\"https://github.com/0xTomDaniel/octo-feather-realcase/tree/gh1332-wrapper-base\"},\"protected\":false,\"protection\":{\"enabled\":false,\"required_status_checks\":{\"enforcement_level\":\"off\",\"contexts\":[],\"checks\":[]}},\"protection_url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/branches/gh1332-wrapper-base/protection\"}",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/branches/gh1332-wrapper-base",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/rules/branches/gh1332-wrapper-base",
+   "out": "[]",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/rules/branches/gh1332-wrapper-base",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "pr list --state open --base gh1332-wrapper-base --limit 200 --json number,headRefName,headRefOid",
+   "out": "[{\"headRefName\":\"gh1332-wrapper\",\"headRefOid\":\"831ba8a95977ec0d422d4240dca10512766528b1\",\"number\":48}]\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh pr list --state open --base gh1332-wrapper-base --limit 200 --json number,headRefName,headRefOid",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "pr view 48 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments",
+   "out": "{\"baseRefName\":\"gh1332-wrapper-base\",\"body\":\"Closes #1332\\n\\n## Merge ask\\n\\nHead: 831ba8a95977\\nChecks: none reported on 831ba8a95977\\nJudged: 1b0a88959730 to 831ba8a95977: no qc status commit; clean merge of main 13e11dd528d5: lane hunks identical (1 file, sha256 85b656209efa); wrapper 831ba8a95977 of 13e11dd528d5 carries it (tree equal)\\nReview verdict: https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\\nBuilt: none\\nFailed: none\\n\",\"comments\":[{\"id\":\"IC_kwDOV6oJUc8AAAABrxrDnw\",\"author\":{\"login\":\"0xTomDaniel\"},\"authorAssociation\":\"OWNER\",\"body\":\"<!-- octo-feather-review-verdict -->\\n## Code review verdict\\n\\nHead: 1b0a8895973011468c460eee0bc79a584b9864a6\\nPR head: 1b0a8895973011468c460eee0bc79a584b9864a6\\nVerdict: clear\\nChecks: none\\n\\n### Rounds\\n\\n- Round 1: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6, full, verdict clear\\n  - Checks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\nRange: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6\\n\",\"createdAt\":\"2026-11-28T03:00:35Z\",\"includesCreatedEdit\":false,\"isMinimized\":false,\"minimizedReason\":\"\",\"reactionGroups\":[],\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\",\"viewerDidAuthor\":true}],\"headRefName\":\"gh1332-wrapper\",\"headRefOid\":\"831ba8a95977ec0d422d4240dca10512766528b1\",\"statusCheckRollup\":[]}\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh pr view 48 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/git/trees/831ba8a95977ec0d422d4240dca10512766528b1",
+   "out": "{\"sha\":\"831ba8a95977ec0d422d4240dca10512766528b1\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/831ba8a95977ec0d422d4240dca10512766528b1\",\"tree\":[{\"path\":\"app.py\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"f79db4024dd95fc42727716e46762e26c781bd50\",\"size\":53,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/f79db4024dd95fc42727716e46762e26c781bd50\"},{\"path\":\"c.txt\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"f2ad6c76f0115a6ba5b00456a849810e7ec0af20\",\"size\":2,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/f2ad6c76f0115a6ba5b00456a849810e7ec0af20\"},{\"path\":\"notes.txt\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"bfa655111293037a5564088d1a9bbca4cbcf446b\",\"size\":6,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/bfa655111293037a5564088d1a9bbca4cbcf446b\"}],\"truncated\":false}",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/git/trees/831ba8a95977ec0d422d4240dca10512766528b1",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/branches/gh1332-wrapper-base",
+   "out": "{\"name\":\"gh1332-wrapper-base\",\"commit\":{\"sha\":\"eabdd34055caf292f7325246ce9c90e1972e74c6\",\"node_id\":\"C_kwDOV6oJUdoAKGVhYmRkMzQwNTVjYWYyOTJmNzMyNTI0NmNlOWM5MGUxOTcyZTc0YzY\",\"commit\":{\"author\":{\"name\":\"t\",\"email\":\"t@example.com\",\"date\":\"2026-11-28T00:00:00Z\"},\"committer\":{\"name\":\"t\",\"email\":\"t@example.com\",\"date\":\"2026-11-28T00:00:00Z\"},\"message\":\"base\",\"tree\":{\"sha\":\"8a6f2d5b2a9412efa4835f01d2c1e43928fdfa5a\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/8a6f2d5b2a9412efa4835f01d2c1e43928fdfa5a\"},\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/commits/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"comment_count\":0,\"verification\":{\"verified\":false,\"reason\":\"unsigned\",\"signature\":null,\"payload\":null,\"verified_at\":null}},\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/commits/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"html_url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/commit/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"comments_url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/commits/eabdd34055caf292f7325246ce9c90e1972e74c6/comments\",\"author\":{\"login\":\"tasdfds\",\"id\":110080105,\"node_id\":\"U_kgDOBo-waQ\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/110080105?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/tasdfds\",\"html_url\":\"https://github.com/tasdfds\",\"followers_url\":\"https://api.github.com/users/tasdfds/followers\",\"following_url\":\"https://api.github.com/users/tasdfds/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/tasdfds/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/tasdfds/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/tasdfds/subscriptions\",\"organizations_url\":\"https://api.github.com/users/tasdfds/orgs\",\"repos_url\":\"https://api.github.com/users/tasdfds/repos\",\"events_url\":\"https://api.github.com/users/tasdfds/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/tasdfds/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"committer\":{\"login\":\"tasdfds\",\"id\":110080105,\"node_id\":\"U_kgDOBo-waQ\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/110080105?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/tasdfds\",\"html_url\":\"https://github.com/tasdfds\",\"followers_url\":\"https://api.github.com/users/tasdfds/followers\",\"following_url\":\"https://api.github.com/users/tasdfds/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/tasdfds/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/tasdfds/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/tasdfds/subscriptions\",\"organizations_url\":\"https://api.github.com/users/tasdfds/orgs\",\"repos_url\":\"https://api.github.com/users/tasdfds/repos\",\"events_url\":\"https://api.github.com/users/tasdfds/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/tasdfds/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"parents\":[]},\"_links\":{\"self\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/branches/gh1332-wrapper-base\",\"html\":\"https://github.com/0xTomDaniel/octo-feather-realcase/tree/gh1332-wrapper-base\"},\"protected\":false,\"protection\":{\"enabled\":false,\"required_status_checks\":{\"enforcement_level\":\"off\",\"contexts\":[],\"checks\":[]}},\"protection_url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/branches/gh1332-wrapper-base/protection\"}",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/branches/gh1332-wrapper-base",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/rules/branches/gh1332-wrapper-base",
+   "out": "[]",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/rules/branches/gh1332-wrapper-base",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "pr list --state open --base gh1332-wrapper-base --limit 200 --json number,headRefName,headRefOid",
+   "out": "[{\"headRefName\":\"gh1332-wrapper\",\"headRefOid\":\"831ba8a95977ec0d422d4240dca10512766528b1\",\"number\":48}]\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh pr list --state open --base gh1332-wrapper-base --limit 200 --json number,headRefName,headRefOid",
+    "date": "2026-11-28"
+   }
+  }
+ ],
+ "wrapper_resolved": [
+  {
+   "request": "pr view 48 --json headRefOid,baseRefName,comments",
+   "out": "{\"baseRefName\":\"gh1332-wrapper-base\",\"comments\":[{\"id\":\"IC_kwDOV6oJUc8AAAABrxrDnw\",\"author\":{\"login\":\"0xTomDaniel\"},\"authorAssociation\":\"OWNER\",\"body\":\"<!-- octo-feather-review-verdict -->\\n## Code review verdict\\n\\nHead: 1b0a8895973011468c460eee0bc79a584b9864a6\\nPR head: 1b0a8895973011468c460eee0bc79a584b9864a6\\nVerdict: clear\\nChecks: none\\n\\n### Rounds\\n\\n- Round 1: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6, full, verdict clear\\n  - Checks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\nRange: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6\\n\",\"createdAt\":\"2026-11-28T03:00:35Z\",\"includesCreatedEdit\":false,\"isMinimized\":false,\"minimizedReason\":\"\",\"reactionGroups\":[],\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\",\"viewerDidAuthor\":true}],\"headRefOid\":\"831ba8a95977ec0d422d4240dca10512766528b1\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh pr view 48 --json headRefOid,baseRefName,comments",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api -X PATCH repos/{owner}/{repo}/issues/comments/7232734111 --input {\"body\": \"<!-- octo-feather-review-verdict -->\\n## Code review verdict\\n\\nHead: 1b0a8895973011468c460eee0bc79a584b9864a6\\nPR head: 831ba8a95977ec0d422d4240dca10512766528b1\\nVerdict: clear\\nChecks: none\\n\\n### Rounds\\n\\n- Round 1: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6, full, verdict clear\\n  - Checks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\nRange: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6\\n\"} --jq .html_url",
+   "out": "https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api -X PATCH repos/{owner}/{repo}/issues/comments/7232734111 --input /tmp/rec-wrapper_resolved-3pfata5l/tmp/tmpmhpx8us7.json --jq .html_url",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "pr view 48 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments",
+   "out": "{\"baseRefName\":\"gh1332-wrapper-base\",\"body\":\"Closes #1332\\n\\n## Merge ask\\n\\nHead: f6a566ad01c9\\nChecks: none reported on f6a566ad01c9\\nReview verdict: https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\\nBuilt: none\\nFailed: none\\n\",\"comments\":[{\"id\":\"IC_kwDOV6oJUc8AAAABrxrDnw\",\"author\":{\"login\":\"0xTomDaniel\"},\"authorAssociation\":\"OWNER\",\"body\":\"<!-- octo-feather-review-verdict -->\\n## Code review verdict\\n\\nHead: 1b0a8895973011468c460eee0bc79a584b9864a6\\nPR head: 831ba8a95977ec0d422d4240dca10512766528b1\\nVerdict: clear\\nChecks: none\\n\\n### Rounds\\n\\n- Round 1: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6, full, verdict clear\\n  - Checks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\nRange: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6\\n\",\"createdAt\":\"2026-11-28T03:00:35Z\",\"includesCreatedEdit\":true,\"isMinimized\":false,\"minimizedReason\":\"\",\"reactionGroups\":[],\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\",\"viewerDidAuthor\":true}],\"headRefName\":\"gh1332-wrapper\",\"headRefOid\":\"f6a566ad01c909ceb733c15dcb44a1db74b6a711\",\"statusCheckRollup\":[]}\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh pr view 48 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/git/trees/f6a566ad01c909ceb733c15dcb44a1db74b6a711",
+   "out": "{\"sha\":\"f6a566ad01c909ceb733c15dcb44a1db74b6a711\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/f6a566ad01c909ceb733c15dcb44a1db74b6a711\",\"tree\":[{\"path\":\"app.py\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"f79db4024dd95fc42727716e46762e26c781bd50\",\"size\":53,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/f79db4024dd95fc42727716e46762e26c781bd50\"},{\"path\":\"c.txt\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"f2ad6c76f0115a6ba5b00456a849810e7ec0af20\",\"size\":2,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/f2ad6c76f0115a6ba5b00456a849810e7ec0af20\"},{\"path\":\"notes.txt\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"e02a300af24d8d1323c1d8a7bacd10f52a7c54d2\",\"size\":11,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/e02a300af24d8d1323c1d8a7bacd10f52a7c54d2\"}],\"truncated\":false}",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/git/trees/f6a566ad01c909ceb733c15dcb44a1db74b6a711",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/branches/gh1332-wrapper-base",
+   "out": "{\"name\":\"gh1332-wrapper-base\",\"commit\":{\"sha\":\"eabdd34055caf292f7325246ce9c90e1972e74c6\",\"node_id\":\"C_kwDOV6oJUdoAKGVhYmRkMzQwNTVjYWYyOTJmNzMyNTI0NmNlOWM5MGUxOTcyZTc0YzY\",\"commit\":{\"author\":{\"name\":\"t\",\"email\":\"t@example.com\",\"date\":\"2026-11-28T00:00:00Z\"},\"committer\":{\"name\":\"t\",\"email\":\"t@example.com\",\"date\":\"2026-11-28T00:00:00Z\"},\"message\":\"base\",\"tree\":{\"sha\":\"8a6f2d5b2a9412efa4835f01d2c1e43928fdfa5a\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/8a6f2d5b2a9412efa4835f01d2c1e43928fdfa5a\"},\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/commits/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"comment_count\":0,\"verification\":{\"verified\":false,\"reason\":\"unsigned\",\"signature\":null,\"payload\":null,\"verified_at\":null}},\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/commits/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"html_url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/commit/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"comments_url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/commits/eabdd34055caf292f7325246ce9c90e1972e74c6/comments\",\"author\":{\"login\":\"tasdfds\",\"id\":110080105,\"node_id\":\"U_kgDOBo-waQ\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/110080105?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/tasdfds\",\"html_url\":\"https://github.com/tasdfds\",\"followers_url\":\"https://api.github.com/users/tasdfds/followers\",\"following_url\":\"https://api.github.com/users/tasdfds/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/tasdfds/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/tasdfds/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/tasdfds/subscriptions\",\"organizations_url\":\"https://api.github.com/users/tasdfds/orgs\",\"repos_url\":\"https://api.github.com/users/tasdfds/repos\",\"events_url\":\"https://api.github.com/users/tasdfds/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/tasdfds/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"committer\":{\"login\":\"tasdfds\",\"id\":110080105,\"node_id\":\"U_kgDOBo-waQ\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/110080105?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/tasdfds\",\"html_url\":\"https://github.com/tasdfds\",\"followers_url\":\"https://api.github.com/users/tasdfds/followers\",\"following_url\":\"https://api.github.com/users/tasdfds/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/tasdfds/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/tasdfds/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/tasdfds/subscriptions\",\"organizations_url\":\"https://api.github.com/users/tasdfds/orgs\",\"repos_url\":\"https://api.github.com/users/tasdfds/repos\",\"events_url\":\"https://api.github.com/users/tasdfds/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/tasdfds/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"parents\":[]},\"_links\":{\"self\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/branches/gh1332-wrapper-base\",\"html\":\"https://github.com/0xTomDaniel/octo-feather-realcase/tree/gh1332-wrapper-base\"},\"protected\":false,\"protection\":{\"enabled\":false,\"required_status_checks\":{\"enforcement_level\":\"off\",\"contexts\":[],\"checks\":[]}},\"protection_url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/branches/gh1332-wrapper-base/protection\"}",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/branches/gh1332-wrapper-base",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/rules/branches/gh1332-wrapper-base",
+   "out": "[]",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/rules/branches/gh1332-wrapper-base",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "pr list --state open --base gh1332-wrapper-base --limit 200 --json number,headRefName,headRefOid",
+   "out": "[{\"headRefName\":\"gh1332-wrapper\",\"headRefOid\":\"f6a566ad01c909ceb733c15dcb44a1db74b6a711\",\"number\":48}]\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh pr list --state open --base gh1332-wrapper-base --limit 200 --json number,headRefName,headRefOid",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "pr view 48 --json headRefOid,baseRefName,comments",
+   "out": "{\"baseRefName\":\"gh1332-wrapper-base\",\"comments\":[{\"id\":\"IC_kwDOV6oJUc8AAAABrxrDnw\",\"author\":{\"login\":\"0xTomDaniel\"},\"authorAssociation\":\"OWNER\",\"body\":\"<!-- octo-feather-review-verdict -->\\n## Code review verdict\\n\\nHead: 1b0a8895973011468c460eee0bc79a584b9864a6\\nPR head: 831ba8a95977ec0d422d4240dca10512766528b1\\nVerdict: clear\\nChecks: none\\n\\n### Rounds\\n\\n- Round 1: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6, full, verdict clear\\n  - Checks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\nRange: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6\\n\",\"createdAt\":\"2026-11-28T03:00:35Z\",\"includesCreatedEdit\":true,\"isMinimized\":false,\"minimizedReason\":\"\",\"reactionGroups\":[],\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\",\"viewerDidAuthor\":true}],\"headRefOid\":\"f6a566ad01c909ceb733c15dcb44a1db74b6a711\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh pr view 48 --json headRefOid,baseRefName,comments",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api -X POST repos/{owner}/{repo}/issues/48/comments --input {\"body\": \"<!-- octo-feather-review-resolution: 44ff5ab84cc850186a81224444f210a29968834d -->\\n## Code review verdict: resolution of a main merge\\n\\nMerge: 44ff5ab84cc850186a81224444f210a29968834d\\nFiles: app.py\\nPR head: f6a566ad01c909ceb733c15dcb44a1db74b6a711\\nVerdict: clear\\nChecks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\n\"} --jq .html_url",
+   "out": "https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232740642\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api -X POST repos/{owner}/{repo}/issues/48/comments --input /tmp/rec-wrapper_resolved-3pfata5l/tmp/tmplsz_xtg7.json --jq .html_url",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "pr view 48 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments",
+   "out": "{\"baseRefName\":\"gh1332-wrapper-base\",\"body\":\"Closes #1332\\n\\n## Merge ask\\n\\nHead: f6a566ad01c9\\nChecks: none reported on f6a566ad01c9\\nReview verdict: https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\\nBuilt: none\\nFailed: none\\n\",\"comments\":[{\"id\":\"IC_kwDOV6oJUc8AAAABrxrDnw\",\"author\":{\"login\":\"0xTomDaniel\"},\"authorAssociation\":\"OWNER\",\"body\":\"<!-- octo-feather-review-verdict -->\\n## Code review verdict\\n\\nHead: 1b0a8895973011468c460eee0bc79a584b9864a6\\nPR head: 831ba8a95977ec0d422d4240dca10512766528b1\\nVerdict: clear\\nChecks: none\\n\\n### Rounds\\n\\n- Round 1: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6, full, verdict clear\\n  - Checks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\nRange: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6\\n\",\"createdAt\":\"2026-11-28T03:00:35Z\",\"includesCreatedEdit\":true,\"isMinimized\":false,\"minimizedReason\":\"\",\"reactionGroups\":[],\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\",\"viewerDidAuthor\":true},{\"id\":\"IC_kwDOV6oJUc8AAAABrxrdIg\",\"author\":{\"login\":\"0xTomDaniel\"},\"authorAssociation\":\"OWNER\",\"body\":\"<!-- octo-feather-review-resolution: 44ff5ab84cc850186a81224444f210a29968834d -->\\n## Code review verdict: resolution of a main merge\\n\\nMerge: 44ff5ab84cc850186a81224444f210a29968834d\\nFiles: app.py\\nPR head: f6a566ad01c909ceb733c15dcb44a1db74b6a711\\nVerdict: clear\\nChecks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\n\",\"createdAt\":\"2026-11-28T03:01:12Z\",\"includesCreatedEdit\":false,\"isMinimized\":false,\"minimizedReason\":\"\",\"reactionGroups\":[],\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232740642\",\"viewerDidAuthor\":true}],\"headRefName\":\"gh1332-wrapper\",\"headRefOid\":\"f6a566ad01c909ceb733c15dcb44a1db74b6a711\",\"statusCheckRollup\":[]}\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh pr view 48 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/git/trees/f6a566ad01c909ceb733c15dcb44a1db74b6a711",
+   "out": "{\"sha\":\"f6a566ad01c909ceb733c15dcb44a1db74b6a711\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/f6a566ad01c909ceb733c15dcb44a1db74b6a711\",\"tree\":[{\"path\":\"app.py\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"f79db4024dd95fc42727716e46762e26c781bd50\",\"size\":53,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/f79db4024dd95fc42727716e46762e26c781bd50\"},{\"path\":\"c.txt\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"f2ad6c76f0115a6ba5b00456a849810e7ec0af20\",\"size\":2,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/f2ad6c76f0115a6ba5b00456a849810e7ec0af20\"},{\"path\":\"notes.txt\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"e02a300af24d8d1323c1d8a7bacd10f52a7c54d2\",\"size\":11,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/e02a300af24d8d1323c1d8a7bacd10f52a7c54d2\"}],\"truncated\":false}",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/git/trees/f6a566ad01c909ceb733c15dcb44a1db74b6a711",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/branches/gh1332-wrapper-base",
+   "out": "{\"name\":\"gh1332-wrapper-base\",\"commit\":{\"sha\":\"eabdd34055caf292f7325246ce9c90e1972e74c6\",\"node_id\":\"C_kwDOV6oJUdoAKGVhYmRkMzQwNTVjYWYyOTJmNzMyNTI0NmNlOWM5MGUxOTcyZTc0YzY\",\"commit\":{\"author\":{\"name\":\"t\",\"email\":\"t@example.com\",\"date\":\"2026-11-28T00:00:00Z\"},\"committer\":{\"name\":\"t\",\"email\":\"t@example.com\",\"date\":\"2026-11-28T00:00:00Z\"},\"message\":\"base\",\"tree\":{\"sha\":\"8a6f2d5b2a9412efa4835f01d2c1e43928fdfa5a\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/8a6f2d5b2a9412efa4835f01d2c1e43928fdfa5a\"},\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/commits/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"comment_count\":0,\"verification\":{\"verified\":false,\"reason\":\"unsigned\",\"signature\":null,\"payload\":null,\"verified_at\":null}},\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/commits/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"html_url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/commit/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"comments_url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/commits/eabdd34055caf292f7325246ce9c90e1972e74c6/comments\",\"author\":{\"login\":\"tasdfds\",\"id\":110080105,\"node_id\":\"U_kgDOBo-waQ\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/110080105?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/tasdfds\",\"html_url\":\"https://github.com/tasdfds\",\"followers_url\":\"https://api.github.com/users/tasdfds/followers\",\"following_url\":\"https://api.github.com/users/tasdfds/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/tasdfds/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/tasdfds/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/tasdfds/subscriptions\",\"organizations_url\":\"https://api.github.com/users/tasdfds/orgs\",\"repos_url\":\"https://api.github.com/users/tasdfds/repos\",\"events_url\":\"https://api.github.com/users/tasdfds/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/tasdfds/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"committer\":{\"login\":\"tasdfds\",\"id\":110080105,\"node_id\":\"U_kgDOBo-waQ\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/110080105?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/tasdfds\",\"html_url\":\"https://github.com/tasdfds\",\"followers_url\":\"https://api.github.com/users/tasdfds/followers\",\"following_url\":\"https://api.github.com/users/tasdfds/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/tasdfds/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/tasdfds/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/tasdfds/subscriptions\",\"organizations_url\":\"https://api.github.com/users/tasdfds/orgs\",\"repos_url\":\"https://api.github.com/users/tasdfds/repos\",\"events_url\":\"https://api.github.com/users/tasdfds/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/tasdfds/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"parents\":[]},\"_links\":{\"self\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/branches/gh1332-wrapper-base\",\"html\":\"https://github.com/0xTomDaniel/octo-feather-realcase/tree/gh1332-wrapper-base\"},\"protected\":false,\"protection\":{\"enabled\":false,\"required_status_checks\":{\"enforcement_level\":\"off\",\"contexts\":[],\"checks\":[]}},\"protection_url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/branches/gh1332-wrapper-base/protection\"}",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/branches/gh1332-wrapper-base",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/rules/branches/gh1332-wrapper-base",
+   "out": "[]",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/rules/branches/gh1332-wrapper-base",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "pr list --state open --base gh1332-wrapper-base --limit 200 --json number,headRefName,headRefOid",
+   "out": "[{\"headRefName\":\"gh1332-wrapper\",\"headRefOid\":\"f6a566ad01c909ceb733c15dcb44a1db74b6a711\",\"number\":48}]\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh pr list --state open --base gh1332-wrapper-base --limit 200 --json number,headRefName,headRefOid",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "pr view 48 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments",
+   "out": "{\"baseRefName\":\"gh1332-wrapper-base\",\"body\":\"Closes #1332\\n\\n## Merge ask\\n\\nHead: f6a566ad01c9\\nChecks: none reported on f6a566ad01c9\\nReviewed: 1b0a88959730 to f6a566ad01c9: no qc status commit; clean merge of main 13e11dd528d5: lane hunks identical (1 file, sha256 85b656209efa) outside the resolved files; resolution of merge 44ff5ab84cc8 (app.py) reviewed clear: https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232740642; wrapper 831ba8a95977 of 13e11dd528d5 carries it (tree equal); wrapper f6a566ad01c9 of 44ff5ab84cc8 carries it (tree equal)\\nReview verdict: https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\\nBuilt: none\\nFailed: none\\n\",\"comments\":[{\"id\":\"IC_kwDOV6oJUc8AAAABrxrDnw\",\"author\":{\"login\":\"0xTomDaniel\"},\"authorAssociation\":\"OWNER\",\"body\":\"<!-- octo-feather-review-verdict -->\\n## Code review verdict\\n\\nHead: 1b0a8895973011468c460eee0bc79a584b9864a6\\nPR head: 831ba8a95977ec0d422d4240dca10512766528b1\\nVerdict: clear\\nChecks: none\\n\\n### Rounds\\n\\n- Round 1: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6, full, verdict clear\\n  - Checks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\nRange: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6\\n\",\"createdAt\":\"2026-11-28T03:00:35Z\",\"includesCreatedEdit\":true,\"isMinimized\":false,\"minimizedReason\":\"\",\"reactionGroups\":[],\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\",\"viewerDidAuthor\":true},{\"id\":\"IC_kwDOV6oJUc8AAAABrxrdIg\",\"author\":{\"login\":\"0xTomDaniel\"},\"authorAssociation\":\"OWNER\",\"body\":\"<!-- octo-feather-review-resolution: 44ff5ab84cc850186a81224444f210a29968834d -->\\n## Code review verdict: resolution of a main merge\\n\\nMerge: 44ff5ab84cc850186a81224444f210a29968834d\\nFiles: app.py\\nPR head: f6a566ad01c909ceb733c15dcb44a1db74b6a711\\nVerdict: clear\\nChecks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\n\",\"createdAt\":\"2026-11-28T03:01:12Z\",\"includesCreatedEdit\":false,\"isMinimized\":false,\"minimizedReason\":\"\",\"reactionGroups\":[],\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232740642\",\"viewerDidAuthor\":true}],\"headRefName\":\"gh1332-wrapper\",\"headRefOid\":\"f6a566ad01c909ceb733c15dcb44a1db74b6a711\",\"statusCheckRollup\":[]}\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh pr view 48 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/git/trees/f6a566ad01c909ceb733c15dcb44a1db74b6a711",
+   "out": "{\"sha\":\"f6a566ad01c909ceb733c15dcb44a1db74b6a711\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/f6a566ad01c909ceb733c15dcb44a1db74b6a711\",\"tree\":[{\"path\":\"app.py\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"f79db4024dd95fc42727716e46762e26c781bd50\",\"size\":53,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/f79db4024dd95fc42727716e46762e26c781bd50\"},{\"path\":\"c.txt\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"f2ad6c76f0115a6ba5b00456a849810e7ec0af20\",\"size\":2,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/f2ad6c76f0115a6ba5b00456a849810e7ec0af20\"},{\"path\":\"notes.txt\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"e02a300af24d8d1323c1d8a7bacd10f52a7c54d2\",\"size\":11,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/e02a300af24d8d1323c1d8a7bacd10f52a7c54d2\"}],\"truncated\":false}",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/git/trees/f6a566ad01c909ceb733c15dcb44a1db74b6a711",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/branches/gh1332-wrapper-base",
+   "out": "{\"name\":\"gh1332-wrapper-base\",\"commit\":{\"sha\":\"eabdd34055caf292f7325246ce9c90e1972e74c6\",\"node_id\":\"C_kwDOV6oJUdoAKGVhYmRkMzQwNTVjYWYyOTJmNzMyNTI0NmNlOWM5MGUxOTcyZTc0YzY\",\"commit\":{\"author\":{\"name\":\"t\",\"email\":\"t@example.com\",\"date\":\"2026-11-28T00:00:00Z\"},\"committer\":{\"name\":\"t\",\"email\":\"t@example.com\",\"date\":\"2026-11-28T00:00:00Z\"},\"message\":\"base\",\"tree\":{\"sha\":\"8a6f2d5b2a9412efa4835f01d2c1e43928fdfa5a\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/8a6f2d5b2a9412efa4835f01d2c1e43928fdfa5a\"},\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/commits/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"comment_count\":0,\"verification\":{\"verified\":false,\"reason\":\"unsigned\",\"signature\":null,\"payload\":null,\"verified_at\":null}},\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/commits/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"html_url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/commit/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"comments_url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/commits/eabdd34055caf292f7325246ce9c90e1972e74c6/comments\",\"author\":{\"login\":\"tasdfds\",\"id\":110080105,\"node_id\":\"U_kgDOBo-waQ\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/110080105?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/tasdfds\",\"html_url\":\"https://github.com/tasdfds\",\"followers_url\":\"https://api.github.com/users/tasdfds/followers\",\"following_url\":\"https://api.github.com/users/tasdfds/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/tasdfds/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/tasdfds/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/tasdfds/subscriptions\",\"organizations_url\":\"https://api.github.com/users/tasdfds/orgs\",\"repos_url\":\"https://api.github.com/users/tasdfds/repos\",\"events_url\":\"https://api.github.com/users/tasdfds/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/tasdfds/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"committer\":{\"login\":\"tasdfds\",\"id\":110080105,\"node_id\":\"U_kgDOBo-waQ\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/110080105?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/tasdfds\",\"html_url\":\"https://github.com/tasdfds\",\"followers_url\":\"https://api.github.com/users/tasdfds/followers\",\"following_url\":\"https://api.github.com/users/tasdfds/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/tasdfds/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/tasdfds/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/tasdfds/subscriptions\",\"organizations_url\":\"https://api.github.com/users/tasdfds/orgs\",\"repos_url\":\"https://api.github.com/users/tasdfds/repos\",\"events_url\":\"https://api.github.com/users/tasdfds/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/tasdfds/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"parents\":[]},\"_links\":{\"self\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/branches/gh1332-wrapper-base\",\"html\":\"https://github.com/0xTomDaniel/octo-feather-realcase/tree/gh1332-wrapper-base\"},\"protected\":false,\"protection\":{\"enabled\":false,\"required_status_checks\":{\"enforcement_level\":\"off\",\"contexts\":[],\"checks\":[]}},\"protection_url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/branches/gh1332-wrapper-base/protection\"}",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/branches/gh1332-wrapper-base",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/rules/branches/gh1332-wrapper-base",
+   "out": "[]",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/rules/branches/gh1332-wrapper-base",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "pr list --state open --base gh1332-wrapper-base --limit 200 --json number,headRefName,headRefOid",
+   "out": "[{\"headRefName\":\"gh1332-wrapper\",\"headRefOid\":\"f6a566ad01c909ceb733c15dcb44a1db74b6a711\",\"number\":48}]\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh pr list --state open --base gh1332-wrapper-base --limit 200 --json number,headRefName,headRefOid",
+    "date": "2026-11-28"
+   }
+  }
+ ],
+ "wrapper_refused": [
+  {
+   "request": "pr view 48 --json headRefOid,baseRefName,comments",
+   "out": "{\"baseRefName\":\"gh1332-wrapper-base\",\"comments\":[{\"id\":\"IC_kwDOV6oJUc8AAAABrxrDnw\",\"author\":{\"login\":\"0xTomDaniel\"},\"authorAssociation\":\"OWNER\",\"body\":\"<!-- octo-feather-review-verdict -->\\n## Code review verdict\\n\\nHead: 1b0a8895973011468c460eee0bc79a584b9864a6\\nPR head: 831ba8a95977ec0d422d4240dca10512766528b1\\nVerdict: clear\\nChecks: none\\n\\n### Rounds\\n\\n- Round 1: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6, full, verdict clear\\n  - Checks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\nRange: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6\\n\",\"createdAt\":\"2026-11-28T03:00:35Z\",\"includesCreatedEdit\":true,\"isMinimized\":false,\"minimizedReason\":\"\",\"reactionGroups\":[],\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\",\"viewerDidAuthor\":true},{\"id\":\"IC_kwDOV6oJUc8AAAABrxrdIg\",\"author\":{\"login\":\"0xTomDaniel\"},\"authorAssociation\":\"OWNER\",\"body\":\"<!-- octo-feather-review-resolution: 44ff5ab84cc850186a81224444f210a29968834d -->\\n## Code review verdict: resolution of a main merge\\n\\nMerge: 44ff5ab84cc850186a81224444f210a29968834d\\nFiles: app.py\\nPR head: f6a566ad01c909ceb733c15dcb44a1db74b6a711\\nVerdict: clear\\nChecks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\n\",\"createdAt\":\"2026-11-28T03:01:12Z\",\"includesCreatedEdit\":false,\"isMinimized\":false,\"minimizedReason\":\"\",\"reactionGroups\":[],\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232740642\",\"viewerDidAuthor\":true}],\"headRefOid\":\"f6a566ad01c909ceb733c15dcb44a1db74b6a711\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh pr view 48 --json headRefOid,baseRefName,comments",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api -X PATCH repos/{owner}/{repo}/issues/comments/7232734111 --input {\"body\": \"<!-- octo-feather-review-verdict -->\\n## Code review verdict\\n\\nHead: 1b0a8895973011468c460eee0bc79a584b9864a6\\nPR head: f6a566ad01c909ceb733c15dcb44a1db74b6a711\\nVerdict: clear\\nChecks: none\\n\\n### Rounds\\n\\n- Round 1: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6, full, verdict clear\\n  - Checks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\nRange: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6\\n\"} --jq .html_url",
+   "out": "https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api -X PATCH repos/{owner}/{repo}/issues/comments/7232734111 --input /tmp/rec-wrapper_refused-xz3d3jmm/tmp/tmp89bk3k_q.json --jq .html_url",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "pr view 48 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments",
+   "out": "{\"baseRefName\":\"gh1332-wrapper-base\",\"body\":\"Closes #1332\\n\\n## Merge ask\\n\\nHead: 1d7e0a489278\\nChecks: none reported on 1d7e0a489278\\nReview verdict: https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\\nBuilt: none\\nFailed: none\\n\",\"comments\":[{\"id\":\"IC_kwDOV6oJUc8AAAABrxrDnw\",\"author\":{\"login\":\"0xTomDaniel\"},\"authorAssociation\":\"OWNER\",\"body\":\"<!-- octo-feather-review-verdict -->\\n## Code review verdict\\n\\nHead: 1b0a8895973011468c460eee0bc79a584b9864a6\\nPR head: f6a566ad01c909ceb733c15dcb44a1db74b6a711\\nVerdict: clear\\nChecks: none\\n\\n### Rounds\\n\\n- Round 1: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6, full, verdict clear\\n  - Checks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\nRange: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6\\n\",\"createdAt\":\"2026-11-28T03:00:35Z\",\"includesCreatedEdit\":true,\"isMinimized\":false,\"minimizedReason\":\"\",\"reactionGroups\":[],\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\",\"viewerDidAuthor\":true},{\"id\":\"IC_kwDOV6oJUc8AAAABrxrdIg\",\"author\":{\"login\":\"0xTomDaniel\"},\"authorAssociation\":\"OWNER\",\"body\":\"<!-- octo-feather-review-resolution: 44ff5ab84cc850186a81224444f210a29968834d -->\\n## Code review verdict: resolution of a main merge\\n\\nMerge: 44ff5ab84cc850186a81224444f210a29968834d\\nFiles: app.py\\nPR head: f6a566ad01c909ceb733c15dcb44a1db74b6a711\\nVerdict: clear\\nChecks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\n\",\"createdAt\":\"2026-11-28T03:01:12Z\",\"includesCreatedEdit\":false,\"isMinimized\":false,\"minimizedReason\":\"\",\"reactionGroups\":[],\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232740642\",\"viewerDidAuthor\":true}],\"headRefName\":\"gh1332-wrapper\",\"headRefOid\":\"1d7e0a489278bb679ae3083d6fd1cfc4edc2e297\",\"statusCheckRollup\":[]}\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh pr view 48 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/git/trees/1d7e0a489278bb679ae3083d6fd1cfc4edc2e297",
+   "out": "{\"sha\":\"1d7e0a489278bb679ae3083d6fd1cfc4edc2e297\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/1d7e0a489278bb679ae3083d6fd1cfc4edc2e297\",\"tree\":[{\"path\":\"app.py\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"f79db4024dd95fc42727716e46762e26c781bd50\",\"size\":53,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/f79db4024dd95fc42727716e46762e26c781bd50\"},{\"path\":\"c.txt\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"f2ad6c76f0115a6ba5b00456a849810e7ec0af20\",\"size\":2,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/f2ad6c76f0115a6ba5b00456a849810e7ec0af20\"},{\"path\":\"notes.txt\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"196f739382440f47999c6fc440be3a48c229499a\",\"size\":13,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/196f739382440f47999c6fc440be3a48c229499a\"}],\"truncated\":false}",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/git/trees/1d7e0a489278bb679ae3083d6fd1cfc4edc2e297",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/branches/gh1332-wrapper-base",
+   "out": "{\"name\":\"gh1332-wrapper-base\",\"commit\":{\"sha\":\"eabdd34055caf292f7325246ce9c90e1972e74c6\",\"node_id\":\"C_kwDOV6oJUdoAKGVhYmRkMzQwNTVjYWYyOTJmNzMyNTI0NmNlOWM5MGUxOTcyZTc0YzY\",\"commit\":{\"author\":{\"name\":\"t\",\"email\":\"t@example.com\",\"date\":\"2026-11-28T00:00:00Z\"},\"committer\":{\"name\":\"t\",\"email\":\"t@example.com\",\"date\":\"2026-11-28T00:00:00Z\"},\"message\":\"base\",\"tree\":{\"sha\":\"8a6f2d5b2a9412efa4835f01d2c1e43928fdfa5a\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/8a6f2d5b2a9412efa4835f01d2c1e43928fdfa5a\"},\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/commits/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"comment_count\":0,\"verification\":{\"verified\":false,\"reason\":\"unsigned\",\"signature\":null,\"payload\":null,\"verified_at\":null}},\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/commits/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"html_url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/commit/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"comments_url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/commits/eabdd34055caf292f7325246ce9c90e1972e74c6/comments\",\"author\":{\"login\":\"tasdfds\",\"id\":110080105,\"node_id\":\"U_kgDOBo-waQ\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/110080105?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/tasdfds\",\"html_url\":\"https://github.com/tasdfds\",\"followers_url\":\"https://api.github.com/users/tasdfds/followers\",\"following_url\":\"https://api.github.com/users/tasdfds/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/tasdfds/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/tasdfds/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/tasdfds/subscriptions\",\"organizations_url\":\"https://api.github.com/users/tasdfds/orgs\",\"repos_url\":\"https://api.github.com/users/tasdfds/repos\",\"events_url\":\"https://api.github.com/users/tasdfds/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/tasdfds/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"committer\":{\"login\":\"tasdfds\",\"id\":110080105,\"node_id\":\"U_kgDOBo-waQ\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/110080105?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/tasdfds\",\"html_url\":\"https://github.com/tasdfds\",\"followers_url\":\"https://api.github.com/users/tasdfds/followers\",\"following_url\":\"https://api.github.com/users/tasdfds/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/tasdfds/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/tasdfds/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/tasdfds/subscriptions\",\"organizations_url\":\"https://api.github.com/users/tasdfds/orgs\",\"repos_url\":\"https://api.github.com/users/tasdfds/repos\",\"events_url\":\"https://api.github.com/users/tasdfds/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/tasdfds/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"parents\":[]},\"_links\":{\"self\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/branches/gh1332-wrapper-base\",\"html\":\"https://github.com/0xTomDaniel/octo-feather-realcase/tree/gh1332-wrapper-base\"},\"protected\":false,\"protection\":{\"enabled\":false,\"required_status_checks\":{\"enforcement_level\":\"off\",\"contexts\":[],\"checks\":[]}},\"protection_url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/branches/gh1332-wrapper-base/protection\"}",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/branches/gh1332-wrapper-base",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/rules/branches/gh1332-wrapper-base",
+   "out": "[]",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/rules/branches/gh1332-wrapper-base",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "pr list --state open --base gh1332-wrapper-base --limit 200 --json number,headRefName,headRefOid",
+   "out": "[{\"headRefName\":\"gh1332-wrapper\",\"headRefOid\":\"1d7e0a489278bb679ae3083d6fd1cfc4edc2e297\",\"number\":48}]\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh pr list --state open --base gh1332-wrapper-base --limit 200 --json number,headRefName,headRefOid",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "pr view 48 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments",
+   "out": "{\"baseRefName\":\"gh1332-wrapper-base\",\"body\":\"Closes #1332\\n\\n## Merge ask\\n\\nHead: f0468ed4ca00\\nChecks: none reported on f0468ed4ca00\\nReview verdict: https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\\nBuilt: none\\nFailed: none\\n\",\"comments\":[{\"id\":\"IC_kwDOV6oJUc8AAAABrxrDnw\",\"author\":{\"login\":\"0xTomDaniel\"},\"authorAssociation\":\"OWNER\",\"body\":\"<!-- octo-feather-review-verdict -->\\n## Code review verdict\\n\\nHead: 1b0a8895973011468c460eee0bc79a584b9864a6\\nPR head: f6a566ad01c909ceb733c15dcb44a1db74b6a711\\nVerdict: clear\\nChecks: none\\n\\n### Rounds\\n\\n- Round 1: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6, full, verdict clear\\n  - Checks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\nRange: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6\\n\",\"createdAt\":\"2026-11-28T03:00:35Z\",\"includesCreatedEdit\":true,\"isMinimized\":false,\"minimizedReason\":\"\",\"reactionGroups\":[],\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\",\"viewerDidAuthor\":true},{\"id\":\"IC_kwDOV6oJUc8AAAABrxrdIg\",\"author\":{\"login\":\"0xTomDaniel\"},\"authorAssociation\":\"OWNER\",\"body\":\"<!-- octo-feather-review-resolution: 44ff5ab84cc850186a81224444f210a29968834d -->\\n## Code review verdict: resolution of a main merge\\n\\nMerge: 44ff5ab84cc850186a81224444f210a29968834d\\nFiles: app.py\\nPR head: f6a566ad01c909ceb733c15dcb44a1db74b6a711\\nVerdict: clear\\nChecks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\n\",\"createdAt\":\"2026-11-28T03:01:12Z\",\"includesCreatedEdit\":false,\"isMinimized\":false,\"minimizedReason\":\"\",\"reactionGroups\":[],\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232740642\",\"viewerDidAuthor\":true}],\"headRefName\":\"gh1332-wrapper\",\"headRefOid\":\"f0468ed4ca00534506b341fa13a79a9d8d8a4516\",\"statusCheckRollup\":[]}\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh pr view 48 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/git/trees/f0468ed4ca00534506b341fa13a79a9d8d8a4516",
+   "out": "{\"sha\":\"f0468ed4ca00534506b341fa13a79a9d8d8a4516\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/f0468ed4ca00534506b341fa13a79a9d8d8a4516\",\"tree\":[{\"path\":\"app.py\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"f79db4024dd95fc42727716e46762e26c781bd50\",\"size\":53,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/f79db4024dd95fc42727716e46762e26c781bd50\"},{\"path\":\"c.txt\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"f2ad6c76f0115a6ba5b00456a849810e7ec0af20\",\"size\":2,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/f2ad6c76f0115a6ba5b00456a849810e7ec0af20\"},{\"path\":\"notes.txt\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"bfa655111293037a5564088d1a9bbca4cbcf446b\",\"size\":6,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/bfa655111293037a5564088d1a9bbca4cbcf446b\"}],\"truncated\":false}",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/git/trees/f0468ed4ca00534506b341fa13a79a9d8d8a4516",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/branches/gh1332-wrapper-base",
+   "out": "{\"name\":\"gh1332-wrapper-base\",\"commit\":{\"sha\":\"eabdd34055caf292f7325246ce9c90e1972e74c6\",\"node_id\":\"C_kwDOV6oJUdoAKGVhYmRkMzQwNTVjYWYyOTJmNzMyNTI0NmNlOWM5MGUxOTcyZTc0YzY\",\"commit\":{\"author\":{\"name\":\"t\",\"email\":\"t@example.com\",\"date\":\"2026-11-28T00:00:00Z\"},\"committer\":{\"name\":\"t\",\"email\":\"t@example.com\",\"date\":\"2026-11-28T00:00:00Z\"},\"message\":\"base\",\"tree\":{\"sha\":\"8a6f2d5b2a9412efa4835f01d2c1e43928fdfa5a\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/8a6f2d5b2a9412efa4835f01d2c1e43928fdfa5a\"},\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/commits/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"comment_count\":0,\"verification\":{\"verified\":false,\"reason\":\"unsigned\",\"signature\":null,\"payload\":null,\"verified_at\":null}},\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/commits/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"html_url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/commit/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"comments_url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/commits/eabdd34055caf292f7325246ce9c90e1972e74c6/comments\",\"author\":{\"login\":\"tasdfds\",\"id\":110080105,\"node_id\":\"U_kgDOBo-waQ\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/110080105?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/tasdfds\",\"html_url\":\"https://github.com/tasdfds\",\"followers_url\":\"https://api.github.com/users/tasdfds/followers\",\"following_url\":\"https://api.github.com/users/tasdfds/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/tasdfds/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/tasdfds/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/tasdfds/subscriptions\",\"organizations_url\":\"https://api.github.com/users/tasdfds/orgs\",\"repos_url\":\"https://api.github.com/users/tasdfds/repos\",\"events_url\":\"https://api.github.com/users/tasdfds/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/tasdfds/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"committer\":{\"login\":\"tasdfds\",\"id\":110080105,\"node_id\":\"U_kgDOBo-waQ\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/110080105?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/tasdfds\",\"html_url\":\"https://github.com/tasdfds\",\"followers_url\":\"https://api.github.com/users/tasdfds/followers\",\"following_url\":\"https://api.github.com/users/tasdfds/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/tasdfds/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/tasdfds/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/tasdfds/subscriptions\",\"organizations_url\":\"https://api.github.com/users/tasdfds/orgs\",\"repos_url\":\"https://api.github.com/users/tasdfds/repos\",\"events_url\":\"https://api.github.com/users/tasdfds/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/tasdfds/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"parents\":[]},\"_links\":{\"self\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/branches/gh1332-wrapper-base\",\"html\":\"https://github.com/0xTomDaniel/octo-feather-realcase/tree/gh1332-wrapper-base\"},\"protected\":false,\"protection\":{\"enabled\":false,\"required_status_checks\":{\"enforcement_level\":\"off\",\"contexts\":[],\"checks\":[]}},\"protection_url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/branches/gh1332-wrapper-base/protection\"}",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/branches/gh1332-wrapper-base",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/rules/branches/gh1332-wrapper-base",
+   "out": "[]",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/rules/branches/gh1332-wrapper-base",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "pr list --state open --base gh1332-wrapper-base --limit 200 --json number,headRefName,headRefOid",
+   "out": "[{\"headRefName\":\"gh1332-wrapper\",\"headRefOid\":\"f0468ed4ca00534506b341fa13a79a9d8d8a4516\",\"number\":48}]\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh pr list --state open --base gh1332-wrapper-base --limit 200 --json number,headRefName,headRefOid",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "pr view 48 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments",
+   "out": "{\"baseRefName\":\"gh1332-wrapper-base\",\"body\":\"Closes #1332\\n\\n## Merge ask\\n\\nHead: fc552f6cb12f\\nChecks: none reported on fc552f6cb12f\\nReview verdict: https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\\nBuilt: none\\nFailed: none\\n\",\"comments\":[{\"id\":\"IC_kwDOV6oJUc8AAAABrxrDnw\",\"author\":{\"login\":\"0xTomDaniel\"},\"authorAssociation\":\"OWNER\",\"body\":\"<!-- octo-feather-review-verdict -->\\n## Code review verdict\\n\\nHead: 1b0a8895973011468c460eee0bc79a584b9864a6\\nPR head: f6a566ad01c909ceb733c15dcb44a1db74b6a711\\nVerdict: clear\\nChecks: none\\n\\n### Rounds\\n\\n- Round 1: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6, full, verdict clear\\n  - Checks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\nRange: eabdd34055caf292f7325246ce9c90e1972e74c6..1b0a8895973011468c460eee0bc79a584b9864a6\\n\",\"createdAt\":\"2026-11-28T03:00:35Z\",\"includesCreatedEdit\":true,\"isMinimized\":false,\"minimizedReason\":\"\",\"reactionGroups\":[],\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232734111\",\"viewerDidAuthor\":true},{\"id\":\"IC_kwDOV6oJUc8AAAABrxrdIg\",\"author\":{\"login\":\"0xTomDaniel\"},\"authorAssociation\":\"OWNER\",\"body\":\"<!-- octo-feather-review-resolution: 44ff5ab84cc850186a81224444f210a29968834d -->\\n## Code review verdict: resolution of a main merge\\n\\nMerge: 44ff5ab84cc850186a81224444f210a29968834d\\nFiles: app.py\\nPR head: f6a566ad01c909ceb733c15dcb44a1db74b6a711\\nVerdict: clear\\nChecks: none\\n\\n### Findings\\n\\nFindings: none blocking.\\nChecks: none\\nVerdict: clear\\n\",\"createdAt\":\"2026-11-28T03:01:12Z\",\"includesCreatedEdit\":false,\"isMinimized\":false,\"minimizedReason\":\"\",\"reactionGroups\":[],\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/48#issuecomment-7232740642\",\"viewerDidAuthor\":true}],\"headRefName\":\"gh1332-wrapper\",\"headRefOid\":\"fc552f6cb12fcbcaee7109f10e92e86ce501671f\",\"statusCheckRollup\":[]}\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh pr view 48 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/git/trees/fc552f6cb12fcbcaee7109f10e92e86ce501671f",
+   "out": "{\"sha\":\"fc552f6cb12fcbcaee7109f10e92e86ce501671f\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/fc552f6cb12fcbcaee7109f10e92e86ce501671f\",\"tree\":[{\"path\":\"app.py\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"f79db4024dd95fc42727716e46762e26c781bd50\",\"size\":53,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/f79db4024dd95fc42727716e46762e26c781bd50\"},{\"path\":\"c.txt\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"f2ad6c76f0115a6ba5b00456a849810e7ec0af20\",\"size\":2,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/f2ad6c76f0115a6ba5b00456a849810e7ec0af20\"},{\"path\":\"notes.txt\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"bfa655111293037a5564088d1a9bbca4cbcf446b\",\"size\":6,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/bfa655111293037a5564088d1a9bbca4cbcf446b\"},{\"path\":\"s.txt\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"b4785957bc986dc39c629de9fac9df46972c00fc\",\"size\":2,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/b4785957bc986dc39c629de9fac9df46972c00fc\"}],\"truncated\":false}",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/git/trees/fc552f6cb12fcbcaee7109f10e92e86ce501671f",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/branches/gh1332-wrapper-base",
+   "out": "{\"name\":\"gh1332-wrapper-base\",\"commit\":{\"sha\":\"eabdd34055caf292f7325246ce9c90e1972e74c6\",\"node_id\":\"C_kwDOV6oJUdoAKGVhYmRkMzQwNTVjYWYyOTJmNzMyNTI0NmNlOWM5MGUxOTcyZTc0YzY\",\"commit\":{\"author\":{\"name\":\"t\",\"email\":\"t@example.com\",\"date\":\"2026-11-28T00:00:00Z\"},\"committer\":{\"name\":\"t\",\"email\":\"t@example.com\",\"date\":\"2026-11-28T00:00:00Z\"},\"message\":\"base\",\"tree\":{\"sha\":\"8a6f2d5b2a9412efa4835f01d2c1e43928fdfa5a\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/8a6f2d5b2a9412efa4835f01d2c1e43928fdfa5a\"},\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/commits/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"comment_count\":0,\"verification\":{\"verified\":false,\"reason\":\"unsigned\",\"signature\":null,\"payload\":null,\"verified_at\":null}},\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/commits/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"html_url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/commit/eabdd34055caf292f7325246ce9c90e1972e74c6\",\"comments_url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/commits/eabdd34055caf292f7325246ce9c90e1972e74c6/comments\",\"author\":{\"login\":\"tasdfds\",\"id\":110080105,\"node_id\":\"U_kgDOBo-waQ\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/110080105?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/tasdfds\",\"html_url\":\"https://github.com/tasdfds\",\"followers_url\":\"https://api.github.com/users/tasdfds/followers\",\"following_url\":\"https://api.github.com/users/tasdfds/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/tasdfds/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/tasdfds/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/tasdfds/subscriptions\",\"organizations_url\":\"https://api.github.com/users/tasdfds/orgs\",\"repos_url\":\"https://api.github.com/users/tasdfds/repos\",\"events_url\":\"https://api.github.com/users/tasdfds/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/tasdfds/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"committer\":{\"login\":\"tasdfds\",\"id\":110080105,\"node_id\":\"U_kgDOBo-waQ\",\"avatar_url\":\"https://avatars.githubusercontent.com/u/110080105?v=4\",\"gravatar_id\":\"\",\"url\":\"https://api.github.com/users/tasdfds\",\"html_url\":\"https://github.com/tasdfds\",\"followers_url\":\"https://api.github.com/users/tasdfds/followers\",\"following_url\":\"https://api.github.com/users/tasdfds/following{/other_user}\",\"gists_url\":\"https://api.github.com/users/tasdfds/gists{/gist_id}\",\"starred_url\":\"https://api.github.com/users/tasdfds/starred{/owner}{/repo}\",\"subscriptions_url\":\"https://api.github.com/users/tasdfds/subscriptions\",\"organizations_url\":\"https://api.github.com/users/tasdfds/orgs\",\"repos_url\":\"https://api.github.com/users/tasdfds/repos\",\"events_url\":\"https://api.github.com/users/tasdfds/events{/privacy}\",\"received_events_url\":\"https://api.github.com/users/tasdfds/received_events\",\"type\":\"User\",\"user_view_type\":\"public\",\"site_admin\":false},\"parents\":[]},\"_links\":{\"self\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/branches/gh1332-wrapper-base\",\"html\":\"https://github.com/0xTomDaniel/octo-feather-realcase/tree/gh1332-wrapper-base\"},\"protected\":false,\"protection\":{\"enabled\":false,\"required_status_checks\":{\"enforcement_level\":\"off\",\"contexts\":[],\"checks\":[]}},\"protection_url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/branches/gh1332-wrapper-base/protection\"}",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/branches/gh1332-wrapper-base",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "api repos/{owner}/{repo}/rules/branches/gh1332-wrapper-base",
+   "out": "[]",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh api repos/{owner}/{repo}/rules/branches/gh1332-wrapper-base",
+    "date": "2026-11-28"
+   }
+  },
+  {
+   "request": "pr list --state open --base gh1332-wrapper-base --limit 200 --json number,headRefName,headRefOid",
+   "out": "[{\"headRefName\":\"gh1332-wrapper\",\"headRefOid\":\"fc552f6cb12fcbcaee7109f10e92e86ce501671f\",\"number\":48}]\n",
+   "err": "",
+   "exit": 0,
+   "source": {
+    "gh": "2.102.0",
+    "repo": "0xTomDaniel/octo-feather-realcase",
+    "command": "gh pr list --state open --base gh1332-wrapper-base --limit 200 --json number,headRefName,headRefOid",
+    "date": "2026-11-28"
+   }
+  }
+ ]
+}

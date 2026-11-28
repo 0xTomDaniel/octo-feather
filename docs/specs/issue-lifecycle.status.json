@@ -203,6 +203,33 @@
         "tests/lane-review-resolution.sh"
       ]
     },
+    "acceptance-review-wrapper-clean": {
+      "status": "built",
+      "pr": 1342,
+      "record": "20261128T044315Z-4ba33b37",
+      "commit": "6b18942021e15f096d15959ffbdf4d6a4a882f88",
+      "tests": [
+        "tests/gate/kit/lane_review_wrapper.py"
+      ]
+    },
+    "acceptance-review-wrapper-resolved": {
+      "status": "built",
+      "pr": 1342,
+      "record": "20261128T044315Z-03404cf0",
+      "commit": "6b18942021e15f096d15959ffbdf4d6a4a882f88",
+      "tests": [
+        "tests/gate/kit/lane_review_wrapper.py"
+      ]
+    },
+    "acceptance-review-wrapper-refused": {
+      "status": "built",
+      "pr": 1342,
+      "record": "20261128T044315Z-200f9103",
+      "commit": "6b18942021e15f096d15959ffbdf4d6a4a882f88",
+      "tests": [
+        "tests/gate/kit/lane_review_wrapper.py"
+      ]
+    },
     "acceptance-merge-ask-evidence": {
       "status": "built",
       "pr": 49
