@@ -163,6 +163,15 @@ def test_exemptions_pass(tmp_path: Path) -> None:
         assert check(tmp_path / f"binary{i}", {"docs/x.md": text}) == binary, text
 
 
+def test_binary_file_with_retired_word_fails(tmp_path: Path) -> None:
+    """A retired word in a file grep calls binary (a NUL byte, or invalid UTF-8) fails, the file
+    refused by name, never passed silently (#1353, #1117)."""
+    for i, text in enumerate([f"the {OP}\0\n".encode(), b"caf\xff: the " + HU.encode() + b"\n"]):
+        found = check(tmp_path / str(i), {"agents/x.md": text})
+        named = b"check-refs: agents/x.md: binary file matches"
+        assert found == Report((("err", named), ("err", WORDS)), 1), text
+
+
 def test_unreadable_file_fails_closed(tmp_path: Path) -> None:
     """A tracked file the scan cannot read: a scanner error naming it and why, never ok (ruling
     R1)."""
