@@ -461,8 +461,13 @@
       "pr": null
     },
     "acceptance-parity-network-free": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1366,
+      "record": "20261128T121528Z-1db9da2c",
+      "commit": "d9b53f6bb4130fb631a8cd07d2d8d235343181f2",
+      "tests": [
+        "tests/gate/kit/test_parity_lever.py"
+      ]
     }
   }
 }
