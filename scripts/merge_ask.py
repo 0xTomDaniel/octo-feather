@@ -1528,24 +1528,20 @@ def head_proof(  # noqa: C901, PLR0912, PLR0913, PLR0915  one branch per commit 
             else:
                 qc.append(c)
                 touched |= k.files
+        elif (w := k.merge.wrap if k.merge else None) and not _unwrapped(w, base):
+            wrapped.append((c, w.merge))  # it counts as M, which the walk checks
+        elif w:
+            why.append(
+                f"merge {c[:12]} {s[:60]!r} wraps merge {w.merge[:12]}, but "
+                f"{'; '.join(_unwrapped(w, base))}: only a merge of main, or integrate's merge of "
+                f"a worker's merge of main adding nothing and dropping nothing, keeps {kept}; "
+                f"{rerun}"
+            )
         elif len(parents) != MERGE_PARENTS or k.merge is None or not k.merge.onto:
-            w = k.merge.wrap if k.merge else None
-            failed = _unwrapped(w, base) if w else []
-            if w and not failed:  # it counts as M, which the walk checks (spec #lanes-one-head)
-                wrapped.append((c, w.merge))
-            elif w:
-                why.append(
-                    f"merge {c[:12]} {s[:60]!r} wraps merge {w.merge[:12]}, but "
-                    f"{'; '.join(failed)}: only a merge of main, or integrate's merge of a "
-                    f"worker's merge of main adding nothing and dropping nothing, keeps {kept}; "
-                    f"{rerun}"
-                )
-            else:
-                why.append(
-                    f"merge {c[:12]} {s[:60]!r} brings in "
-                    f"{', '.join(p[:12] for p in parents[1:])}, not {base}: only a merge of main "
-                    f"keeps {kept}; {rerun}"
-                )
+            why.append(
+                f"merge {c[:12]} {s[:60]!r} brings in {', '.join(p[:12] for p in parents[1:])}, "
+                f"not {base}: only a merge of main keeps {kept}; {rerun}"
+            )
         else:
             m = k.merge
             hint = (
