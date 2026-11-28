@@ -19,9 +19,8 @@ green static check (exit 75, no other item run) saying gh8 queued and its place,
 shows as its one entry; gh8's supervisor is told the place, the director's pane nothing.
 self_grant_ends (quality #acceptance-slot-self-grant-ends, #1327): through `just test`, gh7's
 implementer's run, granted at once, ends red; once its hold is gone (the grace 0, so no wall
-clock: the grace's own timing is tests/gate/kit/test_slot_queue.py's self_grant_ends) gh8's
-implementer's run is granted the slot at once and runs its tests; after gh7's hold, granted at
-once, is killed (no end recorded), gh8's next run is granted at once; nobody told.
+clock) gh8's implementer's run is granted the slot at once and runs its tests; nobody told. The
+grace's own timing and the killed hold: tests/gate/kit/test_slot_queue.py's self_grant_ends.
 sandboxed: a 31-item run inside the qc sandbox (a `just qc` demo, as qa runs its cases there)
 from that same ungranted agent runs.
 
@@ -756,26 +755,17 @@ def self_grant_ends(s: Scratch) -> None:
     world(s)  # grace 0: the grace is over at the first check after a run (no wall clock)
     red, green = just_test(s, "red", RED), just_test(s, "green")
     at_once = "(granted at once: the heavy slot free, queue empty)"
-    ran = s.run(red, want=1, env={**AGENT, "GATE_WORKERS": "2"})
+    ran = s.run(red, want=1, env={**AGENT, "GATE_WORKERS": "0"})
     out = ran.out + ran.err
     assert "heavy slot: held: the heavy slot for lane gh7, run pid " in out, out
     assert at_once in out, out
     assert "1 failed" in out, out  # red: the gate stops at its first failure
     unheld(s)  # gh7's hold gone, its end recorded; no run of gh7 since
-
-    def takes_at_once(lane: str, env: dict[str, str]) -> None:
-        ran = s.run(green, env={**env, "GATE_WORKERS": "2"})
-        out = ran.out + ran.err
-        assert f"heavy slot: held: the heavy slot for lane {lane}, run pid " in out, out
-        assert at_once in out, out
-        assert "32 passed" in out, out
-
-    takes_at_once("gh8", AGENT8)
-    unheld(s)  # gh8's self-grant ends too, at the next check
-    killed = holding(s)  # gh7's run granted at once, then its hold killed: no end recorded
-    killed.kill()
-    killed.wait(timeout=WAIT_S)
-    takes_at_once("gh8", AGENT8)  # at once, no grace waited
+    ran = s.run(green, env={**AGENT8, "GATE_WORKERS": "0"})
+    out = ran.out + ran.err
+    assert "heavy slot: held: the heavy slot for lane gh8, run pid " in out, out
+    assert at_once in out, out
+    assert "32 passed" in out, out
     assert said(s) == [], said(s)  # nobody told, the director's pane included
 
 
