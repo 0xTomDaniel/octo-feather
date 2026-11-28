@@ -1,4 +1,5 @@
-covers: FAIL: non-Python declared paths lost from covers (coverage cannot see them):
+# covers.py check, no flags, in a clone at 91d3c2a8 (origin fetched; baseline: octo-feather-gate base = f7f16367). Exit 1.
+covers: FAIL: declared paths coverage cannot see, lost from covers (against f7f163676186):
   quality#acceptance-qc-capture: schemas/qc.v1.schema.json
   quality#acceptance-qc-same-verdict: schemas/qc.v1.schema.json
   quality#acceptance-qc-sandbox-cost: package.json

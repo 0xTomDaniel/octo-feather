@@ -18,6 +18,7 @@ the split (functions move whole, so lines that collide inside one function still
 placements: (c') a hunk no line of which places goes to the dispatcher; (c'') by its nearest context, else nowhere.
 A conflict in another scripts/ file the split leaves as it is (merge_ask.py gains functions but keeps its own; the gate
 and qa scripts are not touched) stands.
+It reads no GitHub data (git only), so it has no gh edge to validate (gh_records.py).
 """
 
 from __future__ import annotations

@@ -21,72 +21,68 @@ Interval: createdAt to mergedAt, else closedAt, else the fetch time (still open)
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import datetime as dt
 import gzip
-import json
 import subprocess
 import sys
 from pathlib import Path
-from typing import Any, cast
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import covers  # noqa: E402
-
-
-def end(p: dict[str, Any], now: str) -> str:
-    return str(p.get("mergedAt") or p.get("closedAt") or now)
+import gh_records  # noqa: E402  # the gh PR records, validated at the edge
 
 
 def fetch(prs_file: Path, out: Path) -> None:
     repo = Path.cwd()
     now = dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    prs = cast("list[dict[str, Any]]", json.loads(prs_file.read_text()))
-    first = min(str(p["mergedAt"]) for p in prs)
-    every = cast("list[dict[str, Any]]", json.loads(covers.run(
+    prs = gh_records.merged_list(prs_file.read_text(), str(prs_file))
+    first = min(p.merged_at for p in prs)
+    every = gh_records.any_list(covers.run(
         ["gh", "pr", "list", "--state", "all", "--limit", "1000", "--json",
-         "number,state,createdAt,mergedAt,closedAt,mergeCommit,headRefOid"], repo)))
+         "number,state,createdAt,mergedAt,closedAt,mergeCommit,headRefOid"], repo), "gh pr list --state all")
     # any PR open at some point since the earliest of PRS was opened: its interval can overlap one of PRS's
-    start = min(str(p["createdAt"]) for p in every if p["number"] in {q["number"] for q in prs})
-    keep = [p for p in every if end(p, now) >= start]
-    for p in keep:
-        n = p["number"]
-        oid = str(cast("dict[str, Any]", p.get("mergeCommit") or {}).get("oid") or "")
-        if p.get("mergedAt") and oid and not subprocess.run(["git", "cat-file", "-e", oid], cwd=repo,
-                                                             check=False).returncode:
-            p["base"], p["head"] = f"{oid}^1", oid
+    ours = {q.number for q in prs}
+    start = min(p.created_at for p in every if p.number in ours)
+    keep: list[gh_records.AnyPR] = []
+    for p in (p for p in every if p.end(now) >= start):
+        if p.merged_at and p.merge and not subprocess.run(["git", "cat-file", "-e", p.merge], cwd=repo,
+                                                          check=False).returncode:
+            base, head = f"{p.merge}^1", p.merge
         else:
-            got = subprocess.run(["git", "fetch", "-q", "origin", f"pull/{n}/head"], cwd=repo, check=False).returncode
-            head = "" if got else covers.run(["git", "rev-parse", "-q", "--verify", "FETCH_HEAD"], repo, check=False).strip()
+            got = subprocess.run(["git", "fetch", "-q", "origin", f"pull/{p.number}/head"], cwd=repo,
+                                 check=False).returncode
+            head = "" if got else covers.run(["git", "rev-parse", "-q", "--verify", "FETCH_HEAD"], repo,
+                                             check=False).strip()
             if not head:
-                p["files"] = None
+                keep.append(p)
                 continue
-            p["base"] = covers.run(["git", "merge-base", head, "origin/main"], repo, check=False).strip() or f"{head}^1"
-            p["head"] = head
-        p["files"] = covers.git(repo, "diff", "--name-only", str(p["base"]), str(p["head"])).split()
-    text = json.dumps({"fetched": now, "first_merged": first, "prs": keep}, indent=1) + "\n"
+            base = covers.run(["git", "merge-base", head, "origin/main"], repo, check=False).strip() or f"{head}^1"
+        files = tuple(covers.git(repo, "diff", "--name-only", base, head).split())
+        keep.append(dataclasses.replace(p, base=base, head=head, files=files))
+    text = gh_records.Overlap(now, first, tuple(keep)).dumps()
     out.write_bytes(gzip.compress(text.encode(), mtime=0))
     print(f"collide: {len(keep)} PRs into {out}")
 
 
 def report(prs_file: Path, all_file: Path, split_ref: str, exclude: list[int]) -> None:
     repo = Path.cwd()
-    data = cast("dict[str, Any]", json.loads(gzip.decompress(all_file.read_bytes())))
-    now = str(data["fetched"])
-    every = {int(p["number"]): p for p in cast("list[dict[str, Any]]", data["prs"])
-             if p.get("files") is not None and int(p["number"]) not in exclude}
-    ours = [int(p["number"]) for p in cast("list[dict[str, Any]]", json.loads(prs_file.read_text()))]
+    data = gh_records.overlap(gzip.decompress(all_file.read_bytes()), str(all_file))
+    now = data.fetched
+    every = {p.number: p for p in data.prs if p.files is not None and p.number not in exclude}
+    ours = [p.number for p in gh_records.merged_list(prs_file.read_text(), str(prs_file))]
     split = covers.Split(repo, split_ref)
     views: dict[str, dict[int, set[str]]] = {"before": {}, "c'": {}, "c''": {}}
     for n, p in every.items():
-        fs = set(cast("list[str]", p["files"]))
+        fs = set(p.files or ())
         views["before"][n] = fs
         for v, near in (("c'", False), ("c''", True)):
-            views[v][n] = ((fs - {covers.HUB}) | split.place(p["head"], near=near, base=p["base"])
+            views[v][n] = ((fs - {covers.HUB}) | split.place(str(p.head), near=near, base=p.base)
                            if covers.HUB in fs else fs)
 
     def overlap(a: int, b: int) -> bool:
         pa, pb = every[a], every[b]
-        return str(pa["createdAt"]) < end(pb, now) and str(pb["createdAt"]) < end(pa, now)
+        return pa.created_at < pb.end(now) and pb.created_at < pa.end(now)
 
     print(f"PRs measured: the {len(ours)} merged in prs.json; others: every PR whose interval overlaps theirs "
           f"({len(every)} with files, fetched {now}); left out: {exclude or 'none'}.\n")
