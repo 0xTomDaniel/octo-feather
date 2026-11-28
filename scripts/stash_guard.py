@@ -8,7 +8,9 @@ stash of a worktree's own (#1185 issuecomment-7168239371), so in a repository wh
 replaces an entry (bare, its push options, push, save, pop, drop, clear, store, branch, import,
 export: its --to-ref may name refs/stash, so it is refused with --print too) is refused whatever
 its other arguments, exit 1, writing nothing, naming a work-in-progress commit
-instead; of such a subcommand only its help (-h or --help as its one argument) runs. Its option
+instead, as is any such write whose worktree count fails or lists none (fail closed: no
+repository, or a git that cannot answer it); of such a subcommand only its help (-h or --help
+as its one argument) runs. Its option
 grammar is not parsed. Reading the stash (list, show), create, apply, every other git command, and
 any stash in a one-worktree repository exec REAL_GIT unchanged. Global options before the
 subcommand (-C, -c, --git-dir, --work-tree, ...) are honoured: the worktree count asks git with
@@ -50,9 +52,7 @@ ACTIONS = {
     "--info-path",
 }
 REFUSAL = (
-    "git stash refused (kit stash guard, spec roles#launch-stash-guard): this repository has {n} "
-    "worktrees, and its stash is one list every worktree shares, so a stash here can take or drop "
-    "another worktree's work.\n"
+    "git stash refused (kit stash guard, spec roles#launch-stash-guard): {why}.\n"
     "Set work aside with a work-in-progress commit on your own branch instead: "
     "git commit -am wip (git add -A first for new files), later git reset --soft HEAD~1 to take "
     "it back.\n"
@@ -88,9 +88,21 @@ def writes_stash(sub: list[str]) -> bool:
     return rest not in HELP_ONLY  # bare `git stash` and its options: push
 
 
-def worktrees(git: str, repo: list[str]) -> int:
+SHARED = (
+    "this repository has {n} worktrees, and its stash is one list every worktree shares, so a "
+    "stash here can take or drop another worktree's work"
+)
+# A write is allowed only on a count that shows exactly one worktree: an inventory that fails or
+# shows none (no repository, or a git that cannot answer it) refuses, never authorizes (#1323).
+UNKNOWN = (
+    "`{git} worktree list --porcelain` {how}, so this guard cannot tell whether another worktree "
+    "shares this stash"
+)
+
+
+def worktrees(git: str, repo: list[str]) -> tuple[int, str]:
     """How many worktrees `git worktree list --porcelain` shows for the repository REPO's options
-    pick; 0 when git cannot tell (no repository: git's own stash then says why)."""
+    pick, and, when it cannot tell (the call fails, or shows none), why."""
     r = subprocess.run(
         [git, *repo, "worktree", "list", "--porcelain"],
         capture_output=True,
@@ -98,15 +110,19 @@ def worktrees(git: str, repo: list[str]) -> int:
         check=False,
     )
     if r.returncode != 0:
-        return 0
-    return sum(line.startswith("worktree ") for line in r.stdout.splitlines())
+        err = " ".join(r.stderr.split())[:200]
+        return 0, UNKNOWN.format(git=git, how=f"exited {r.returncode} ({err or 'no output'})")
+    n = sum(line.startswith("worktree ") for line in r.stdout.splitlines())
+    return n, "" if n else UNKNOWN.format(git=git, how="listed no worktree")
 
 
 def main(git: str, args: list[str]) -> None:
     repo, sub = split(args)
-    if writes_stash(sub) and (n := worktrees(git, repo)) > 1:
-        sys.stderr.write(REFUSAL.format(n=n))
-        sys.exit(1)
+    if writes_stash(sub):
+        n, unknown = worktrees(git, repo)
+        if n != 1:
+            sys.stderr.write(REFUSAL.format(why=unknown or SHARED.format(n=n)))
+            sys.exit(1)
     os.execv(git, ["git", *args])  # noqa: S606  git as its caller ran it, no shell between
 
 
