@@ -44,20 +44,20 @@ playwright = "1.64.1"
 # --unreachable-exit 77: a drive with an unreachable step is a demo that did not run to its end (verify-octo-feather SKILL.md).
 [demo."quality#acceptance-qc-capture"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-capture"
-covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-contract", "schemas/qc.v1.schema.json"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "schemas/qc.v1.schema.json", "scripts/check-gate-free", "scripts/correction_lanes.py", "scripts/eval_grading.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "scripts/octo-feather-qa", "scripts/octo-feather-qc", "scripts/octo-feather-spec-status", "scripts/tracker_calls.py"]
 
 [demo."quality#acceptance-qc-insufficient"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-insufficient"
-covers = ["scripts/octo-feather-qc", "scripts/octo-feather-lane", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence"]
+covers = [".agents/skills/github-pr/scripts/gh", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "scripts/check-behavior-smoke", "scripts/check-gate-free", "scripts/correction_lanes.py", "scripts/eval_grading.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-gate", "scripts/octo-feather-lane", "scripts/octo-feather-qc", "scripts/octo-feather-spec-status", "scripts/pi-role", "scripts/tracker_calls.py"]
 
 [demo."quality#acceptance-qc-same-verdict"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-capture"
-covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-contract", "schemas/qc.v1.schema.json"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "schemas/qc.v1.schema.json", "scripts/check-gate-free", "scripts/correction_lanes.py", "scripts/eval_grading.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "scripts/octo-feather-qa", "scripts/octo-feather-qc", "scripts/octo-feather-spec-status", "scripts/tracker_calls.py"]
 
 [demo."quality#acceptance-qc-capture-browser"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-browser"
 browser = true
-covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "scripts/check-gate-free", "scripts/correction_lanes.py", "scripts/eval_grading.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "scripts/octo-feather-qa", "scripts/octo-feather-qc", "scripts/octo-feather-spec-status", "scripts/tracker_calls.py"]
 
 [demo."quality#acceptance-qc-sandbox-maintained"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-sandbox"
@@ -65,119 +65,119 @@ covers = ["scripts/octo-feather-qc-sandbox", "scripts/octo-feather-qc", "package
 
 [demo."quality#acceptance-qc-sandbox-cost"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-sandbox-cost"
-covers = ["scripts/octo-feather-qc-sandbox", "package.json", "pnpm-lock.yaml", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "tests/gate/kit/qc_sandbox_cost.py", "tests/gate/kit/test_qc_sandbox_cost.py"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "package.json", "pnpm-lock.yaml", "scripts/octo-feather-contract", "scripts/octo-feather-evidence"]
 
 [demo."quality#acceptance-qc-advisory"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-advisory"
-covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qa", "evals/judgment-criterion-evidence", "tests/fixtures/classify-stub/pi"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "evals/judgment-criterion-evidence", "scripts/check-gate-free", "scripts/correction_lanes.py", "scripts/eval_grading.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "scripts/octo-feather-qa", "scripts/octo-feather-qc", "scripts/octo-feather-spec-status", "scripts/tracker_calls.py"]
 
 [demo."quality#acceptance-qc-fallback"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-fallback"
-covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "tests/fixtures/qc-judge/pi"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "scripts/check-gate-free", "scripts/eval_grading.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-qa", "scripts/octo-feather-qc", "scripts/octo-feather-spec-status", "tests/fixtures/qc-judge/pi"]
 
 [demo."quality#acceptance-built-links"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-stale"
-covers = ["scripts/octo-feather-qc", "scripts/octo-feather-spec-status"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "scripts/check-gate-free", "scripts/correction_lanes.py", "scripts/eval_grading.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "scripts/octo-feather-qa", "scripts/octo-feather-qc", "scripts/octo-feather-spec-status", "scripts/tracker_calls.py"]
 
 [demo."quality#acceptance-evidence-stale"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-stale"
-covers = ["scripts/octo-feather-spec-status"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "scripts/check-gate-free", "scripts/correction_lanes.py", "scripts/eval_grading.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "scripts/octo-feather-qa", "scripts/octo-feather-qc", "scripts/octo-feather-spec-status", "scripts/tracker_calls.py"]
 
 [demo."issue-lifecycle#acceptance-revision-preserve"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run spec-revision-init"
-covers = ["scripts/octo-feather-spec-status", "tests/fixtures/spec-status/revision"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-spec-status", "scripts/pi-role", "tests/fixtures/spec-status/revision"]
 
 [demo."issue-lifecycle#acceptance-revision-remove"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run spec-revision-init"
-covers = ["scripts/octo-feather-spec-status", "tests/fixtures/spec-status/revision"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-spec-status", "scripts/pi-role", "tests/fixtures/spec-status/revision"]
 
 [demo."issue-lifecycle#acceptance-revision-repeat"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run spec-revision-init"
-covers = ["scripts/octo-feather-spec-status", "tests/fixtures/spec-status/revision"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-spec-status", "scripts/pi-role", "tests/fixtures/spec-status/revision"]
 
 [demo."issue-lifecycle#acceptance-revision-invalid"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run spec-revision-init"
-covers = ["scripts/octo-feather-spec-status", "tests/fixtures/spec-status/revision"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-spec-status", "scripts/pi-role", "tests/fixtures/spec-status/revision"]
 
 [demo."quality#acceptance-fast-affected"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 gate-tiers"
-covers = ["scripts/octo-feather-gate", "scripts/octo-feather-integrate", "justfile", "shared-machinery.txt"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "justfile", "scripts/check-dashes", "scripts/check-gate-free", "scripts/check_rules.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-gate", "scripts/octo-feather-integrate", "scripts/pi-role", "shared-machinery.txt", "tests/gate/conftest.py", "tests/gate/heavy_slot.py", "tests/gate/kit/conftest.py", "tests/gate/test_gate.py"]
 
 [demo."issue-lifecycle#acceptance-integrate-fast"]
-covers = ["scripts/octo-feather-gate", "scripts/octo-feather-integrate", "justfile", "shared-machinery.txt"]
+covers = ["justfile", "scripts/octo-feather-gate", "scripts/octo-feather-integrate", "scripts/pi-role", "shared-machinery.txt"]
 
 [demo."issue-lifecycle#acceptance-integrate-checkpoint"]
-covers = ["scripts/octo-feather-gate", "scripts/octo-feather-integrate", "justfile", "shared-machinery.txt"]
+covers = ["justfile", "scripts/octo-feather-gate", "scripts/octo-feather-integrate", "scripts/pi-role", "shared-machinery.txt"]
 
 [demo."issue-lifecycle#acceptance-pilot-full"]
-covers = ["scripts/octo-feather-gate", "scripts/octo-feather-integrate", "justfile", "shared-machinery.txt"]
+covers = ["justfile", "scripts/octo-feather-gate", "scripts/octo-feather-integrate", "scripts/pi-role", "shared-machinery.txt"]
 
 [demo."templates#acceptance-fresh-fast"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 template-tiers"
-covers = ["templates/python/justfile", "templates/typescript/justfile", "templates/python/tests", "templates/typescript/tests", "templates/python/shared-machinery.txt", "templates/typescript/shared-machinery.txt"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "evals/fixtures/quote-app-inline/src/app/__init__.py", "scripts/check-gate-free", "scripts/check-vendored", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "scripts/pi_sessions.py", "scripts/tracker_calls.py", "templates/python/justfile", "templates/python/scripts/check-languages", "templates/python/scripts/own-tool-paths", "templates/python/shared-machinery.txt", "templates/python/src/app/__init__.py", "templates/python/src/app/cli.py", "templates/python/src/app/core.py", "templates/python/tests", "templates/python/tests/conftest.py", "templates/python/tests/e2e/conftest.py", "templates/python/tests/integration/conftest.py", "templates/python/tests/test_gate.py", "templates/typescript/justfile", "templates/typescript/shared-machinery.txt", "templates/typescript/tests", "tests/fixtures/lane-report/gh", "tests/gate/kit/testkit/__init__.py"]
 
 [demo."templates#acceptance-test-kinds"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 template-tiers"
-covers = ["templates/python/justfile", "templates/typescript/justfile", "templates/python/tests", "templates/typescript/tests", "templates/python/pyproject.toml", "templates/typescript/vitest.config.ts"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "evals/fixtures/quote-app-inline/src/app/__init__.py", "scripts/check-gate-free", "scripts/check-vendored", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "scripts/pi_sessions.py", "scripts/tracker_calls.py", "templates/python/justfile", "templates/python/pyproject.toml", "templates/python/scripts/check-languages", "templates/python/scripts/own-tool-paths", "templates/python/src/app/__init__.py", "templates/python/src/app/cli.py", "templates/python/src/app/core.py", "templates/python/tests", "templates/python/tests/conftest.py", "templates/python/tests/e2e/conftest.py", "templates/python/tests/integration/conftest.py", "templates/python/tests/test_gate.py", "templates/typescript/justfile", "templates/typescript/tests", "templates/typescript/vitest.config.ts", "tests/fixtures/lane-report/gh", "tests/gate/kit/testkit/__init__.py"]
 
 [demo."templates#acceptance-shared-fixture"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 template-tiers"
-covers = ["templates/python/tests/integration/conftest.py", "templates/typescript/tests/shared-fixture.ts", "templates/typescript/vitest.config.ts"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "evals/fixtures/quote-app-inline/src/app/__init__.py", "scripts/check-gate-free", "scripts/check-vendored", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "scripts/pi_sessions.py", "scripts/tracker_calls.py", "templates/python/scripts/check-languages", "templates/python/scripts/own-tool-paths", "templates/python/src/app/__init__.py", "templates/python/src/app/cli.py", "templates/python/src/app/core.py", "templates/python/tests/conftest.py", "templates/python/tests/e2e/conftest.py", "templates/python/tests/integration/conftest.py", "templates/python/tests/test_gate.py", "templates/typescript/tests/shared-fixture.ts", "templates/typescript/vitest.config.ts", "tests/fixtures/lane-report/gh", "tests/gate/kit/testkit/__init__.py"]
 
 [demo."templates#acceptance-same-gate"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 template-tiers"
-covers = ["templates/python/.githooks/pre-commit", "templates/typescript/.githooks/pre-commit", "templates/python/.github/workflows/check.yml", "templates/typescript/.github/workflows/check.yml", ".github/workflows/check.yml", "scripts/check-templates"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".github/workflows/check.yml", "evals/fixtures/quote-app-inline/src/app/__init__.py", "scripts/check-gate-free", "scripts/check-vendored", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "scripts/pi_sessions.py", "scripts/tracker_calls.py", "templates/python/.githooks/pre-commit", "templates/python/.github/workflows/check.yml", "templates/python/scripts/check-languages", "templates/python/scripts/own-tool-paths", "templates/python/src/app/__init__.py", "templates/python/src/app/cli.py", "templates/python/src/app/core.py", "templates/python/tests/conftest.py", "templates/python/tests/e2e/conftest.py", "templates/python/tests/integration/conftest.py", "templates/python/tests/test_gate.py", "templates/typescript/.githooks/pre-commit", "templates/typescript/.github/workflows/check.yml", "tests/fixtures/lane-report/gh", "tests/gate/kit/testkit/__init__.py"]
 
 [demo."templates#acceptance-starter-acceptance-test"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 starter-acceptance"
-covers = ["templates/python/tests", "templates/typescript/tests", "templates/python/qc.toml", "templates/typescript/qc.toml", "templates/typescript/vitest.config.ts", "scripts/octo-feather-qc", "tests/gate/conftest.py"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "evals/fixtures/quote-app-inline/src/app/__init__.py", "scripts/check-gate-free", "scripts/correction_lanes.py", "scripts/eval_grading.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-gate", "scripts/octo-feather-lane", "scripts/octo-feather-qa", "scripts/octo-feather-qc", "scripts/octo-feather-spec-status", "scripts/tracker_calls.py", "templates/python/qc.toml", "templates/python/scripts/check-languages", "templates/python/scripts/own-tool-paths", "templates/python/src/app/__init__.py", "templates/python/src/app/cli.py", "templates/python/src/app/core.py", "templates/python/tests", "templates/python/tests/conftest.py", "templates/python/tests/e2e/conftest.py", "templates/python/tests/e2e/test_cli_e2e.py", "templates/python/tests/integration/conftest.py", "templates/python/tests/integration/test_cli.py", "templates/python/tests/test_gate.py", "templates/typescript/qc.toml", "templates/typescript/tests", "templates/typescript/vitest.config.ts", "tests/gate/kit/testkit/__init__.py"]
 
 [demo."templates#acceptance-edge-rejects"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 template-edge"
-covers = ["templates/python/src", "templates/python/pyproject.toml", "templates/python/uv.lock", "templates/typescript/src", "templates/typescript/package.json", "templates/typescript/pnpm-lock.yaml"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "scripts/check-gate-free", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "templates/python/pyproject.toml", "templates/python/src", "templates/python/src/app/__init__.py", "templates/python/src/app/cli.py", "templates/python/src/app/core.py", "templates/python/uv.lock", "templates/typescript/package.json", "templates/typescript/pnpm-lock.yaml", "templates/typescript/src"]
 
 [demo."issue-lifecycle#acceptance-merge-ask-full-proof"]
-covers = ["scripts/octo-feather-lane", "scripts/octo-feather-gate", "scripts/octo-feather-integrate"]
+covers = ["evals/fixtures/quote-app-inline/src/app/__init__.py", "scripts/check-behavior-smoke", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-gate", "scripts/octo-feather-integrate", "scripts/octo-feather-lane", "scripts/octo-feather-spec-status", "scripts/pi-role", "scripts/tracker_calls.py", "templates/python/src/app/__init__.py", "tests/gate/kit/lane_merge_ask.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/gh.py"]
 
 # Proven by tests/gate/kit/test_lane_merge_order.py's tagged item (the rule: issue-lifecycle #gates-merge-order).
 [demo."issue-lifecycle#acceptance-merge-ask-siblings"]
-covers = ["scripts/octo-feather-lane", "scripts/merge_ask.py"]
+covers = ["evals/fixtures/quote-app-inline/src/app/__init__.py", "scripts/check-behavior-smoke", "scripts/correction_lanes.py", "scripts/eval_grading.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-gate", "scripts/octo-feather-lane", "scripts/octo-feather-qa", "scripts/octo-feather-spec-status", "scripts/pi-role", "scripts/tracker_calls.py", "templates/python/src/app/__init__.py", "tests/gate/kit/lane_merge_ask.py", "tests/gate/kit/lane_merge_order.py", "tests/gate/kit/qc_eval_verdict.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/gh.py", "tests/gate/kit/testkit/qc.py"]
 
 # Proven by tests/gate/kit/test_lane_merge_ask.py's tagged items (the rule: issue-lifecycle #lanes-one-head).
 [demo."issue-lifecycle#acceptance-ci-status-only"]
-covers = ["scripts/octo-feather-lane", ".github/workflows/check.yml", "templates/python/.github/workflows/check.yml", "templates/typescript/.github/workflows/check.yml"]
+covers = [".github/workflows/check.yml", "evals/fixtures/quote-app-inline/src/app/__init__.py", "scripts/check-behavior-smoke", "scripts/correction_lanes.py", "scripts/eval_grading.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/lane_review.py", "scripts/merge_ask.py", "scripts/octo-feather-gate", "scripts/octo-feather-lane", "scripts/octo-feather-spec-status", "scripts/pi-role", "scripts/tracker_calls.py", "templates/python/.github/workflows/check.yml", "templates/python/src/app/__init__.py", "templates/typescript/.github/workflows/check.yml", "tests/gate/kit/lane_merge_ask.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/gh.py"]
 
 # Proven by tests/gate/kit/test_lane_merge_ask_hunks.py's tagged item (the rule: issue-lifecycle #lanes-one-head).
 [demo."issue-lifecycle#acceptance-one-head-hunks"]
-covers = ["scripts/octo-feather-lane", "scripts/merge_ask.py"]
+covers = ["evals/fixtures/quote-app-inline/src/app/__init__.py", "scripts/check-behavior-smoke", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-gate", "scripts/octo-feather-lane", "scripts/octo-feather-spec-status", "scripts/pi-role", "scripts/tracker_calls.py", "templates/python/src/app/__init__.py", "tests/gate/kit/lane_merge_ask.py", "tests/gate/kit/lane_merge_ask_hunks.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/gh.py"]
 
 # Proven by tests/gate/kit/test_lane_review_resolution.py's tagged item (the rule: issue-lifecycle #lanes-one-head).
 [demo."issue-lifecycle#acceptance-review-resolution"]
-covers = ["scripts/octo-feather-lane", "agents/code-reviewer.md", "agents/supervisor.md"]
+covers = ["agents/code-reviewer.md", "agents/supervisor.md", "scripts/check-behavior-smoke", "scripts/correction_lanes.py", "scripts/eval_grading.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/lane_review.py", "scripts/merge_ask.py", "scripts/octo-feather-gate", "scripts/octo-feather-lane", "scripts/octo-feather-spec-status", "scripts/pi-role", "scripts/tracker_calls.py", "tests/gate/kit/lane_ci_start.py", "tests/gate/kit/lane_review_resolution.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/gh.py"]
 
 # Proven by tests/gate/kit/test_lane_verdict_rounds.py's tagged items (the rule: issue-lifecycle #lanes-one-head).
 [demo."issue-lifecycle#acceptance-verdict-covers-lane"]
-covers = ["scripts/octo-feather-lane", "scripts/merge_ask.py", ".skillfile/patches/skills/code-review/SKILL.md.patch", ".agents/skills/code-review/SKILL.md"]
+covers = [".agents/skills/code-review/SKILL.md", ".skillfile/patches/skills/code-review/SKILL.md.patch", "evals/fixtures/quote-app-inline/src/app/__init__.py", "scripts/check-behavior-smoke", "scripts/correction_lanes.py", "scripts/eval_grading.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/lane_review.py", "scripts/merge_ask.py", "scripts/octo-feather-gate", "scripts/octo-feather-lane", "scripts/octo-feather-spec-status", "scripts/pi-role", "scripts/tracker_calls.py", "templates/python/src/app/__init__.py", "tests/gate/kit/lane_verdict_rounds.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/gh.py"]
 
 # Proven by tests/gate/kit/test_lane_verdict_rounds.py's tagged items (the rule: issue-lifecycle #lanes-one-head; docs/adr/0008).
 [demo."issue-lifecycle#acceptance-declaration-check-shown"]
-covers = ["scripts/octo-feather-lane", "scripts/merge_ask.py", ".skillfile/patches/skills/code-review/SKILL.md.patch", ".agents/skills/code-review/SKILL.md"]
+covers = [".agents/skills/code-review/SKILL.md", ".skillfile/patches/skills/code-review/SKILL.md.patch", "evals/fixtures/quote-app-inline/src/app/__init__.py", "scripts/check-behavior-smoke", "scripts/correction_lanes.py", "scripts/eval_grading.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/lane_review.py", "scripts/merge_ask.py", "scripts/octo-feather-gate", "scripts/octo-feather-lane", "scripts/octo-feather-spec-status", "scripts/pi-role", "scripts/tracker_calls.py", "templates/python/src/app/__init__.py", "tests/gate/kit/lane_verdict_rounds.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/gh.py"]
 
 # Proven by tests/gate/kit/test_lane_correction_replay.py's tagged items (the rule: issue-lifecycle #lanes-correction; rows run in the qc sandbox).
 [demo."issue-lifecycle#acceptance-correction-replay-missing"]
-covers = ["scripts/octo-feather-lane", "scripts/merge_ask.py", "scripts/correction_lanes.py", "scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-qc-ghsnap"]
+covers = ["evals/fixtures/quote-app-inline/src/app/__init__.py", "scripts/check-behavior-smoke", "scripts/correction_lanes.py", "scripts/eval_grading.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/lane_review.py", "scripts/merge_ask.py", "scripts/octo-feather-gate", "scripts/octo-feather-lane", "scripts/octo-feather-qc", "scripts/octo-feather-qc-ghsnap", "scripts/octo-feather-spec-status", "scripts/pi-role", "scripts/tracker_calls.py", "templates/python/src/app/__init__.py", "tests/gate/kit/lane_correction_replay.py", "tests/gate/kit/lane_verdict_rounds.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/gh.py", "tests/gate/kit/testkit/install_check.py", "tests/gate/kit/testkit/jsonwalk.py", "tests/gate/kit/testkit/qc_box.py"]
 
 # Proven by tests/gate/kit/test_lane_correction_replay.py's tagged items (the rule: issue-lifecycle #lanes-correction; rows run in the qc sandbox).
 [demo."issue-lifecycle#acceptance-correction-replay-shown"]
-covers = ["scripts/octo-feather-lane", "scripts/merge_ask.py", "scripts/correction_lanes.py", "scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-qc-ghsnap"]
+covers = ["evals/fixtures/quote-app-inline/src/app/__init__.py", "scripts/check-behavior-smoke", "scripts/correction_lanes.py", "scripts/eval_grading.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/lane_review.py", "scripts/merge_ask.py", "scripts/octo-feather-gate", "scripts/octo-feather-lane", "scripts/octo-feather-qc", "scripts/octo-feather-qc-ghsnap", "scripts/octo-feather-spec-status", "scripts/pi-role", "scripts/tracker_calls.py", "templates/python/src/app/__init__.py", "tests/gate/kit/lane_correction_replay.py", "tests/gate/kit/lane_verdict_rounds.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/gh.py", "tests/gate/kit/testkit/install_check.py", "tests/gate/kit/testkit/jsonwalk.py", "tests/gate/kit/testkit/qc_box.py"]
 
 # Proven by tests/gate/kit/test_lane_ci_start.py's tagged items (the rule: issue-lifecycle #lanes-one-head); the role naming the
 # command: owed eval docs/owed-evals/589.md.
 [demo."issue-lifecycle#acceptance-ci-alongside"]
-covers = ["scripts/octo-feather-lane", "agents/supervisor.md", ".skillfile/patches/skills/implement-spec/SKILL.md.patch", ".agents/skills/implement-spec/SKILL.md"]
+covers = [".agents/skills/implement-spec/SKILL.md", ".skillfile/patches/skills/implement-spec/SKILL.md.patch", "agents/supervisor.md", "evals/fixtures/quote-app-inline/src/app/__init__.py", "scripts/ci_start.py", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/merge_ask.py", "scripts/octo-feather-gate", "scripts/octo-feather-lane", "scripts/tracker_calls.py", "templates/python/src/app/__init__.py", "tests/gate/kit/lane_ci_start.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/gh.py"]
 
 [demo."issue-lifecycle#acceptance-brownfield-full"]
-covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-gate"]
+covers = ["scripts/octo-feather-gate", "scripts/octo-feather-integrate", "scripts/pi-role"]
 
 [demo."quality#acceptance-one-execution"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 one-execution"
@@ -185,108 +185,108 @@ covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts
 
 # Proven by tests/qc-carry.sh's tagged cases (the rule: quality #qc-carry).
 [demo."quality#acceptance-qc-carry"]
-covers = ["scripts/octo-feather-qc", "scripts/octo-feather-spec-status", "scripts/octo-feather-evidence", "scripts/octo-feather-gate"]
+covers = ["scripts/check-gate-free", "scripts/eval_grading.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-gate", "scripts/octo-feather-qa", "scripts/octo-feather-qc", "scripts/octo-feather-spec-status", "scripts/pi-role", "tests/gate/conftest.py", "tests/gate/test_gate.py"]
 
 [demo."quality#acceptance-one-execution-incomplete"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 one-execution-incomplete"
-covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "tests/gate/conftest.py", "tests/gate/test_gate.py"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "scripts/check-gate-free", "scripts/eval_grading.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-gate", "scripts/octo-feather-qc", "scripts/octo-feather-spec-status", "tests/gate/conftest.py", "tests/gate/test_gate.py"]
 
 [demo."comms#acceptance-report-gate-budget"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 factory-report"
-covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.toml"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "gate-budget.toml", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "scripts/octo-feather-reflect", "scripts/pi_sessions.py", "scripts/tracker_calls.py", "tests/fixtures/lane-report/gh"]
 
 [demo."issue-lifecycle#acceptance-merge-ask-gate-budget"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 merge-ask-proof"
-covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.toml"]
+covers = [".agents/skills/github-pr/scripts/gh", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "gate-budget.toml", "scripts/check-behavior-smoke", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-gate", "scripts/octo-feather-lane", "scripts/octo-feather-spec-status", "scripts/pi-role", "scripts/tracker_calls.py"]
 
 # Judged from a pinned stored eval run (rule: scripts/octo-feather-qa --help, Verdict): a real headless director handed
 # realcase PR #1's recorded tier 3 merge ask (evals/director-tier-relay). The run's generated evidence:
 # evidence/2026-11-25-gh1284-merge-tiers.md.
 [demo."issue-lifecycle#acceptance-tier-three-waits"]
 command = "scripts/octo-feather-qa --verdict 20261126T064835Z-939595/director-tier-relay/tier-three-waits-for-owner"
-covers = ["agents/director.md", "evals/director-tier-relay", "evals/fixtures/python-app", "scripts/octo-feather-qa", "scripts/eval_grading.py", "evidence/2026-11-25-gh1284-merge-tiers.md"]
+covers = ["agents/director.md", "evals/director-tier-relay", "evals/fixtures/python-app", "evidence/2026-11-25-gh1284-merge-tiers.md", "scripts/check-evals", "scripts/eval_grading.py", "scripts/octo-feather-qa", "scripts/pi-role"]
 
 # Proven by its tagged test, tests/web-tools.sh (headless roles and herdr-spawn tab launches, real Pi, codemode).
 [demo."roles#acceptance-codemode-every-role"]
-covers = ["scripts/pi-role", ".agents/skills/herdr-comms/assets/herdr-spawn", "agents/director.md", "agents/supervisor.md", "agents/general-worker.md", "agents/implementer.md", "agents/corrector.md", "agents/code-reviewer.md", "agents/qc-judge.md", "extensions/web-servers.ts", "web-mcp.json", "pi-version"]
+covers = [".agents/skills/herdr-comms/assets/herdr-spawn", ".agents/skills/herdr-comms/assets/herdr_ready.py", ".agents/skills/herdr-comms/assets/herdr_scope.py", "agents/code-reviewer.md", "agents/corrector.md", "agents/director.md", "agents/general-worker.md", "agents/implementer.md", "agents/qc-judge.md", "agents/supervisor.md", "extensions/web-servers.ts", "pi-version", "scripts/check-roles", "scripts/handoff_log.py", "scripts/octo-feather-handoff", "scripts/pi-role", "web-mcp.json"]
 
 [demo."roles#acceptance-shaper-launch"]
-covers = ["scripts/octo-feather-shape", "scripts/pi-role", "agents/shaper.md", "justfile"]
+covers = ["agents/shaper.md", "justfile", "scripts/check-gate-free", "scripts/pi-role"]
 
 # The stub role's model is a stub `pi` the drive writes first on the qa sandbox's PATH: no real model call.
 [demo."quality#acceptance-qa-repeats"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-runs"
-covers = ["scripts/octo-feather-qa"]
+covers = ["scripts/check-evals", "scripts/pi-role", "tests/fixtures/classify-stub/pi", "tests/fixtures/install-check/pi", "tests/fixtures/qc-judge/pi"]
 
 [demo."quality#acceptance-qa-cost"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-baseline"
-covers = ["scripts/octo-feather-qa"]
+covers = ["scripts/check-evals", "scripts/pi-role", "tests/fixtures/classify-stub/pi", "tests/fixtures/install-check/pi", "tests/fixtures/qc-judge/pi"]
 
 [demo."quality#acceptance-qa-baseline"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-baseline"
-covers = ["scripts/octo-feather-qa"]
+covers = ["scripts/check-evals", "scripts/pi-role", "tests/fixtures/classify-stub/pi", "tests/fixtures/install-check/pi", "tests/fixtures/qc-judge/pi"]
 
 [demo."quality#acceptance-qa-analyst"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-analyst"
-covers = ["scripts/octo-feather-qa"]
+covers = ["scripts/check-evals", "scripts/pi-role", "tests/fixtures/classify-stub/pi", "tests/fixtures/install-check/pi", "tests/fixtures/qc-judge/pi"]
 
 [demo."quality#acceptance-qa-review"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-review"
-covers = ["scripts/octo-feather-qa", "scripts/check-evals"]
+covers = ["scripts/check-evals", "scripts/pi-role", "tests/fixtures/classify-stub/pi", "tests/fixtures/install-check/pi", "tests/fixtures/qc-judge/pi"]
 
 [demo."quality#acceptance-qa-history"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-history"
-covers = ["scripts/octo-feather-qa", "scripts/check-evals"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "scripts/check-evals", "scripts/check-gate-free", "scripts/eval_grading.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-qa", "scripts/octo-feather-qc", "scripts/octo-feather-slot", "scripts/pi-role", "scripts/slot_queue.py"]
 
 # Reflectors stubbed, tracker faked: no model call, no tracker write.
 [demo."comms#acceptance-reflect-files-correction"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
-covers = ["scripts/octo-feather-reflect", "scripts/correction_lanes.py", "scripts/tracker_calls.py", "scripts/octo-feather-lane", "tests/fixtures/tracker-gh/gh"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reflection.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "scripts/octo-feather-reflect", "scripts/pi-role", "scripts/pi_sessions.py", "scripts/post_merge.py", "scripts/slot_queue.py", "scripts/tracker_calls.py", "tests/fixtures/classify-stub/pi", "tests/fixtures/herdr-say/herdr", "tests/fixtures/herdr-spawn/herdr", "tests/fixtures/install-check/pi", "tests/fixtures/qc-judge/pi", "tests/fixtures/reflection-director", "tests/fixtures/tracker-gh/gh"]
 
 # The route owner's tracker: the drive files a kit-routed class in the kit's and a `target:`-routed one in the target's.
 [demo."comms#acceptance-reflect-files-route-owner"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
-covers = ["scripts/octo-feather-reflect", "scripts/correction_lanes.py", "scripts/tracker_calls.py", "scripts/octo-feather-lane", "tests/fixtures/tracker-gh/gh"]
+covers = ["tests/gate/kit/testkit/gh.py"]
 
 [demo."issue-lifecycle#acceptance-writer-route-lane"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
-covers = ["scripts/octo-feather-reflect", "scripts/correction_lanes.py", "scripts/tracker_calls.py", "scripts/octo-feather-lane"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reflection.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "scripts/octo-feather-reflect", "scripts/pi-role", "scripts/pi_sessions.py", "scripts/post_merge.py", "scripts/slot_queue.py", "scripts/tracker_calls.py", "tests/fixtures/classify-stub/pi", "tests/fixtures/herdr-say/herdr", "tests/fixtures/herdr-spawn/herdr", "tests/fixtures/install-check/pi", "tests/fixtures/qc-judge/pi", "tests/fixtures/reflection-director", "tests/fixtures/tracker-gh/gh"]
 
 [demo."comms#acceptance-correction-intake"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
-covers = ["scripts/octo-feather-lane", "scripts/octo-feather-reflect", "scripts/correction_lanes.py", "scripts/tracker_calls.py"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reflection.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "scripts/octo-feather-reflect", "scripts/pi-role", "scripts/pi_sessions.py", "scripts/post_merge.py", "scripts/slot_queue.py", "scripts/tracker_calls.py", "tests/fixtures/classify-stub/pi", "tests/fixtures/herdr-say/herdr", "tests/fixtures/herdr-spawn/herdr", "tests/fixtures/install-check/pi", "tests/fixtures/qc-judge/pi", "tests/fixtures/reflection-director", "tests/fixtures/tracker-gh/gh"]
 
 # Proven by its tagged test, tests/gate/kit/test_handoff_ended.py (Herdr stand-in; the scenario prints the lane hand-off log).
 [demo."comms#acceptance-worker-ended"]
-covers = ["scripts/octo-feather-handoff", "scripts/handoff_log.py", "agents/supervisor.md", "tests/gate/kit/handoff_ended.py"]
+covers = [".agents/skills/herdr-comms/assets/herdr_ready.py", ".agents/skills/herdr-comms/assets/herdr_scope.py", "agents/supervisor.md", "scripts/handoff_log.py", "scripts/octo-feather-handoff", "scripts/pi-role", "tests/gate/kit/handoff_ended.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/systemd.py"]
 
 # Proven by its tagged test, tests/gate/kit/test_lane_correction.py (gh stand-in's store; the scenario prints each archive's output).
 [demo."comms#acceptance-reflect-recurrence-comments"]
-covers = ["scripts/octo-feather-reflect", "scripts/correction_lanes.py", "scripts/tracker_calls.py", "scripts/octo-feather-lane", "tests/gate/kit/lane_correction.py"]
+covers = ["tests/gate/kit/testkit/gh.py"]
 
 # Proven by its tagged test, tests/gate/kit/test_lane_correction.py (gh stand-in's store; the scenario prints each reflect --director's output).
 [demo."issue-lifecycle#acceptance-reflection-missed-lane"]
-covers = ["scripts/octo-feather-reflect", "scripts/correction_lanes.py", "scripts/tracker_calls.py", "scripts/octo-feather-lane", "tests/gate/kit/lane_correction.py"]
+covers = ["tests/gate/kit/testkit/gh.py"]
 
 [demo."comms#acceptance-report-owner-caught-headline"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run factory-report"
-covers = ["scripts/octo-feather-lane"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "scripts/octo-feather-reflect", "scripts/pi_sessions.py", "scripts/tracker_calls.py", "tests/fixtures/lane-report/gh"]
 
 [demo."comms#acceptance-report-skill-reach"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run factory-report"
-covers = ["scripts/octo-feather-lane"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "scripts/octo-feather-reflect", "scripts/pi_sessions.py", "scripts/tracker_calls.py", "tests/fixtures/lane-report/gh"]
 
 [demo."skills#acceptance-launch-refuses-unloaded"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run skill-loading"
-covers = ["scripts/pi-role", "extensions/skills-loaded.ts"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "extensions/skills-loaded.ts", "scripts/check-skills", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/pi-role"]
 
 [demo."skills#acceptance-only-listed"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run skill-loading"
-covers = ["scripts/pi-role", "extensions/skills-loaded.ts", "scripts/check-skills"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "extensions/skills-loaded.ts", "scripts/check-skills", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/pi-role"]
 
 [demo."skills#acceptance-skill-frontmatter"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run skill-loading"
-covers = ["scripts/check-skills", "extensions/skills-loaded.ts"]
+covers = [".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "extensions/skills-loaded.ts", "scripts/check-skills", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/pi-role"]
 
 # No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-notifications --runs 3 --baseline
 # origin/main), which needs the eval slot and a real model route, 18 runs of minutes each: not a qc demo. The agent
@@ -296,7 +296,7 @@ covers = ["agents/supervisor.md", "evals/supervisor-notifications", "evidence/20
 
 [demo."issue-lifecycle#acceptance-pilot-pr"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 pilot-pr"
-covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-qc", "scripts/octo-feather-lane", "tests/fixtures/tracker-gh/gh"]
+covers = ["scripts/check-gate-free", "scripts/correction_lanes.py", "scripts/eval_grading.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reporting.py", "scripts/lane_review.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-gate", "scripts/octo-feather-integrate", "scripts/octo-feather-lane", "scripts/octo-feather-qa", "scripts/octo-feather-qc", "scripts/octo-feather-spec-status", "scripts/pi-role", "scripts/tracker_calls.py", "tests/fixtures/tracker-gh/gh"]
 
 # Proven by its tagged test (tests/gate/kit/test_herdr_messaging.py, queued_completion) and this demo, herdr-say against the
 # testkit's Herdr stand-in: a worker's --parent completion while its supervisor compacts is never resent, delivered once
@@ -306,21 +306,21 @@ covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-qc", "scripts/
 # evidence/2026-11-13-gh840-worker-uncertain-send.md (pass rates on both kits).
 [demo."comms#acceptance-queued-completion"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 queued-completion"
-covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-queued", "tests/gate/kit/testkit/herdr.py", "agents/implementer.md", "agents/code-reviewer.md", "evals/worker-uncertain-send", "evidence/2026-11-13-gh840-worker-uncertain-send.md"]
+covers = [".agents/skills/herdr-comms/assets/herdr-say", "agents/code-reviewer.md", "agents/implementer.md", "evals/worker-uncertain-send", "evidence/2026-11-13-gh840-worker-uncertain-send.md", "scripts/handoff_log.py", "scripts/octo-feather-handoff", "scripts/octo-feather-queued", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/realcase.py"]
 
 # The three drives below run the kit's commands over the testkit Herdr (features/parent-resumed.md, result-file.md,
 # result-missing.md); scenario twins in tests/gate/kit/herdr_messaging.py.
 [demo."comms#acceptance-parent-resumed"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 parent-resumed"
-covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-handoff", "scripts/octo-feather-start", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/parent-resumed.md"]
+covers = [".agents/skills/herdr-comms/assets/herdr-say", ".agents/skills/herdr-comms/assets/herdr_ready.py", ".agents/skills/herdr-comms/assets/herdr_scope.py", ".agents/skills/verify-octo-feather/features/parent-resumed.md", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reflection.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-handoff", "scripts/octo-feather-lane", "scripts/octo-feather-reflect", "scripts/octo-feather-start", "scripts/pi-role", "scripts/tracker_calls.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/systemd.py"]
 
 [demo."comms#acceptance-result-file"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 result-file"
-covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-handoff", "scripts/octo-feather-queued", "agents/supervisor.md", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/result-file.md"]
+covers = [".agents/skills/herdr-comms/assets/herdr-say", ".agents/skills/verify-octo-feather/features/result-file.md", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "agents/supervisor.md", "scripts/handoff_log.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-handoff", "scripts/octo-feather-queued", "tests/gate/kit/testkit/herdr.py"]
 
 [demo."comms#acceptance-result-missing"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 result-missing"
-covers = ["scripts/octo-feather-handoff", "agents/supervisor.md", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/result-missing.md"]
+covers = [".agents/skills/verify-octo-feather/features/result-missing.md", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "agents/supervisor.md", "scripts/handoff_log.py", "scripts/octo-feather-contract", "scripts/octo-feather-evidence", "scripts/octo-feather-handoff", "tests/gate/kit/testkit/herdr.py"]
 
 # No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-delegation --runs 3 --baseline
 # origin/main), which needs the eval slot and a real model route: not a qc demo. The agent fallback judge reads its run
@@ -345,7 +345,7 @@ covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11
 # tests/gate/kit/test_herdr_messaging.py.
 [demo."comms#acceptance-real-blocker"]
 command = "scripts/octo-feather-qa --verdict 20261122T162704Z-4a14c2/supervisor-autonomy/owner-access-blocker-and-ready-work 20261122T162704Z-4a14c2/supervisor-autonomy/owner-access-blocker-message"
-covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evals/fixtures/lane-shout-wip", "evals/fixtures/lane-shout-main", "scripts/octo-feather-qa", "evidence/2026-11-13-gh840-supervisor-autonomy.md", "evidence/2026-11-18-gh978-eval-verdict.md", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/herdr_messaging.py"]
+covers = [".agents/skills/herdr-comms/assets/herdr-say", "agents/supervisor.md", "evals/fixtures/lane-shout-main", "evals/fixtures/lane-shout-wip", "evals/supervisor-autonomy", "evidence/2026-11-13-gh840-supervisor-autonomy.md", "evidence/2026-11-18-gh978-eval-verdict.md", "scripts/check-evals", "scripts/eval_grading.py", "scripts/octo-feather-qa", "scripts/pi-role"]
 
 # Two halves. The supervisor half, judged from pinned stored eval runs (rule: scripts/octo-feather-qa --help, Verdict):
 # sent back and nothing integrated on a missed named skill, integrated on none; the cases' stand-in for `skills` and the
@@ -356,14 +356,14 @@ covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evals/fixtures/l
 # once loaded (tests/gate/kit/lane_skills.py demo, also a gate item).
 [demo."issue-lifecycle#acceptance-ticket-skills"]
 command = "scripts/octo-feather-qa --verdict 20261122T162704Z-4a14c2/supervisor-ticket-skills/missed-skill-sent-back 20261122T162704Z-4a14c2/supervisor-ticket-skills/loaded-skill-integrated && python3 tests/gate/kit/lane_skills.py demo"
-covers = ["agents/supervisor.md", "scripts/octo-feather-lane", "scripts/octo-feather-handoff", ".agents/skills/herdr-comms/assets/herdr-spawn", ".agents/skills/github-issues/scripts/lane-key", "tests/gate/kit/lane_skills.py", "tests/gate/kit/testkit/herdr.py", "evals/supervisor-ticket-skills", "evals/fixtures/lane-skills-main", "evals/fixtures/lane-skills-1099", "evals/fixtures/lane-skills-1094", "tests/gate/kit/testkit/recordings/lane-skills.json", "tests/fixtures/lane-skills", "scripts/octo-feather-qa", "evidence/2026-11-20-gh644-1161-supervisor-ticket-skills.md"]
+covers = [".agents/skills/github-issues/scripts/lane-key", ".agents/skills/herdr-comms/assets/herdr-spawn", "agents/supervisor.md", "evals/fixtures/lane-skills-1094", "evals/fixtures/lane-skills-1099", "evals/fixtures/lane-skills-main", "evals/supervisor-ticket-skills", "evidence/2026-11-20-gh644-1161-supervisor-ticket-skills.md", "scripts/check-evals", "scripts/eval_grading.py", "scripts/octo-feather-qa", "scripts/pi-role", "tests/fixtures/lane-skills", "tests/gate/kit/testkit/recordings/lane-skills.json"]
 
 # Judged from pinned stored eval runs (rule: scripts/octo-feather-qa --help, Verdict). Which case proves which Then
 # clause: evidence/2026-11-18-gh978-eval-verdict.md; the pinned run's generated evidence:
 # evidence/2026-11-22-gh1075-supervisor-repin.md.
 [demo."roles#acceptance-general-worker-no-implementation"]
 command = "scripts/octo-feather-qa --verdict 20261122T162704Z-4a14c2/supervisor-general-worker/diagnosis-diff-goes-to-implementer 20261122T162704Z-4a14c2/supervisor-general-worker/implementer-result-integrated-not-candidate 20261122T162704Z-4a14c2/supervisor-general-worker/reviewed-implementer-result-integrated"
-covers = ["agents/supervisor.md", "evals/supervisor-general-worker", "evals/fixtures/lane-shout-general-diff", "evals/fixtures/lane-shout-qc-fixed", "evals/fixtures/lane-shout-qc-red", "scripts/octo-feather-qa", "evidence/2026-11-17-gh840-supervisor-general-worker.md", "evidence/2026-11-18-gh978-eval-verdict.md"]
+covers = ["agents/supervisor.md", "evals/fixtures/lane-shout-general-diff", "evals/fixtures/lane-shout-qc-fixed", "evals/fixtures/lane-shout-qc-red", "evals/supervisor-general-worker", "evidence/2026-11-17-gh840-supervisor-general-worker.md", "evidence/2026-11-18-gh978-eval-verdict.md", "scripts/check-evals", "scripts/eval_grading.py", "scripts/octo-feather-qa", "scripts/pi-role"]
 
 # Two halves (evidence/2026-11-13-gh840-supervisor-fresh-worker.md, How this meets the criterion): the supervisor starts
 # the independent work with a new spawn, never a --resume, and a self-contained brief (model eval supervisor-fresh-worker,
@@ -372,17 +372,17 @@ covers = ["agents/supervisor.md", "evals/supervisor-general-worker", "evals/fixt
 # herdr-spawn and herdr-close against the testkit's Herdr stand-in.
 [demo."roles#acceptance-fresh-independent-worker"]
 command = "python3 tests/gate/kit/herdr_messaging.py fresh_worker_session"
-covers = ["agents/supervisor.md", "evals/supervisor-fresh-worker", "evidence/2026-11-13-gh840-supervisor-fresh-worker.md", ".agents/skills/herdr-comms/assets/herdr-spawn", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/herdr.py"]
+covers = [".agents/skills/herdr-comms/assets/herdr-spawn", ".agents/skills/herdr-comms/assets/herdr_ready.py", ".agents/skills/herdr-comms/assets/herdr_scope.py", "agents/supervisor.md", "evals/supervisor-fresh-worker", "evidence/2026-11-13-gh840-supervisor-fresh-worker.md", "scripts/handoff_log.py", "scripts/octo-feather-handoff", "scripts/pi-role", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/realcase.py", "tests/gate/kit/testkit/systemd.py"]
 # Proven by its tagged tests (tests/gate/kit/test_herdr_messaging.py) and this demo: herdr-say run as a general worker
 # against the testkit's Herdr stand-in: live parent delivered, peer lane refused (77), parent gone: the director stand-in
 # receives exactly the fixed alert; timeout and stall raise none, an implementer cannot reach the director.
 [demo."roles#acceptance-task-worker-route"]
 command = "python3 tests/gate/kit/herdr_messaging.py worker_route && python3 tests/gate/kit/herdr_messaging.py parent_gone"
-covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-parent-gone", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/herdr.py"]
+covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/handoff_log.py", "scripts/octo-feather-handoff", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/realcase.py"]
 
 [demo."comms#acceptance-parent-gone"]
 command = "python3 tests/gate/kit/herdr_messaging.py worker_route && python3 tests/gate/kit/herdr_messaging.py parent_gone"
-covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-parent-gone", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/herdr.py"]
+covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/handoff_log.py", "scripts/octo-feather-handoff", "scripts/octo-feather-parent-gone", "scripts/octo-feather-queued", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/realcase.py"]
 
 # Proven by its tagged test (tests/gate/kit/test_herdr_messaging.py) and this demo, the kit's commands against the testkit's
 # Herdr stand-in: the director parks its general worker stand-in (herdr-close --park, appended to the director log),
@@ -391,7 +391,7 @@ covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-p
 # a parked lane worker still resumes in its supervisor's workspace.
 [demo."comms#acceptance-director-worker-resume"]
 command = "python3 tests/gate/kit/herdr_messaging.py director_worker_resume"
-covers = ["scripts/octo-feather-handoff", ".agents/skills/herdr-comms/assets/herdr-say", ".agents/skills/herdr-comms/assets/herdr-close", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/herdr.py"]
+covers = [".agents/skills/herdr-comms/assets/herdr-close", ".agents/skills/herdr-comms/assets/herdr-say", ".agents/skills/herdr-comms/assets/herdr_ready.py", ".agents/skills/herdr-comms/assets/herdr_scope.py", "scripts/handoff_log.py", "scripts/octo-feather-handoff", "scripts/pi-role", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/realcase.py", "tests/gate/kit/testkit/systemd.py"]
 
 # Proven by tests/gate/kit/test_lane_start.py's tagged item; the demo is the verify skill's lane-start drive
 # (features/lane-start.md): `octo-feather-lane start 905 --goal ... --outcome ... --brief-file brief.md` in a scratch
@@ -399,26 +399,26 @@ covers = ["scripts/octo-feather-handoff", ".agents/skills/herdr-comms/assets/her
 # workspace, worktree, record, the stand-in's prompts and the director log read back.
 [demo."issue-lifecycle#acceptance-lane-start"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
-covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/tracker_calls.py", "scripts/octo-feather-start", ".agents/skills/herdr-comms/assets/herdr-spawn", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
+covers = [".agents/skills/herdr-comms/assets/herdr-say", ".agents/skills/herdr-comms/assets/herdr-spawn", ".agents/skills/herdr-comms/assets/herdr_ready.py", ".agents/skills/herdr-comms/assets/herdr_scope.py", ".agents/skills/verify-octo-feather/features/lane-start.md", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reflection.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-handoff", "scripts/octo-feather-lane", "scripts/octo-feather-reflect", "scripts/octo-feather-start", "scripts/pi-role", "scripts/pi_sessions.py", "scripts/start_lane.py", "scripts/tracker_calls.py", "tests/gate/kit/lane_start.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/gh.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/systemd.py"]
 
 # Proven by test_lane_start.py's tagged item; the demo is the same lane-start drive's `files` case: `octo-feather-lane
 # start --new "Scratch lane" --body-file body.md --goal ... --outcome ... --brief-file brief.md` in the scratch clone prints
 # filed=907 then key=gh907 ...; the gh stand-in's log shows one issue create, no --parent; issue-view 907 no parent.
 [demo."issue-lifecycle#acceptance-lane-start-files"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
-covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/tracker_calls.py", ".agents/skills/github-issues/scripts/issue-create", ".agents/skills/github-issues/scripts/issue-view", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
+covers = [".agents/skills/github-issues/scripts/issue-create", ".agents/skills/github-issues/scripts/issue-view", ".agents/skills/herdr-comms/assets/herdr_ready.py", ".agents/skills/herdr-comms/assets/herdr_scope.py", ".agents/skills/verify-octo-feather/features/lane-start.md", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reflection.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-handoff", "scripts/octo-feather-lane", "scripts/octo-feather-reflect", "scripts/pi-role", "scripts/pi_sessions.py", "scripts/start_lane.py", "scripts/tracker_calls.py", "tests/gate/kit/lane_start.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/gh.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/systemd.py"]
 
 # Proven by test_lane_start.py's tagged item; the demo is the lane-start drive's `sub-issue` case: ticket 908, a
 # sub-issue of 905, refused naming 905; no worktree, branch, workspace or record for gh908.
 [demo."issue-lifecycle#acceptance-lane-start-sub-issue"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
-covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", ".agents/skills/github-issues/scripts/issue-view", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
+covers = [".agents/skills/github-issues/scripts/issue-view", ".agents/skills/verify-octo-feather/features/lane-start.md", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/octo-feather-lane", "scripts/pi-role", "scripts/start_lane.py", "scripts/tracker_calls.py", "tests/gate/kit/lane_start.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/gh.py"]
 # Proven by tests/gate/kit/test_lane_start.py's exists item; the demo is the lane-start drive's exists case
 # (features/lane-start.md): the same start again on the started lane gh905 exits 1 naming its record, worktree,
 # branch and workspace, each read back as it was, no workspace, tab or agent started.
 [demo."issue-lifecycle#acceptance-lane-start-exists"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
-covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/tracker_calls.py", "scripts/octo-feather-start", ".agents/skills/herdr-comms/assets/herdr-spawn", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
+covers = [".agents/skills/herdr-comms/assets/herdr-say", ".agents/skills/herdr-comms/assets/herdr-spawn", ".agents/skills/verify-octo-feather/features/lane-start.md", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/octo-feather-lane", "scripts/octo-feather-start", "scripts/pi-role", "scripts/start_lane.py", "scripts/tracker_calls.py", "tests/gate/kit/lane_start.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/gh.py", "tests/gate/kit/testkit/herdr.py"]
 
 # Proven by tests/gate/kit/test_lane_start.py's rerun item; the demo is the lane-start drive's rerun cases: the testkit
 # Herdr failing the goal's delivery once, `octo-feather-lane start 906 ...` stops naming step goal, the same start
@@ -426,7 +426,7 @@ covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/tracker
 # third is refused naming the record.
 [demo."issue-lifecycle#acceptance-lane-start-rerun"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
-covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/tracker_calls.py", "scripts/octo-feather-start", ".agents/skills/herdr-comms/assets/herdr-spawn", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
+covers = [".agents/skills/herdr-comms/assets/herdr-say", ".agents/skills/herdr-comms/assets/herdr-spawn", ".agents/skills/herdr-comms/assets/herdr_ready.py", ".agents/skills/herdr-comms/assets/herdr_scope.py", ".agents/skills/verify-octo-feather/features/lane-start.md", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reflection.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-handoff", "scripts/octo-feather-lane", "scripts/octo-feather-queued", "scripts/octo-feather-reflect", "scripts/octo-feather-start", "scripts/pi-role", "scripts/pi_sessions.py", "scripts/start_lane.py", "scripts/tracker_calls.py", "tests/gate/kit/lane_start.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/gh.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/systemd.py"]
 
 # Proven by tests/gate/kit/test_lane_start.py's tagged item (behind_kit); the demo is the lane-start drive's current-kit
 # case: OCTO_FEATHER_KIT_INSTALL a scratch kit clone one commit behind its origin's main, `octo-feather-lane start 905
@@ -434,7 +434,7 @@ covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/tracker
 # behind main, nothing made; then the install fast-forwarded as named and the start runs.
 [demo."issue-lifecycle#acceptance-lane-start-current-kit"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
-covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/gh.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
+covers = [".agents/skills/verify-octo-feather/features/lane-start.md", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/octo-feather-lane", "scripts/pi-role", "scripts/start_lane.py", "scripts/tracker_calls.py", "tests/gate/kit/lane_start.py", "tests/gate/kit/testkit/__init__.py"]
 
 # Proven by their tagged tests (tests/gate/kit/test_start_relaunch.py): octo-feather-start --director
 # --relaunch / --resume against the testkit's Herdr stand-in, real processes as the director's shell and Pi. Busy: a
@@ -444,59 +444,49 @@ covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "tests/gate/kit/
 # pane: exit 64, nothing changed. Same session: --director --resume beside the live director on it: exit 73. The verify
 # drive (features/director-relaunch.md) drives all of it on a real scratch Herdr session.
 [demo."comms#acceptance-director-relaunch-busy"]
-covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/test_start_relaunch.py", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/director-relaunch.md"]
+covers = [".agents/skills/herdr-comms/assets/herdr_scope.py", ".agents/skills/verify-octo-feather/features/director-relaunch.md", "scripts/director_relaunch.py", "scripts/octo-feather-start", "scripts/pi-role", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/herdr.py"]
 
 [demo."comms#acceptance-director-relaunch-own-scope"]
-covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/test_start_relaunch.py", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/director-relaunch.md"]
+covers = [".agents/skills/herdr-comms/assets/herdr_scope.py", ".agents/skills/verify-octo-feather/features/director-relaunch.md", "scripts/director_relaunch.py", "scripts/octo-feather-start", "scripts/pi-role", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/herdr.py"]
 
 [demo."comms#acceptance-director-relaunch-same-session"]
-covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/test_start_relaunch.py", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/director-relaunch.md"]
+covers = [".agents/skills/herdr-comms/assets/herdr_scope.py", ".agents/skills/verify-octo-feather/features/director-relaunch.md", "scripts/director_relaunch.py", "scripts/octo-feather-start", "scripts/pi-role", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/herdr.py"]
 
 # Proven by its tagged tests (tests/gate/kit/test_start_relaunch.py, replace_outgoing and replace_none): octo-feather-start
 # --director --replace against the testkit's Herdr stand-in, the old director's Pi a real process. The verify drive
 # (features/director-relaunch.md) drives it on a real scratch Herdr session.
 [demo."comms#acceptance-director-replace-outgoing"]
-covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/test_start_relaunch.py", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/director-relaunch.md"]
+covers = [".agents/skills/herdr-comms/assets/herdr_ready.py", ".agents/skills/herdr-comms/assets/herdr_scope.py", ".agents/skills/verify-octo-feather/features/director-relaunch.md", "scripts/correction_lanes.py", "scripts/director_relaunch.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reflection.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-handoff", "scripts/octo-feather-lane", "scripts/octo-feather-reflect", "scripts/octo-feather-start", "scripts/pi-role", "scripts/tracker_calls.py", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/systemd.py"]
 
 # Proven by their tagged tests (tests/gate/kit/test_start_relaunch.py, relaunch_report and replace_report): a supervisor
 # the director started (octo-feather-start --issue from the director's pane), then octo-feather-start --director
 # --relaunch, or --replace, against the testkit's Herdr stand-in; the supervisor's herdr-say --parent reaches the new
 # pane alone. The verify drive (features/director-relaunch.md, report cases) drives it on a real scratch Herdr session.
 [demo."comms#acceptance-director-relaunch"]
-covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "scripts/octo-feather-handoff", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/test_start_relaunch.py", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/director-relaunch.md"]
+covers = [".agents/skills/herdr-comms/assets/herdr-say", ".agents/skills/herdr-comms/assets/herdr_ready.py", ".agents/skills/herdr-comms/assets/herdr_scope.py", ".agents/skills/verify-octo-feather/features/director-relaunch.md", "scripts/correction_lanes.py", "scripts/director_relaunch.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reflection.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-handoff", "scripts/octo-feather-lane", "scripts/octo-feather-reflect", "scripts/octo-feather-start", "scripts/pi-role", "scripts/tracker_calls.py", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/systemd.py"]
 
 [demo."comms#acceptance-director-replace"]
-covers = ["scripts/director_relaunch.py", "scripts/octo-feather-start", "scripts/octo-feather-handoff", ".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/test_start_relaunch.py", "tests/gate/kit/testkit/herdr.py", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/director-relaunch.md"]
+covers = [".agents/skills/herdr-comms/assets/herdr-say", ".agents/skills/herdr-comms/assets/herdr_ready.py", ".agents/skills/herdr-comms/assets/herdr_scope.py", ".agents/skills/verify-octo-feather/features/director-relaunch.md", "scripts/correction_lanes.py", "scripts/director_relaunch.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reflection.py", "scripts/lane_reporting.py", "scripts/merge_ask.py", "scripts/octo-feather-handoff", "scripts/octo-feather-lane", "scripts/octo-feather-reflect", "scripts/octo-feather-start", "scripts/pi-role", "scripts/tracker_calls.py", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/systemd.py"]
 
 # Lane gh1234's criteria, each proven by its tagged tests (tests/gate/kit/test_fast_map.py,
-# tests/gate/kit/test_lane_post_merge_map.py); covers: the tracked files those items' coverage map entries name (a
-# just fast-map of them at 46d6e852), the testkit, gate plugin and conftest every item reaches left out.
-# The map misses scripts/octo-feather-gate and the justfile: this criterion's tests run them as commands in the kit
-# copy (just fast-map, fast-list, fast), through just with the system python3, which coverage does not measure;
-# they are what the criterion is about, so they are named by hand.
+# tests/gate/kit/test_lane_post_merge_map.py); covers: the tracked files a coverage run of those tests names
+# (evidence/gh1274-split/covers/covers.py regen, which writes every covers line here). Coverage measures Python only,
+# so scripts/octo-feather-gate and the justfile, which these tests run through just with the system python3, are not
+# listed.
 [demo."quality#acceptance-fast-map-slot-free"]
-covers = ["scripts/octo-feather-gate", "justfile", "scripts/octo-feather-slot", "scripts/slot_queue.py", "tests/gate/kit/fast_map.py", "tests/gate/kit/fast_slot_free.py", "tests/gate/kit/gate_recipes_first.py"]
+covers = ["justfile", "scripts/handoff_log.py", "scripts/octo-feather-handoff", "scripts/octo-feather-slot", "scripts/slot_queue.py", "tests/gate/kit/fast_map.py", "tests/gate/kit/fast_slot_free.py", "tests/gate/kit/gate_recipes_first.py", "tests/gate/kit/testkit/__init__.py"]
 
-# The map misses scripts/octo-feather-gate and the justfile: this criterion's tests run them as commands in the kit
-# copy (just fast-map, fast-list, fast), through just with the system python3, which coverage does not measure;
-# they are what the criterion is about, so they are named by hand.
 [demo."quality#acceptance-fast-map-behind"]
-covers = ["scripts/octo-feather-gate", "justfile", "tests/gate/kit/fast_map.py", "tests/gate/kit/fast_slot_free.py", "tests/gate/kit/gate_recipes_first.py"]
+covers = ["justfile", "tests/gate/kit/fast_map.py", "tests/gate/kit/fast_slot_free.py", "tests/gate/kit/gate_recipes_first.py", "tests/gate/kit/testkit/__init__.py"]
 
-# The map misses scripts/octo-feather-gate and the justfile: this criterion's tests run them as commands in the kit
-# copy (just fast-map, fast-list, fast), through just with the system python3, which coverage does not measure;
-# they are what the criterion is about, so they are named by hand.
 [demo."quality#acceptance-fast-diff-base"]
-covers = ["scripts/octo-feather-gate", "justfile", "tests/gate/kit/fast_map.py", "tests/gate/kit/fast_slot_free.py", "tests/gate/kit/gate_recipes_first.py"]
+covers = ["justfile", "tests/gate/kit/fast_map.py", "tests/gate/kit/fast_slot_free.py", "tests/gate/kit/gate_recipes_first.py", "tests/gate/kit/testkit/__init__.py"]
 
-# The map misses scripts/octo-feather-gate and the justfile: this criterion's tests run them as commands in the kit
-# copy (just fast-map, fast-list, fast), through just with the system python3, which coverage does not measure;
-# they are what the criterion is about, so they are named by hand.
 [demo."quality#acceptance-map-after-merge"]
-covers = ["scripts/octo-feather-gate", "justfile", "scripts/post_merge.py", "scripts/octo-feather-lane", "scripts/tracker_calls.py", "scripts/slot_queue.py", "scripts/handoff_log.py", "scripts/correction_lanes.py", "scripts/merge_ask.py", "scripts/eval_grading.py", "scripts/pi-role", ".agents/skills/herdr-comms/assets/herdr_scope.py", "tests/gate/kit/lane_post_merge_map.py", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/fast_map.py", "tests/gate/kit/fast_slot_free.py", "tests/gate/kit/gate_recipes_first.py"]
+covers = [".agents/skills/herdr-comms/assets/herdr_scope.py", "justfile", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/octo-feather-lane", "scripts/octo-feather-slot", "scripts/pi-role", "scripts/post_merge.py", "scripts/slot_queue.py", "scripts/tracker_calls.py", "tests/gate/kit/fast_map.py", "tests/gate/kit/fast_slot_free.py", "tests/gate/kit/gate_recipes_first.py", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/lane_post_merge_map.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/gh.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/realcase.py", "tests/gate/kit/testkit/systemd.py", "tests/lib/no-packages.py"]
 
 [demo."quality#acceptance-map-full-daily"]
-covers = ["scripts/post_merge.py", "scripts/octo-feather-lane", "scripts/tracker_calls.py", "scripts/slot_queue.py", "scripts/handoff_log.py", "scripts/correction_lanes.py", "scripts/merge_ask.py", "scripts/eval_grading.py", "scripts/pi-role", ".agents/skills/herdr-comms/assets/herdr_scope.py", "tests/gate/kit/lane_post_merge_map.py", "tests/gate/kit/herdr_messaging.py"]
+covers = [".agents/skills/herdr-comms/assets/herdr_scope.py", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/octo-feather-lane", "scripts/pi-role", "scripts/post_merge.py", "scripts/slot_queue.py", "scripts/tracker_calls.py", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/lane_post_merge_map.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/gh.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/realcase.py", "tests/gate/kit/testkit/systemd.py"]
 
 [demo."quality#acceptance-map-build-failed"]
-covers = ["scripts/post_merge.py", "scripts/octo-feather-lane", "scripts/tracker_calls.py", "scripts/slot_queue.py", "scripts/handoff_log.py", "scripts/correction_lanes.py", "scripts/merge_ask.py", "scripts/eval_grading.py", "scripts/pi-role", ".agents/skills/herdr-comms/assets/herdr_scope.py", "tests/gate/kit/lane_post_merge_map.py", "tests/gate/kit/herdr_messaging.py"]
+covers = [".agents/skills/herdr-comms/assets/herdr_scope.py", "scripts/correction_lanes.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/octo-feather-lane", "scripts/pi-role", "scripts/post_merge.py", "scripts/slot_queue.py", "scripts/tracker_calls.py", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/lane_post_merge_map.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/gh.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/realcase.py", "tests/gate/kit/testkit/systemd.py"]

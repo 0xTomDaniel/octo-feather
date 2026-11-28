@@ -1,0 +1,391 @@
+{
+ "proof": {
+  "comms#acceptance-correction-intake": "demo:.agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake",
+  "comms#acceptance-director-relaunch": "tests/gate/kit/test_start_relaunch.py::test_relaunch_report",
+  "comms#acceptance-director-relaunch-busy": "tests/gate/kit/test_start_relaunch.py::test_relaunch_busy",
+  "comms#acceptance-director-relaunch-own-scope": "tests/gate/kit/test_start_relaunch.py::test_relaunch_own_scope",
+  "comms#acceptance-director-replace": "tests/gate/kit/test_start_relaunch.py::test_replace_report",
+  "comms#acceptance-director-replace-outgoing": "tests/gate/kit/test_start_relaunch.py::test_replace_none",
+  "comms#acceptance-director-worker-resume": "tests/gate/kit/test_herdr_messaging.py::test_director_worker_moved",
+  "comms#acceptance-parent-gone": "tests/gate/kit/test_herdr_messaging.py::test_parent_gone",
+  "comms#acceptance-parent-resumed": "demo:.agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 parent-resumed",
+  "comms#acceptance-queued-completion": "tests/gate/kit/test_herdr_messaging.py::test_queued_completion",
+  "comms#acceptance-real-blocker": "demo:scripts/octo-feather-qa --verdict 20261122T162704Z-4a14c2/supervisor-autonomy/owner-access-blocker-and-ready-work 20261122T162704Z-4a14c2/supervisor-autonomy/owner-access-blocker-message",
+  "comms#acceptance-reflect-files-correction": "demo:.agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake",
+  "comms#acceptance-reflect-files-route-owner": "tests/gate/kit/test_lane_correction_filer.py::test_lane_correction_route_owner",
+  "comms#acceptance-reflect-recurrence-comments": "tests/gate/kit/test_lane_correction_filer.py::test_lane_correction_legacy_duplicates",
+  "comms#acceptance-report-gate-budget": "demo:.agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 factory-report",
+  "comms#acceptance-report-owner-caught-headline": "demo:.agents/skills/verify-octo-feather/scripts/verify-octo-feather run factory-report",
+  "comms#acceptance-report-skill-reach": "demo:.agents/skills/verify-octo-feather/scripts/verify-octo-feather run factory-report",
+  "comms#acceptance-worker-ended": "tests/gate/kit/test_handoff_ended.py::test_worker_ended",
+  "issue-lifecycle#acceptance-ci-alongside": "tests/gate/kit/test_lane_ci_start.py::test_lane_ci_start_not_started",
+  "issue-lifecycle#acceptance-ci-status-only": "tests/gate/kit/test_lane_merge_ask.py::test_merge_ask_ci_status_only",
+  "issue-lifecycle#acceptance-correction-replay-missing": "tests/gate/kit/test_lane_correction_replay.py::test_correction_replay_contained",
+  "issue-lifecycle#acceptance-correction-replay-shown": "tests/gate/kit/test_lane_correction_replay.py::test_correction_replay_contained",
+  "issue-lifecycle#acceptance-declaration-check-shown": "tests/gate/kit/test_lane_verdict_rounds.py::test_declaration_check_shown",
+  "issue-lifecycle#acceptance-lane-start": "tests/gate/kit/test_lane_start.py::test_lane_start_started",
+  "issue-lifecycle#acceptance-lane-start-current-kit": "tests/gate/kit/test_lane_start.py::test_lane_start_behind_kit",
+  "issue-lifecycle#acceptance-lane-start-exists": "tests/gate/kit/test_lane_start.py::test_lane_start_exists",
+  "issue-lifecycle#acceptance-lane-start-files": "tests/gate/kit/test_lane_start.py::test_lane_start_files",
+  "issue-lifecycle#acceptance-lane-start-rerun": "tests/gate/kit/test_lane_start.py::test_lane_start_rerun",
+  "issue-lifecycle#acceptance-merge-ask-full-proof": "tests/gate/kit/test_lane_merge_ask.py::test_merge_ask_full_pass",
+  "issue-lifecycle#acceptance-merge-ask-gate-budget": "demo:.agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 merge-ask-proof",
+  "issue-lifecycle#acceptance-merge-ask-siblings": "tests/gate/kit/test_lane_merge_order.py::test_merge_ask_siblings",
+  "issue-lifecycle#acceptance-one-head-hunks": "tests/gate/kit/test_lane_merge_ask_hunks.py::test_merge_ask_one_head_hunks",
+  "issue-lifecycle#acceptance-pilot-pr": "tests/lane-pilot-pr.sh",
+  "issue-lifecycle#acceptance-review-resolution": "tests/gate/kit/test_lane_review_resolution.py::test_lane_review_resolution",
+  "issue-lifecycle#acceptance-ticket-skills": "demo:scripts/octo-feather-qa --verdict 20261122T162704Z-4a14c2/supervisor-ticket-skills/missed-skill-sent-back 20261122T162704Z-4a14c2/supervisor-ticket-skills/loaded-skill-integrated && python3 tests/gate/kit/lane_skills.py demo",
+  "issue-lifecycle#acceptance-tier-three-waits": "demo:scripts/octo-feather-qa --verdict 20261126T064835Z-939595/director-tier-relay/tier-three-waits-for-owner",
+  "issue-lifecycle#acceptance-writer-route-lane": "demo:.agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake",
+  "quality#acceptance-built-links": "demo:.agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-stale",
+  "quality#acceptance-evidence-stale": "demo:.agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-stale",
+  "quality#acceptance-fast-affected": "demo:.agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 gate-tiers",
+  "quality#acceptance-map-after-merge": "tests/gate/kit/test_fast_map.py::test_fast_map_since_newest",
+  "quality#acceptance-qa-history": "demo:.agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-history",
+  "quality#acceptance-qc-carry": "tests/qc-carry.sh",
+  "quality#acceptance-qc-insufficient": "demo:.agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-insufficient",
+  "roles#acceptance-codemode-every-role": "tests/web-tools.sh",
+  "skills#acceptance-launch-refuses-unloaded": "demo:.agents/skills/verify-octo-feather/scripts/verify-octo-feather run skill-loading",
+  "templates#acceptance-edge-rejects": "demo:.agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 template-edge",
+  "templates#acceptance-fresh-fast": "demo:.agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 template-tiers",
+  "templates#acceptance-same-gate": "demo:.agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 template-tiers",
+  "templates#acceptance-shared-fixture": "demo:.agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 template-tiers",
+  "templates#acceptance-starter-acceptance-test": "demo:.agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 starter-acceptance"
+ },
+ "tree": "f7f1636761867209bdc1a0d90d586a65188a6bab",
+ "verdict": {
+  ".agents/skills/github-pr/scripts/gh": {
+   "issue-lifecycle#acceptance-merge-ask-gate-budget": "called",
+   "quality#acceptance-qc-insufficient": "called"
+  },
+  ".agents/skills/herdr-comms/assets/herdr_ready.py": {
+   "comms#acceptance-director-relaunch": "called",
+   "comms#acceptance-director-replace": "called",
+   "comms#acceptance-director-replace-outgoing": "called"
+  },
+  ".agents/skills/herdr-comms/assets/herdr_scope.py": {
+   "comms#acceptance-director-relaunch": "called",
+   "comms#acceptance-director-relaunch-busy": "called",
+   "comms#acceptance-director-relaunch-own-scope": "called"
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather": {
+   "comms#acceptance-correction-intake": "called",
+   "comms#acceptance-reflect-files-correction": "called",
+   "comms#acceptance-report-gate-budget": "called"
+  },
+  "evals/fixtures/quote-app-inline/src/app/__init__.py": {
+   "issue-lifecycle#acceptance-ci-alongside": "loaded only",
+   "issue-lifecycle#acceptance-ci-status-only": "loaded only",
+   "issue-lifecycle#acceptance-correction-replay-missing": "loaded only"
+  },
+  "scripts/check-behavior-smoke": {
+   "issue-lifecycle#acceptance-correction-replay-missing": "called",
+   "issue-lifecycle#acceptance-correction-replay-shown": "called",
+   "issue-lifecycle#acceptance-merge-ask-gate-budget": "called"
+  },
+  "scripts/check-dashes": {
+   "quality#acceptance-fast-affected": "called"
+  },
+  "scripts/check-evals": {
+   "comms#acceptance-real-blocker": "called",
+   "issue-lifecycle#acceptance-ticket-skills": "called",
+   "issue-lifecycle#acceptance-tier-three-waits": "called"
+  },
+  "scripts/check-gate-free": {
+   "issue-lifecycle#acceptance-pilot-pr": "called",
+   "quality#acceptance-built-links": "called",
+   "quality#acceptance-evidence-stale": "called"
+  },
+  "scripts/check-roles": {
+   "roles#acceptance-codemode-every-role": "called"
+  },
+  "scripts/check-skills": {
+   "skills#acceptance-launch-refuses-unloaded": "called"
+  },
+  "scripts/check-vendored": {
+   "templates#acceptance-fresh-fast": "called",
+   "templates#acceptance-same-gate": "called",
+   "templates#acceptance-shared-fixture": "called"
+  },
+  "scripts/check_rules.py": {
+   "quality#acceptance-fast-affected": "called"
+  },
+  "scripts/correction_lanes.py": {
+   "comms#acceptance-director-relaunch": "loaded only",
+   "comms#acceptance-director-replace": "loaded only",
+   "comms#acceptance-director-replace-outgoing": "loaded only"
+  },
+  "scripts/eval_grading.py": {
+   "comms#acceptance-correction-intake": "called",
+   "comms#acceptance-director-relaunch": "called",
+   "comms#acceptance-director-replace": "called"
+  },
+  "scripts/handoff_log.py": {
+   "comms#acceptance-correction-intake": "called",
+   "comms#acceptance-director-relaunch": "called",
+   "comms#acceptance-director-replace": "called"
+  },
+  "scripts/merge_ask.py": {
+   "comms#acceptance-correction-intake": "called",
+   "comms#acceptance-director-relaunch": "called",
+   "comms#acceptance-director-replace": "called"
+  },
+  "scripts/octo-feather-contract": {
+   "comms#acceptance-correction-intake": "called",
+   "comms#acceptance-parent-resumed": "called",
+   "comms#acceptance-reflect-files-correction": "called"
+  },
+  "scripts/octo-feather-evidence": {
+   "comms#acceptance-correction-intake": "called",
+   "comms#acceptance-parent-resumed": "called",
+   "comms#acceptance-reflect-files-correction": "called"
+  },
+  "scripts/octo-feather-gate": {
+   "issue-lifecycle#acceptance-ci-alongside": "called",
+   "issue-lifecycle#acceptance-ci-status-only": "called",
+   "issue-lifecycle#acceptance-correction-replay-missing": "called"
+  },
+  "scripts/octo-feather-handoff": {
+   "comms#acceptance-director-replace-outgoing": "called",
+   "comms#acceptance-parent-gone": "called",
+   "comms#acceptance-queued-completion": "called"
+  },
+  "scripts/octo-feather-lane": {
+   "comms#acceptance-director-relaunch": "called",
+   "comms#acceptance-director-replace": "called",
+   "comms#acceptance-director-replace-outgoing": "called"
+  },
+  "scripts/octo-feather-qa": {
+   "issue-lifecycle#acceptance-merge-ask-siblings": "called",
+   "issue-lifecycle#acceptance-pilot-pr": "called",
+   "quality#acceptance-built-links": "called"
+  },
+  "scripts/octo-feather-qc": {
+   "quality#acceptance-evidence-stale": "called",
+   "quality#acceptance-qa-history": "called"
+  },
+  "scripts/octo-feather-queued": {
+   "comms#acceptance-parent-gone": "called",
+   "issue-lifecycle#acceptance-lane-start-rerun": "not measured"
+  },
+  "scripts/octo-feather-reflect": {
+   "comms#acceptance-director-relaunch": "called",
+   "comms#acceptance-director-replace": "called",
+   "comms#acceptance-director-replace-outgoing": "called"
+  },
+  "scripts/octo-feather-slot": {
+   "quality#acceptance-map-after-merge": "called",
+   "quality#acceptance-qa-history": "called"
+  },
+  "scripts/octo-feather-spec-status": {
+   "issue-lifecycle#acceptance-correction-replay-missing": "called",
+   "issue-lifecycle#acceptance-correction-replay-shown": "called",
+   "issue-lifecycle#acceptance-merge-ask-gate-budget": "called"
+  },
+  "scripts/pi-role": {
+   "comms#acceptance-correction-intake": "called",
+   "comms#acceptance-director-relaunch": "called",
+   "comms#acceptance-director-relaunch-busy": "called"
+  },
+  "scripts/post_merge.py": {
+   "comms#acceptance-correction-intake": "loaded only",
+   "comms#acceptance-director-relaunch": "loaded only",
+   "comms#acceptance-director-replace": "loaded only"
+  },
+  "scripts/slot_queue.py": {
+   "comms#acceptance-correction-intake": "called",
+   "comms#acceptance-director-relaunch": "called",
+   "comms#acceptance-director-replace": "called"
+  },
+  "scripts/tracker_calls.py": {
+   "comms#acceptance-director-relaunch": "called",
+   "comms#acceptance-director-replace": "called",
+   "comms#acceptance-director-replace-outgoing": "called"
+  },
+  "templates/python/scripts/check-languages": {
+   "templates#acceptance-fresh-fast": "called",
+   "templates#acceptance-same-gate": "called",
+   "templates#acceptance-shared-fixture": "called"
+  },
+  "templates/python/scripts/own-tool-paths": {
+   "templates#acceptance-fresh-fast": "called",
+   "templates#acceptance-same-gate": "called",
+   "templates#acceptance-shared-fixture": "called"
+  },
+  "templates/python/src/app/__init__.py": {
+   "issue-lifecycle#acceptance-ci-alongside": "loaded only",
+   "issue-lifecycle#acceptance-ci-status-only": "loaded only",
+   "issue-lifecycle#acceptance-correction-replay-missing": "loaded only"
+  },
+  "templates/python/src/app/cli.py": {
+   "templates#acceptance-edge-rejects": "called",
+   "templates#acceptance-fresh-fast": "called",
+   "templates#acceptance-same-gate": "called"
+  },
+  "templates/python/src/app/core.py": {
+   "templates#acceptance-edge-rejects": "called",
+   "templates#acceptance-fresh-fast": "called",
+   "templates#acceptance-same-gate": "called"
+  },
+  "templates/python/tests/conftest.py": {
+   "templates#acceptance-fresh-fast": "called",
+   "templates#acceptance-same-gate": "called",
+   "templates#acceptance-shared-fixture": "called"
+  },
+  "templates/python/tests/e2e/conftest.py": {
+   "templates#acceptance-fresh-fast": "called",
+   "templates#acceptance-same-gate": "called",
+   "templates#acceptance-shared-fixture": "called"
+  },
+  "templates/python/tests/e2e/test_cli_e2e.py": {
+   "templates#acceptance-starter-acceptance-test": "loaded only"
+  },
+  "templates/python/tests/integration/conftest.py": {
+   "templates#acceptance-fresh-fast": "loaded only",
+   "templates#acceptance-same-gate": "loaded only",
+   "templates#acceptance-starter-acceptance-test": "loaded only"
+  },
+  "templates/python/tests/integration/test_cli.py": {
+   "templates#acceptance-starter-acceptance-test": "loaded only"
+  },
+  "templates/python/tests/test_gate.py": {
+   "templates#acceptance-fresh-fast": "called",
+   "templates#acceptance-same-gate": "called",
+   "templates#acceptance-shared-fixture": "called"
+  },
+  "tests/fixtures/classify-stub/pi": {
+   "comms#acceptance-correction-intake": "loaded only",
+   "comms#acceptance-reflect-files-correction": "loaded only",
+   "issue-lifecycle#acceptance-writer-route-lane": "loaded only"
+  },
+  "tests/fixtures/herdr-say/herdr": {
+   "comms#acceptance-correction-intake": "loaded only",
+   "comms#acceptance-reflect-files-correction": "loaded only",
+   "issue-lifecycle#acceptance-writer-route-lane": "loaded only"
+  },
+  "tests/fixtures/herdr-spawn/herdr": {
+   "comms#acceptance-correction-intake": "loaded only",
+   "comms#acceptance-reflect-files-correction": "loaded only",
+   "issue-lifecycle#acceptance-writer-route-lane": "loaded only"
+  },
+  "tests/fixtures/install-check/pi": {
+   "comms#acceptance-correction-intake": "loaded only",
+   "comms#acceptance-reflect-files-correction": "loaded only",
+   "issue-lifecycle#acceptance-writer-route-lane": "loaded only"
+  },
+  "tests/fixtures/lane-report/gh": {
+   "comms#acceptance-report-gate-budget": "called",
+   "comms#acceptance-report-owner-caught-headline": "called",
+   "comms#acceptance-report-skill-reach": "called"
+  },
+  "tests/fixtures/qc-judge/pi": {
+   "comms#acceptance-correction-intake": "loaded only",
+   "comms#acceptance-reflect-files-correction": "loaded only",
+   "issue-lifecycle#acceptance-writer-route-lane": "loaded only"
+  },
+  "tests/fixtures/reflection-director": {
+   "comms#acceptance-correction-intake": "called",
+   "comms#acceptance-reflect-files-correction": "called",
+   "issue-lifecycle#acceptance-writer-route-lane": "called"
+  },
+  "tests/fixtures/tracker-gh/gh": {
+   "comms#acceptance-correction-intake": "called",
+   "issue-lifecycle#acceptance-writer-route-lane": "called"
+  },
+  "tests/gate/conftest.py": {
+   "quality#acceptance-fast-affected": "called",
+   "quality#acceptance-qc-carry": "called"
+  },
+  "tests/gate/heavy_slot.py": {
+   "quality#acceptance-fast-affected": "called"
+  },
+  "tests/gate/kit/conftest.py": {
+   "quality#acceptance-fast-affected": "loaded only"
+  },
+  "tests/gate/kit/herdr_messaging.py": {
+   "comms#acceptance-queued-completion": "called"
+  },
+  "tests/gate/kit/lane_ci_start.py": {
+   "issue-lifecycle#acceptance-ci-alongside": "called",
+   "issue-lifecycle#acceptance-review-resolution": "called"
+  },
+  "tests/gate/kit/lane_correction_replay.py": {
+   "issue-lifecycle#acceptance-correction-replay-missing": "called",
+   "issue-lifecycle#acceptance-correction-replay-shown": "called"
+  },
+  "tests/gate/kit/lane_merge_ask.py": {
+   "issue-lifecycle#acceptance-ci-status-only": "called",
+   "issue-lifecycle#acceptance-merge-ask-full-proof": "called",
+   "issue-lifecycle#acceptance-merge-ask-siblings": "called"
+  },
+  "tests/gate/kit/lane_merge_ask_hunks.py": {
+   "issue-lifecycle#acceptance-one-head-hunks": "called"
+  },
+  "tests/gate/kit/lane_merge_order.py": {
+   "issue-lifecycle#acceptance-merge-ask-siblings": "called"
+  },
+  "tests/gate/kit/lane_review_resolution.py": {
+   "issue-lifecycle#acceptance-review-resolution": "called"
+  },
+  "tests/gate/kit/lane_start.py": {
+   "issue-lifecycle#acceptance-lane-start": "called",
+   "issue-lifecycle#acceptance-lane-start-current-kit": "called",
+   "issue-lifecycle#acceptance-lane-start-exists": "called"
+  },
+  "tests/gate/kit/lane_verdict_rounds.py": {
+   "issue-lifecycle#acceptance-correction-replay-missing": "called",
+   "issue-lifecycle#acceptance-correction-replay-shown": "called",
+   "issue-lifecycle#acceptance-declaration-check-shown": "called"
+  },
+  "tests/gate/kit/qc_eval_verdict.py": {
+   "issue-lifecycle#acceptance-merge-ask-siblings": "called"
+  },
+  "tests/gate/kit/testkit/__init__.py": {
+   "comms#acceptance-director-relaunch": "called",
+   "comms#acceptance-director-relaunch-busy": "called",
+   "comms#acceptance-director-relaunch-own-scope": "called"
+  },
+  "tests/gate/kit/testkit/gh.py": {
+   "comms#acceptance-reflect-files-route-owner": "called",
+   "comms#acceptance-reflect-recurrence-comments": "called",
+   "issue-lifecycle#acceptance-ci-alongside": "called"
+  },
+  "tests/gate/kit/testkit/herdr.py": {
+   "comms#acceptance-worker-ended": "called",
+   "issue-lifecycle#acceptance-lane-start-files": "called",
+   "quality#acceptance-map-after-merge": "not measured"
+  },
+  "tests/gate/kit/testkit/install_check.py": {
+   "issue-lifecycle#acceptance-correction-replay-missing": "called",
+   "issue-lifecycle#acceptance-correction-replay-shown": "called"
+  },
+  "tests/gate/kit/testkit/jsonwalk.py": {
+   "issue-lifecycle#acceptance-correction-replay-missing": "called",
+   "issue-lifecycle#acceptance-correction-replay-shown": "called"
+  },
+  "tests/gate/kit/testkit/qc.py": {
+   "issue-lifecycle#acceptance-merge-ask-siblings": "called"
+  },
+  "tests/gate/kit/testkit/qc_box.py": {
+   "issue-lifecycle#acceptance-correction-replay-missing": "called",
+   "issue-lifecycle#acceptance-correction-replay-shown": "called"
+  },
+  "tests/gate/kit/testkit/realcase.py": {
+   "comms#acceptance-director-worker-resume": "called",
+   "comms#acceptance-parent-gone": "called",
+   "comms#acceptance-queued-completion": "called"
+  },
+  "tests/gate/kit/testkit/systemd.py": {
+   "comms#acceptance-director-relaunch": "called",
+   "comms#acceptance-director-replace": "called",
+   "comms#acceptance-director-replace-outgoing": "called"
+  },
+  "tests/gate/test_gate.py": {
+   "quality#acceptance-fast-affected": "called",
+   "quality#acceptance-qc-carry": "called"
+  },
+  "tests/lib/no-packages.py": {
+   "quality#acceptance-map-after-merge": "called"
+  }
+ }
+}
