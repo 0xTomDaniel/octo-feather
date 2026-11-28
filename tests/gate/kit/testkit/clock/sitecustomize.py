@@ -3,7 +3,12 @@ mocking.md), loaded by every Python a scenario starts once testkit.clock put thi
 PYTHONPATH: `datetime.datetime.now` and `utcnow` read TESTKIT_NOW (UTC ISO 8601) plus the real time
 gone since this process started, so a kit command run under it sees that day. Nothing else moves:
 time.time, file times and sleeps stay real. No kit code reads TESTKIT_NOW; with it unset this file
-does nothing."""
+does nothing.
+
+Hand-written (AGENTS.md, infrastructure): time-machine and freezegun patch only the interpreter
+that imports them, and the kit's commands run stdlib-only under the box's python3, which cannot
+import them; libfaketime is a system library (LD_PRELOAD) the box does not install. A
+sitecustomize is the one hook every such python3 loads by itself."""
 
 from __future__ import annotations
 
