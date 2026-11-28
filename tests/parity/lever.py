@@ -47,6 +47,21 @@ line N: X: No such file or directory" or "... command not found" from the old te
 file it sources (a failed `source` lets a test carry on without its library, print its pass
 line and exit 0).
 
+Restoring (#1361, #953): the old test and every file of its `needs` come out of old_at by git
+itself (`git checkout OLD_AT -- PATH...` in the copy, which holds old_at through refs/kit/head),
+never as blob bytes written by the lever, so each keeps the mode and the link git holds there: an
+executable stand-in stays executable, a symlink stays a symlink to its target. Each restored path
+is then checked on disk against old_at's tree (mode 100755 executable, 100644 not, 120000 a
+symlink); one git cannot reproduce faithfully (a submodule, mode 160000, or a checkout that lands
+another kind) is refused, naming it.
+
+No network (#1343, owner ruling 2026-11-28): every old and new run goes through bubblewrap
+(`bwrap --dev-bind / / --unshare-net`, the tool the qc sandbox's srt drives for its network
+namespace): the same files and user, in a network namespace of its own holding only its own
+loopback, so no route out exists (a test reaching for a host, a proxy or a server on the
+caller's loopback fails to connect); uv runs offline from its cache, and mise and just from their
+installs, as the gate always does. Without a working bwrap the lever refuses to run at all.
+
 Re-anchoring (#1154): when scripts/check-parity names a case's patch, the change that moved its
 code remakes that patch against the code as it now is, seeding the same defect (and points the
 case's `ran` at the file it now patches), then runs `tests/parity/lever.py CASE` to exit 0; a
@@ -71,6 +86,7 @@ import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
@@ -93,6 +109,8 @@ DROP = (
 # Git with the copy's commit identity; COPY: the copy's first commit, every run's start.
 GIT = ["git", "-c", "user.name=lever", "-c", "user.email=lever@t", "-c", "commit.gpgsign=false"]
 COPY = "refs/lever/copy"
+# Every old and new run's prefix: the same files, in a network namespace of its own (--help).
+OFFLINE = ["bwrap", "--dev-bind", "/", "/", "--unshare-net", "--die-with-parent", "--"]
 # What an old test names under tests/: a sourced file beside it, a kit path.
 SOURCED = re.compile(
     r'^\s*(?:source|\.)\s+"\$\(dirname "\$(?:0|\{BASH_SOURCE\[0\]\})"\)/([^"]+)"', re.MULTILINE
@@ -144,16 +162,27 @@ def copy(dest: Path) -> None:
     subprocess.run([*GIT, *fetch], cwd=dest, capture_output=True, check=True)
 
 
+def offline() -> None:
+    """Refused unless OFFLINE starts a command here: no run goes with the caller's network."""
+    p = subprocess.run([*OFFLINE, "true"], capture_output=True, check=False)
+    if p.returncode:
+        refuse(f"bwrap cannot give a run a network of its own here: {p.stderr.decode().strip()}")
+
+
 def old_files(old: str, old_at: str, needs: list[str]) -> dict[str, bytes]:
     """The old test and each file of NEEDS (a dir: every file under it) at OLD_AT, by path;
-    refused when OLD_AT lacks one."""
+    refused when OLD_AT lacks one, or holds a submodule there (git restores none faithfully)."""
     out: dict[str, bytes] = {}
     for n in [old.partition("::")[0], *needs]:
-        listed = git("ls-tree", "-r", "--name-only", old_at, "--", n).stdout.decode().split()
-        if not listed:
+        tree = git("ls-tree", "-r", "-z", old_at, "--", n).stdout.decode().split("\0")
+        rows = [t.partition("\t") for t in filter(None, tree)]
+        if not rows:
             refuse(
                 f"{n} is not at {old_at}: drop it from needs, or set old_at to a commit holding it"
             )
+        if subs := [p for m, _, p in rows if m.startswith("160000")]:
+            refuse(f"{', '.join(subs)} at {old_at}: a submodule, which git restores as no file")
+        listed = [p for _, _, p in rows]
         for p in listed:
             body = at(old_at, p)
             assert body is not None, p
@@ -297,6 +326,32 @@ def check_ran(how: dict[str, str], trace: Trace | None, cov: set[str]) -> list[s
     return missing
 
 
+def restore(k: Path, old_at: str, paths: list[str]) -> None:
+    """PATHS checked out of OLD_AT into the copy K by git (mode and links as git holds them), then
+    each checked on disk against OLD_AT's tree; refused where one is not as git holds it."""
+    co = subprocess.run(
+        ["git", "--literal-pathspecs", "checkout", old_at, "--", *paths],  # noqa: S607
+        cwd=k,
+        capture_output=True,
+        check=False,
+    )
+    if co.returncode:
+        refuse(f"git checkout {old_at} in the copy: {co.stderr.decode().strip()}")
+    tree = git("--literal-pathspecs", "ls-tree", "-r", "-z", old_at, "--", *paths, cwd=k)
+    for meta, _, p in (t.partition("\t") for t in filter(None, tree.stdout.decode().split("\0"))):
+        mode, f = meta.split()[0], k / p
+        st = f.lstat() if os.path.lexists(f) else None
+        reg = st is not None and stat.S_ISREG(st.st_mode)
+        held = {
+            "120000": st is not None and stat.S_ISLNK(st.st_mode),
+            "100755": reg and st is not None and st.st_mode & 0o100 != 0,
+            "100644": reg and st is not None and st.st_mode & 0o100 == 0,
+        }.get(mode, False)
+        if not held:
+            got = stat.filemode(st.st_mode) if st else "nothing"
+            refuse(f"{p} is mode {mode} at {old_at}, restored as {got}: git cannot reproduce it")
+
+
 def settle(k: Path) -> None:
     """What the run adds to the copy (restored files, a defect) committed on its branch: the
     copy's default branch then holds it, so the gate judges none of it changed (--help, budget)."""
@@ -328,17 +383,13 @@ class Lever:
     files: dict[str, bytes]
 
     def run_old(self, name: str, how: dict[str, str] | None) -> int:
-        """The old test with FILES restored (committed, settle(): the coverage map sees it as the
-        kit's, the budget as unchanged);
+        """The old test with FILES restored by git (restore(); committed, settle(): the coverage
+        map sees it as the kit's, the budget as unchanged), with no network (OFFLINE);
         with HOW (the clean run), traced and measured, and refused unless it ran every file HOW
         names."""
         k, logs, files, old = self.k, self.logs, self.files, self.case["old"]
-        for p, body in files.items():
-            (k / p).parent.mkdir(parents=True, exist_ok=True)
-            (k / p).write_bytes(body)
+        restore(k, self.case["old_at"], sorted(files))
         item = "::" in old  # a pytest item id: run as itself, its file restored above
-        if not item:
-            (k / old).chmod(0o755)
         settle(k)
         log = logs / f"{name}.old.log"
         cmd = [
@@ -349,7 +400,7 @@ class Lever:
             old if item else f"tests/gate/test_gate.py::test_script[{old}]",
         ]
         if how is None:
-            return sh(cmd, k, log)
+            return sh([*OFFLINE, *cmd], k, log)
         with tempfile.TemporaryDirectory(prefix="lever-old-") as w:
             cov, tr = Path(w) / "cov", Path(w) / "trace"
             cov.mkdir()
@@ -386,7 +437,7 @@ class Lever:
                     str(tr / "t"),
                     *cmd,
                 ]
-            rc = sh(cmd, k, log, env)
+            rc = sh([*OFFLINE, *cmd], k, log, env)
             missing = check_ran(
                 how,
                 Trace(tr) if traced else None,
@@ -418,7 +469,8 @@ class Lever:
         reset(k)
         apply(k, patch)
         settle(k)
-        new_rc = sh(["just", "test", "-x", "-rA", case["new"]], k, logs / f"{name}.new.log")
+        new = [*OFFLINE, "just", "test", "-x", "-rA", case["new"]]
+        new_rc = sh(new, k, logs / f"{name}.new.log")
         reset(k)
         said = {0: "pass"}
         line = (
@@ -458,6 +510,7 @@ def main() -> int:
         k = Path(t)
         try:
             how = facts(case, defects)
+            offline()
             files = old_files(old, old_at, case.get("needs", []))
             copy(k)
             for b in unrestored(old, old_at, files, k):  # a hint only: the run's facts decide
