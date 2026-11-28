@@ -69,5 +69,5 @@ The world, under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/lane-start/`: the kit's t
 - The start fetches its kit install's origin first (which dir that is: `octo-feather-lane --help`, start): the drive always names a scratch one in OCTO_FEATHER_KIT_INSTALL, never the real kit's origin.
 - The start spawns through the real herdr-spawn, which waits for the stand-in's Pi to report; a few seconds.
 - The rerun cases depend on `prompt-down` being consumed by the goal's prompt: the start sends nothing before the goal.
-- Each start not a rerun prints the brake's line first (`octo-feather-lane --help`, start); a rerun of a stopped one (its `lanes/<key>.start.json` there) prints none. Between `start` and `files` the route is the provider's port, closed: those starts say `usage: not read`, naming the stored reading of this week.
+- Between `start` and `files` the route is the provider's port, closed: those starts say `usage: not read`, naming the stored reading of this week.
 - The world's `prompts` holds one line per prompt, `PANE<TAB>TEXT`, so a multi-line brief spans lines there.
