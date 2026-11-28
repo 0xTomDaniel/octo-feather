@@ -203,6 +203,6 @@ after. scripts/lane_reporting.py by 36, 396 pairs, before; by 25, 275 pairs, aft
 scripts/gate_time.py, new, by 36, 324 pairs: merge_ask.py imports it, so every merge-ask criterion still covers it;
 scripts/pr_git.py by 13, 104 pairs; scripts/pr_report.py below the top 15.
 
-Collisions (collide.md's command, after: --split 9e96c717, merge_ask.py hunks placed the same way; full output
-collide-after-1335.md): all files 265 pairs before #1335, 265 after (52 PRs, median 3, both); scripts/ 87 before,
+Overlaps (collide.md's command, after: --split 9e96c717, merge_ask.py hunks placed the same way; full output
+collide-after-1335.md), c'': all files 265 pairs before #1335, 265 after (52 PRs, median 3, both); scripts/ 87 before,
 85 after (28 PRs, median 0, both); merge_ask.py 20 pairs (9 PRs) before, 16 (8 PRs) after.

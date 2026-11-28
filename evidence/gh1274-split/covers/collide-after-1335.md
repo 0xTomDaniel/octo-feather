@@ -1,6 +1,6 @@
 PRs measured: the 60 merged in prs.json; others: every PR whose interval overlaps theirs (71 with files, fetched 2026-11-28T09:46:20Z); left out: [79].
 
-| files | view | PRs of the 60 that collided | median colliding PRs per PR | collision pairs (PR, other PR) |
+| files | view | PRs of the 60 that overlapped | median overlapping PRs per PR | overlap pairs (PR, other PR) |
 |---|---|---|---|---|
 | all | before | 52 | 4 | 275 |
 | all | c' | 52 | 3 | 265 |
@@ -9,7 +9,7 @@ PRs measured: the 60 merged in prs.json; others: every PR whose interval overlap
 | scripts/ | c' | 28 | 0 | 85 |
 | scripts/ | c'' | 28 | 0 | 85 |
 
-Top colliding files, before: | file | collision pairs through it | PRs of the 60 colliding through it |
+Top overlapping files, before: | file | overlap pairs through it | PRs of the 60 overlapping through it |
 |---|---|---|
 | scripts/octo-feather-lane | 100 | 21 |
 | qc.toml | 80 | 18 |
@@ -32,7 +32,7 @@ Top colliding files, before: | file | collision pairs through it | PRs of the 60
 | tests/gate/kit/testkit/__init__.py | 13 | 7 |
 | .agents/skills/herdr-comms/SKILL.md | 12 | 8 |
 
-Top colliding files, c': | file | collision pairs through it | PRs of the 60 colliding through it |
+Top overlapping files, c': | file | overlap pairs through it | PRs of the 60 overlapping through it |
 |---|---|---|
 | qc.toml | 80 | 18 |
 | docs/specs/issue-lifecycle.status.json | 61 | 18 |
@@ -55,7 +55,7 @@ Top colliding files, c': | file | collision pairs through it | PRs of the 60 col
 | scripts/lane_reflection.py | 16 | 7 |
 | scripts/merge_ask.py | 16 | 8 |
 
-Top colliding files, c'': | file | collision pairs through it | PRs of the 60 colliding through it |
+Top overlapping files, c'': | file | overlap pairs through it | PRs of the 60 overlapping through it |
 |---|---|---|
 | qc.toml | 80 | 18 |
 | docs/specs/issue-lifecycle.status.json | 61 | 18 |

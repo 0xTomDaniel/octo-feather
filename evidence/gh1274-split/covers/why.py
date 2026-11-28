@@ -30,6 +30,7 @@ from typing import Any, cast
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import covers  # noqa: E402
+import gh_records  # noqa: E402
 
 PROBES = 3
 
@@ -139,14 +140,14 @@ def report(measure: Path, probe_file: Path, prs_file: Path, ref: str) -> None:
     b = covers.built(repo, ref)
     adds = added(m, qc, b, covers.Seen(repo, ref))
     verdict = cast("dict[str, dict[str, str]]", json.loads(probe_file.read_text())["verdict"])
-    prs = cast("list[dict[str, Any]]", json.loads(prs_file.read_text()))
+    prs = gh_records.merged_list(prs_file.read_text(), str(prs_file))
     cov_b = {c: v[0] for c, v in covers.computed(m, qc, covers.Seen(repo, ref)).items() if c in b}
     cov_a = {c: [str(x) for x in e["covers"]] for c, e in qc.items() if "covers" in e and c in b}
     extra: dict[str, int] = {}
     lost: dict[str, int] = {}
     pairs_b = pairs_a = 0
     for p in prs:
-        files = covers.changed(repo, p["mergeCommit"]["oid"])
+        files = covers.changed(repo, p.merge)
         for c in cov_b:
             hb, ha = covers.hits(cov_b[c], files), covers.hits(cov_a[c], files)
             pairs_b += bool(hb)

@@ -23,10 +23,13 @@ Subcommands:
                                   else the newest fast map from TREE's HEAD or an ancestor (octo-feather-gate select's).
   write MEASURE [--qc FILE] [--declared REF]
                                   rewrite FILE's (default ./qc.toml) covers lines from MEASURE, the declared covers
-                                  read from qc.toml at REF (default: FILE); prints each change; then check.
+                                  read before the write from qc.toml at REF (default: FILE as it stands); prints each
+                                  change; then fails loud on a loss against those declarations, and check.
   check [--qc FILE] [--declared REF]
                                   exit 1 naming each declared path coverage cannot see (any non-Python file or dir:
-                                  bash, md, justfile, toml) that a criterion's covers in FILE no longer name.
+                                  bash, md, justfile, toml) in qc.toml at REF, default HEAD's merge base with the
+                                  default branch (octo-feather-gate base), that a criterion's covers in FILE no longer
+                                  name. On the default branch itself that base is HEAD: pass --declared then.
   regen [--map FILE] [--declared REF]
                                   measure on this tree into covers/measure-<head12>.json, then write ./qc.toml: the one
                                   command; a second run changes nothing.
@@ -80,6 +83,9 @@ class Measure(TypedDict):
     demos: dict[str, Demo]
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import gh_records  # noqa: E402  # the gh PR records, validated at the edge
+
 SCRIPT = "tests/gate/test_gate.py::test_script["
 COVERS = re.compile(r'^\[demo\."([^"]+)"\]$')
 
@@ -273,29 +279,48 @@ def lost(declared: dict[str, Any], now: dict[str, Any], seen: Seen) -> list[str]
     return out
 
 
-def declared_qc(root: Path, ref: str | None, qc_file: Path) -> dict[str, Any]:
-    text = git(root, "show", f"{ref}:qc.toml") if ref else qc_file.read_text()
-    return cast("dict[str, Any]", tomllib.loads(text)["demo"])
+def declared_qc(root: Path, ref: str) -> dict[str, Any]:
+    """qc.toml's [demo] table at REF in ROOT."""
+    return cast("dict[str, Any]", tomllib.loads(git(root, "show", f"{ref}:qc.toml"))["demo"])
+
+
+def baseline(root: Path, ref: str | None) -> str:
+    """The commit whose qc.toml holds the declarations a check compares with: REF, else HEAD's merge base with the
+    default branch as octo-feather-gate base finds it (the gate's own rule), an independent file, never the one
+    checked. None found: exit 2, naming --declared."""
+    if ref:
+        return ref
+    p = subprocess.run([sys.executable, str(root / "scripts/octo-feather-gate"), "base"], cwd=root,
+                       capture_output=True, text=True, check=False)
+    if p.returncode or not p.stdout.split():
+        sys.stderr.write(f"covers: no baseline: {p.stderr.strip()}; pass --declared REF\n")
+        sys.exit(2)
+    return p.stdout.split()[0]
+
+
+def fail_lost(bad: list[str], against: str) -> None:
+    if bad:
+        sys.exit(f"covers: FAIL: declared paths coverage cannot see, lost from covers (against {against}):\n  "
+                 + "\n  ".join(bad))
 
 
 def check(root: Path, ref: str | None, qc_file: Path) -> None:
-    """Fail loud (exit 1) when a criterion in qc.toml at REF (default: QC_FILE itself) lost a declared path
-    coverage cannot see."""
-    seen = Seen(root)
-    bad = lost(declared_qc(root, ref, qc_file), tomllib.loads(qc_file.read_text())["demo"], seen)
-    if bad:
-        sys.exit("covers: FAIL: non-Python declared paths lost from covers (coverage cannot see them):\n  "
-                 + "\n  ".join(bad))
-    print(f"covers: check ok: no criterion lost a non-Python declared path (declared: {ref or qc_file})")
+    """Fail loud (exit 1) when a criterion's covers in QC_FILE lost a declared path coverage cannot see, compared
+    with qc.toml at baseline(REF)."""
+    base = baseline(root, ref)
+    fail_lost(lost(declared_qc(root, base), tomllib.loads(qc_file.read_text())["demo"], Seen(root)), base[:12])
+    print(f"covers: check ok: no criterion lost a declared path coverage cannot see (against {base[:12]})")
 
 
 def write(measure_file: Path, qc_file: Path, ref: str | None = None) -> None:
-    """Rewrite QC_FILE's covers lines from MEASURE_FILE, declared paths read from qc.toml at REF (default: QC_FILE),
-    then check() against the same."""
+    """Rewrite QC_FILE's covers lines from MEASURE_FILE, the declarations read before the write (from qc.toml at REF,
+    else QC_FILE as it stands); then fail loud if the written file lost one of those declarations, or one declared at
+    baseline(REF)."""
     m = cast("Measure", json.loads(measure_file.read_text()))
     root = qc_file.resolve().parent
     text = qc_file.read_text()
-    res = computed(m, declared_qc(root, ref, qc_file), Seen(root))
+    before = declared_qc(root, ref) if ref else cast("dict[str, Any]", tomllib.loads(text)["demo"])
+    res = computed(m, before, Seen(root))
     lines, cur, changed = text.splitlines(keepends=True), None, 0
     for n, ln in enumerate(lines):
         if hit := COVERS.match(ln.rstrip("\n")):
@@ -310,6 +335,8 @@ def write(measure_file: Path, qc_file: Path, ref: str | None = None) -> None:
             print(f"{cur}: {len(res[cur][0])} files ({res[cur][1]}){'' if new == ln else ' CHANGED'}")
     qc_file.write_text("".join(lines))
     print(f"covers: {changed} covers lines changed in {qc_file}")
+    after = cast("dict[str, Any]", tomllib.loads(qc_file.read_text())["demo"])
+    fail_lost(lost(before, after, Seen(root)), "the declarations read before the write")
     check(root, ref, qc_file)
 
 
@@ -394,17 +421,27 @@ class Split:
                 if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
 
     def place(self, commit: str, near: bool = False, base: str | None = None, path: str = HUB) -> set[str]:
-        """The split files COMMIT's change to the hub (BASE, default commit^1, ..commit) lands in. A hunk none of whose lines is
-        placed goes to the dispatcher; with NEAR (c''), instead to the file holding the nearest unchanged line around
-        it in the pre-image (up to NEAR_LINES each way) that exactly one split file holds: the module header or
-        help chunk it sits in; none found, the hunk is dropped."""
+        """The split files COMMIT's change to PATH (the hub; BASE, default commit^1, ..commit) lands in: the union of
+        hunks()."""
+        out: set[str] = set()
+        for _a, _an, placed in self.hunks(commit, near, base, path):
+            out |= placed
+        return out if near else (out or {path})
+
+    def hunks(self, commit: str, near: bool = False, base: str | None = None,
+              path: str = HUB) -> list[tuple[int, int, set[str]]]:
+        """Each hunk of PATH's diff (the hub's) BASE (default commit^1)..COMMIT: its pre-image start and length, and the
+        split files it lands in. A hunk none of whose lines is placed goes to the dispatcher (PATH itself); with NEAR
+        (c''), instead to the file holding the nearest unchanged line around it in the pre-image (up to NEAR_LINES each
+        way) that exactly one split file holds: the module header or help chunk it sits in; none found, it lands
+        nowhere."""
         base = base or f"{commit}^1"
         old = run(["git", "show", f"{base}:{path}"], self.repo, check=False)
         new = run(["git", "show", f"{commit}:{path}"], self.repo, check=False)
         od, nd = self.defs(old), self.defs(new)
         ol, nl = old.splitlines(), new.splitlines()
         diff = git(self.repo, "diff", "-U0", base, commit, "--", path)
-        out: set[str] = set()
+        out: list[tuple[int, int, set[str]]] = []
 
         # merge_ask.py's text went only to the shared modules (#1335): its lines are placed among those files alone
         among = None if path == HUB else {path, *[f"scripts/{m}.py" for m in self.shared()]}
@@ -427,16 +464,18 @@ class Split:
             placed: set[str] = set[str]().union(*(put(od, ol, k) for k in range(a, a + an)),
                                  *(put(nd, nl, k) for k in range(b, b + bn)))
             if placed or not near:
-                out |= placed or {path}
+                out.append((a, an, placed or {path}))
                 continue
+            found: set[str] = set()
             for d in range(1, NEAR_LINES + 1):
                 hold = [held(ol[k - 1].strip()) for k in (a - d, a + an - 1 + d)
                         if 0 < k <= len(ol) and len(ol[k - 1].strip()) > 3]
-                one = [h for h in hold if len(h) == 1]
+                one = [x for x in hold if len(x) == 1]
                 if one:
-                    out |= one[0]
+                    found = one[0]
                     break
-        return out if near else (out or {path})
+            out.append((a, an, found))
+        return out
 
 
 def changed(repo: Path, commit: str) -> list[str]:
@@ -461,8 +500,8 @@ def hits(cov: list[str], files: list[str]) -> list[str]:
 
 def counts(a: argparse.Namespace) -> None:
     repo = Path.cwd()
-    prs = cast("list[dict[str, Any]]", json.loads(Path(a.prs).read_text()))
-    pr = cast("dict[str, Any]", json.loads(run(["gh", "pr", "view", str(a.pr), "--json", "number,mergeCommit"], repo)))
+    prs = gh_records.merged_list(Path(a.prs).read_text(), str(a.prs))
+    pr = gh_records.view(run(["gh", "pr", "view", str(a.pr), "--json", "number,mergeCommit"], repo), "gh pr view")
     qc_main = tomllib.loads(git(repo, "show", f"{a.main}:qc.toml"))["demo"]
     sets: dict[str, dict[str, list[str]]] = {}
     for name, ref, mfile in (("a", a.main, None), ("b", a.main, a.b), ("c", a.split, a.c)):
@@ -491,7 +530,7 @@ def counts(a: argparse.Namespace) -> None:
             ("(c') split tree, hub hunks placed, unplaced to the dispatcher", "c", "placed", lane_after),
             ("(c'') split tree, hub hunks placed, unplaced by nearest context or dropped", "c", "near", lane_after)]
     every = [pr, *prs]
-    rows: list[list[int]] = [[int(p["number"])] for p in every]
+    rows: list[list[int]] = [[p.number] for p in every]
     per_col: list[dict[str, Any]] = []
     for _h, s, mode, lane in cols:
         pairs = alone = 0
@@ -499,7 +538,7 @@ def counts(a: argparse.Namespace) -> None:
         sole: dict[str, int] = {}
         changes: dict[str, int] = {}
         for n, p in enumerate(every):
-            files = files_of(p["mergeCommit"]["oid"], mode)
+            files = files_of(p.merge, mode)
             if n:
                 for f in files:
                     changes[f] = changes.get(f, 0) + 1
@@ -519,8 +558,8 @@ def counts(a: argparse.Namespace) -> None:
             rows[n].append(k)
         per_col.append({"pairs": pairs, "alone": alone, "trig": trig, "sole": sole, "changes": changes, "set": s})
     print(f"Built criteria with covers: (a) {len(sets['a'])}, (b) {len(sets['b'])}, (c) {len(sets['c'])}. "
-          f"PRs: {len(prs)} merged, #{prs[-1]['number']}..#{prs[0]['number']}, "
-          f"{prs[-1]['mergedAt'][:10]}..{prs[0]['mergedAt'][:10]}.\n")
+          f"PRs: {len(prs)} merged, #{prs[-1].number}..#{prs[0].number}, "
+          f"{prs[-1].merged_at[:10]}..{prs[0].merged_at[:10]}.\n")
     print(f"| covers set | PR #{a.pr} (lane gh1234) | median | p90 | max | stale (PR, criterion) pairs | "
           "of them through lane-command files alone |")
     print("|---|---|---|---|---|---|---|")
@@ -548,10 +587,10 @@ def counts(a: argparse.Namespace) -> None:
 
 
 def fetch(out: Path, repo: Path) -> None:
-    prs = cast("list[dict[str, str]]", json.loads(run(["gh", "pr", "list", "--state", "merged", "--limit", "60",
-                                                       "--json", "number,mergedAt,mergeCommit"], repo)))
-    prs.sort(key=lambda p: p["mergedAt"], reverse=True)
-    out.write_text(json.dumps(prs, indent=1) + "\n")
+    prs = gh_records.merged_list(run(["gh", "pr", "list", "--state", "merged", "--limit", "60", "--json",
+                                      "number,mergedAt,mergeCommit"], repo), "gh pr list")
+    prs.sort(key=lambda p: p.merged_at, reverse=True)
+    out.write_text(json.dumps([p.raw() for p in prs], indent=1, sort_keys=True) + "\n")
     print(f"covers: {len(prs)} PRs into {out}")
 
 

@@ -469,10 +469,10 @@ covers = [".agents/skills/herdr-comms/assets/herdr-say", ".agents/skills/herdr-c
 covers = [".agents/skills/herdr-comms/assets/herdr-say", ".agents/skills/herdr-comms/assets/herdr_ready.py", ".agents/skills/herdr-comms/assets/herdr_scope.py", ".agents/skills/verify-octo-feather/features/director-relaunch.md", "scripts/correction_lanes.py", "scripts/director_relaunch.py", "scripts/gate_time.py", "scripts/handoff_log.py", "scripts/lane_cli.py", "scripts/lane_reflection.py", "scripts/lane_reporting.py", "scripts/octo-feather-handoff", "scripts/octo-feather-lane", "scripts/octo-feather-reflect", "scripts/octo-feather-start", "scripts/pi-role", "scripts/tracker_calls.py", "tests/gate/kit/start_relaunch.py", "tests/gate/kit/testkit/__init__.py", "tests/gate/kit/testkit/herdr.py", "tests/gate/kit/testkit/systemd.py"]
 
 # Lane gh1234's criteria, each proven by its tagged tests (tests/gate/kit/test_fast_map.py,
-# tests/gate/kit/test_lane_post_merge_map.py); covers: the tracked files a coverage run of those tests names
-# (evidence/gh1274-split/covers/covers.py regen, which writes every covers line here). Coverage measures Python only,
-# so scripts/octo-feather-gate and the justfile, which these tests run through just with the system python3, are not
-# listed.
+# tests/gate/kit/test_lane_post_merge_map.py); covers, as every entry's here (evidence/gh1274-split/covers/covers.py
+# regen): the Python files a coverage run of those tests names, plus each declared path coverage cannot see, kept as
+# declared (here the justfile). scripts/octo-feather-gate is not listed: these tests run it through just with the
+# system python3, which coverage does not measure.
 [demo."quality#acceptance-fast-map-slot-free"]
 covers = ["justfile", "scripts/handoff_log.py", "scripts/octo-feather-handoff", "scripts/octo-feather-slot", "scripts/slot_queue.py", "tests/gate/kit/fast_map.py", "tests/gate/kit/fast_slot_free.py", "tests/gate/kit/gate_recipes_first.py", "tests/gate/kit/testkit/__init__.py"]
 
