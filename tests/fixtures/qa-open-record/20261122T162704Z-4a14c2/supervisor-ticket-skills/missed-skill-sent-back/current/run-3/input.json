@@ -1,0 +1,152 @@
+{
+  "suite": "supervisor-ticket-skills",
+  "id": "missed-skill-sent-back",
+  "role": "supervisor",
+  "fixture": "lane-skills-main",
+  "branch": "gh644",
+  "branches": [
+    {
+      "fixture": "lane-skills-1099",
+      "branch": "implementer-gh1099",
+      "message": "fix(lane): tickets reads the latest line of body and comments (#1099)"
+    }
+  ],
+  "stand_ins": {
+    "gh": [
+      {
+        "args": [
+          "issue",
+          "view",
+          "1099",
+          "--json",
+          "number,title,body,state,url,parent,subIssues,blockedBy"
+        ],
+        "stdout": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"## Parent\\n\\n#644\\n\\n## What to build\\n\\nA lane ticket names the skills its worker must load, and the supervisor sees at hand-off which of them the worker never loaded.\\n\\n- The to-tickets ticket template gains a `## Skills` section holding one column-0 line, `Skills: <skill>, <skill>` or `Skills: none`. A line set later is posted as a ticket comment in the same form, as `Seam:` lines are (issue-view --notes); the latest one counts.\\n- `octo-feather-lane ticket` and `tickets` fail a named skill that the implementer's role is not offered (as `pi-role` resolves it, `{tracker}` included).\\n- When the target's `.octo-feather.toml` sets `skills_line = \\\"required\\\"`, they also fail a ticket with no Skills line. `optional` lets a ticket omit it, and is the code default until the owner decides.\\n- A new `octo-feather-lane skills TICKET` compares the ticket's Skills line with the Pi session of the ticket's worker. It finds that session from the latest spawn line for the ticket in the caller's lane hand-off log, and reads it with the skill-reach reader the factory report uses: a load, never a mention.\\n  - It prints one line per named skill: `loaded`, `not loaded` or `not offered`.\\n  - It appends one finding line per miss to the lane log: source `skills`, class `skill-not-loaded`, with ticket and skill.\\n  - `.octo-feather.toml` `skill_miss` decides the outcome. `record` (the code default until the owner decides) logs the miss as non-blocking and exits 0. `send-back` logs it as blocking, exits 1, and prints the fix: send the worker back to load the skill before integrate.\\n- The supervisor role runs it when it consumes a worker's result (one entry in its role file).\\n\\n## Acceptance criteria\\n\\n- [ ] issue-lifecycle#acceptance-ticket-skills: a worker hands off without loading a skill its ticket names, and the lane's hand-off log records the miss naming the ticket and the skill; under `skill_miss = \\\"send-back\\\"` the command exits 1 telling the supervisor to send the worker back\\n- [ ] issue-lifecycle#acceptance-tracer-tickets: `octo-feather-lane ticket` fails a draft naming a skill the implementer is not offered, and, under `skills_line = \\\"required\\\"`, a draft with no Skills line, each with its class and fix\\n- [ ] demo: `scripts/octo-feather-lane skills 1094` prints, for the pilot's worker session, each skill #1094 names as loaded or not loaded\\n\\n## Seams\\n\\nSeam: issue-lifecycle#acceptance-ticket-skills: `octo-feather-lane skills`\\nSeam: issue-lifecycle#acceptance-tracer-tickets: `octo-feather-lane ticket`\\n\\n## Skills\\n\\nSkills: tdd, codebase-design\\n\\n## Blocked by\\n\\nNone (can start immediately)\\n\",\"number\":1099,\"parent\":{\"id\":\"I_kwDOVOndwM8AAAABdEBhqQ\",\"number\":644,\"state\":\"OPEN\",\"title\":\"Implementers never read codebase-design in real work (0 of 19 sessions) though evals pass 3/3; same for principle-build-the-lever\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/644\"},\"state\":\"OPEN\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"Tickets name the skills their worker must load; hand-off compares them with the worker's session\",\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/1099\"}\n",
+        "exit": 0
+      },
+      {
+        "args": [
+          "api",
+          "graphql",
+          "-F",
+          "n=1099",
+          "-f",
+          "owner=0xTomDaniel",
+          "-f",
+          "name=octo-feather",
+          "-f",
+          "query=query($owner: String!, $name: String!, $n: Int!) { repository(owner: $owner, name: $name) { issue(number: $n) { url createdAt lastEditedAt body comments(first: 100) { pageInfo { hasNextPage } nodes { url createdAt lastEditedAt body } } } } }"
+        ],
+        "stdout": "{\"data\":{\"repository\":{\"issue\":{\"url\":\"https://github.com/0xTomDaniel/octo-feather/issues/1099\",\"createdAt\":\"2026-11-19T20:24:39Z\",\"lastEditedAt\":null,\"body\":\"## Parent\\n\\n#644\\n\\n## What to build\\n\\nA lane ticket names the skills its worker must load, and the supervisor sees at hand-off which of them the worker never loaded.\\n\\n- The to-tickets ticket template gains a `## Skills` section holding one column-0 line, `Skills: <skill>, <skill>` or `Skills: none`. A line set later is posted as a ticket comment in the same form, as `Seam:` lines are (issue-view --notes); the latest one counts.\\n- `octo-feather-lane ticket` and `tickets` fail a named skill that the implementer's role is not offered (as `pi-role` resolves it, `{tracker}` included).\\n- When the target's `.octo-feather.toml` sets `skills_line = \\\"required\\\"`, they also fail a ticket with no Skills line. `optional` lets a ticket omit it, and is the code default until the owner decides.\\n- A new `octo-feather-lane skills TICKET` compares the ticket's Skills line with the Pi session of the ticket's worker. It finds that session from the latest spawn line for the ticket in the caller's lane hand-off log, and reads it with the skill-reach reader the factory report uses: a load, never a mention.\\n  - It prints one line per named skill: `loaded`, `not loaded` or `not offered`.\\n  - It appends one finding line per miss to the lane log: source `skills`, class `skill-not-loaded`, with ticket and skill.\\n  - `.octo-feather.toml` `skill_miss` decides the outcome. `record` (the code default until the owner decides) logs the miss as non-blocking and exits 0. `send-back` logs it as blocking, exits 1, and prints the fix: send the worker back to load the skill before integrate.\\n- The supervisor role runs it when it consumes a worker's result (one entry in its role file).\\n\\n## Acceptance criteria\\n\\n- [ ] issue-lifecycle#acceptance-ticket-skills: a worker hands off without loading a skill its ticket names, and the lane's hand-off log records the miss naming the ticket and the skill; under `skill_miss = \\\"send-back\\\"` the command exits 1 telling the supervisor to send the worker back\\n- [ ] issue-lifecycle#acceptance-tracer-tickets: `octo-feather-lane ticket` fails a draft naming a skill the implementer is not offered, and, under `skills_line = \\\"required\\\"`, a draft with no Skills line, each with its class and fix\\n- [ ] demo: `scripts/octo-feather-lane skills 1094` prints, for the pilot's worker session, each skill #1094 names as loaded or not loaded\\n\\n## Seams\\n\\nSeam: issue-lifecycle#acceptance-ticket-skills: `octo-feather-lane skills`\\nSeam: issue-lifecycle#acceptance-tracer-tickets: `octo-feather-lane ticket`\\n\\n## Skills\\n\\nSkills: tdd, codebase-design\\n\\n## Blocked by\\n\\nNone (can start immediately)\\n\",\"comments\":{\"pageInfo\":{\"hasNextPage\":false},\"nodes\":[]}}}}}",
+        "exit": 0
+      }
+    ],
+    "octo-feather-lane": [
+      {
+        "args": [
+          "skills",
+          "1099"
+        ],
+        "argc": 2,
+        "stdout": "1099: worker implementer-gh1099 (w1:p4), Pi session /tmp/lane-skills-rec/pi/sessions/--home-exedev-src-octo-feather-gh644-1094--/2026-11-19T19-48-27-938Z_4fd43c0c-7119-4cb4-866f-e114e16ecdb4.jsonl\n1099: skill tdd: not loaded\n1099: skill codebase-design: not loaded\n1099: 2 blocking finding line(s) in /tmp/lane-skills-rec/state/octo-feather/lanes/gh644.handoffs.jsonl, class skill-not-loaded: tdd, codebase-design\n1099: fix: send implementer-gh1099 back before integrate: herdr-say w1:p4 'Load tdd, codebase-design (read each SKILL.md by path), apply it to ticket 1099, then hand off again'; integrate once octo-feather-lane skills 1099 no longer exits 1\n",
+        "exit": 1
+      }
+    ],
+    "herdr-say": [
+      {
+        "args": [],
+        "stdout": "",
+        "exit": 0
+      }
+    ],
+    "herdr-close": [
+      {
+        "args": [],
+        "stdout": "",
+        "exit": 0
+      }
+    ],
+    "herdr": [
+      {
+        "args": [
+          "agent",
+          "get",
+          "w1:p4"
+        ],
+        "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w1:p4 not found\"}, \"id\": \"cli:agent:get\"}\n",
+        "exit": 1,
+        "after": [
+          "herdr-close"
+        ]
+      },
+      {
+        "args": [
+          "agent",
+          "get",
+          "w1:p4"
+        ],
+        "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}/../wt-gh1099\", \"interactive_ready\": true, \"name\": \"implementer-gh1099\", \"pane_id\": \"w1:p4\", \"tab_id\": \"w1:t4\", \"workspace_id\": \"w1\"}, \"type\": \"agent_info\"}}\n",
+        "exit": 0
+      },
+      {
+        "args": [
+          "agent",
+          "get",
+          "implementer-gh1099"
+        ],
+        "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh1099 not found\"}, \"id\": \"cli:agent:get\"}\n",
+        "exit": 1,
+        "after": [
+          "herdr-close"
+        ]
+      },
+      {
+        "args": [
+          "agent",
+          "get",
+          "implementer-gh1099"
+        ],
+        "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}/../wt-gh1099\", \"interactive_ready\": true, \"name\": \"implementer-gh1099\", \"pane_id\": \"w1:p4\", \"tab_id\": \"w1:t4\", \"workspace_id\": \"w1\"}, \"type\": \"agent_info\"}}\n",
+        "exit": 0
+      },
+      {
+        "args": [
+          "agent",
+          "list"
+        ],
+        "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": []}}\n",
+        "exit": 0,
+        "after": [
+          "herdr-close"
+        ]
+      },
+      {
+        "args": [
+          "agent",
+          "list"
+        ],
+        "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}/../wt-gh1099\", \"interactive_ready\": true, \"name\": \"implementer-gh1099\", \"pane_id\": \"w1:p4\", \"tab_id\": \"w1:t4\", \"workspace_id\": \"w1\"}]}}\n",
+        "exit": 0
+      },
+      {
+        "args": [
+          "pane",
+          "read",
+          "w1:p4"
+        ],
+        "stdout": "$ pi\n> \n",
+        "exit": 0
+      }
+    ]
+  },
+  "task": "Goal check-in, lane gh644 (parent issue #644 in GitHub 0xTomDaniel/octo-feather), lane branch gh644 checked out in this directory (head {head}), draft PR open for it. Worker worktrees sit beside this one, `{repo}/../wt-gh<ticket>`.\nA worker's finished branch goes onto gh644 with `just integrate 644 <worker branch>` (the lane's parent ticket, then the branch).\nTicket #1099 (GitHub issue 0xTomDaniel/octo-feather#1099): you briefed implementer-gh1099 (pane w1:p4) on it; no other worker is running.\nSince your last check-in:\n- implementer-gh1099 (pane w1:p4) reported DONE: \"#1099: scripts/lane_tickets.py now reads the latest line over the body and its comments, a comment's replacing the body's; test_comment_replaces_body added to tests/test_lane_tickets.py; branch implementer-gh1099, one commit `fix(lane): tickets reads the latest line of body and comments (#1099)`; `just fast` green.\"\nAct on this check-in. `just qc` and the review of the new head are the next check-in's.\nSandbox run: GitHub answers only ticket #1099's reads (recorded GitHub answers); Herdr is offline and its wrappers answer as stand-ins; the lane record and log under octo-feather-state are absent, and octo-feather-lane answers from this lane's recorded state.",
+  "model": "anthropic/claude-opus-5-5",
+  "fixture_head": "fefec9049def491513b121d6359742f7510deb40",
+  "max_tool_calls": 40,
+  "timeout_s": 900,
+  "kit_ref": "HEAD",
+  "kit_sha": "0363d3e9457d5af77534051e4491f296a8ad9e8f",
+  "run": 3,
+  "of": 3,
+  "config": "current"
+}

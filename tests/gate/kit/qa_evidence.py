@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from qc_eval_verdict import PI_ROLE
 from testkit import Scratch, kit, main
+from testkit.opens import opens_whole
 from testkit.qc import target
 
 if TYPE_CHECKING:
@@ -81,7 +82,8 @@ def stored_run(qa: Path, sha: str, base: str) -> Path:
         facts = [dict(SAY, status=say), dict(MERGE, status="pass")]
         graded = [dict(f, evidence="e") for f in facts]
         (rd / "grading.json").write_text(json.dumps({"facts": graded, "deciding": ["d"]}))
-        (rd / "sandbox.json").write_text(json.dumps({"attempts": attempts}))
+        sandbox = {"attempts": attempts, "recorded": len(attempts)}
+        (rd / "sandbox.json").write_text(json.dumps(sandbox))
         deciding = ["ran herdr-say --parent: " + ("recorded run" if say == "pass" else "none")]
         one = {"suite": "s1", "id": "c1", "verdict": verdict, "deciding": deciding, "seconds": 10.0}
         (rd / "result.json").write_text(json.dumps({**one, **run}))
@@ -121,6 +123,7 @@ def stored_run(qa: Path, sha: str, base: str) -> Path:
         "delta": {"pass_rate": 1.0, "time": 0.0, "tokens": 0.0, "cost_usd": None},
     }
     (c / "result.json").write_text(json.dumps(case))
+    opens_whole(c, qa)
     summary = {
         "run_id": RUN,
         "kit_ref": "HEAD",
@@ -136,8 +139,9 @@ def stored_run(qa: Path, sha: str, base: str) -> Path:
     return d
 
 
-def evidence(s: Scratch, d: Path) -> str:
-    return s.run([kit("octo-feather-qa"), "--analyze", str(d), "--evidence"]).out
+def evidence(s: Scratch, d: Path, r: Path) -> str:
+    """The evidence block of D, run in the repo R holding the run's kit (its pin's cross-check)."""
+    return s.run([kit("octo-feather-qa"), "--analyze", str(d), "--evidence"], cwd=r).out
 
 
 def block(s: Scratch) -> None:
@@ -147,8 +151,8 @@ def block(s: Scratch) -> None:
     sha = s.git(r, "rev-parse", "HEAD~1")
     base = "b" * 40
     d = stored_run(s.root / "qa", sha, base)
-    out = evidence(s, d)
-    assert evidence(s, d) == out, "a second print differs"
+    out = evidence(s, d, r)
+    assert evidence(s, d, r) == out, "a second print differs"
     lines = out.splitlines()
     cite = f"{RUN}/s1/c1"
     for want in (

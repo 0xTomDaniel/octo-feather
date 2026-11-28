@@ -5,7 +5,7 @@ import sys
 from collections.abc import Callable
 
 import pytest
-from qc_open_record import not_whole, whole
+from qc_open_record import not_whole, watcher, whole
 
 Case = Callable[..., None]
 pytestmark = pytest.mark.skipif(sys.platform == "darwin", reason="the qc sandbox needs Linux")
@@ -21,3 +21,9 @@ def test_whole(case: Case) -> None:
 @pytest.mark.criterion("quality#acceptance-qc-eval-verdict")
 def test_not_whole(case: Case) -> None:
     case(not_whole)
+
+
+@pytest.mark.e2e  # real srt and namespaces (quality spec #test-kinds)
+@pytest.mark.criterion("quality#acceptance-qc-eval-verdict")
+def test_watcher(case: Case) -> None:
+    case(watcher)

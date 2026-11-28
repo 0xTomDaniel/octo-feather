@@ -14,6 +14,7 @@ import shutil
 from typing import TYPE_CHECKING, cast
 
 from testkit import Scratch, kit, main, tool_homes
+from testkit.opens import opens_whole
 from testkit.qc import qc, reports, target
 
 if TYPE_CHECKING:
@@ -57,15 +58,18 @@ FILES = {
 }
 
 
-def store(
+def store(  # noqa: PLR0913  # a stored run's own fields
     s: Scratch,
     sha: str,
     verdicts: tuple[str, ...] = ("PASS", "PASS"),
     case: Mapping[str, object] = CASE,
     run: str = RUN,
+    *,
+    opened: tuple[str, ...] = (),
 ) -> None:
     """A stored run RUN of s1/CASE at kit SHA, one run per VERDICTS (--runs), as
-    octo-feather-qa writes it."""
+    octo-feather-qa writes it, each run's open record whole: OPENED, the kit files it opened
+    beyond its launch (testkit/opens.py)."""
     d = s.root / "qa" / run / "s1" / str(case["id"])
     runs: list[dict[str, object]] = []
     for k, v in enumerate(verdicts, 1):
@@ -107,12 +111,14 @@ def store(
         **({"review": case["review"]} if "review" in case else {}),
     }
     (d / "result.json").write_text(json.dumps(top))
+    opens_whole(d, s.root, opened)
 
 
-def world(s: Scratch) -> tuple[Path, str]:
-    """The target and its stored run at its first commit; (repo, that head with status planned)."""
+def world(s: Scratch, opened: tuple[str, ...] = ()) -> tuple[Path, str]:
+    """The target and its stored run at its first commit, its runs having opened OPENED; (repo,
+    that head with status planned)."""
     r = target(s, FILES, exe=("scripts/pi-role",))
-    store(s, s.git(r, "rev-parse", "HEAD~1"))
+    store(s, s.git(r, "rev-parse", "HEAD~1"), opened=opened)
     s.env["OCTO_FEATHER_QA_DIR"] = str(s.root / "qa")
     s.env |= tool_homes()
     return r, s.git(r, "rev-parse", "HEAD")
@@ -192,5 +198,29 @@ def insufficient(s: Scratch) -> None:
     assert f"run {RUN} has no readable s1/c1/result.json" in str(res["why"]), res
 
 
+def carry(s: Scratch) -> None:
+    """The demo passed at one head, its runs having opened README.md: at a later head changing
+    another file it is carried; at one changing README.md it is judged again, stderr naming the
+    pinned run and the file, and reads insufficient evidence naming it (quality #qc-carry)."""
+    r, _ = world(s, ("README.md",))
+    judged(s, r, 0)
+    s.git(r, "commit", "-q", "--allow-empty", "-m", "another change")
+    ran = qc(s, r, "5", "acceptance-a", want=0)
+    assert "qc: carried demo#acceptance-a" in ran.err, ran.err
+    (r / "README.md").write_text("target, changed\n")
+    s.git(r, "commit", "-qam", "README.md changed")
+    head = s.git(r, "rev-parse", "HEAD")
+    ran = qc(s, r, "5", "acceptance-a", want=2)
+    want = (
+        f"qc: judging demo#acceptance-a again: pinned run {RUN} s1/c1 stale at HEAD {head[:12]}: "
+        "README.md changed (opened by the run)"
+    )
+    assert want in ran.err, ran.err
+    results = cast("list[dict[str, object]]", reports(s, head)[-1]["results"])
+    [res] = [x for x in results if x["id"] == "acceptance-a"]
+    assert res["verdict"] == "insufficient evidence", res
+    assert "README.md changed (opened by the run)" in str(res["why"]), res
+
+
 if __name__ == "__main__":
-    main(same_verdict, insufficient)
+    main(same_verdict, insufficient, carry)

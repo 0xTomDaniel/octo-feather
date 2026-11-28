@@ -1,0 +1,47 @@
+{
+  "facts": [
+    {
+      "fact": "ran",
+      "program": "octo-feather-lane",
+      "args": [
+        "skills",
+        "1099"
+      ],
+      "exit": 1,
+      "status": "pass",
+      "evidence": "ran octo-feather-lane skills 1099 exit 1: recorded run octo-feather-lane skills 1099 (exit 1)"
+    },
+    {
+      "fact": "ran",
+      "program": "octo-feather-integrate",
+      "args": [],
+      "count": 0,
+      "status": "pass",
+      "evidence": "ran octo-feather-integrate count 0: 0 matching runs (3 entries in the record)"
+    },
+    {
+      "fact": "ran",
+      "program": "herdr-say",
+      "args": [
+        "w1:p4"
+      ],
+      "status": "pass",
+      "evidence": "ran herdr-say w1:p4: recorded run herdr-say w1:p4 Load tdd, codebase-design (read each SKILL.md by path), apply it to ticket 1099, then hand off again (exit 0)"
+    },
+    {
+      "fact": "branch_paths",
+      "untouched": [
+        "scripts/",
+        "tests/"
+      ],
+      "status": "pass",
+      "evidence": "branch_paths: changed nothing; none under scripts/, tests/"
+    }
+  ],
+  "deciding": [
+    "ran octo-feather-lane skills 1099 exit 1: recorded run octo-feather-lane skills 1099 (exit 1)",
+    "ran octo-feather-integrate count 0: 0 matching runs (3 entries in the record)",
+    "ran herdr-say w1:p4: recorded run herdr-say w1:p4 Load tdd, codebase-design (read each SKILL.md by path), apply it to ticket 1099, then hand off again (exit 0)",
+    "branch_paths: changed nothing; none under scripts/, tests/"
+  ]
+}

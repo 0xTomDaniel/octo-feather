@@ -1,0 +1,207 @@
+{
+  "suite": "supervisor-ticket-skills",
+  "id": "missed-skill-sent-back",
+  "verdict": "PASS",
+  "deciding": [
+    "3/3 runs passed (pass rate 1.00, stddev 0.00)",
+    "run 1: ran octo-feather-lane skills 1099 exit 1: recorded run octo-feather-lane skills 1099 (exit 1); ran octo-feather-integrate count 0: 0 matching runs (3 entries in the record); ran herdr-say w1:p4: recorded run herdr-say w1:p4 Load tdd, codebase-design (read each SKILL.md by path), apply it to ticket 1099, then hand off again (exit 0); branch_paths: changed nothing; none under scripts/, tests/"
+  ],
+  "model": "anthropic/claude-opus-5-5",
+  "seconds": 104.6,
+  "stop": "exit",
+  "tool_calls": 6,
+  "role": "supervisor",
+  "kit_ref": "HEAD",
+  "kit_sha": "0de82247aecc0e0ce8fe4ed650b96276e91f0122",
+  "runs": [
+    {
+      "run": 1,
+      "dir": "run-1",
+      "verdict": "PASS",
+      "deciding": [
+        "ran octo-feather-lane skills 1099 exit 1: recorded run octo-feather-lane skills 1099 (exit 1)",
+        "ran octo-feather-integrate count 0: 0 matching runs (3 entries in the record)",
+        "ran herdr-say w1:p4: recorded run herdr-say w1:p4 Load tdd, codebase-design (read each SKILL.md by path), apply it to ticket 1099, then hand off again (exit 0)",
+        "branch_paths: changed nothing; none under scripts/, tests/"
+      ],
+      "model": "anthropic/claude-opus-5-5",
+      "seconds": 38.7,
+      "stop": "exit",
+      "tool_calls": 6,
+      "usage": {
+        "input": 13,
+        "output": 1882,
+        "cache_read": 107078,
+        "cache_write": 19664,
+        "total": 128637,
+        "cost_usd": 0.21642
+      },
+      "facts": [
+        {
+          "fact": "ran",
+          "program": "octo-feather-lane",
+          "args": [
+            "skills",
+            "1099"
+          ],
+          "exit": 1,
+          "status": "pass"
+        },
+        {
+          "fact": "ran",
+          "program": "octo-feather-integrate",
+          "args": [],
+          "count": 0,
+          "status": "pass"
+        },
+        {
+          "fact": "ran",
+          "program": "herdr-say",
+          "args": [
+            "w1:p4"
+          ],
+          "status": "pass"
+        },
+        {
+          "fact": "branch_paths",
+          "untouched": [
+            "scripts/",
+            "tests/"
+          ],
+          "status": "pass"
+        }
+      ]
+    },
+    {
+      "run": 2,
+      "dir": "run-2",
+      "verdict": "PASS",
+      "deciding": [
+        "ran octo-feather-lane skills 1099 exit 1: recorded run octo-feather-lane skills 1099 (exit 1)",
+        "ran octo-feather-integrate count 0: 0 matching runs (3 entries in the record)",
+        "ran herdr-say w1:p4: recorded run herdr-say w1:p4 Load tdd, codebase-design (read each SKILL.md by path), apply it to ticket 1099, then hand off again (exit 0)",
+        "branch_paths: changed nothing; none under scripts/, tests/"
+      ],
+      "model": "anthropic/claude-opus-5-5",
+      "seconds": 37.1,
+      "stop": "exit",
+      "tool_calls": 4,
+      "usage": {
+        "input": 9,
+        "output": 1361,
+        "cache_read": 69026,
+        "cache_write": 19017,
+        "total": 89413,
+        "cost_usd": 0.193197
+      },
+      "facts": [
+        {
+          "fact": "ran",
+          "program": "octo-feather-lane",
+          "args": [
+            "skills",
+            "1099"
+          ],
+          "exit": 1,
+          "status": "pass"
+        },
+        {
+          "fact": "ran",
+          "program": "octo-feather-integrate",
+          "args": [],
+          "count": 0,
+          "status": "pass"
+        },
+        {
+          "fact": "ran",
+          "program": "herdr-say",
+          "args": [
+            "w1:p4"
+          ],
+          "status": "pass"
+        },
+        {
+          "fact": "branch_paths",
+          "untouched": [
+            "scripts/",
+            "tests/"
+          ],
+          "status": "pass"
+        }
+      ]
+    },
+    {
+      "run": 3,
+      "dir": "run-3",
+      "verdict": "PASS",
+      "deciding": [
+        "ran octo-feather-lane skills 1099 exit 1: recorded run octo-feather-lane skills 1099 (exit 1)",
+        "ran octo-feather-integrate count 0: 0 matching runs (3 entries in the record)",
+        "ran herdr-say w1:p4: recorded run herdr-say w1:p4 Load tdd, codebase-design (read each SKILL.md by path), apply it to ticket 1099, then hand off again (exit 0)",
+        "branch_paths: changed nothing; none under scripts/, tests/"
+      ],
+      "model": "anthropic/claude-opus-5-5",
+      "seconds": 28.8,
+      "stop": "exit",
+      "tool_calls": 4,
+      "usage": {
+        "input": 9,
+        "output": 1274,
+        "cache_read": 68749,
+        "cache_write": 18926,
+        "total": 88958,
+        "cost_usd": 0.190674
+      },
+      "facts": [
+        {
+          "fact": "ran",
+          "program": "octo-feather-lane",
+          "args": [
+            "skills",
+            "1099"
+          ],
+          "exit": 1,
+          "status": "pass"
+        },
+        {
+          "fact": "ran",
+          "program": "octo-feather-integrate",
+          "args": [],
+          "count": 0,
+          "status": "pass"
+        },
+        {
+          "fact": "ran",
+          "program": "herdr-say",
+          "args": [
+            "w1:p4"
+          ],
+          "status": "pass"
+        },
+        {
+          "fact": "branch_paths",
+          "untouched": [
+            "scripts/",
+            "tests/"
+          ],
+          "status": "pass"
+        }
+      ]
+    }
+  ],
+  "runs_passed": 3,
+  "pass_rate": 1.0,
+  "stddev": 0.0,
+  "time": {
+    "mean": 34.8667,
+    "stddev": 5.3144
+  },
+  "tokens": {
+    "mean": 102336.0,
+    "stddev": 22778.4703
+  },
+  "cost_usd": {
+    "mean": 0.2001,
+    "stddev": 0.0142
+  }
+}

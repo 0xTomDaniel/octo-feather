@@ -1,0 +1,21 @@
+{
+  "suite": "supervisor-ticket-skills",
+  "id": "missed-skill-sent-back",
+  "verdict": "PASS",
+  "deciding": [
+    "ran octo-feather-lane skills 1099 exit 1: recorded run octo-feather-lane skills 1099 (exit 1)",
+    "ran octo-feather-integrate count 0: 0 matching runs (3 entries in the record)",
+    "ran herdr-say w1:p4: recorded run herdr-say w1:p4 Load tdd, codebase-design (read each SKILL.md by path), apply it to ticket 1099, then hand off again (exit 0)",
+    "branch_paths: changed nothing; none under scripts/, tests/"
+  ],
+  "model": "anthropic/claude-opus-5-5",
+  "seconds": 24.2,
+  "stop": "exit",
+  "tool_calls": 4,
+  "role": "supervisor",
+  "kit_ref": "HEAD",
+  "kit_sha": "0363d3e9457d5af77534051e4491f296a8ad9e8f",
+  "run": 1,
+  "of": 3,
+  "config": "current"
+}

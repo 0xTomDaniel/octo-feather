@@ -119,10 +119,12 @@ octo-feather-qa --analyze RUN_DIR prints the analysis of a stored run again from
 sandbox or model runs; no other option but --evidence; an unreadable summary.json exits 64.
 Evidence (ticket #995; owner ruling 2026-11-18 #978: an evidence file for an eval-backed change is generated from the
 stored run, never transcribed by hand): `--analyze RUN_DIR --evidence` prints, from the stored run alone (summary.json,
-and each case run's grading.json, sandbox.json and input.json), nothing run or written, a markdown block for the
+and each case run's grading.json, sandbox.json, input.json and transcript.jsonl), nothing run or written, a markdown block for the
 evidence file: the run id, the current and baseline kit shas, cases passed; per fact case its lines as the run printed
 them (case line; with --baseline the baseline's line and the compare table, with --runs N its cost line), its pin
-`octo-feather-qa --verdict RUN_ID/SUITE/CASE` (the argument a qc.toml demo pins, Verdict), and each graded `ran` fact
+`octo-feather-qa --verdict RUN_ID/SUITE/CASE` (the argument a qc.toml demo pins, Verdict), or instead `No pin: <why>`
+when a current-kit run holds no whole open record the cross-check accepts (Verdict; the kit's files read at K from the
+repo at the working directory, else this kit), and each graded `ran` fact
 of each run on each kit, cited RUN_ID/SUITE/CASE/<run dir>, with its status and every sandbox.json `attempts` run
 matching it (the Run record rule) as program, argv whole as JSON, and exit; then the analysis, and the `Smoke:` and
 `Removed:` lines check-behavior-smoke reads, as stubs to fill. Deterministic: the same run prints the same bytes.
@@ -156,14 +158,25 @@ naming it. Fixture trees: for each fixture the case names at any depth (every st
 history fixture {repo, commit} is pinned by its commit), its materialized tree (schema.md, Fixtures) at K and at HEAD,
 each rev's evals/ exported from git into scratch and built by this kit's materializer, hashed as `check-evals --trees`
 hashes it: a different hash is stale, `evals/fixtures/<name> tree changed`; a materializer refusal on either side is
-insufficient evidence, naming it. So a fixture rewritten onto a base or pool with the same tree stays fresh. The grader (this
+insufficient evidence, naming it. So a fixture rewritten onto a base or pool with the same tree stays fresh. Opened
+files: every kit file and dir the current-kit runs opened, read, ran or listed, united from each run's open record
+(sandbox.json `opens`; schema, Open record), outside evals/ (its own rules above) and outside the role file and launch
+set: a file git diff names between K and HEAD is stale, `<path> changed (opened by the run)` (added, deleted alike);
+a dir the run listed is stale when a tracked entry directly in it was added or deleted at HEAD, `<entry> added (listed
+by the run)`. A run's record counts only whole and cross-checked against the run's own records: each kit path (tracked
+at K) Pi's read tool read with success in its transcript.jsonl (codemode nested reads included), relative paths from
+the case repo (the proof's worktree line), and each Run record whose program names a tracked executable at K (a
+stand-in, fake gh or fake octo-feather-qa of the case aside) must be in it, the kit root the proof's `kit under test`
+line. Else insufficient evidence naming the run dirs and why: `no open record (stored before #1229): rerun` (every run
+stored before the record), `open record not whole (<its why>): rerun`, or `open record refused by the cross-check, not
+in it: <path> (read), <program> (ran: <path>): rerun`; never fresh, never stale. The grader (this
 script) is not in the set: a grading change shows as an expectations change or a rerun. Prints one line per
 argument: the verdict (PASS, FAIL, or INSUFFICIENT when not fresh or not readable), SUITE/CASE, the stored verdict,
 the run id, kit sha, runs passed/total, and its freshness against HEAD, each stale file named. Insufficient
 evidence (exit 77, schemas/qc.v2.schema.json demo command: did not run to its end) when any run is missing or
 unreadable (no result.json, a run's input.json, grading.json or result.json, a kit sha the repo does not hold, a
 run made with --kit-ref, whose fixtures' commit it does not record, a review case with no verdict recorded for the
-run) or stale; the last stderr line names each. Not refused inside a `just check` run, as --analyze and --review are
+run, a run with no whole, cross-checked open record) or stale; the last stderr line names each. Not refused inside a `just check` run, as --analyze and --review are
 not: it calls no model, runs no eval and decides from stored data only, so the gate stays deterministic and free.
 Exit: 0 every named case PASS and fresh, 1 any FAIL (none insufficient), 77 any insufficient, 64 usage (no
 argument, one not RUN_ID/SUITE/CASE, an option, or not in a git repo).
@@ -478,12 +491,13 @@ def run_case(qc: "ModuleType", evals: Path, suite: Result, case: Result, facts: 
             os.environ["OCTO_FEATHER_QC_RO_BINDS"] = ":".join(p for p in (ro, str(kit), grading.__file__) if p)
         # the sandbox's run shims: only the programs this case's ran facts name (schema, Run record)
         os.environ["QC_RECORD"] = planned.shims
+        os.environ["QC_OPENS"] = "judge"   # the open record starts as the watcher starts Pi (pi_starts)
         try:
             run, rec = qc.sandboxed(cmd, f"qa-{runid}-{n}", {"off": GH_OFF}, history=False, kit=kit)
         except SystemExit as e:   # unshare missing or unusable: never run unsandboxed
             run, rec = None, {"error": f"sandbox unavailable (exit {e.code})"}
         finally:
-            os.chdir(here); os.environ.pop("QC_RECORD", None)
+            os.chdir(here); os.environ.pop("QC_RECORD", None); os.environ.pop("QC_OPENS", None)
             if ro is None:
                 os.environ.pop("OCTO_FEATHER_QC_RO_BINDS", None)
             else:
