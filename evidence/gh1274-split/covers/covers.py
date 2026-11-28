@@ -343,7 +343,9 @@ class Split:
     split moved its code into (../tables.py CUT, the codemod's table): a line inside a top-level def goes to the module
     defining that name; any other non-blank line (help text, imports, constants) to each of those files holding that
     exact line (a line no file holds today, edited since, places nothing); a hunk none of whose lines is placed goes
-    to the dispatcher."""
+    to the dispatcher. On a REF holding #1335's shared modules (../tables.py SHARED), merge_ask.py's changed lines are
+    placed the same way among merge_ask.py and those files alone (its text went nowhere else), an unplaced hunk
+    staying on merge_ask.py."""
 
     @staticmethod
     def modules() -> list[str]:
@@ -351,11 +353,22 @@ class Split:
         exec((HERE.parent / "tables.py").read_text(), ns)  # noqa: S102  # the split's own table
         return sorted(ns["CUT"])
 
+    @staticmethod
+    def shared() -> list[str]:
+        """The shared modules #1335's helpers step moved merge_ask.py's helpers into (../tables.py SHARED)."""
+        ns: dict[str, Any] = {}
+        exec((HERE.parent / "tables.py").read_text(), ns)  # noqa: S102
+        return sorted(ns.get("SHARED", {}))
+
     def __init__(self, repo: Path, ref: str) -> None:
         self.repo, self.ref = repo, ref
         self.owner: dict[str, str] = {}
         self.lines: dict[str, set[str]] = {}
         files = [HUB, *[f"scripts/{m}.py" for m in self.modules()]]
+        self.helpers = bool(self.shared()) and all(subprocess.run(  # REF holds them: #1335's step ran there
+            ["git", "cat-file", "-e", f"{ref}:scripts/{m}.py"], cwd=repo, capture_output=True, check=False).returncode == 0
+            for m in self.shared())
+        files += [f"scripts/{m}.py" for m in self.shared()] if self.helpers else []
         for f in files:
             src = git(repo, "show", f"{ref}:{f}")
             for s in src.splitlines():
@@ -380,44 +393,50 @@ class Split:
         return [(n.lineno - len(n.decorator_list), n.end_lineno or n.lineno, n.name) for n in body
                 if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
 
-    def place(self, commit: str, near: bool = False, base: str | None = None) -> set[str]:
+    def place(self, commit: str, near: bool = False, base: str | None = None, path: str = HUB) -> set[str]:
         """The split files COMMIT's change to the hub (BASE, default commit^1, ..commit) lands in. A hunk none of whose lines is
         placed goes to the dispatcher; with NEAR (c''), instead to the file holding the nearest unchanged line around
         it in the pre-image (up to NEAR_LINES each way) that exactly one split file holds: the module header or
         help chunk it sits in; none found, the hunk is dropped."""
         base = base or f"{commit}^1"
-        old = run(["git", "show", f"{base}:{HUB}"], self.repo, check=False)
-        new = run(["git", "show", f"{commit}:{HUB}"], self.repo, check=False)
+        old = run(["git", "show", f"{base}:{path}"], self.repo, check=False)
+        new = run(["git", "show", f"{commit}:{path}"], self.repo, check=False)
         od, nd = self.defs(old), self.defs(new)
         ol, nl = old.splitlines(), new.splitlines()
-        diff = git(self.repo, "diff", "-U0", base, commit, "--", HUB)
+        diff = git(self.repo, "diff", "-U0", base, commit, "--", path)
         out: set[str] = set()
+
+        # merge_ask.py's text went only to the shared modules (#1335): its lines are placed among those files alone
+        among = None if path == HUB else {path, *[f"scripts/{m}.py" for m in self.shared()]}
+
+        def held(text: str) -> set[str]:
+            return self.lines.get(text, set()) if among is None else self.lines.get(text, set()) & among
 
         def at(defs: list[tuple[int, int, str]], line: int) -> str | None:
             return next((name for a, b, name in defs if a <= line <= b), None)
 
         def put(defs: list[tuple[int, int, str]], src: list[str], line: int) -> set[str]:
             name = at(defs, line)
-            if name and name in self.owner:
+            if name and name in self.owner and (among is None or self.owner[name] in among):
                 return {self.owner[name]}
             text = src[line - 1].strip() if 0 < line <= len(src) else ""
-            return self.lines.get(text, set()) if len(text) > 3 else set()
+            return held(text) if len(text) > 3 else set()
 
         for h in re.finditer(r"^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@", diff, re.M):
             a, an, b, bn = int(h[1]), int(h[2] or 1), int(h[3]), int(h[4] or 1)
             placed: set[str] = set[str]().union(*(put(od, ol, k) for k in range(a, a + an)),
                                  *(put(nd, nl, k) for k in range(b, b + bn)))
             if placed or not near:
-                out |= placed or {HUB}
+                out |= placed or {path}
                 continue
             for d in range(1, NEAR_LINES + 1):
-                hold = [self.lines.get(ol[k - 1].strip(), set()) for k in (a - d, a + an - 1 + d)
+                hold = [held(ol[k - 1].strip()) for k in (a - d, a + an - 1 + d)
                         if 0 < k <= len(ol) and len(ol[k - 1].strip()) > 3]
                 one = [h for h in hold if len(h) == 1]
                 if one:
                     out |= one[0]
                     break
-        return out if near else (out or {HUB})
+        return out if near else (out or {path})
 
 
 def changed(repo: Path, commit: str) -> list[str]:
@@ -456,13 +475,16 @@ def counts(a: argparse.Namespace) -> None:
             cov = {c: v[0] for c, v in computed(m, qc, Seen(repo, ref)).items()}
         sets[name] = {c: v for c, v in cov.items() if c in b}
     split = Split(repo, a.split)
-    lane_after = {HUB, *[f"scripts/{m}.py" for m in split.modules()]}
+    lane_after = {HUB, *[f"scripts/{m}.py" for m in [*split.modules(), *(split.shared() if split.helpers else [])]]}
+    ma = "scripts/merge_ask.py"   # #1335: on a tree with the shared modules, merge_ask.py's hunks are placed too
 
     def files_of(commit: str, mode: str) -> list[str]:
         fs = changed(repo, commit)
-        if mode == "raw" or HUB not in fs:
+        if mode == "raw" or not ({HUB, *([ma] if split.helpers else [])} & set(fs)):
             return fs
-        return sorted({x for f in fs for x in (split.place(commit, near=mode == "near") if f == HUB else {f})})
+        return sorted({x for f in fs for x in (split.place(commit, near=mode == "near") if f == HUB else
+                                              split.place(commit, near=mode == "near", path=ma)
+                                              if f == ma and split.helpers else {f})})
 
     cols = [("(a) declared, main", "a", "raw", LANE_BEFORE), ("(b) coverage, main tree", "b", "raw", LANE_BEFORE),
             ("(c) coverage, split tree", "c", "raw", lane_after),

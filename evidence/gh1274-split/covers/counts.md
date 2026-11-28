@@ -179,3 +179,30 @@ Per PR: number, (a), (b), (c), (c'), (c'')
 958 42 49 49 49 49
 967 8 42 42 42 42
 962 33 46 46 46 32
+
+## Before and after #1335 (merge_ask.py's shared helpers moved to pr_git.py, pr_report.py, gate_time.py)
+
+Made 2026-11-28 by README.md's counts command, the same main, (b) measure and PRs; before: split e9e16e57 with
+measure-e9e16e570896.json (this file's table above, reproduced exactly); after: split 9e96c717 with
+measure-a17be240e5d0.json (`just fast-map` at a17be240: 424 passed, 380 mapped; test_replace_none timed out under
+coverage, run by regen as a tagged item). On the after tree covers.py's Split places each PR's merge_ask.py hunks
+too, among merge_ask.py and the shared modules alone (its text went nowhere else), as it places the hub's. Full
+output: counts-after-1335.md.
+
+| covers set | | PR #1246 | median | p90 | max | stale pairs | through lane-command files alone |
+|---|---|---|---|---|---|---|---|
+| (c) coverage | before #1335 | 72 | 43.5 | 70 | 88 | 2340 | 453 |
+| (c) coverage | after #1335 | 72 | 43.5 | 70 | 88 | 2340 | 454 |
+| (c') hub hunks placed, unplaced to the dispatcher | before #1335 | 72 | 40.5 | 70 | 88 | 2148 | 261 |
+| (c') + merge_ask.py hunks placed | after #1335 | 72 | 40.5 | 70 | 88 | 2127 | 241 |
+| (c'') hub hunks placed, unplaced by nearest context or dropped | before #1335 | 72 | 38 | 70 | 88 | 2134 | 247 |
+| (c'') + merge_ask.py hunks placed | after #1335 | 72 | 37 | 70 | 88 | 2113 | 227 |
+
+(c'') triggers that moved: scripts/merge_ask.py listed by 37 criteria, 407 stale pairs, before; by 11, 99 pairs,
+after. scripts/lane_reporting.py by 36, 396 pairs, before; by 25, 275 pairs, after (merge-ask no longer loads it).
+scripts/gate_time.py, new, by 36, 324 pairs: merge_ask.py imports it, so every merge-ask criterion still covers it;
+scripts/pr_git.py by 13, 104 pairs; scripts/pr_report.py below the top 15.
+
+Collisions (collide.md's command, after: --split 9e96c717, merge_ask.py hunks placed the same way; full output
+collide-after-1335.md): all files 265 pairs before #1335, 265 after (52 PRs, median 3, both); scripts/ 87 before,
+85 after (28 PRs, median 0, both); merge_ask.py 20 pairs (9 PRs) before, 16 (8 PRs) after.

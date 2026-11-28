@@ -80,9 +80,12 @@ def report(prs_file: Path, all_file: Path, split_ref: str, exclude: list[int]) -
     for n, p in every.items():
         fs = set(cast("list[str]", p["files"]))
         views["before"][n] = fs
+        ma = "scripts/merge_ask.py"   # #1335: on a tree with the shared modules, merge_ask.py's hunks placed too
         for v, near in (("c'", False), ("c''", True)):
             views[v][n] = ((fs - {covers.HUB}) | split.place(p["head"], near=near, base=p["base"])
                            if covers.HUB in fs else fs)
+            if split.helpers and ma in fs:
+                views[v][n] = (views[v][n] - {ma}) | split.place(p["head"], near=near, base=p["base"], path=ma)
 
     def overlap(a: int, b: int) -> bool:
         pa, pb = every[a], every[b]

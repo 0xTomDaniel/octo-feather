@@ -92,3 +92,9 @@ Top colliding files, c'': | file | collision pairs through it | PRs of the 60 co
 | docs/specs/comms.calls.jsonl | 18 | 9 |
 | docs/specs/comms.spec.html | 18 | 9 |
 | docs/specs/comms.status.json | 17 | 9 |
+
+## Before and after #1335
+
+All files: c'' 265 pairs before #1335, 265 after; scripts/: 87 before, 85 after; through scripts/merge_ask.py 20
+before, 16 after. The table, its command and its full output: counts.md (Before and after #1335),
+collide-after-1335.md.

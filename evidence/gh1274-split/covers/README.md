@@ -48,3 +48,14 @@ check-before.txt: that check on 91d3c2a8's qc.toml, exit 1 (171 paths lost, 63 c
 
     $L/collide.py fetch prs.json prs-overlap.json.gz
     $L/collide.py report prs.json prs-overlap.json.gz --split <split head> --exclude 79
+
+## Before and after #1335 (counts.md, its last section)
+
+    $L/covers.py counts --main f7f16367 --b measure-main-f7f163676186.json --split e9e16e57 --c measure-e9e16e570896.json \
+        --prs prs.json --pr 1246      # before: the table above, reproduced
+    $L/covers.py counts --main f7f16367 --b measure-main-f7f163676186.json --split <#1335 head> \
+        --c measure-<#1335 head12>.json --prs prs.json --pr 1246      # after: counts-after-1335.md
+    $L/collide.py report prs.json prs-overlap.json.gz --split <#1335 head> --exclude 79   # collide-after-1335.md
+
+On a split tree holding #1335's shared modules (../tables.py SHARED), Split places merge_ask.py's hunks too, among
+merge_ask.py and those modules alone.

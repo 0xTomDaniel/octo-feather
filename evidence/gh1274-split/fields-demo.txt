@@ -1,0 +1,3 @@
+octo-feather-lane fields - < fields-demo-report.md, at origin/main 67fc426d and at the #1335 head: exit 0 both, stdout byte-identical:
+
+{"Check": {"lines": [{"path": "scripts/check-lane-dispatch", "rule": "the dispatcher imports only lane_cli at module level", "owner": "owner ruling 2026-11-28 #1274", "reads": "scripts/octo-feather-lane imports", "class": "exact"}], "none": false, "errors": []}, "Owner": {"lines": [{"path": "docs/adr/0008", "rule": "rung 2", "restated": []}], "none": false, "errors": []}, "Decision": {"owner": [], "cleared": [], "errors": []}, "fields": {"Findings": ["none."], "Verdict": ["clear"], "Range": ["0123456..89abcde"], "Prior art": ["none"]}}
