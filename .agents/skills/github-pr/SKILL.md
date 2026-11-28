@@ -79,6 +79,15 @@ durable workflow artifacts.
   done included: its `--help`). A spec PR, with no lane record: `gh pr merge <N> --merge --match-head-commit <head>`.
   Required failed checks remain blockers until fixed or durably waived
   through a repository-approved path.
+- Supervisor, once `octo-feather-lane merge-ask <N>` passes: run the
+  `octo-feather-lane merge <N> <head>` it names next; the merge decides
+  whether it goes. On its refusal, send the director the section merge-ask
+  printed, exactly as printed, with `herdr-say --parent`; when the director
+  says it relayed the merge, run the same merge again.
+- Director, relaying a merge: from your own pane,
+  `octo-feather-lane relay <N> <the head the ask named> [--link <where the
+  word is written>]`, then tell the supervisor with `herdr-say <its pane>`
+  (what a relay is: spec `#gates-merge-guard`).
 - The merge completes the worklane. Do not assume deployment-named labels exist.
 - Verify the state change landed, whether performed by repository automation
   or by the owning agent. Do not claim a hook succeeded without readback.

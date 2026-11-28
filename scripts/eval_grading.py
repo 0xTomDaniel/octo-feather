@@ -626,21 +626,64 @@ def arg_matches(want: str, got: str, head: str | None) -> bool:
     return m is not None and all(head.startswith(g) for g in m.groups())
 
 
-def args_match(want: list[str], got: list[str], head: str | None) -> bool:
-    """Whether a recorded argv GOT holds a ran fact's arguments WANT, HEAD the case's sha (rule:
-    schema, Run record)."""
+# The programs a ran fact reads as their own parser does (rule: schema, Run record), each asked
+# through its --help usage line. herdr-say: .agents/skills/herdr-comms/assets/herdr-say.
+PARSED = {"herdr-say": KIT / ".agents" / "skills" / "herdr-comms" / "assets" / "herdr-say"}
+_VALUED: dict[str, frozenset[str]] = {}
+
+
+def valued_options(program: str) -> frozenset[str] | None:
+    """The options PROGRAM's usage line gives a value (`[--timeout SECONDS]`), asked of the program
+    itself once; None for a program PARSED does not name."""
+    if program not in PARSED:
+        return None
+    if program not in _VALUED:
+        r = subprocess.run(
+            [str(PARSED[program]), "--help"], capture_output=True, text=True, check=False
+        )
+        _VALUED[program] = frozenset(re.findall(r"\[(-[-\w]+) [A-Z][A-Z_]*\]", r.stdout + r.stderr))
+    return _VALUED[program]
+
+
+def operands(program: str | None, got: list[str]) -> list[str]:
+    """GOT's operands as PROGRAM parses them (rule: schema, Run record); GOT itself for a program
+    not PARSED."""
+    valued = valued_options(program) if program else None
+    if valued is None:
+        return got
+    out: list[str] = []
+    i = 0
+    while i < len(got):
+        a = got[i]
+        if a == "--":
+            return out + got[i + 1 :]
+        if a.startswith("-") and a != "-":
+            i += 2 if a in valued else 1
+            continue
+        out.append(a)
+        i += 1
+    return out
+
+
+def args_match(
+    want: list[str], got: list[str], head: str | None, program: str | None = None
+) -> bool:
+    """Whether a recorded argv GOT of PROGRAM holds a ran fact's arguments WANT, HEAD the case's sha
+    (rule: schema, Run record)."""
     k = next((i for i, w in enumerate(want) if w.startswith("-")), len(want))
-    if len(got) < k or not all(
-        arg_matches(w, g, head) for w, g in zip(want[:k], got, strict=False)
+    lead = operands(program, got) if k else got
+    if len(lead) < k or not all(
+        arg_matches(w, g, head) for w, g in zip(want[:k], lead, strict=False)
     ):
         return False
+    start = 0 if lead is not got else k  # a PARSED program's options stand anywhere
     groups: list[list[str]] = []
     for w in want[k:]:
         if groups and not w.startswith("-") and len(groups[-1]) == 1:
             groups[-1].append(w)
         else:
             groups.append([w])
-    rest = got[k:]
+    rest = got[start:]
     return all(
         any(
             all(arg_matches(w, g, head) for w, g in zip(gr, rest[i : i + len(gr)], strict=True))
@@ -689,7 +732,7 @@ def judge_ran(fact: Fact, seen: Seen, *, final: bool) -> Status:
     hits = [
         r
         for r, a in runs
-        if args_match(want, a, head if isinstance(head, str) else None)
+        if args_match(want, a, head if isinstance(head, str) else None, p)
         and ("exit" not in fact or r.get("exit") == fact["exit"])
     ]
     if "count" in fact:  # rule: schema, Run record
@@ -2123,6 +2166,7 @@ def ran_cited(case_dir: Path, cite: str, runs: list[Result]) -> list[str]:
                     want,
                     [str(a) for a in cast("list[object]", x["argv"])],
                     head if isinstance(head, str) else None,
+                    str(f.get("program")),
                 )
             ]
             out += [

@@ -1,0 +1,413 @@
+{
+ "owner": [
+  {
+   "request": "pr view 36 --json state,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+   "out": "{\"headRefOid\":\"d44992873d6361b0a58179e352005b908edef91e\",\"state\":\"OPEN\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 36 d44992873d63 --repo (owner: tier 3, no relay)"
+  },
+  {
+   "request": "pr view 36 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments -R 0xTomDaniel/octo-feather-realcase",
+   "out": "{\"baseRefName\":\"gh1255-1266-base\",\"body\":\"Closes #32\\n\\nRecorded for 0xTomDaniel/octo-feather#1266 (the merge guard): throwaway content.\\n\\n## Merge ask\\n\\nHead: d44992873d63\\nBuilt: none\\nFailed:\\n- demo#acceptance-c: repair ticket #99 (recorded case)\",\"comments\":[],\"headRefName\":\"gh1255-1266-owner\",\"headRefOid\":\"d44992873d6361b0a58179e352005b908edef91e\",\"statusCheckRollup\":[{\"__typename\":\"CheckRun\",\"completedAt\":\"2026-11-24T22:40:17Z\",\"conclusion\":\"SUCCESS\",\"detailsUrl\":\"https://github.com/0xTomDaniel/octo-feather-realcase/actions/runs/45503079701/job/138831141586\",\"name\":\"check\",\"startedAt\":\"2026-11-24T22:40:14Z\",\"status\":\"COMPLETED\",\"workflowName\":\"check\"}]}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 36 d44992873d63 --repo (owner: tier 3, no relay)"
+  },
+  {
+   "request": "pr list --state open --base gh1255-1266-base --limit 200 --json number,headRefName,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+   "out": "[{\"headRefName\":\"gh1255-1266-owner\",\"headRefOid\":\"d44992873d6361b0a58179e352005b908edef91e\",\"number\":36},{\"headRefName\":\"gh1255-1266-other\",\"headRefOid\":\"c1ca7326d097e1056dd2a7d1ae48f92e718f28f1\",\"number\":35},{\"headRefName\":\"gh1255-1266-order\",\"headRefOid\":\"9bc1520502a9731ef9d417cceb64110c16e55893\",\"number\":34},{\"headRefName\":\"gh1255-1266-self\",\"headRefOid\":\"ee3c86bc6f73774d8c102f78ca53f42ebdc688c2\",\"number\":33}]\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 36 d44992873d63 --repo (owner: tier 3, no relay)"
+  }
+ ],
+ "order": [
+  {
+   "request": "pr view 34 --json state,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+   "out": "{\"headRefOid\":\"9bc1520502a9731ef9d417cceb64110c16e55893\",\"state\":\"OPEN\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 34 9bc1520502a9 --repo (order: tier 1, #35 conflicting, no relay)"
+  },
+  {
+   "request": "pr view 34 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments -R 0xTomDaniel/octo-feather-realcase",
+   "out": "{\"baseRefName\":\"gh1255-1266-base\",\"body\":\"Closes #31\\n\\nRecorded for 0xTomDaniel/octo-feather#1266 (the merge guard): throwaway content.\\n\\n## Merge ask\\n\\nHead: 9bc1520502a9\\nBuilt: none\\nFailed: none\",\"comments\":[],\"headRefName\":\"gh1255-1266-order\",\"headRefOid\":\"9bc1520502a9731ef9d417cceb64110c16e55893\",\"statusCheckRollup\":[{\"__typename\":\"CheckRun\",\"completedAt\":\"2026-11-24T22:40:12Z\",\"conclusion\":\"SUCCESS\",\"detailsUrl\":\"https://github.com/0xTomDaniel/octo-feather-realcase/actions/runs/45503064510/job/138831092755\",\"name\":\"check\",\"startedAt\":\"2026-11-24T22:40:09Z\",\"status\":\"COMPLETED\",\"workflowName\":\"check\"}]}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 34 9bc1520502a9 --repo (order: tier 1, #35 conflicting, no relay)"
+  },
+  {
+   "request": "pr list --state open --base gh1255-1266-base --limit 200 --json number,headRefName,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+   "out": "[{\"headRefName\":\"gh1255-1266-owner\",\"headRefOid\":\"d44992873d6361b0a58179e352005b908edef91e\",\"number\":36},{\"headRefName\":\"gh1255-1266-other\",\"headRefOid\":\"c1ca7326d097e1056dd2a7d1ae48f92e718f28f1\",\"number\":35},{\"headRefName\":\"gh1255-1266-order\",\"headRefOid\":\"9bc1520502a9731ef9d417cceb64110c16e55893\",\"number\":34},{\"headRefName\":\"gh1255-1266-self\",\"headRefOid\":\"ee3c86bc6f73774d8c102f78ca53f42ebdc688c2\",\"number\":33}]\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 34 9bc1520502a9 --repo (order: tier 1, #35 conflicting, no relay)"
+  }
+ ],
+ "self": [
+  {
+   "request": "pr view 39 --json state,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+   "out": "{\"headRefOid\":\"7c8fd62a66adf15c5f0f074565989da29125a9a2\",\"state\":\"OPEN\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 39 7c8fd62a66ad --repo (self: tier 2, a clarifying call, waits for nobody)"
+  },
+  {
+   "request": "pr view 39 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments -R 0xTomDaniel/octo-feather-realcase",
+   "out": "{\"baseRefName\":\"gh1255-1266-base\",\"body\":\"Closes #37\\n\\nRecorded for 0xTomDaniel/octo-feather#1266 (the merge guard): throwaway content.\\n\\n## Merge ask\\n\\nHead: 7c8fd62a66ad\\nBuilt: none\\nFailed: none\",\"comments\":[],\"headRefName\":\"gh1255-1266-self2\",\"headRefOid\":\"7c8fd62a66adf15c5f0f074565989da29125a9a2\",\"statusCheckRollup\":[{\"__typename\":\"CheckRun\",\"completedAt\":\"2026-11-24T23:45:53Z\",\"conclusion\":\"SUCCESS\",\"detailsUrl\":\"https://github.com/0xTomDaniel/octo-feather-realcase/actions/runs/45512665446/job/138864070876\",\"name\":\"check\",\"startedAt\":\"2026-11-24T23:45:51Z\",\"status\":\"COMPLETED\",\"workflowName\":\"check\"}]}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 39 7c8fd62a66ad --repo (self: tier 2, a clarifying call, waits for nobody)"
+  },
+  {
+   "request": "pr list --state open --base gh1255-1266-base --limit 200 --json number,headRefName,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+   "out": "[{\"headRefName\":\"gh1255-1266-other2\",\"headRefOid\":\"61226922fbda5f691fafec568d2bb4661b1e470c\",\"number\":41},{\"headRefName\":\"gh1255-1266-order2\",\"headRefOid\":\"bd4fccb637aa804ac5b053e27e23287519920efa\",\"number\":40},{\"headRefName\":\"gh1255-1266-self2\",\"headRefOid\":\"7c8fd62a66adf15c5f0f074565989da29125a9a2\",\"number\":39}]\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 39 7c8fd62a66ad --repo (self: tier 2, a clarifying call, waits for nobody)"
+  },
+  {
+   "request": "pr merge 39 --merge --match-head-commit 7c8fd62a66adf15c5f0f074565989da29125a9a2 -R 0xTomDaniel/octo-feather-realcase",
+   "out": "",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 39 7c8fd62a66ad --repo (self: tier 2, a clarifying call, waits for nobody)"
+  },
+  {
+   "request": "issue view 37 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Throwaway parent issue of the realcase lane gh1255-1266-self2, recorded for 0xTomDaniel/octo-feather#1266 (the merge guard, tier 2). The lane's merge closes it.\",\"number\":37,\"parent\":null,\"state\":\"OPEN\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"[gh1255] merge guard recording: lane self2 parent (#1266)\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/37\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 39 7c8fd62a66ad --repo (self: tier 2, a clarifying call, waits for nobody)"
+  },
+  {
+   "request": "issue close 37",
+   "out": "",
+   "err": "\u2713 Closed issue 0xTomDaniel/octo-feather-realcase#37 ([gh1255] merge guard recording: lane self2 parent (#1266))\n",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 39 7c8fd62a66ad --repo (self: tier 2, a clarifying call, waits for nobody)"
+  },
+  {
+   "request": "issue view 37 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Throwaway parent issue of the realcase lane gh1255-1266-self2, recorded for 0xTomDaniel/octo-feather#1266 (the merge guard, tier 2). The lane's merge closes it.\",\"number\":37,\"parent\":null,\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"[gh1255] merge guard recording: lane self2 parent (#1266)\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/37\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 39 7c8fd62a66ad --repo (self: tier 2, a clarifying call, waits for nobody)"
+  },
+  {
+   "request": "pr view 39 --json state,headRefOid,mergeCommit,baseRefName,headRefName -R 0xTomDaniel/octo-feather-realcase",
+   "out": "{\"baseRefName\":\"gh1255-1266-base\",\"headRefName\":\"gh1255-1266-self2\",\"headRefOid\":\"7c8fd62a66adf15c5f0f074565989da29125a9a2\",\"mergeCommit\":{\"oid\":\"4808a098fb1c06a2aeb3e10528ad83ecec073add\"},\"state\":\"MERGED\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 39 7c8fd62a66ad --repo (self: tier 2, a clarifying call, waits for nobody)"
+  },
+  {
+   "request": "run list --commit 4808a098fb1c06a2aeb3e10528ad83ecec073add --event push --json databaseId,status,conclusion,workflowName,url -R 0xTomDaniel/octo-feather-realcase",
+   "out": "[]\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 39 7c8fd62a66ad --repo (self: tier 2, a clarifying call, waits for nobody)"
+  },
+  {
+   "request": "api repos/0xTomDaniel/octo-feather-realcase/git/trees/4808a098fb1c06a2aeb3e10528ad83ecec073add",
+   "out": "{\"sha\":\"4808a098fb1c06a2aeb3e10528ad83ecec073add\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/4808a098fb1c06a2aeb3e10528ad83ecec073add\",\"tree\":[{\"path\":\".github\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"9e38afda83e5d3b5475d54ed25c4e0e10e7531bf\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/9e38afda83e5d3b5475d54ed25c4e0e10e7531bf\"},{\"path\":\"README.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"4add7fd444188a5a06900b067d169bab988761d6\",\"size\":1241,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/4add7fd444188a5a06900b067d169bab988761d6\"},{\"path\":\"a.py\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"1337a530cbc1bd7d20aee2d80f1f174a9182417d\",\"size\":6,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/1337a530cbc1bd7d20aee2d80f1f174a9182417d\"},{\"path\":\"app.py\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"48e7ccc97c5d6587b78e900261968876db5f07a6\",\"size\":51,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/48e7ccc97c5d6587b78e900261968876db5f07a6\"},{\"path\":\"d.py\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"12b46250ba8ea68c0a0c69d5e58f86dbb5a5a997\",\"size\":6,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/12b46250ba8ea68c0a0c69d5e58f86dbb5a5a997\"},{\"path\":\"docs\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"ff43c8002ef2e9dbddf76e35477f2470f0966585\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/ff43c8002ef2e9dbddf76e35477f2470f0966585\"},{\"path\":\"e.py\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"e91e58d3aa56c1dfae07be7e5bcb50917b337e09\",\"size\":6,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/e91e58d3aa56c1dfae07be7e5bcb50917b337e09\"},{\"path\":\"realcase\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"cb440d1e8c46ce729e23c4986dd3460242056b6e\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/cb440d1e8c46ce729e23c4986dd3460242056b6e\"}],\"truncated\":false}",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 39 7c8fd62a66ad --repo (self: tier 2, a clarifying call, waits for nobody)"
+  },
+  {
+   "request": "api repos/0xTomDaniel/octo-feather-realcase/git/trees/9e38afda83e5d3b5475d54ed25c4e0e10e7531bf",
+   "out": "{\"sha\":\"9e38afda83e5d3b5475d54ed25c4e0e10e7531bf\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/9e38afda83e5d3b5475d54ed25c4e0e10e7531bf\",\"tree\":[{\"path\":\"workflows\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"e0e7a29979faca96673e1dff50dc3abb57552dba\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/e0e7a29979faca96673e1dff50dc3abb57552dba\"}],\"truncated\":false}",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 39 7c8fd62a66ad --repo (self: tier 2, a clarifying call, waits for nobody)"
+  },
+  {
+   "request": "api repos/0xTomDaniel/octo-feather-realcase/git/trees/e0e7a29979faca96673e1dff50dc3abb57552dba",
+   "out": "{\"sha\":\"e0e7a29979faca96673e1dff50dc3abb57552dba\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/e0e7a29979faca96673e1dff50dc3abb57552dba\",\"tree\":[{\"path\":\"check.yml\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"d88444655a833589c6d077bde249ba57bc07dee1\",\"size\":412,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/d88444655a833589c6d077bde249ba57bc07dee1\"}],\"truncated\":false}",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 39 7c8fd62a66ad --repo (self: tier 2, a clarifying call, waits for nobody)"
+  },
+  {
+   "request": "run list --commit 4808a098fb1c06a2aeb3e10528ad83ecec073add --event push --json databaseId,status,conclusion,workflowName,url -R 0xTomDaniel/octo-feather-realcase",
+   "out": "[{\"conclusion\":\"success\",\"databaseId\":45512819959,\"status\":\"completed\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/actions/runs/45512819959\",\"workflowName\":\"check\"}]\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 39 7c8fd62a66ad --repo (self: tier 2, a clarifying call, waits for nobody)"
+  },
+  {
+   "request": "repo view 0xTomDaniel/octo-feather-realcase --json nameWithOwner",
+   "out": "{\"nameWithOwner\":\"0xTomDaniel/octo-feather-realcase\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 39 7c8fd62a66ad --repo (self: tier 2, a clarifying call, waits for nobody)"
+  },
+  {
+   "request": "repo view https://github.com/0xTomDaniel/octo-feather.git --json nameWithOwner",
+   "out": "{\"nameWithOwner\":\"0xTomDaniel/octo-feather\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 39 7c8fd62a66ad --repo (self: tier 2, a clarifying call, waits for nobody)"
+  }
+ ],
+ "relayed": [
+  {
+   "request": "pr view 40 --json state,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+   "out": "{\"headRefOid\":\"bd4fccb637aa804ac5b053e27e23287519920efa\",\"state\":\"OPEN\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 40 bd4fccb637aa (refused), relay 40 bd4fccb637aa, then merge 40 bd4fccb637aa --repo (relayed: tier 2, a clarifying call, waits for the director's order)"
+  },
+  {
+   "request": "pr view 40 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments -R 0xTomDaniel/octo-feather-realcase",
+   "out": "{\"baseRefName\":\"gh1255-1266-base\",\"body\":\"Closes #38\\n\\nRecorded for 0xTomDaniel/octo-feather#1266 (the merge guard): throwaway content.\\n\\n## Merge ask\\n\\nHead: bd4fccb637aa\\nBuilt: none\\nFailed: none\",\"comments\":[],\"headRefName\":\"gh1255-1266-order2\",\"headRefOid\":\"bd4fccb637aa804ac5b053e27e23287519920efa\",\"statusCheckRollup\":[{\"__typename\":\"CheckRun\",\"completedAt\":\"2026-11-24T23:45:58Z\",\"conclusion\":\"SUCCESS\",\"detailsUrl\":\"https://github.com/0xTomDaniel/octo-feather-realcase/actions/runs/45512669734/job/138864085442\",\"name\":\"check\",\"startedAt\":\"2026-11-24T23:45:53Z\",\"status\":\"COMPLETED\",\"workflowName\":\"check\"}]}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 40 bd4fccb637aa (refused), relay 40 bd4fccb637aa, then merge 40 bd4fccb637aa --repo (relayed: tier 2, a clarifying call, waits for the director's order)"
+  },
+  {
+   "request": "pr list --state open --base gh1255-1266-base --limit 200 --json number,headRefName,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+   "out": "[{\"headRefName\":\"gh1255-1266-other2\",\"headRefOid\":\"61226922fbda5f691fafec568d2bb4661b1e470c\",\"number\":41},{\"headRefName\":\"gh1255-1266-order2\",\"headRefOid\":\"bd4fccb637aa804ac5b053e27e23287519920efa\",\"number\":40}]\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 40 bd4fccb637aa (refused), relay 40 bd4fccb637aa, then merge 40 bd4fccb637aa --repo (relayed: tier 2, a clarifying call, waits for the director's order)"
+  },
+  {
+   "request": "pr view 40 --json state,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+   "out": "{\"headRefOid\":\"bd4fccb637aa804ac5b053e27e23287519920efa\",\"state\":\"OPEN\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 40 bd4fccb637aa (refused), relay 40 bd4fccb637aa, then merge 40 bd4fccb637aa --repo (relayed: tier 2, a clarifying call, waits for the director's order)"
+  },
+  {
+   "request": "pr view 40 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments -R 0xTomDaniel/octo-feather-realcase",
+   "out": "{\"baseRefName\":\"gh1255-1266-base\",\"body\":\"Closes #38\\n\\nRecorded for 0xTomDaniel/octo-feather#1266 (the merge guard): throwaway content.\\n\\n## Merge ask\\n\\nHead: bd4fccb637aa\\nBuilt: none\\nFailed: none\",\"comments\":[],\"headRefName\":\"gh1255-1266-order2\",\"headRefOid\":\"bd4fccb637aa804ac5b053e27e23287519920efa\",\"statusCheckRollup\":[{\"__typename\":\"CheckRun\",\"completedAt\":\"2026-11-24T23:45:58Z\",\"conclusion\":\"SUCCESS\",\"detailsUrl\":\"https://github.com/0xTomDaniel/octo-feather-realcase/actions/runs/45512669734/job/138864085442\",\"name\":\"check\",\"startedAt\":\"2026-11-24T23:45:53Z\",\"status\":\"COMPLETED\",\"workflowName\":\"check\"}]}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 40 bd4fccb637aa (refused), relay 40 bd4fccb637aa, then merge 40 bd4fccb637aa --repo (relayed: tier 2, a clarifying call, waits for the director's order)"
+  },
+  {
+   "request": "pr list --state open --base gh1255-1266-base --limit 200 --json number,headRefName,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+   "out": "[{\"headRefName\":\"gh1255-1266-other2\",\"headRefOid\":\"61226922fbda5f691fafec568d2bb4661b1e470c\",\"number\":41},{\"headRefName\":\"gh1255-1266-order2\",\"headRefOid\":\"bd4fccb637aa804ac5b053e27e23287519920efa\",\"number\":40}]\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 40 bd4fccb637aa (refused), relay 40 bd4fccb637aa, then merge 40 bd4fccb637aa --repo (relayed: tier 2, a clarifying call, waits for the director's order)"
+  },
+  {
+   "request": "pr merge 40 --merge --match-head-commit bd4fccb637aa804ac5b053e27e23287519920efa -R 0xTomDaniel/octo-feather-realcase",
+   "out": "",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 40 bd4fccb637aa (refused), relay 40 bd4fccb637aa, then merge 40 bd4fccb637aa --repo (relayed: tier 2, a clarifying call, waits for the director's order)"
+  },
+  {
+   "request": "issue view 38 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Throwaway parent issue of the realcase lane gh1255-1266-order2, recorded for 0xTomDaniel/octo-feather#1266 (the merge guard, tier 2). The lane's merge closes it.\",\"number\":38,\"parent\":null,\"state\":\"OPEN\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"[gh1255] merge guard recording: lane order2 parent (#1266)\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/38\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 40 bd4fccb637aa (refused), relay 40 bd4fccb637aa, then merge 40 bd4fccb637aa --repo (relayed: tier 2, a clarifying call, waits for the director's order)"
+  },
+  {
+   "request": "issue close 38",
+   "out": "",
+   "err": "\u2713 Closed issue 0xTomDaniel/octo-feather-realcase#38 ([gh1255] merge guard recording: lane order2 parent (#1266))\n",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 40 bd4fccb637aa (refused), relay 40 bd4fccb637aa, then merge 40 bd4fccb637aa --repo (relayed: tier 2, a clarifying call, waits for the director's order)"
+  },
+  {
+   "request": "issue view 38 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Throwaway parent issue of the realcase lane gh1255-1266-order2, recorded for 0xTomDaniel/octo-feather#1266 (the merge guard, tier 2). The lane's merge closes it.\",\"number\":38,\"parent\":null,\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"[gh1255] merge guard recording: lane order2 parent (#1266)\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/38\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 40 bd4fccb637aa (refused), relay 40 bd4fccb637aa, then merge 40 bd4fccb637aa --repo (relayed: tier 2, a clarifying call, waits for the director's order)"
+  },
+  {
+   "request": "pr view 40 --json state,headRefOid,mergeCommit,baseRefName,headRefName -R 0xTomDaniel/octo-feather-realcase",
+   "out": "{\"baseRefName\":\"gh1255-1266-base\",\"headRefName\":\"gh1255-1266-order2\",\"headRefOid\":\"bd4fccb637aa804ac5b053e27e23287519920efa\",\"mergeCommit\":{\"oid\":\"190237c34938bca67fcf764dfd38d426c1e4caf5\"},\"state\":\"MERGED\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 40 bd4fccb637aa (refused), relay 40 bd4fccb637aa, then merge 40 bd4fccb637aa --repo (relayed: tier 2, a clarifying call, waits for the director's order)"
+  },
+  {
+   "request": "run list --commit 190237c34938bca67fcf764dfd38d426c1e4caf5 --event push --json databaseId,status,conclusion,workflowName,url -R 0xTomDaniel/octo-feather-realcase",
+   "out": "[]\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 40 bd4fccb637aa (refused), relay 40 bd4fccb637aa, then merge 40 bd4fccb637aa --repo (relayed: tier 2, a clarifying call, waits for the director's order)"
+  },
+  {
+   "request": "api repos/0xTomDaniel/octo-feather-realcase/git/trees/190237c34938bca67fcf764dfd38d426c1e4caf5",
+   "out": "{\"sha\":\"190237c34938bca67fcf764dfd38d426c1e4caf5\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/190237c34938bca67fcf764dfd38d426c1e4caf5\",\"tree\":[{\"path\":\".github\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"9e38afda83e5d3b5475d54ed25c4e0e10e7531bf\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/9e38afda83e5d3b5475d54ed25c4e0e10e7531bf\"},{\"path\":\"README.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"4add7fd444188a5a06900b067d169bab988761d6\",\"size\":1241,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/4add7fd444188a5a06900b067d169bab988761d6\"},{\"path\":\"a.py\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"1337a530cbc1bd7d20aee2d80f1f174a9182417d\",\"size\":6,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/1337a530cbc1bd7d20aee2d80f1f174a9182417d\"},{\"path\":\"app.py\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"ac247b31c4788732aaf366787fa53456246b9b23\",\"size\":51,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/ac247b31c4788732aaf366787fa53456246b9b23\"},{\"path\":\"d.py\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"12b46250ba8ea68c0a0c69d5e58f86dbb5a5a997\",\"size\":6,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/12b46250ba8ea68c0a0c69d5e58f86dbb5a5a997\"},{\"path\":\"docs\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"ff43c8002ef2e9dbddf76e35477f2470f0966585\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/ff43c8002ef2e9dbddf76e35477f2470f0966585\"},{\"path\":\"e.py\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"e91e58d3aa56c1dfae07be7e5bcb50917b337e09\",\"size\":6,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/e91e58d3aa56c1dfae07be7e5bcb50917b337e09\"},{\"path\":\"realcase\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"cb440d1e8c46ce729e23c4986dd3460242056b6e\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/cb440d1e8c46ce729e23c4986dd3460242056b6e\"}],\"truncated\":false}",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 40 bd4fccb637aa (refused), relay 40 bd4fccb637aa, then merge 40 bd4fccb637aa --repo (relayed: tier 2, a clarifying call, waits for the director's order)"
+  },
+  {
+   "request": "api repos/0xTomDaniel/octo-feather-realcase/git/trees/9e38afda83e5d3b5475d54ed25c4e0e10e7531bf",
+   "out": "{\"sha\":\"9e38afda83e5d3b5475d54ed25c4e0e10e7531bf\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/9e38afda83e5d3b5475d54ed25c4e0e10e7531bf\",\"tree\":[{\"path\":\"workflows\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"e0e7a29979faca96673e1dff50dc3abb57552dba\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/e0e7a29979faca96673e1dff50dc3abb57552dba\"}],\"truncated\":false}",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 40 bd4fccb637aa (refused), relay 40 bd4fccb637aa, then merge 40 bd4fccb637aa --repo (relayed: tier 2, a clarifying call, waits for the director's order)"
+  },
+  {
+   "request": "api repos/0xTomDaniel/octo-feather-realcase/git/trees/e0e7a29979faca96673e1dff50dc3abb57552dba",
+   "out": "{\"sha\":\"e0e7a29979faca96673e1dff50dc3abb57552dba\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/e0e7a29979faca96673e1dff50dc3abb57552dba\",\"tree\":[{\"path\":\"check.yml\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"d88444655a833589c6d077bde249ba57bc07dee1\",\"size\":412,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/d88444655a833589c6d077bde249ba57bc07dee1\"}],\"truncated\":false}",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 40 bd4fccb637aa (refused), relay 40 bd4fccb637aa, then merge 40 bd4fccb637aa --repo (relayed: tier 2, a clarifying call, waits for the director's order)"
+  },
+  {
+   "request": "run list --commit 190237c34938bca67fcf764dfd38d426c1e4caf5 --event push --json databaseId,status,conclusion,workflowName,url -R 0xTomDaniel/octo-feather-realcase",
+   "out": "[{\"conclusion\":\"success\",\"databaseId\":45512909275,\"status\":\"completed\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/actions/runs/45512909275\",\"workflowName\":\"check\"}]\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 40 bd4fccb637aa (refused), relay 40 bd4fccb637aa, then merge 40 bd4fccb637aa --repo (relayed: tier 2, a clarifying call, waits for the director's order)"
+  },
+  {
+   "request": "repo view 0xTomDaniel/octo-feather-realcase --json nameWithOwner",
+   "out": "{\"nameWithOwner\":\"0xTomDaniel/octo-feather-realcase\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 40 bd4fccb637aa (refused), relay 40 bd4fccb637aa, then merge 40 bd4fccb637aa --repo (relayed: tier 2, a clarifying call, waits for the director's order)"
+  },
+  {
+   "request": "repo view https://github.com/0xTomDaniel/octo-feather.git --json nameWithOwner",
+   "out": "{\"nameWithOwner\":\"0xTomDaniel/octo-feather\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane merge 40 bd4fccb637aa (refused), relay 40 bd4fccb637aa, then merge 40 bd4fccb637aa --repo (relayed: tier 2, a clarifying call, waits for the director's order)"
+  }
+ ],
+ "head": [
+  {
+   "request": "pr view 36 --json state,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+   "out": "{\"headRefOid\":\"7f7e09c5147b71f4e26d7f18c9fd1a901ffcb208\",\"state\":\"OPEN\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane relay 36 d44992873d63, fix 7f7e09c5147b pushed, then merge 36 7f7e09c5147b --repo (head)"
+  },
+  {
+   "request": "pr view 36 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments -R 0xTomDaniel/octo-feather-realcase",
+   "out": "{\"baseRefName\":\"gh1255-1266-base\",\"body\":\"Closes #32\\n\\nRecorded for 0xTomDaniel/octo-feather#1266 (the merge guard): throwaway content.\\n\\n## Merge ask\\n\\nHead: d44992873d63\\nBuilt: none\\nFailed:\\n- demo#acceptance-c: repair ticket #99 (recorded case)\",\"comments\":[],\"headRefName\":\"gh1255-1266-owner\",\"headRefOid\":\"7f7e09c5147b71f4e26d7f18c9fd1a901ffcb208\",\"statusCheckRollup\":[{\"__typename\":\"CheckRun\",\"completedAt\":\"0001-01-01T00:00:00Z\",\"conclusion\":\"\",\"detailsUrl\":\"https://github.com/0xTomDaniel/octo-feather-realcase/actions/runs/45503523781/job/138832678498\",\"name\":\"check\",\"startedAt\":\"2026-11-24T22:43:09Z\",\"status\":\"IN_PROGRESS\",\"workflowName\":\"check\"}]}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane relay 36 d44992873d63, fix 7f7e09c5147b pushed, then merge 36 7f7e09c5147b --repo (head)"
+  },
+  {
+   "request": "pr list --state open --base gh1255-1266-base --limit 200 --json number,headRefName,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+   "out": "[{\"headRefName\":\"gh1255-1266-owner\",\"headRefOid\":\"7f7e09c5147b71f4e26d7f18c9fd1a901ffcb208\",\"number\":36},{\"headRefName\":\"gh1255-1266-other\",\"headRefOid\":\"c1ca7326d097e1056dd2a7d1ae48f92e718f28f1\",\"number\":35}]\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane relay 36 d44992873d63, fix 7f7e09c5147b pushed, then merge 36 7f7e09c5147b --repo (head)"
+  }
+ ],
+ "carry": [
+  {
+   "request": "pr view 36 --json state,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+   "out": "{\"headRefOid\":\"16dc9236b3d097aa39d0c67b437855adcb9c84cb\",\"state\":\"OPEN\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane relay 36 7f7e09c5147b, base merged in cleanly as 16dc9236b3d0, then merge 36 16dc9236b3d0 --repo (carry)"
+  },
+  {
+   "request": "pr view 36 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments -R 0xTomDaniel/octo-feather-realcase",
+   "out": "{\"baseRefName\":\"gh1255-1266-base\",\"body\":\"Closes #32\\n\\nRecorded for 0xTomDaniel/octo-feather#1266 (the merge guard): throwaway content.\\n\\n## Merge ask\\n\\nHead: d44992873d63\\nBuilt: none\\nFailed:\\n- demo#acceptance-c: repair ticket #99 (recorded case)\",\"comments\":[],\"headRefName\":\"gh1255-1266-owner\",\"headRefOid\":\"16dc9236b3d097aa39d0c67b437855adcb9c84cb\",\"statusCheckRollup\":[{\"__typename\":\"CheckRun\",\"completedAt\":\"0001-01-01T00:00:00Z\",\"conclusion\":\"\",\"detailsUrl\":\"https://github.com/0xTomDaniel/octo-feather-realcase/actions/runs/45503577460/job/138832869634\",\"name\":\"check\",\"startedAt\":\"2026-11-24T22:43:29Z\",\"status\":\"QUEUED\",\"workflowName\":\"check\"}]}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane relay 36 7f7e09c5147b, base merged in cleanly as 16dc9236b3d0, then merge 36 16dc9236b3d0 --repo (carry)"
+  },
+  {
+   "request": "pr list --state open --base gh1255-1266-base --limit 200 --json number,headRefName,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+   "out": "[{\"headRefName\":\"gh1255-1266-owner\",\"headRefOid\":\"16dc9236b3d097aa39d0c67b437855adcb9c84cb\",\"number\":36},{\"headRefName\":\"gh1255-1266-other\",\"headRefOid\":\"c1ca7326d097e1056dd2a7d1ae48f92e718f28f1\",\"number\":35}]\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane relay 36 7f7e09c5147b, base merged in cleanly as 16dc9236b3d0, then merge 36 16dc9236b3d0 --repo (carry)"
+  },
+  {
+   "request": "pr merge 36 --merge --match-head-commit 16dc9236b3d097aa39d0c67b437855adcb9c84cb -R 0xTomDaniel/octo-feather-realcase",
+   "out": "",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane relay 36 7f7e09c5147b, base merged in cleanly as 16dc9236b3d0, then merge 36 16dc9236b3d0 --repo (carry)"
+  },
+  {
+   "request": "issue view 32 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Throwaway parent issue of the realcase lane gh1255-1266-owner, recorded for 0xTomDaniel/octo-feather#1266 (the merge guard). The lane's merge closes it.\",\"number\":32,\"parent\":null,\"state\":\"OPEN\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"[gh1255] merge guard recording: lane owner parent (#1266)\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/32\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane relay 36 7f7e09c5147b, base merged in cleanly as 16dc9236b3d0, then merge 36 16dc9236b3d0 --repo (carry)"
+  },
+  {
+   "request": "issue close 32",
+   "out": "",
+   "err": "\u2713 Closed issue 0xTomDaniel/octo-feather-realcase#32 ([gh1255] merge guard recording: lane owner parent (#1266))\n",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane relay 36 7f7e09c5147b, base merged in cleanly as 16dc9236b3d0, then merge 36 16dc9236b3d0 --repo (carry)"
+  },
+  {
+   "request": "issue view 32 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Throwaway parent issue of the realcase lane gh1255-1266-owner, recorded for 0xTomDaniel/octo-feather#1266 (the merge guard). The lane's merge closes it.\",\"number\":32,\"parent\":null,\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"[gh1255] merge guard recording: lane owner parent (#1266)\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/32\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane relay 36 7f7e09c5147b, base merged in cleanly as 16dc9236b3d0, then merge 36 16dc9236b3d0 --repo (carry)"
+  },
+  {
+   "request": "pr view 36 --json state,headRefOid,mergeCommit,baseRefName,headRefName -R 0xTomDaniel/octo-feather-realcase",
+   "out": "{\"baseRefName\":\"gh1255-1266-base\",\"headRefName\":\"gh1255-1266-owner\",\"headRefOid\":\"16dc9236b3d097aa39d0c67b437855adcb9c84cb\",\"mergeCommit\":{\"oid\":\"d96a6756a9adfd27ebb6048f47bafa47ec4218d9\"},\"state\":\"MERGED\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane relay 36 7f7e09c5147b, base merged in cleanly as 16dc9236b3d0, then merge 36 16dc9236b3d0 --repo (carry)"
+  },
+  {
+   "request": "run list --commit d96a6756a9adfd27ebb6048f47bafa47ec4218d9 --event push --json databaseId,status,conclusion,workflowName,url -R 0xTomDaniel/octo-feather-realcase",
+   "out": "[]\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane relay 36 7f7e09c5147b, base merged in cleanly as 16dc9236b3d0, then merge 36 16dc9236b3d0 --repo (carry)"
+  },
+  {
+   "request": "api repos/0xTomDaniel/octo-feather-realcase/git/trees/d96a6756a9adfd27ebb6048f47bafa47ec4218d9",
+   "out": "{\"sha\":\"d96a6756a9adfd27ebb6048f47bafa47ec4218d9\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/d96a6756a9adfd27ebb6048f47bafa47ec4218d9\",\"tree\":[{\"path\":\".github\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"9e38afda83e5d3b5475d54ed25c4e0e10e7531bf\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/9e38afda83e5d3b5475d54ed25c4e0e10e7531bf\"},{\"path\":\"README.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"4add7fd444188a5a06900b067d169bab988761d6\",\"size\":1241,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/4add7fd444188a5a06900b067d169bab988761d6\"},{\"path\":\"a.py\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"1337a530cbc1bd7d20aee2d80f1f174a9182417d\",\"size\":6,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/1337a530cbc1bd7d20aee2d80f1f174a9182417d\"},{\"path\":\"app.py\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"48e7ccc97c5d6587b78e900261968876db5f07a6\",\"size\":51,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/48e7ccc97c5d6587b78e900261968876db5f07a6\"},{\"path\":\"d.py\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"12b46250ba8ea68c0a0c69d5e58f86dbb5a5a997\",\"size\":6,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/12b46250ba8ea68c0a0c69d5e58f86dbb5a5a997\"},{\"path\":\"docs\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"5bad9196912c6818998c3b4f28118fede9451526\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/5bad9196912c6818998c3b4f28118fede9451526\"},{\"path\":\"realcase\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"cb440d1e8c46ce729e23c4986dd3460242056b6e\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/cb440d1e8c46ce729e23c4986dd3460242056b6e\"}],\"truncated\":false}",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane relay 36 7f7e09c5147b, base merged in cleanly as 16dc9236b3d0, then merge 36 16dc9236b3d0 --repo (carry)"
+  },
+  {
+   "request": "api repos/0xTomDaniel/octo-feather-realcase/git/trees/9e38afda83e5d3b5475d54ed25c4e0e10e7531bf",
+   "out": "{\"sha\":\"9e38afda83e5d3b5475d54ed25c4e0e10e7531bf\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/9e38afda83e5d3b5475d54ed25c4e0e10e7531bf\",\"tree\":[{\"path\":\"workflows\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"e0e7a29979faca96673e1dff50dc3abb57552dba\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/e0e7a29979faca96673e1dff50dc3abb57552dba\"}],\"truncated\":false}",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane relay 36 7f7e09c5147b, base merged in cleanly as 16dc9236b3d0, then merge 36 16dc9236b3d0 --repo (carry)"
+  },
+  {
+   "request": "api repos/0xTomDaniel/octo-feather-realcase/git/trees/e0e7a29979faca96673e1dff50dc3abb57552dba",
+   "out": "{\"sha\":\"e0e7a29979faca96673e1dff50dc3abb57552dba\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/e0e7a29979faca96673e1dff50dc3abb57552dba\",\"tree\":[{\"path\":\"check.yml\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"d88444655a833589c6d077bde249ba57bc07dee1\",\"size\":412,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/d88444655a833589c6d077bde249ba57bc07dee1\"}],\"truncated\":false}",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane relay 36 7f7e09c5147b, base merged in cleanly as 16dc9236b3d0, then merge 36 16dc9236b3d0 --repo (carry)"
+  },
+  {
+   "request": "run list --commit d96a6756a9adfd27ebb6048f47bafa47ec4218d9 --event push --json databaseId,status,conclusion,workflowName,url -R 0xTomDaniel/octo-feather-realcase",
+   "out": "[{\"conclusion\":\"success\",\"databaseId\":45503607127,\"status\":\"completed\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/actions/runs/45503607127\",\"workflowName\":\"check\"}]\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane relay 36 7f7e09c5147b, base merged in cleanly as 16dc9236b3d0, then merge 36 16dc9236b3d0 --repo (carry)"
+  },
+  {
+   "request": "repo view 0xTomDaniel/octo-feather-realcase --json nameWithOwner",
+   "out": "{\"nameWithOwner\":\"0xTomDaniel/octo-feather-realcase\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane relay 36 7f7e09c5147b, base merged in cleanly as 16dc9236b3d0, then merge 36 16dc9236b3d0 --repo (carry)"
+  },
+  {
+   "request": "repo view https://github.com/0xTomDaniel/octo-feather.git --json nameWithOwner",
+   "out": "{\"nameWithOwner\":\"0xTomDaniel/octo-feather\"}\n",
+   "err": "",
+   "exit": 0,
+   "source": "gh 2.102.0 on 0xTomDaniel/octo-feather-realcase, 2026-11-24: octo-feather-lane relay 36 7f7e09c5147b, base merged in cleanly as 16dc9236b3d0, then merge 36 16dc9236b3d0 --repo (carry)"
+  }
+ ]
+}

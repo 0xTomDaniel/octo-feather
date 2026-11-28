@@ -17,6 +17,19 @@ Stash guard (spec roles#launch-stash-guard): every launch, pane and headless,
            holds a git or is a system dir, so the agent's git runs through it
            (what it refuses: scripts/stash_guard.py). Every dir the caller put
            earlier still wins; a git in one of them runs behind the guard.
+           Every launch also sets OCTO_FEATHER_GIT (in --print-env's lines and the
+           headless child's env): the first git on that PATH after the guard's dir
+           that is not the guard, links resolved. The guard runs the next git on
+           PATH after itself, and only when there is none (a test or script that
+           narrows PATH to a dir of its own holding a link to or a copy of the
+           agent's git) OCTO_FEATHER_GIT, trusted only as an absolute path to an
+           executable file that is not the guard (its own path, a link to it or a
+           copy of it); else, or with OCTO_FEATHER_GIT cleared (env -i), exit
+           127 naming why. A link to the guard finds its checker through the link
+           when python3 is on that PATH. A copy of it, which has no checker beside
+           it, or a guard with no python3 on PATH, refuses every call naming
+           stash, exit 1, naming a work-in-progress commit on the agent's own
+           branch: it never runs a stash unguarded.
 Headless:  pi-role agents/<role>.md -p "<brief>" in the worktree; the final
            message is on stdout. A -p (--print) run has no route to any pane:
            its child gets no OCTO_FEATHER_PARENT, HERDR_PANE_ID, HERDR_TAB_ID
@@ -180,7 +193,8 @@ def launch_env(path: str) -> dict[str, str]:
         sys.exit(f"pi-role: {fm.get('name', path)} not started: it would commit, and the factory commit identity is not set "
                  f"({why}). The setting: [{IDENTITY}] name and email in the box onboarding file {onboarding_file()}. "
                  f"Set it once per box: {set_hint()}")
-    return env
+    git = real_git(with_guard(os.environ.get("PATH", "")))
+    return {**env, GIT_ENV: git} if git else env
 
 
 TABLE = re.compile(r"^\s*\[")
@@ -481,9 +495,43 @@ def with_mise(path: str, mise_dir: str) -> str:
     return os.pathsep.join([*dirs[:at], mise_dir, *dirs[at:]])
 
 
+def guard_dir() -> str:
+    """The kit's stash guard's dir, scripts/stash-guard (a function: review-host loads this file with no __file__ set
+    until it runs one)."""
+    return os.path.join(os.path.dirname(os.path.realpath(__file__)), "stash-guard")
+
+
+# The real git every launch fixes for the guard (pi-role --help, Stash guard).
+GIT_ENV = "OCTO_FEATHER_GIT"
+
+
+# The opening of the guard's line 2, which marks it and every copy (scripts/stash-guard/git, guard_file).
+GUARD_MARK = b"# The kit's stash guard ("
+
+
+def is_guard(f: str) -> bool:
+    """Whether file F is the stash guard, of any kit version: its line 2 opens with GUARD_MARK (a copy counts)."""
+    try:
+        with open(f, "rb") as h:
+            return bool(h.readline()) and h.readline().startswith(GUARD_MARK)
+    except OSError:
+        return False
+
+
+def real_git(path: str) -> str | None:
+    """The first git on PATH after the guard's dir that is not the guard, links resolved; None when there is none."""
+    guard = guard_dir()
+    dirs = path.split(os.pathsep)
+    for d in dirs[dirs.index(guard) + 1:] if guard in dirs else dirs:
+        f = os.path.realpath(os.path.join(d, "git")) if d else ""
+        if f and os.path.isfile(f) and os.access(f, os.X_OK) and not is_guard(f):
+            return f
+    return None
+
+
 def with_guard(path: str) -> str:
     """PATH with the stash guard's dir placed once (where: pi-role --help, Stash guard)."""
-    guard = os.path.join(os.path.dirname(os.path.realpath(__file__)), "stash-guard")
+    guard = guard_dir()
     dirs = [d for d in path.split(os.pathsep) if d and d != guard]
     at = next((i for i, d in enumerate(dirs)
                if d.rstrip("/") in SYSTEM_DIRS or os.access(os.path.join(d, "git"), os.X_OK)), len(dirs))

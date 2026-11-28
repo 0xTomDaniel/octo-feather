@@ -134,12 +134,14 @@ def unset(s: Scratch) -> None:
 
 def read_only(s: Scratch) -> None:
     """No setting: the launch of a role whose contract never commits (the code reviewer) is not
-    refused, and applies no identity: its launch env (`pi-role --print-env`) is empty."""
+    refused, and applies no identity: its launch env (`pi-role --print-env`) has no GIT_ line."""
     repo = world(s)
     ran = s.run(
         [kit("pi-role"), "--print-env", str(ROOT / "agents" / "code-reviewer.md")], cwd=repo
     )
-    assert ran.out == "", ran.out
+    assert not re.search("^GIT_", ran.out, re.MULTILINE), (
+        ran.out
+    )  # OCTO_FEATHER_GIT aside: pi-role --help
 
 
 def no_commit(s: Scratch) -> None:
@@ -149,7 +151,9 @@ def no_commit(s: Scratch) -> None:
     ran = s.run(
         [kit("pi-role"), "--print-env", str(ROOT / "agents" / "general-worker.md")], cwd=repo
     )
-    assert ran.out == "", ran.out
+    assert not re.search("^GIT_", ran.out, re.MULTILINE), (
+        ran.out
+    )  # OCTO_FEATHER_GIT aside: pi-role --help
     s.run(
         [kit("pi-role"), "--print-env", str(ROOT / "agents" / "implementer.md")], want=1, cwd=repo
     )
