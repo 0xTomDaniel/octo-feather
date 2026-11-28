@@ -1,0 +1,1766 @@
+{
+ "demos": {
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 factory-report": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "scripts/correction_lanes.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/lane_reporting.py",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-lane",
+    "scripts/octo-feather-reflect",
+    "scripts/pi_sessions.py",
+    "scripts/tracker_calls.py",
+    "tests/fixtures/lane-report/gh"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 gate-tiers": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "scripts/check-dashes",
+    "scripts/check-gate-free",
+    "scripts/check_rules.py",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-gate",
+    "scripts/pi-role",
+    "tests/gate/conftest.py",
+    "tests/gate/heavy_slot.py",
+    "tests/gate/kit/conftest.py",
+    "tests/gate/test_gate.py"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 merge-ask-proof": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/github-pr/scripts/gh",
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "scripts/check-behavior-smoke",
+    "scripts/correction_lanes.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/merge_ask.py",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-gate",
+    "scripts/octo-feather-lane",
+    "scripts/octo-feather-spec-status",
+    "scripts/pi-role",
+    "scripts/pr_git.py",
+    "scripts/pr_report.py",
+    "scripts/tracker_calls.py"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 one-execution-incomplete": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "scripts/check-gate-free",
+    "scripts/eval_grading.py",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-gate",
+    "scripts/octo-feather-qc",
+    "scripts/octo-feather-spec-status",
+    "tests/gate/conftest.py",
+    "tests/gate/test_gate.py"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 parent-resumed": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/herdr-comms/assets/herdr_ready.py",
+    ".agents/skills/herdr-comms/assets/herdr_scope.py",
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "scripts/correction_lanes.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/lane_reflection.py",
+    "scripts/lane_reporting.py",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-handoff",
+    "scripts/octo-feather-lane",
+    "scripts/octo-feather-reflect",
+    "scripts/pi-role",
+    "scripts/tracker_calls.py",
+    "tests/gate/kit/testkit/herdr.py",
+    "tests/gate/kit/testkit/systemd.py"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-advisory": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "scripts/check-gate-free",
+    "scripts/correction_lanes.py",
+    "scripts/eval_grading.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/lane_reporting.py",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-lane",
+    "scripts/octo-feather-qa",
+    "scripts/octo-feather-qc",
+    "scripts/octo-feather-spec-status",
+    "scripts/tracker_calls.py"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-browser": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "scripts/check-gate-free",
+    "scripts/correction_lanes.py",
+    "scripts/eval_grading.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/lane_reporting.py",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-lane",
+    "scripts/octo-feather-qa",
+    "scripts/octo-feather-qc",
+    "scripts/octo-feather-spec-status",
+    "scripts/tracker_calls.py"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-capture": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "scripts/check-gate-free",
+    "scripts/correction_lanes.py",
+    "scripts/eval_grading.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/lane_reporting.py",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-lane",
+    "scripts/octo-feather-qa",
+    "scripts/octo-feather-qc",
+    "scripts/octo-feather-spec-status",
+    "scripts/tracker_calls.py"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-fallback": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "scripts/check-gate-free",
+    "scripts/eval_grading.py",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-qa",
+    "scripts/octo-feather-qc",
+    "scripts/octo-feather-spec-status"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-insufficient": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/github-pr/scripts/gh",
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "scripts/check-behavior-smoke",
+    "scripts/check-gate-free",
+    "scripts/correction_lanes.py",
+    "scripts/eval_grading.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/merge_ask.py",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-gate",
+    "scripts/octo-feather-lane",
+    "scripts/octo-feather-qc",
+    "scripts/octo-feather-spec-status",
+    "scripts/pi-role",
+    "scripts/pr_git.py",
+    "scripts/pr_report.py",
+    "scripts/tracker_calls.py"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-sandbox-cost": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 result-file": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "scripts/handoff_log.py",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-handoff",
+    "tests/gate/kit/testkit/herdr.py"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 result-missing": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "scripts/handoff_log.py",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-handoff",
+    "tests/gate/kit/testkit/herdr.py"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 starter-acceptance": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "evals/fixtures/quote-app-inline/src/app/__init__.py",
+    "scripts/check-gate-free",
+    "scripts/correction_lanes.py",
+    "scripts/eval_grading.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/lane_reporting.py",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-gate",
+    "scripts/octo-feather-lane",
+    "scripts/octo-feather-qa",
+    "scripts/octo-feather-qc",
+    "scripts/octo-feather-spec-status",
+    "scripts/tracker_calls.py",
+    "templates/python/scripts/check-languages",
+    "templates/python/scripts/own-tool-paths",
+    "templates/python/src/app/__init__.py",
+    "templates/python/src/app/cli.py",
+    "templates/python/src/app/core.py",
+    "templates/python/tests/conftest.py",
+    "templates/python/tests/e2e/conftest.py",
+    "templates/python/tests/e2e/test_cli_e2e.py",
+    "templates/python/tests/integration/conftest.py",
+    "templates/python/tests/integration/test_cli.py",
+    "templates/python/tests/test_gate.py",
+    "tests/gate/kit/testkit/__init__.py"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 template-edge": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "scripts/check-gate-free",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "templates/python/src/app/__init__.py",
+    "templates/python/src/app/cli.py",
+    "templates/python/src/app/core.py"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 template-tiers": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "evals/fixtures/quote-app-inline/src/app/__init__.py",
+    "scripts/check-gate-free",
+    "scripts/check-vendored",
+    "scripts/correction_lanes.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/lane_reporting.py",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-lane",
+    "scripts/pi_sessions.py",
+    "scripts/tracker_calls.py",
+    "templates/python/scripts/check-languages",
+    "templates/python/scripts/own-tool-paths",
+    "templates/python/src/app/__init__.py",
+    "templates/python/src/app/cli.py",
+    "templates/python/src/app/core.py",
+    "templates/python/tests/conftest.py",
+    "templates/python/tests/e2e/conftest.py",
+    "templates/python/tests/integration/conftest.py",
+    "templates/python/tests/test_gate.py",
+    "tests/fixtures/lane-report/gh",
+    "tests/gate/kit/testkit/__init__.py"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "scripts/correction_lanes.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/lane_reflection.py",
+    "scripts/lane_reporting.py",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-lane",
+    "scripts/octo-feather-reflect",
+    "scripts/pi-role",
+    "scripts/pi_sessions.py",
+    "scripts/post_merge.py",
+    "scripts/slot_queue.py",
+    "scripts/tracker_calls.py",
+    "tests/fixtures/classify-stub/pi",
+    "tests/fixtures/herdr-say/herdr",
+    "tests/fixtures/herdr-spawn/herdr",
+    "tests/fixtures/install-check/pi",
+    "tests/fixtures/qc-judge/pi",
+    "tests/fixtures/reflection-director",
+    "tests/fixtures/tracker-gh/gh"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run factory-report": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "scripts/correction_lanes.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/lane_reporting.py",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-lane",
+    "scripts/octo-feather-reflect",
+    "scripts/pi_sessions.py",
+    "scripts/tracker_calls.py",
+    "tests/fixtures/lane-report/gh"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-history": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "scripts/check-evals",
+    "scripts/check-gate-free",
+    "scripts/eval_grading.py",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-qa",
+    "scripts/octo-feather-qc",
+    "scripts/octo-feather-slot",
+    "scripts/pi-role",
+    "scripts/slot_queue.py"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-stale": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "scripts/check-gate-free",
+    "scripts/correction_lanes.py",
+    "scripts/eval_grading.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/lane_reporting.py",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-lane",
+    "scripts/octo-feather-qa",
+    "scripts/octo-feather-qc",
+    "scripts/octo-feather-spec-status",
+    "scripts/tracker_calls.py"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run skill-loading": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "scripts/check-skills",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/pi-role"
+   ],
+   "tail": ""
+  },
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run spec-revision-init": {
+   "exit": 0,
+   "files": [
+    ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-spec-status",
+    "scripts/pi-role"
+   ],
+   "tail": ""
+  },
+  "scripts/octo-feather-qa --verdict 20261122T162704Z-4a14c2/supervisor-autonomy/owner-access-blocker-and-ready-work 20261122T162704Z-4a14c2/supervisor-autonomy/owner-access-blocker-message": {
+   "exit": 77,
+   "files": [
+    "scripts/check-evals",
+    "scripts/eval_grading.py",
+    "scripts/octo-feather-qa",
+    "scripts/pi-role"
+   ],
+   "tail": ""
+  },
+  "scripts/octo-feather-qa --verdict 20261122T162704Z-4a14c2/supervisor-general-worker/diagnosis-diff-goes-to-implementer 20261122T162704Z-4a14c2/supervisor-general-worker/implementer-result-integrated-not-candidate 20261122T162704Z-4a14c2/supervisor-general-worker/reviewed-implementer-result-integrated": {
+   "exit": 77,
+   "files": [
+    "scripts/check-evals",
+    "scripts/eval_grading.py",
+    "scripts/octo-feather-qa",
+    "scripts/pi-role"
+   ],
+   "tail": ""
+  },
+  "scripts/octo-feather-qa --verdict 20261122T162704Z-4a14c2/supervisor-ticket-skills/missed-skill-sent-back 20261122T162704Z-4a14c2/supervisor-ticket-skills/loaded-skill-integrated && python3 tests/gate/kit/lane_skills.py demo": {
+   "exit": 77,
+   "files": [
+    "scripts/check-evals",
+    "scripts/eval_grading.py",
+    "scripts/octo-feather-qa",
+    "scripts/pi-role"
+   ],
+   "tail": ""
+  },
+  "scripts/octo-feather-qa --verdict 20261126T064835Z-939595/director-tier-relay/tier-three-waits-for-owner": {
+   "exit": 77,
+   "files": [
+    "scripts/check-evals",
+    "scripts/eval_grading.py",
+    "scripts/octo-feather-qa",
+    "scripts/pi-role"
+   ],
+   "tail": ""
+  }
+ },
+ "extra_items": {
+  "tests/gate/kit/test_herdr_messaging.py::test_parent_gone": {
+   "files": [
+    "scripts/handoff_log.py",
+    "scripts/octo-feather-handoff",
+    "scripts/octo-feather-parent-gone",
+    "scripts/octo-feather-queued",
+    "tests/gate/kit/herdr_messaging.py",
+    "tests/gate/kit/testkit/__init__.py",
+    "tests/gate/kit/testkit/herdr.py",
+    "tests/gate/kit/testkit/realcase.py"
+   ],
+   "passed": true
+  },
+  "tests/gate/kit/test_herdr_messaging.py::test_queued_completion": {
+   "files": [
+    "scripts/handoff_log.py",
+    "scripts/octo-feather-handoff",
+    "scripts/octo-feather-queued",
+    "tests/gate/kit/herdr_messaging.py",
+    "tests/gate/kit/testkit/__init__.py",
+    "tests/gate/kit/testkit/herdr.py",
+    "tests/gate/kit/testkit/realcase.py"
+   ],
+   "passed": true
+  },
+  "tests/gate/kit/test_lane_ci_start.py::test_lane_ci_start_not_started": {
+   "files": [
+    "evals/fixtures/quote-app-inline/src/app/__init__.py",
+    "scripts/ci_start.py",
+    "scripts/lane_cli.py",
+    "scripts/octo-feather-gate",
+    "scripts/octo-feather-lane",
+    "scripts/pr_git.py",
+    "scripts/tracker_calls.py",
+    "templates/python/src/app/__init__.py",
+    "tests/gate/kit/lane_ci_start.py",
+    "tests/gate/kit/testkit/__init__.py",
+    "tests/gate/kit/testkit/gh.py"
+   ],
+   "passed": true
+  },
+  "tests/gate/kit/test_lane_ci_start.py::test_lane_ci_start_started": {
+   "files": [
+    "evals/fixtures/quote-app-inline/src/app/__init__.py",
+    "scripts/ci_start.py",
+    "scripts/lane_cli.py",
+    "scripts/octo-feather-gate",
+    "scripts/octo-feather-lane",
+    "scripts/pr_git.py",
+    "scripts/tracker_calls.py",
+    "templates/python/src/app/__init__.py",
+    "tests/gate/kit/lane_ci_start.py",
+    "tests/gate/kit/testkit/__init__.py",
+    "tests/gate/kit/testkit/gh.py"
+   ],
+   "passed": true
+  },
+  "tests/gate/kit/test_lane_correction_replay.py::test_correction_replay_contained": {
+   "files": [
+    "evals/fixtures/quote-app-inline/src/app/__init__.py",
+    "scripts/check-behavior-smoke",
+    "scripts/correction_lanes.py",
+    "scripts/eval_grading.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/lane_review.py",
+    "scripts/merge_ask.py",
+    "scripts/octo-feather-gate",
+    "scripts/octo-feather-lane",
+    "scripts/octo-feather-qc",
+    "scripts/octo-feather-qc-ghsnap",
+    "scripts/octo-feather-spec-status",
+    "scripts/pi-role",
+    "scripts/pr_git.py",
+    "scripts/pr_report.py",
+    "scripts/tracker_calls.py",
+    "templates/python/src/app/__init__.py",
+    "tests/gate/kit/lane_correction_replay.py",
+    "tests/gate/kit/lane_verdict_rounds.py",
+    "tests/gate/kit/testkit/__init__.py",
+    "tests/gate/kit/testkit/gh.py",
+    "tests/gate/kit/testkit/install_check.py",
+    "tests/gate/kit/testkit/jsonwalk.py",
+    "tests/gate/kit/testkit/qc_box.py"
+   ],
+   "passed": true
+  },
+  "tests/gate/kit/test_lane_correction_replay.py::test_correction_replay_masked": {
+   "files": [
+    "evals/fixtures/quote-app-inline/src/app/__init__.py",
+    "scripts/check-behavior-smoke",
+    "scripts/correction_lanes.py",
+    "scripts/eval_grading.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/lane_review.py",
+    "scripts/merge_ask.py",
+    "scripts/octo-feather-gate",
+    "scripts/octo-feather-lane",
+    "scripts/octo-feather-qc",
+    "scripts/octo-feather-qc-ghsnap",
+    "scripts/octo-feather-spec-status",
+    "scripts/pi-role",
+    "scripts/pr_git.py",
+    "scripts/pr_report.py",
+    "scripts/tracker_calls.py",
+    "templates/python/src/app/__init__.py",
+    "tests/gate/kit/lane_correction_replay.py",
+    "tests/gate/kit/lane_verdict_rounds.py",
+    "tests/gate/kit/testkit/__init__.py",
+    "tests/gate/kit/testkit/gh.py",
+    "tests/gate/kit/testkit/install_check.py",
+    "tests/gate/kit/testkit/jsonwalk.py",
+    "tests/gate/kit/testkit/qc_box.py"
+   ],
+   "passed": true
+  },
+  "tests/gate/kit/test_lane_correction_replay.py::test_correction_replay_shown": {
+   "files": [
+    "evals/fixtures/quote-app-inline/src/app/__init__.py",
+    "scripts/check-behavior-smoke",
+    "scripts/correction_lanes.py",
+    "scripts/eval_grading.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/lane_review.py",
+    "scripts/merge_ask.py",
+    "scripts/octo-feather-gate",
+    "scripts/octo-feather-lane",
+    "scripts/octo-feather-qc",
+    "scripts/octo-feather-qc-ghsnap",
+    "scripts/octo-feather-spec-status",
+    "scripts/pi-role",
+    "scripts/pr_git.py",
+    "scripts/pr_report.py",
+    "scripts/tracker_calls.py",
+    "templates/python/src/app/__init__.py",
+    "tests/gate/kit/lane_correction_replay.py",
+    "tests/gate/kit/lane_verdict_rounds.py",
+    "tests/gate/kit/testkit/__init__.py",
+    "tests/gate/kit/testkit/gh.py",
+    "tests/gate/kit/testkit/install_check.py",
+    "tests/gate/kit/testkit/jsonwalk.py",
+    "tests/gate/kit/testkit/qc_box.py"
+   ],
+   "passed": true
+  },
+  "tests/gate/kit/test_lane_correction_replay.py::test_correction_replay_untrue": {
+   "files": [
+    "evals/fixtures/quote-app-inline/src/app/__init__.py",
+    "scripts/check-behavior-smoke",
+    "scripts/correction_lanes.py",
+    "scripts/eval_grading.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/lane_review.py",
+    "scripts/merge_ask.py",
+    "scripts/octo-feather-gate",
+    "scripts/octo-feather-lane",
+    "scripts/octo-feather-qc",
+    "scripts/octo-feather-qc-ghsnap",
+    "scripts/octo-feather-spec-status",
+    "scripts/pi-role",
+    "scripts/pr_git.py",
+    "scripts/pr_report.py",
+    "scripts/tracker_calls.py",
+    "templates/python/src/app/__init__.py",
+    "tests/gate/kit/lane_correction_replay.py",
+    "tests/gate/kit/lane_verdict_rounds.py",
+    "tests/gate/kit/testkit/__init__.py",
+    "tests/gate/kit/testkit/gh.py",
+    "tests/gate/kit/testkit/install_check.py",
+    "tests/gate/kit/testkit/jsonwalk.py",
+    "tests/gate/kit/testkit/qc_box.py"
+   ],
+   "passed": true
+  },
+  "tests/gate/kit/test_qa_summary.py::test_qa_summary_kits": {
+   "files": [
+    "scripts/check-evals",
+    "scripts/pi-role",
+    "tests/fixtures/classify-stub/pi",
+    "tests/fixtures/install-check/pi",
+    "tests/fixtures/qc-judge/pi"
+   ],
+   "passed": true
+  },
+  "tests/gate/kit/test_qc_one_execution.py::test_two_specs": {
+   "files": null,
+   "passed": false
+  },
+  "tests/gate/kit/test_qc_sandbox_gone.py::test_repo_gone": {
+   "files": null,
+   "passed": false
+  },
+  "tests/gate/kit/test_qc_sandbox_gone.py::test_repo_recreated": {
+   "files": null,
+   "passed": false
+  },
+  "tests/gate/kit/test_qc_sandbox_gone.py::test_worktrees_gone": {
+   "files": null,
+   "passed": false
+  },
+  "tests/gate/kit/test_start_relaunch.py::test_relaunch_own_scope": {
+   "files": [
+    ".agents/skills/herdr-comms/assets/herdr_scope.py",
+    "scripts/director_relaunch.py",
+    "scripts/pi-role",
+    "tests/gate/kit/start_relaunch.py",
+    "tests/gate/kit/testkit/__init__.py",
+    "tests/gate/kit/testkit/herdr.py"
+   ],
+   "passed": true
+  },
+  "tests/gate/kit/test_start_relaunch.py::test_relaunch_report": {
+   "files": [
+    ".agents/skills/herdr-comms/assets/herdr_ready.py",
+    ".agents/skills/herdr-comms/assets/herdr_scope.py",
+    "scripts/correction_lanes.py",
+    "scripts/director_relaunch.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/lane_reflection.py",
+    "scripts/lane_reporting.py",
+    "scripts/octo-feather-handoff",
+    "scripts/octo-feather-lane",
+    "scripts/octo-feather-reflect",
+    "scripts/pi-role",
+    "scripts/tracker_calls.py",
+    "tests/gate/kit/start_relaunch.py",
+    "tests/gate/kit/testkit/__init__.py",
+    "tests/gate/kit/testkit/herdr.py",
+    "tests/gate/kit/testkit/systemd.py"
+   ],
+   "passed": true
+  },
+  "tests/gate/kit/test_start_relaunch.py::test_relaunch_short_wait": {
+   "files": [
+    ".agents/skills/herdr-comms/assets/herdr_scope.py",
+    "scripts/director_relaunch.py",
+    "scripts/pi-role",
+    "tests/gate/kit/start_relaunch.py",
+    "tests/gate/kit/testkit/__init__.py",
+    "tests/gate/kit/testkit/herdr.py"
+   ],
+   "passed": true
+  },
+  "tests/gate/kit/test_start_relaunch.py::test_replace_none": {
+   "files": [
+    ".agents/skills/herdr-comms/assets/herdr_ready.py",
+    ".agents/skills/herdr-comms/assets/herdr_scope.py",
+    "scripts/correction_lanes.py",
+    "scripts/director_relaunch.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/lane_reflection.py",
+    "scripts/lane_reporting.py",
+    "scripts/octo-feather-handoff",
+    "scripts/octo-feather-lane",
+    "scripts/octo-feather-reflect",
+    "scripts/pi-role",
+    "scripts/tracker_calls.py",
+    "tests/gate/kit/start_relaunch.py",
+    "tests/gate/kit/testkit/__init__.py",
+    "tests/gate/kit/testkit/herdr.py",
+    "tests/gate/kit/testkit/systemd.py"
+   ],
+   "passed": true
+  },
+  "tests/gate/kit/test_start_relaunch.py::test_replace_outgoing": {
+   "files": [
+    ".agents/skills/herdr-comms/assets/herdr_ready.py",
+    ".agents/skills/herdr-comms/assets/herdr_scope.py",
+    "scripts/correction_lanes.py",
+    "scripts/director_relaunch.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/lane_reflection.py",
+    "scripts/lane_reporting.py",
+    "scripts/octo-feather-handoff",
+    "scripts/octo-feather-lane",
+    "scripts/octo-feather-reflect",
+    "scripts/pi-role",
+    "scripts/tracker_calls.py",
+    "tests/gate/kit/start_relaunch.py",
+    "tests/gate/kit/testkit/__init__.py",
+    "tests/gate/kit/testkit/herdr.py",
+    "tests/gate/kit/testkit/systemd.py"
+   ],
+   "passed": true
+  },
+  "tests/gate/kit/test_start_relaunch.py::test_replace_report": {
+   "files": [
+    ".agents/skills/herdr-comms/assets/herdr_ready.py",
+    ".agents/skills/herdr-comms/assets/herdr_scope.py",
+    "scripts/correction_lanes.py",
+    "scripts/director_relaunch.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/lane_reflection.py",
+    "scripts/lane_reporting.py",
+    "scripts/octo-feather-handoff",
+    "scripts/octo-feather-lane",
+    "scripts/octo-feather-reflect",
+    "scripts/pi-role",
+    "scripts/tracker_calls.py",
+    "tests/gate/kit/start_relaunch.py",
+    "tests/gate/kit/testkit/__init__.py",
+    "tests/gate/kit/testkit/herdr.py",
+    "tests/gate/kit/testkit/systemd.py"
+   ],
+   "passed": true
+  },
+  "tests/lane-pilot-pr.sh": {
+   "files": [
+    "scripts/check-gate-free",
+    "scripts/correction_lanes.py",
+    "scripts/eval_grading.py",
+    "scripts/gate_time.py",
+    "scripts/handoff_log.py",
+    "scripts/lane_cli.py",
+    "scripts/lane_reporting.py",
+    "scripts/lane_review.py",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-gate",
+    "scripts/octo-feather-lane",
+    "scripts/octo-feather-qa",
+    "scripts/octo-feather-qc",
+    "scripts/octo-feather-spec-status",
+    "scripts/pi-role",
+    "scripts/pr_git.py",
+    "scripts/pr_report.py",
+    "scripts/tracker_calls.py",
+    "tests/fixtures/tracker-gh/gh"
+   ],
+   "passed": true
+  },
+  "tests/qc-carry.sh": {
+   "files": [
+    "scripts/check-gate-free",
+    "scripts/eval_grading.py",
+    "scripts/octo-feather-contract",
+    "scripts/octo-feather-evidence",
+    "scripts/octo-feather-gate",
+    "scripts/octo-feather-qa",
+    "scripts/octo-feather-qc",
+    "scripts/octo-feather-spec-status",
+    "scripts/pi-role",
+    "tests/gate/conftest.py",
+    "tests/gate/test_gate.py"
+   ],
+   "passed": true
+  },
+  "tests/web-tools.sh": {
+   "files": [
+    ".agents/skills/herdr-comms/assets/herdr_ready.py",
+    ".agents/skills/herdr-comms/assets/herdr_scope.py",
+    "scripts/check-roles",
+    "scripts/handoff_log.py",
+    "scripts/octo-feather-handoff",
+    "scripts/pi-role"
+   ],
+   "passed": true
+  }
+ },
+ "map": "a17be240e5d061ab4259c9b2f8fdf62ebeea17b6",
+ "map_items": {
+  "tests/gate/kit/test_fast_map.py::test_fast_chooses_from_its_map": [
+   "scripts/handoff_log.py",
+   "scripts/octo-feather-handoff",
+   "scripts/octo-feather-slot",
+   "scripts/slot_queue.py",
+   "tests/gate/kit/fast_map.py",
+   "tests/gate/kit/fast_slot_free.py",
+   "tests/gate/kit/gate_recipes_first.py",
+   "tests/gate/kit/testkit/__init__.py"
+  ],
+  "tests/gate/kit/test_fast_map.py::test_fast_counts_since_main": [
+   "tests/gate/kit/fast_map.py",
+   "tests/gate/kit/fast_slot_free.py",
+   "tests/gate/kit/gate_recipes_first.py",
+   "tests/gate/kit/testkit/__init__.py"
+  ],
+  "tests/gate/kit/test_fast_map.py::test_fast_map_since_newest": [
+   "tests/gate/kit/fast_map.py",
+   "tests/gate/kit/fast_slot_free.py",
+   "tests/gate/kit/gate_recipes_first.py",
+   "tests/gate/kit/testkit/__init__.py"
+  ],
+  "tests/gate/kit/test_fast_map.py::test_fast_map_takes_no_slot": [
+   "tests/gate/kit/fast_map.py",
+   "tests/gate/kit/fast_slot_free.py",
+   "tests/gate/kit/gate_recipes_first.py",
+   "tests/gate/kit/testkit/__init__.py"
+  ],
+  "tests/gate/kit/test_fast_map.py::test_fast_names_map_behind_main": [
+   "tests/gate/kit/fast_map.py",
+   "tests/gate/kit/fast_slot_free.py",
+   "tests/gate/kit/gate_recipes_first.py",
+   "tests/gate/kit/testkit/__init__.py"
+  ],
+  "tests/gate/kit/test_handoff_ended.py::test_worker_ended": [
+   ".agents/skills/herdr-comms/assets/herdr_ready.py",
+   ".agents/skills/herdr-comms/assets/herdr_scope.py",
+   "scripts/handoff_log.py",
+   "scripts/octo-feather-handoff",
+   "scripts/pi-role",
+   "tests/gate/kit/handoff_ended.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/herdr.py",
+   "tests/gate/kit/testkit/systemd.py"
+  ],
+  "tests/gate/kit/test_herdr_messaging.py::test_director_worker_moved": [
+   ".agents/skills/herdr-comms/assets/herdr_ready.py",
+   ".agents/skills/herdr-comms/assets/herdr_scope.py",
+   "scripts/handoff_log.py",
+   "scripts/octo-feather-handoff",
+   "scripts/pi-role",
+   "tests/gate/kit/herdr_messaging.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/herdr.py",
+   "tests/gate/kit/testkit/realcase.py",
+   "tests/gate/kit/testkit/systemd.py"
+  ],
+  "tests/gate/kit/test_herdr_messaging.py::test_director_worker_resume": [
+   ".agents/skills/herdr-comms/assets/herdr_ready.py",
+   ".agents/skills/herdr-comms/assets/herdr_scope.py",
+   "scripts/handoff_log.py",
+   "scripts/octo-feather-handoff",
+   "scripts/pi-role",
+   "tests/gate/kit/herdr_messaging.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/herdr.py",
+   "tests/gate/kit/testkit/realcase.py",
+   "tests/gate/kit/testkit/systemd.py"
+  ],
+  "tests/gate/kit/test_herdr_messaging.py::test_fresh_worker_session": [
+   ".agents/skills/herdr-comms/assets/herdr_ready.py",
+   ".agents/skills/herdr-comms/assets/herdr_scope.py",
+   "scripts/handoff_log.py",
+   "scripts/octo-feather-handoff",
+   "scripts/pi-role",
+   "tests/gate/kit/herdr_messaging.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/herdr.py",
+   "tests/gate/kit/testkit/realcase.py",
+   "tests/gate/kit/testkit/systemd.py"
+  ],
+  "tests/gate/kit/test_herdr_messaging.py::test_lane_worker_resume[w0:p1]": [
+   ".agents/skills/herdr-comms/assets/herdr_ready.py",
+   ".agents/skills/herdr-comms/assets/herdr_scope.py",
+   "scripts/handoff_log.py",
+   "scripts/octo-feather-handoff",
+   "scripts/pi-role",
+   "tests/gate/kit/herdr_messaging.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/herdr.py",
+   "tests/gate/kit/testkit/realcase.py",
+   "tests/gate/kit/testkit/systemd.py"
+  ],
+  "tests/gate/kit/test_herdr_messaging.py::test_lane_worker_resume[w1:p1]": [
+   ".agents/skills/herdr-comms/assets/herdr_ready.py",
+   ".agents/skills/herdr-comms/assets/herdr_scope.py",
+   "scripts/handoff_log.py",
+   "scripts/octo-feather-handoff",
+   "scripts/pi-role",
+   "tests/gate/kit/herdr_messaging.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/herdr.py",
+   "tests/gate/kit/testkit/realcase.py",
+   "tests/gate/kit/testkit/systemd.py"
+  ],
+  "tests/gate/kit/test_herdr_messaging.py::test_parent_relaunched_gone": [
+   "scripts/handoff_log.py",
+   "scripts/octo-feather-handoff",
+   "scripts/octo-feather-parent-gone",
+   "tests/gate/kit/herdr_messaging.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/herdr.py",
+   "tests/gate/kit/testkit/realcase.py"
+  ],
+  "tests/gate/kit/test_herdr_messaging.py::test_worker_route": [
+   "scripts/handoff_log.py",
+   "scripts/octo-feather-handoff",
+   "tests/gate/kit/herdr_messaging.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/herdr.py",
+   "tests/gate/kit/testkit/realcase.py"
+  ],
+  "tests/gate/kit/test_lane_ci_start.py::test_lane_ci_start_refusals": [
+   "scripts/ci_start.py",
+   "scripts/lane_cli.py",
+   "scripts/octo-feather-gate",
+   "scripts/octo-feather-lane",
+   "scripts/pr_git.py",
+   "scripts/tracker_calls.py",
+   "tests/gate/kit/lane_ci_start.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py"
+  ],
+  "tests/gate/kit/test_lane_correction_filer.py::test_lane_correction_legacy_duplicates": [
+   "tests/gate/kit/testkit/gh.py"
+  ],
+  "tests/gate/kit/test_lane_correction_filer.py::test_lane_correction_legacy_quote": [
+   "tests/gate/kit/testkit/gh.py"
+  ],
+  "tests/gate/kit/test_lane_correction_filer.py::test_lane_correction_recorded_372": [
+   "tests/gate/kit/testkit/gh.py"
+  ],
+  "tests/gate/kit/test_lane_correction_filer.py::test_lane_correction_recurrence": [
+   "tests/gate/kit/testkit/gh.py"
+  ],
+  "tests/gate/kit/test_lane_correction_filer.py::test_lane_correction_reflection_missed": [
+   "tests/gate/kit/testkit/gh.py"
+  ],
+  "tests/gate/kit/test_lane_correction_filer.py::test_lane_correction_route_owner": [
+   "tests/gate/kit/testkit/gh.py"
+  ],
+  "tests/gate/kit/test_lane_correction_replay.py::test_correction_replay_missing": [
+   "evals/fixtures/quote-app-inline/src/app/__init__.py",
+   "scripts/check-behavior-smoke",
+   "scripts/correction_lanes.py",
+   "scripts/eval_grading.py",
+   "scripts/gate_time.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/lane_review.py",
+   "scripts/merge_ask.py",
+   "scripts/octo-feather-gate",
+   "scripts/octo-feather-lane",
+   "scripts/octo-feather-spec-status",
+   "scripts/pi-role",
+   "scripts/pr_git.py",
+   "scripts/pr_report.py",
+   "scripts/tracker_calls.py",
+   "templates/python/src/app/__init__.py",
+   "tests/gate/kit/lane_correction_replay.py",
+   "tests/gate/kit/lane_verdict_rounds.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py",
+   "tests/gate/kit/testkit/install_check.py",
+   "tests/gate/kit/testkit/jsonwalk.py",
+   "tests/gate/kit/testkit/qc_box.py"
+  ],
+  "tests/gate/kit/test_lane_correction_replay.py::test_correction_replay_read": [
+   "evals/fixtures/quote-app-inline/src/app/__init__.py",
+   "scripts/check-behavior-smoke",
+   "scripts/correction_lanes.py",
+   "scripts/eval_grading.py",
+   "scripts/gate_time.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/lane_review.py",
+   "scripts/merge_ask.py",
+   "scripts/octo-feather-gate",
+   "scripts/octo-feather-lane",
+   "scripts/octo-feather-spec-status",
+   "scripts/pi-role",
+   "scripts/pr_git.py",
+   "scripts/pr_report.py",
+   "scripts/tracker_calls.py",
+   "templates/python/src/app/__init__.py",
+   "tests/gate/kit/lane_correction_replay.py",
+   "tests/gate/kit/lane_verdict_rounds.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py",
+   "tests/gate/kit/testkit/install_check.py",
+   "tests/gate/kit/testkit/jsonwalk.py",
+   "tests/gate/kit/testkit/qc_box.py"
+  ],
+  "tests/gate/kit/test_lane_correction_replay.py::test_correction_replay_recorded_1233": [
+   "evals/fixtures/quote-app-inline/src/app/__init__.py",
+   "scripts/check-behavior-smoke",
+   "scripts/correction_lanes.py",
+   "scripts/gate_time.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/merge_ask.py",
+   "scripts/octo-feather-gate",
+   "scripts/octo-feather-lane",
+   "scripts/octo-feather-spec-status",
+   "scripts/pi-role",
+   "scripts/pr_git.py",
+   "scripts/pr_report.py",
+   "scripts/tracker_calls.py",
+   "templates/python/src/app/__init__.py",
+   "tests/gate/kit/lane_correction_replay.py",
+   "tests/gate/kit/lane_verdict_rounds.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py",
+   "tests/gate/kit/testkit/install_check.py",
+   "tests/gate/kit/testkit/jsonwalk.py",
+   "tests/gate/kit/testkit/qc_box.py"
+  ],
+  "tests/gate/kit/test_lane_merge_ask.py::test_merge_ask_ci_status_only": [
+   "evals/fixtures/quote-app-inline/src/app/__init__.py",
+   "scripts/check-behavior-smoke",
+   "scripts/correction_lanes.py",
+   "scripts/gate_time.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/merge_ask.py",
+   "scripts/octo-feather-gate",
+   "scripts/octo-feather-lane",
+   "scripts/octo-feather-spec-status",
+   "scripts/pi-role",
+   "scripts/pr_git.py",
+   "scripts/pr_report.py",
+   "scripts/tracker_calls.py",
+   "templates/python/src/app/__init__.py",
+   "tests/gate/kit/lane_merge_ask.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py"
+  ],
+  "tests/gate/kit/test_lane_merge_ask.py::test_merge_ask_current_head_checks": [
+   "evals/fixtures/quote-app-inline/src/app/__init__.py",
+   "scripts/check-behavior-smoke",
+   "scripts/correction_lanes.py",
+   "scripts/gate_time.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/merge_ask.py",
+   "scripts/octo-feather-gate",
+   "scripts/octo-feather-lane",
+   "scripts/octo-feather-spec-status",
+   "scripts/pi-role",
+   "scripts/pr_git.py",
+   "scripts/pr_report.py",
+   "scripts/tracker_calls.py",
+   "templates/python/src/app/__init__.py",
+   "tests/gate/kit/lane_merge_ask.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py"
+  ],
+  "tests/gate/kit/test_lane_merge_ask.py::test_merge_ask_current_head_identity": [
+   "evals/fixtures/quote-app-inline/src/app/__init__.py",
+   "scripts/check-behavior-smoke",
+   "scripts/correction_lanes.py",
+   "scripts/eval_grading.py",
+   "scripts/gate_time.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/lane_review.py",
+   "scripts/merge_ask.py",
+   "scripts/octo-feather-gate",
+   "scripts/octo-feather-lane",
+   "scripts/octo-feather-spec-status",
+   "scripts/pi-role",
+   "scripts/pr_git.py",
+   "scripts/pr_report.py",
+   "scripts/tracker_calls.py",
+   "templates/python/src/app/__init__.py",
+   "tests/gate/kit/lane_merge_ask.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py"
+  ],
+  "tests/gate/kit/test_lane_merge_ask.py::test_merge_ask_full_pass": [
+   "evals/fixtures/quote-app-inline/src/app/__init__.py",
+   "scripts/check-behavior-smoke",
+   "scripts/correction_lanes.py",
+   "scripts/gate_time.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/merge_ask.py",
+   "scripts/octo-feather-gate",
+   "scripts/octo-feather-lane",
+   "scripts/octo-feather-spec-status",
+   "scripts/pi-role",
+   "scripts/pr_git.py",
+   "scripts/pr_report.py",
+   "scripts/tracker_calls.py",
+   "templates/python/src/app/__init__.py",
+   "tests/gate/kit/lane_merge_ask.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py"
+  ],
+  "tests/gate/kit/test_lane_merge_ask_hunks.py::test_merge_ask_one_head_hunks": [
+   "evals/fixtures/quote-app-inline/src/app/__init__.py",
+   "scripts/check-behavior-smoke",
+   "scripts/correction_lanes.py",
+   "scripts/gate_time.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/merge_ask.py",
+   "scripts/octo-feather-gate",
+   "scripts/octo-feather-lane",
+   "scripts/octo-feather-spec-status",
+   "scripts/pi-role",
+   "scripts/pr_git.py",
+   "scripts/pr_report.py",
+   "scripts/tracker_calls.py",
+   "templates/python/src/app/__init__.py",
+   "tests/gate/kit/lane_merge_ask.py",
+   "tests/gate/kit/lane_merge_ask_hunks.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py"
+  ],
+  "tests/gate/kit/test_lane_merge_order.py::test_merge_ask_siblings": [
+   "evals/fixtures/quote-app-inline/src/app/__init__.py",
+   "scripts/check-behavior-smoke",
+   "scripts/correction_lanes.py",
+   "scripts/eval_grading.py",
+   "scripts/gate_time.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/merge_ask.py",
+   "scripts/octo-feather-contract",
+   "scripts/octo-feather-gate",
+   "scripts/octo-feather-lane",
+   "scripts/octo-feather-qa",
+   "scripts/octo-feather-spec-status",
+   "scripts/pi-role",
+   "scripts/pr_git.py",
+   "scripts/pr_report.py",
+   "scripts/tracker_calls.py",
+   "templates/python/src/app/__init__.py",
+   "tests/gate/kit/lane_merge_ask.py",
+   "tests/gate/kit/lane_merge_order.py",
+   "tests/gate/kit/qc_eval_verdict.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py",
+   "tests/gate/kit/testkit/qc.py"
+  ],
+  "tests/gate/kit/test_lane_post_merge_map.py::test_post_merge_map_build_failed": [
+   ".agents/skills/herdr-comms/assets/herdr_scope.py",
+   "scripts/correction_lanes.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/octo-feather-lane",
+   "scripts/pi-role",
+   "scripts/post_merge.py",
+   "scripts/slot_queue.py",
+   "scripts/tracker_calls.py",
+   "tests/gate/kit/herdr_messaging.py",
+   "tests/gate/kit/lane_post_merge_map.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py",
+   "tests/gate/kit/testkit/herdr.py",
+   "tests/gate/kit/testkit/realcase.py",
+   "tests/gate/kit/testkit/systemd.py"
+  ],
+  "tests/gate/kit/test_lane_post_merge_map.py::test_post_merge_maps_full_daily": [
+   ".agents/skills/herdr-comms/assets/herdr_scope.py",
+   "scripts/correction_lanes.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/octo-feather-lane",
+   "scripts/pi-role",
+   "scripts/post_merge.py",
+   "scripts/slot_queue.py",
+   "scripts/tracker_calls.py",
+   "tests/gate/kit/herdr_messaging.py",
+   "tests/gate/kit/lane_post_merge_map.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py",
+   "tests/gate/kit/testkit/herdr.py",
+   "tests/gate/kit/testkit/realcase.py",
+   "tests/gate/kit/testkit/systemd.py"
+  ],
+  "tests/gate/kit/test_lane_post_merge_map.py::test_post_merge_maps_the_merge": [
+   ".agents/skills/herdr-comms/assets/herdr_scope.py",
+   "scripts/correction_lanes.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/octo-feather-lane",
+   "scripts/pi-role",
+   "scripts/post_merge.py",
+   "scripts/slot_queue.py",
+   "scripts/tracker_calls.py",
+   "tests/gate/kit/herdr_messaging.py",
+   "tests/gate/kit/lane_post_merge_map.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py",
+   "tests/gate/kit/testkit/herdr.py",
+   "tests/gate/kit/testkit/realcase.py",
+   "tests/gate/kit/testkit/systemd.py"
+  ],
+  "tests/gate/kit/test_lane_review_resolution.py::test_lane_review_resolution": [
+   "scripts/check-behavior-smoke",
+   "scripts/correction_lanes.py",
+   "scripts/eval_grading.py",
+   "scripts/gate_time.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/lane_review.py",
+   "scripts/merge_ask.py",
+   "scripts/octo-feather-gate",
+   "scripts/octo-feather-lane",
+   "scripts/octo-feather-spec-status",
+   "scripts/pi-role",
+   "scripts/pr_git.py",
+   "scripts/pr_report.py",
+   "scripts/tracker_calls.py",
+   "tests/gate/kit/lane_ci_start.py",
+   "tests/gate/kit/lane_review_resolution.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py"
+  ],
+  "tests/gate/kit/test_lane_start.py::test_lane_start_behind_kit": [
+   "scripts/correction_lanes.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/octo-feather-lane",
+   "scripts/pi-role",
+   "scripts/start_lane.py",
+   "scripts/tracker_calls.py",
+   "tests/gate/kit/lane_start.py",
+   "tests/gate/kit/testkit/__init__.py"
+  ],
+  "tests/gate/kit/test_lane_start.py::test_lane_start_exists": [
+   "scripts/correction_lanes.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/octo-feather-lane",
+   "scripts/pi-role",
+   "scripts/start_lane.py",
+   "scripts/tracker_calls.py",
+   "tests/gate/kit/lane_start.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py",
+   "tests/gate/kit/testkit/herdr.py"
+  ],
+  "tests/gate/kit/test_lane_start.py::test_lane_start_files": [
+   ".agents/skills/herdr-comms/assets/herdr_ready.py",
+   ".agents/skills/herdr-comms/assets/herdr_scope.py",
+   "scripts/correction_lanes.py",
+   "scripts/gate_time.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/lane_reflection.py",
+   "scripts/lane_reporting.py",
+   "scripts/octo-feather-handoff",
+   "scripts/octo-feather-lane",
+   "scripts/octo-feather-reflect",
+   "scripts/pi-role",
+   "scripts/pi_sessions.py",
+   "scripts/start_lane.py",
+   "scripts/tracker_calls.py",
+   "tests/gate/kit/lane_start.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py",
+   "tests/gate/kit/testkit/herdr.py",
+   "tests/gate/kit/testkit/systemd.py"
+  ],
+  "tests/gate/kit/test_lane_start.py::test_lane_start_rerun": [
+   ".agents/skills/herdr-comms/assets/herdr_ready.py",
+   ".agents/skills/herdr-comms/assets/herdr_scope.py",
+   "scripts/correction_lanes.py",
+   "scripts/gate_time.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/lane_reflection.py",
+   "scripts/lane_reporting.py",
+   "scripts/octo-feather-handoff",
+   "scripts/octo-feather-lane",
+   "scripts/octo-feather-reflect",
+   "scripts/pi-role",
+   "scripts/pi_sessions.py",
+   "scripts/start_lane.py",
+   "scripts/tracker_calls.py",
+   "tests/gate/kit/lane_start.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py",
+   "tests/gate/kit/testkit/herdr.py",
+   "tests/gate/kit/testkit/systemd.py"
+  ],
+  "tests/gate/kit/test_lane_start.py::test_lane_start_started": [
+   ".agents/skills/herdr-comms/assets/herdr_ready.py",
+   ".agents/skills/herdr-comms/assets/herdr_scope.py",
+   "scripts/correction_lanes.py",
+   "scripts/gate_time.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/lane_reflection.py",
+   "scripts/lane_reporting.py",
+   "scripts/octo-feather-handoff",
+   "scripts/octo-feather-lane",
+   "scripts/octo-feather-reflect",
+   "scripts/pi-role",
+   "scripts/pi_sessions.py",
+   "scripts/start_lane.py",
+   "scripts/tracker_calls.py",
+   "tests/gate/kit/lane_start.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py",
+   "tests/gate/kit/testkit/herdr.py",
+   "tests/gate/kit/testkit/systemd.py"
+  ],
+  "tests/gate/kit/test_lane_start.py::test_lane_start_sub_issue": [
+   "scripts/correction_lanes.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/octo-feather-lane",
+   "scripts/pi-role",
+   "scripts/start_lane.py",
+   "scripts/tracker_calls.py",
+   "tests/gate/kit/lane_start.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py"
+  ],
+  "tests/gate/kit/test_lane_start.py::test_lane_start_unknown_send": [
+   ".agents/skills/herdr-comms/assets/herdr_ready.py",
+   ".agents/skills/herdr-comms/assets/herdr_scope.py",
+   "scripts/correction_lanes.py",
+   "scripts/gate_time.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/lane_reflection.py",
+   "scripts/lane_reporting.py",
+   "scripts/octo-feather-handoff",
+   "scripts/octo-feather-lane",
+   "scripts/octo-feather-queued",
+   "scripts/octo-feather-reflect",
+   "scripts/pi-role",
+   "scripts/pi_sessions.py",
+   "scripts/start_lane.py",
+   "scripts/tracker_calls.py",
+   "tests/gate/kit/lane_start.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py",
+   "tests/gate/kit/testkit/herdr.py",
+   "tests/gate/kit/testkit/systemd.py"
+  ],
+  "tests/gate/kit/test_lane_verdict_rounds.py::test_declaration_check_shown": [
+   "evals/fixtures/quote-app-inline/src/app/__init__.py",
+   "scripts/check-behavior-smoke",
+   "scripts/correction_lanes.py",
+   "scripts/eval_grading.py",
+   "scripts/gate_time.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/lane_review.py",
+   "scripts/merge_ask.py",
+   "scripts/octo-feather-gate",
+   "scripts/octo-feather-lane",
+   "scripts/octo-feather-spec-status",
+   "scripts/pi-role",
+   "scripts/pr_git.py",
+   "scripts/pr_report.py",
+   "scripts/tracker_calls.py",
+   "templates/python/src/app/__init__.py",
+   "tests/gate/kit/lane_verdict_rounds.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py"
+  ],
+  "tests/gate/kit/test_lane_verdict_rounds.py::test_declaration_check_verdict": [
+   "evals/fixtures/quote-app-inline/src/app/__init__.py",
+   "scripts/check-behavior-smoke",
+   "scripts/correction_lanes.py",
+   "scripts/eval_grading.py",
+   "scripts/gate_time.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/lane_review.py",
+   "scripts/merge_ask.py",
+   "scripts/octo-feather-gate",
+   "scripts/octo-feather-lane",
+   "scripts/octo-feather-spec-status",
+   "scripts/pi-role",
+   "scripts/pr_git.py",
+   "scripts/pr_report.py",
+   "scripts/tracker_calls.py",
+   "templates/python/src/app/__init__.py",
+   "tests/gate/kit/lane_verdict_rounds.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py"
+  ],
+  "tests/gate/kit/test_lane_verdict_rounds.py::test_verdict_covers_lane": [
+   "evals/fixtures/quote-app-inline/src/app/__init__.py",
+   "scripts/check-behavior-smoke",
+   "scripts/correction_lanes.py",
+   "scripts/eval_grading.py",
+   "scripts/gate_time.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/lane_review.py",
+   "scripts/merge_ask.py",
+   "scripts/octo-feather-gate",
+   "scripts/octo-feather-lane",
+   "scripts/octo-feather-spec-status",
+   "scripts/pi-role",
+   "scripts/pr_git.py",
+   "scripts/pr_report.py",
+   "scripts/tracker_calls.py",
+   "templates/python/src/app/__init__.py",
+   "tests/gate/kit/lane_verdict_rounds.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py"
+  ],
+  "tests/gate/kit/test_lane_verdict_rounds.py::test_verdict_legacy_comment": [
+   "evals/fixtures/quote-app-inline/src/app/__init__.py",
+   "scripts/check-behavior-smoke",
+   "scripts/correction_lanes.py",
+   "scripts/eval_grading.py",
+   "scripts/gate_time.py",
+   "scripts/handoff_log.py",
+   "scripts/lane_cli.py",
+   "scripts/lane_review.py",
+   "scripts/merge_ask.py",
+   "scripts/octo-feather-gate",
+   "scripts/octo-feather-lane",
+   "scripts/octo-feather-spec-status",
+   "scripts/pi-role",
+   "scripts/pr_git.py",
+   "scripts/pr_report.py",
+   "scripts/tracker_calls.py",
+   "templates/python/src/app/__init__.py",
+   "tests/gate/kit/lane_verdict_rounds.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py"
+  ],
+  "tests/gate/kit/test_lane_verdict_rounds.py::test_verdict_range_refusals": [
+   "scripts/eval_grading.py",
+   "scripts/lane_cli.py",
+   "scripts/lane_review.py",
+   "scripts/octo-feather-lane",
+   "scripts/pr_git.py",
+   "scripts/pr_report.py",
+   "scripts/tracker_calls.py",
+   "tests/gate/kit/lane_verdict_rounds.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/gh.py"
+  ],
+  "tests/gate/kit/test_qa_analyst.py::test_comparison": [
+   "scripts/check-evals",
+   "scripts/pi-role",
+   "tests/fixtures/classify-stub/pi",
+   "tests/fixtures/install-check/pi",
+   "tests/fixtures/qc-judge/pi"
+  ],
+  "tests/gate/kit/test_qa_analyst.py::test_no_baseline": [
+   "scripts/check-evals",
+   "scripts/pi-role",
+   "tests/fixtures/classify-stub/pi",
+   "tests/fixtures/install-check/pi",
+   "tests/fixtures/qc-judge/pi"
+  ],
+  "tests/gate/kit/test_qa_analyst.py::test_variance": [
+   "scripts/check-evals",
+   "scripts/pi-role",
+   "tests/fixtures/classify-stub/pi",
+   "tests/fixtures/install-check/pi",
+   "tests/fixtures/qc-judge/pi"
+  ],
+  "tests/gate/kit/test_qa_stored.py::test_qa_baseline": [
+   "scripts/check-evals",
+   "scripts/pi-role",
+   "tests/fixtures/classify-stub/pi",
+   "tests/fixtures/install-check/pi",
+   "tests/fixtures/qc-judge/pi"
+  ],
+  "tests/gate/kit/test_qa_stored.py::test_qa_review": [
+   "scripts/check-evals",
+   "scripts/pi-role",
+   "tests/fixtures/classify-stub/pi",
+   "tests/fixtures/install-check/pi",
+   "tests/fixtures/qc-judge/pi"
+  ],
+  "tests/gate/kit/test_qa_stored.py::test_qa_runs": [
+   "scripts/check-evals",
+   "scripts/pi-role",
+   "tests/fixtures/classify-stub/pi",
+   "tests/fixtures/install-check/pi",
+   "tests/fixtures/qc-judge/pi"
+  ],
+  "tests/gate/kit/test_qa_summary.py::test_qa_summary_runs": [
+   "scripts/check-evals",
+   "scripts/pi-role",
+   "tests/fixtures/classify-stub/pi",
+   "tests/fixtures/install-check/pi",
+   "tests/fixtures/qc-judge/pi"
+  ],
+  "tests/gate/kit/test_start_relaunch.py::test_relaunch_busy": [
+   ".agents/skills/herdr-comms/assets/herdr_scope.py",
+   "scripts/director_relaunch.py",
+   "scripts/pi-role",
+   "tests/gate/kit/start_relaunch.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/herdr.py"
+  ],
+  "tests/gate/kit/test_start_relaunch.py::test_resume_same_session": [
+   ".agents/skills/herdr-comms/assets/herdr_scope.py",
+   "scripts/director_relaunch.py",
+   "scripts/pi-role",
+   "tests/gate/kit/start_relaunch.py",
+   "tests/gate/kit/testkit/__init__.py",
+   "tests/gate/kit/testkit/herdr.py"
+  ],
+  "tests/integrate.sh": [
+   "scripts/octo-feather-gate",
+   "scripts/pi-role"
+  ],
+  "tests/shape.sh": [
+   "scripts/check-gate-free",
+   "scripts/pi-role"
+  ]
+ },
+ "tags": {
+  "comms#acceptance-director-relaunch": [
+   "tests/gate/kit/test_start_relaunch.py::test_relaunch_report"
+  ],
+  "comms#acceptance-director-relaunch-busy": [
+   "tests/gate/kit/test_start_relaunch.py::test_relaunch_busy",
+   "tests/gate/kit/test_start_relaunch.py::test_relaunch_short_wait"
+  ],
+  "comms#acceptance-director-relaunch-own-scope": [
+   "tests/gate/kit/test_start_relaunch.py::test_relaunch_own_scope"
+  ],
+  "comms#acceptance-director-relaunch-same-session": [
+   "tests/gate/kit/test_start_relaunch.py::test_resume_same_session"
+  ],
+  "comms#acceptance-director-replace": [
+   "tests/gate/kit/test_start_relaunch.py::test_replace_report"
+  ],
+  "comms#acceptance-director-replace-outgoing": [
+   "tests/gate/kit/test_start_relaunch.py::test_replace_none",
+   "tests/gate/kit/test_start_relaunch.py::test_replace_outgoing"
+  ],
+  "comms#acceptance-director-worker-resume": [
+   "tests/gate/kit/test_herdr_messaging.py::test_director_worker_moved",
+   "tests/gate/kit/test_herdr_messaging.py::test_director_worker_resume",
+   "tests/gate/kit/test_herdr_messaging.py::test_lane_worker_resume[w0:p1]",
+   "tests/gate/kit/test_herdr_messaging.py::test_lane_worker_resume[w1:p1]"
+  ],
+  "comms#acceptance-parent-gone": [
+   "tests/gate/kit/test_herdr_messaging.py::test_parent_gone",
+   "tests/gate/kit/test_herdr_messaging.py::test_parent_relaunched_gone"
+  ],
+  "comms#acceptance-queued-completion": [
+   "tests/gate/kit/test_herdr_messaging.py::test_queued_completion"
+  ],
+  "comms#acceptance-reflect-files-route-owner": [
+   "tests/gate/kit/test_lane_correction_filer.py::test_lane_correction_route_owner"
+  ],
+  "comms#acceptance-reflect-recurrence-comments": [
+   "tests/gate/kit/test_lane_correction_filer.py::test_lane_correction_legacy_duplicates",
+   "tests/gate/kit/test_lane_correction_filer.py::test_lane_correction_legacy_quote",
+   "tests/gate/kit/test_lane_correction_filer.py::test_lane_correction_recorded_372",
+   "tests/gate/kit/test_lane_correction_filer.py::test_lane_correction_recurrence"
+  ],
+  "comms#acceptance-worker-ended": [
+   "tests/gate/kit/test_handoff_ended.py::test_worker_ended"
+  ],
+  "issue-lifecycle#acceptance-brownfield-full": [
+   "tests/integrate.sh"
+  ],
+  "issue-lifecycle#acceptance-ci-alongside": [
+   "tests/gate/kit/test_lane_ci_start.py::test_lane_ci_start_not_started",
+   "tests/gate/kit/test_lane_ci_start.py::test_lane_ci_start_refusals",
+   "tests/gate/kit/test_lane_ci_start.py::test_lane_ci_start_started"
+  ],
+  "issue-lifecycle#acceptance-ci-status-only": [
+   "tests/gate/kit/test_lane_merge_ask.py::test_merge_ask_ci_status_only",
+   "tests/gate/kit/test_lane_merge_ask.py::test_merge_ask_current_head_checks",
+   "tests/gate/kit/test_lane_merge_ask.py::test_merge_ask_current_head_identity"
+  ],
+  "issue-lifecycle#acceptance-correction-replay-missing": [
+   "tests/gate/kit/test_lane_correction_replay.py::test_correction_replay_contained",
+   "tests/gate/kit/test_lane_correction_replay.py::test_correction_replay_missing",
+   "tests/gate/kit/test_lane_correction_replay.py::test_correction_replay_read",
+   "tests/gate/kit/test_lane_correction_replay.py::test_correction_replay_recorded_1233"
+  ],
+  "issue-lifecycle#acceptance-correction-replay-shown": [
+   "tests/gate/kit/test_lane_correction_replay.py::test_correction_replay_contained",
+   "tests/gate/kit/test_lane_correction_replay.py::test_correction_replay_masked",
+   "tests/gate/kit/test_lane_correction_replay.py::test_correction_replay_recorded_1233",
+   "tests/gate/kit/test_lane_correction_replay.py::test_correction_replay_shown",
+   "tests/gate/kit/test_lane_correction_replay.py::test_correction_replay_untrue"
+  ],
+  "issue-lifecycle#acceptance-declaration-check-shown": [
+   "tests/gate/kit/test_lane_verdict_rounds.py::test_declaration_check_shown",
+   "tests/gate/kit/test_lane_verdict_rounds.py::test_declaration_check_verdict"
+  ],
+  "issue-lifecycle#acceptance-integrate-checkpoint": [
+   "tests/integrate.sh"
+  ],
+  "issue-lifecycle#acceptance-integrate-fast": [
+   "tests/integrate.sh"
+  ],
+  "issue-lifecycle#acceptance-lane-start": [
+   "tests/gate/kit/test_lane_start.py::test_lane_start_started"
+  ],
+  "issue-lifecycle#acceptance-lane-start-current-kit": [
+   "tests/gate/kit/test_lane_start.py::test_lane_start_behind_kit"
+  ],
+  "issue-lifecycle#acceptance-lane-start-exists": [
+   "tests/gate/kit/test_lane_start.py::test_lane_start_exists"
+  ],
+  "issue-lifecycle#acceptance-lane-start-files": [
+   "tests/gate/kit/test_lane_start.py::test_lane_start_files"
+  ],
+  "issue-lifecycle#acceptance-lane-start-rerun": [
+   "tests/gate/kit/test_lane_start.py::test_lane_start_rerun",
+   "tests/gate/kit/test_lane_start.py::test_lane_start_unknown_send"
+  ],
+  "issue-lifecycle#acceptance-lane-start-sub-issue": [
+   "tests/gate/kit/test_lane_start.py::test_lane_start_sub_issue"
+  ],
+  "issue-lifecycle#acceptance-merge-ask-full-proof": [
+   "tests/gate/kit/test_lane_merge_ask.py::test_merge_ask_full_pass"
+  ],
+  "issue-lifecycle#acceptance-merge-ask-siblings": [
+   "tests/gate/kit/test_lane_merge_order.py::test_merge_ask_siblings"
+  ],
+  "issue-lifecycle#acceptance-one-head-hunks": [
+   "tests/gate/kit/test_lane_merge_ask_hunks.py::test_merge_ask_one_head_hunks"
+  ],
+  "issue-lifecycle#acceptance-pilot-full": [
+   "tests/integrate.sh"
+  ],
+  "issue-lifecycle#acceptance-pilot-pr": [
+   "tests/lane-pilot-pr.sh"
+  ],
+  "issue-lifecycle#acceptance-reflection-missed-lane": [
+   "tests/gate/kit/test_lane_correction_filer.py::test_lane_correction_reflection_missed"
+  ],
+  "issue-lifecycle#acceptance-review-resolution": [
+   "tests/gate/kit/test_lane_review_resolution.py::test_lane_review_resolution"
+  ],
+  "issue-lifecycle#acceptance-verdict-covers-lane": [
+   "tests/gate/kit/test_lane_verdict_rounds.py::test_verdict_covers_lane",
+   "tests/gate/kit/test_lane_verdict_rounds.py::test_verdict_legacy_comment",
+   "tests/gate/kit/test_lane_verdict_rounds.py::test_verdict_range_refusals"
+  ],
+  "quality#acceptance-fast-diff-base": [
+   "tests/gate/kit/test_fast_map.py::test_fast_counts_since_main"
+  ],
+  "quality#acceptance-fast-map-behind": [
+   "tests/gate/kit/test_fast_map.py::test_fast_names_map_behind_main"
+  ],
+  "quality#acceptance-fast-map-slot-free": [
+   "tests/gate/kit/test_fast_map.py::test_fast_chooses_from_its_map",
+   "tests/gate/kit/test_fast_map.py::test_fast_map_takes_no_slot"
+  ],
+  "quality#acceptance-map-after-merge": [
+   "tests/gate/kit/test_fast_map.py::test_fast_map_since_newest",
+   "tests/gate/kit/test_lane_post_merge_map.py::test_post_merge_maps_the_merge"
+  ],
+  "quality#acceptance-map-build-failed": [
+   "tests/gate/kit/test_lane_post_merge_map.py::test_post_merge_map_build_failed"
+  ],
+  "quality#acceptance-map-full-daily": [
+   "tests/gate/kit/test_lane_post_merge_map.py::test_post_merge_maps_full_daily"
+  ],
+  "quality#acceptance-one-execution": [
+   "tests/gate/kit/test_qc_one_execution.py::test_two_specs"
+  ],
+  "quality#acceptance-qa-analyst": [
+   "tests/gate/kit/test_qa_analyst.py::test_comparison",
+   "tests/gate/kit/test_qa_analyst.py::test_no_baseline",
+   "tests/gate/kit/test_qa_analyst.py::test_variance",
+   "tests/gate/kit/test_qa_summary.py::test_qa_summary_kits"
+  ],
+  "quality#acceptance-qa-baseline": [
+   "tests/gate/kit/test_qa_stored.py::test_qa_baseline",
+   "tests/gate/kit/test_qa_summary.py::test_qa_summary_kits"
+  ],
+  "quality#acceptance-qa-cost": [
+   "tests/gate/kit/test_qa_stored.py::test_qa_baseline"
+  ],
+  "quality#acceptance-qa-repeats": [
+   "tests/gate/kit/test_qa_stored.py::test_qa_runs",
+   "tests/gate/kit/test_qa_summary.py::test_qa_summary_runs"
+  ],
+  "quality#acceptance-qa-review": [
+   "tests/gate/kit/test_qa_stored.py::test_qa_review"
+  ],
+  "quality#acceptance-qc-carry": [
+   "tests/qc-carry.sh"
+  ],
+  "quality#acceptance-qc-sandbox-maintained": [
+   "tests/gate/kit/test_qc_sandbox_gone.py::test_repo_gone",
+   "tests/gate/kit/test_qc_sandbox_gone.py::test_repo_recreated",
+   "tests/gate/kit/test_qc_sandbox_gone.py::test_worktrees_gone"
+  ],
+  "roles#acceptance-codemode-every-role": [
+   "tests/web-tools.sh"
+  ],
+  "roles#acceptance-fresh-independent-worker": [
+   "tests/gate/kit/test_herdr_messaging.py::test_fresh_worker_session"
+  ],
+  "roles#acceptance-shaper-launch": [
+   "tests/shape.sh"
+  ],
+  "roles#acceptance-task-worker-route": [
+   "tests/gate/kit/test_herdr_messaging.py::test_worker_route"
+  ]
+ },
+ "tree": "a17be240e5d061ab4259c9b2f8fdf62ebeea17b6"
+}
