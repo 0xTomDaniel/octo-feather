@@ -2,7 +2,8 @@
 # Integration test for herdr-spawn and pi-role vs Pi's project trust dialog
 # (issue #3): drives herdr-spawn's CLI with a fake herdr first on PATH
 # (tests/fixtures/herdr-spawn/) and pi-role headless with a fake pi. Resuming a
-# parked agent through herdr-say (issue #9): tests/herdr-say-resume.sh. No real
+# parked agent through herdr-say (issue #9): tests/herdr-say-resume.sh. A trust
+# dialog that opens anyway: tests/herdr-spawn-dialog.sh. No real
 # herdr, pi or state dir. Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -97,7 +98,9 @@ filed="$(echo body | env -i "${tabenv[@]}" PATH="$t/key:$(sed -n 's/^PATH=//p' "
 shims="$(mise doctor --json | jq -r .dirs.shims)"; g="$kit/scripts/stash-guard"
 kitpath="$kit/.agents/skills/herdr-comms/assets:$kit/scripts"; ub="$HOME/.local/bin"   # ub: the fallback, last
 grep -qF ":$g:" "$t/ok/tab-env" || fail "tab PATH in a repo without mise.toml lacks the stash guard $g: $(grep ^PATH= "$t/ok/tab-env")"
-grep -qxF "PATH=$kitpath:$t/bin:$PATH:$ub" <(sed "s|:$g:|:|" "$t/ok/tab-env") || fail "tab PATH in a repo without mise.toml changed: $(grep ^PATH= "$t/ok/tab-env")"
+# A caller PATH that already holds $g (a gate under an agent's launch PATH: CI's) has it moved, not added (#1322).
+bare=":$PATH:"; bare="${bare//:$g:/:}"; bare="${bare#:}"; bare="${bare%:}"
+grep -qxF "PATH=$kitpath:$t/bin:$bare:$ub" <(sed "s|:$g:|:|" "$t/ok/tab-env") || fail "tab PATH in a repo without mise.toml changed: $(grep ^PATH= "$t/ok/tab-env")"
 mkdir -p "$t/mbin"; ln -sf "$(command -v mise)" "$t/mbin/mise"; ln -sf "$(command -v jq)" "$t/mbin/jq"
 printf '[tools]\n' >"$t/cwd/mise.toml"
 spawn made PATH="$t/bin:$t/mbin:/usr/local/bin:/usr/bin:/bin"
@@ -124,34 +127,9 @@ for mt in "" mise; do   # without and with a mise.toml (pi-role's "path")
   rm -f "$t/cwd/mise.toml"
 done
 
-# 2. A trust dialog that opens anyway is never answered: exit 69, zero keys,
-#    tab closed, pane text on stderr.
-spawn dialog FAKE_HERDR_FORCE_DIALOG=1
-[[ "$rc" == 69 ]] || fail "forced dialog: exit $rc, want 69: $(cat "$t/dialog/err")"
-[[ ! -s "$t/dialog/keys" ]] || fail "forced dialog: keys sent: $(tr '\n' ' ' <"$t/dialog/keys")"
-grep -qx 'w9:t1' "$t/dialog/closed" 2>/dev/null || fail "forced dialog: tab not closed"
-grep -q 'Trust project folder?' "$t/dialog/err" || fail "forced dialog: pane text not on stderr: $(cat "$t/dialog/err")"
-
-# 2b. Same when the pane read fails after the detecting read: the report shows
-#     the text already read, and close and 69 still run.
-spawn dialog-readfail FAKE_HERDR_FORCE_DIALOG=1 FAKE_HERDR_READS_OK=1
-armed dialog-readfail 1
-[[ "$rc" == 69 ]] || fail "dialog then failed read: exit $rc, want 69: $(cat "$t/dialog-readfail/err")"
-[[ ! -s "$t/dialog-readfail/keys" ]] || fail "dialog then failed read: keys sent"
-grep -qx 'w9:t1' "$t/dialog-readfail/closed" 2>/dev/null || fail "dialog then failed read: tab not closed"
-grep -q 'Trust project folder?' "$t/dialog-readfail/err" || fail "dialog then failed read: detected text not on stderr"
-
-# 2c. The "did not clear" path (a non-Pi dialog that stays open) keeps the same
-#     guarantee when the pane read fails after the last detecting read.
-spawn stuck FAKE_HERDR_FORCE_DIALOG=other HERDR_SPAWN_TRUST_RETRIES=1 FAKE_HERDR_READS_OK=4
-armed stuck 4
-[[ "$rc" == 69 ]] || fail "stuck dialog then failed read: exit $rc, want 69: $(cat "$t/stuck/err")"
-grep -qx 'w9:t1' "$t/stuck/closed" 2>/dev/null || fail "stuck dialog then failed read: tab not closed"
-grep -q 'Quick safety check' "$t/stuck/err" || fail "stuck dialog then failed read: detected text not on stderr"
-
 # 3. Headless pi-role passes --approve too (fake pi records its argv).
 printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@" >"%s/pi-argv"\n' "$t" >"$t/bin/pi"; chmod +x "$t/bin/pi"
 (cd "$t/cwd" && PATH="$t/bin:$PATH" "$kit/scripts/pi-role" "$kit/agents/implementer.md" -p brief)
 grep -qx -- --approve "$t/pi-argv" || fail "headless pi-role argv lacks --approve"
 
-echo "herdr-spawn: ok (pane and headless launch carry --approve; pi-role runs in --cwd (its tracker, not the caller's); LINEAR_API_KEY reaches the tab only from the caller's env, mise's shims before the system dirs on the tab's PATH in a mise.toml repo (none elsewhere or without mise), the caller's stub pi before ~/.local/bin's (its fallback, last), in no written file, files a ticket in the Linear stand-in; Pi trust dialog fails closed, exit 69, no key, also on a failed read; did-not-clear closes on a failed read)"
+echo "herdr-spawn: ok (pane and headless launch carry --approve; pi-role runs in --cwd (its tracker, not the caller's); LINEAR_API_KEY reaches the tab only from the caller's env, mise's shims before the system dirs on the tab's PATH in a mise.toml repo (none elsewhere or without mise), the caller's stub pi before ~/.local/bin's (its fallback, last), in no written file, files a ticket in the Linear stand-in)"
