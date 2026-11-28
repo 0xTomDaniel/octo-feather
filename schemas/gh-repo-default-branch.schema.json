@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gh-repo-default-branch.schema.json",
+  "title": "gh repo view --json defaultBranchRef: the default branch octo-feather-lane digest lists merges into (issue-lifecycle spec #gates-digest)",
+  "description": "Validated by scripts/merge_digest.py (_merged) before it trusts the answer; gh prints exactly the field asked, so no other key is allowed.",
+  "type": "object",
+  "required": ["defaultBranchRef"],
+  "properties": {
+    "defaultBranchRef": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {"name": {"description": "The default branch's name", "type": "string", "minLength": 1}},
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

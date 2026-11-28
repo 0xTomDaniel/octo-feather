@@ -3194,10 +3194,13 @@ def drive_merge_tiers(f: Feature) -> None:
 
 def digest_cases(f: Feature, sc: Path, rec: Path, base: dict[str, str], store: Path,  # noqa: PLR0913, PLR0917
                  git: Callable[..., str], lane_cmd: Callable[..., None]) -> None:
-    """The merge digest (issue 1339) on the realcase's recorded day 2026-11-28 (tests/gate/kit/lane_digest.py's
-    world): lane gh49 merges PR #51 (tier 1), lane gh50 PR #52 (tier 2, one clarifies call), each through `merge` from
-    its supervisor's pane, then `digest 2026-11-28`; the testkit's gh answers only the three recordings, in run order.
-    origin.git's main is set where GitHub's stood before each merge (the fake gh's merge moves no git)."""
+    """The merge digest (issues 1339, 1340) on the realcase's recorded day 2026-11-28 (tests/gate/kit/lane_digest.py's
+    world): lane gh49 merges PR #51 (tier 1) on 2026-11-28, lane gh50 PR #52 (tier 2, one clarifies call) the next day,
+    each through `merge` from its supervisor's pane, the second telling the director the digest of 2026-11-28 is due;
+    then `digest 2026-11-28`, `digest` with no DAY (the due day), `digest --sent` from the supervisor's pane
+    (refused) and the director's, and `digest` again (none due). The testkit's gh answers only the three recordings,
+    the digest's reads once per digest made; the testkit's clock (testkit/clock/sitecustomize.py) sets each command's
+    day. origin.git's main is set where GitHub's stood before each merge (the fake gh's merge moves no git)."""
     w = sc / "world-digest"
     st = w / "state" / "octo-feather"
     (st / "lanes").mkdir(parents=True)
@@ -3218,7 +3221,7 @@ def digest_cases(f: Feature, sc: Path, rec: Path, base: dict[str, str], store: P
                  ["git", "clone", "-q", "--bare", str(rec / "realcase-gh1337.bundle"), str(origin)],
                  ["git", "clone", "-q", str(origin), str(repo)]):
         subprocess.run(argv, check=True, capture_output=True, env=case_env(base))
-    tapes = [r for t in ("lane-merge-digest-51", "lane-merge-digest-52", "lane-digest-1339")
+    tapes = [r for t in ("lane-merge-digest-51", "lane-merge-digest-52", *["lane-digest-1339"] * 3)
              for r in json.loads((rec / f"{t}.json").read_text())]
     (store / "tape.json").write_text(json.dumps(tapes))
     (store / "log").write_text("")
@@ -3230,18 +3233,26 @@ def digest_cases(f: Feature, sc: Path, rec: Path, base: dict[str, str], store: P
     m1, m2 = merged(51), merged(52)
     git(repo, "checkout", "-q", "-B", "main", f"{m1}^1")
     git(repo, "update-ref", "refs/remotes/origin/main", f"{m1}^1")
+    clock = str(rec.parent / "clock")   # the testkit's clock stand-in, beside its recordings
     env = base | {"XDG_STATE_HOME": str(w / "state"), "OCTO_FEATHER_QC_DIR": str(w / "qc"),
-                  "OCTO_FEATHER_KIT_INSTALL": str(ki), "FAKE_HERDR": str(w / "herdr"), "HERDR_SESSION": ""}
-    for name, lane, pr, branch, at in (("digest-merge-tier1", "gh49", 51, "gh1337-tier1", m1),
-                                       ("digest-merge-tier2", "gh50", 52, "gh1337-tier2", m2)):
+                  "OCTO_FEATHER_KIT_INSTALL": str(ki), "FAKE_HERDR": str(w / "herdr"), "HERDR_SESSION": "",
+                  "PYTHONPATH": clock, "TESTKIT_NOW": "2026-11-29T08:00:00Z"}
+    due = (f"zd1:p1\tmerge digest due for 2026-11-28: octo-feather-lane digest --repo {REALCASE}, send its text to the "
+           f"owner, then octo-feather-lane digest --repo {REALCASE} --sent <sha12>\n")
+    for name, lane, pr, branch, at, now in (("digest-merge-tier1", "gh49", 51, "gh1337-tier1", m1, "2026-11-28T03:29:00Z"),
+                                            ("digest-merge-tier2", "gh50", 52, "gh1337-tier2", m2, env["TESTKIT_NOW"])):
         git(origin, "update-ref", "refs/heads/main", at)
         head = git(repo, "rev-parse", f"origin/{branch}")
         pane = panes[lane][0]
-        lane_cmd(name, repo, env | {"HERDR_WORKSPACE_ID": pane.split(":")[0]}, pane, "merge", str(pr), head[:12],
-                 "--repo", REALCASE)
+        lane_cmd(name, repo, env | {"HERDR_WORKSPACE_ID": pane.split(":")[0], "TESTKIT_NOW": now}, pane, "merge",
+                 str(pr), head[:12], "--repo", REALCASE)
+        prompts = w / "herdr" / "prompts"
+        f.obs(name, "told", "".join(x + "\n" for x in (prompts.read_text().splitlines() if prompts.is_file() else [])
+                                    if "merge digest due" in x))
         f.check(name, lambda c, n=pr, h=head, ln=lane: c.code == 0 and c.o["gh-merges"].endswith(   # one log, both
                 f"pr merge {n} --merge --match-head-commit {h} -R {REALCASE}\n")
-                and f"merged: PR #{n} at head {h[:12]} (lane {ln})" in c.out.splitlines())
+                and f"merged: PR #{n} at head {h[:12]} (lane {ln})" in c.out.splitlines()
+                and c.o["told"] == ("" if n == 51 else due))   # today is never due; the next day's merge tells it
     calls = len((store / "log").read_text().splitlines())
     lane_cmd("digest", repo, env, "zd1:p1", "digest", "2026-11-28", "--repo", REALCASE)
     f.obs("digest", "gh-calls", "".join(x + "\n" for x in (store / "log").read_text().splitlines()[calls:]))
@@ -3253,7 +3264,45 @@ def digest_cases(f: Feature, sc: Path, rec: Path, base: dict[str, str], store: P
         x.startswith("#51 ") and "(tier 1, merged 03:29Z) " in x for x in c.out.splitlines()) and any(
         x.startswith("#52 ") and "(tier 2, merged 03:30Z) " in x for x in c.out.splitlines())
         and all(x in c.out.splitlines() for x in full) and any(
-        x.startswith("#53 ") and "(tier not recorded: no merge record) " in x for x in c.out.splitlines()))
+        x.startswith("#53 ") and "(tier not recorded: no merge record) " in x for x in c.out.splitlines())
+        and sha_line(c.out))
+    day = (f.d / "digest.stdout").read_text()
+    sha = day.rstrip("\n").rpartition("\nsha256 ")[2]
+    log = st / "director.handoffs.jsonl"
+
+    def digest_lines() -> str:
+        return "".join(x + "\n" for x in (log.read_text().splitlines() if log.is_file() else []) if '"digest"' in x)
+
+    def gh_since(name: str, n: int) -> None:
+        f.obs(name, "gh-calls", "".join(x + "\n" for x in (store / "log").read_text().splitlines()[n:]))
+        f.obs(name, "digests", digest_lines())
+
+    calls = len((store / "log").read_text().splitlines())
+    lane_cmd("digest-due", repo, env, "zd1:p1", "digest", "--repo", REALCASE)
+    gh_since("digest-due", calls)
+    f.check("digest-due", lambda c: c.code == 0 and c.out == day and c.o["gh-calls"] == "".join(
+        str(r["request"]) + "\n" for r in tapes[-2:]))   # no DAY: the one due day, 2026-11-28, as named
+    calls = len((store / "log").read_text().splitlines())
+    lane_cmd("digest-sent-refused", repo, env, "zt1:p1", "digest", "--repo", REALCASE, "--sent", sha)
+    gh_since("digest-sent-refused", calls)
+    f.check("digest-sent-refused", lambda c: c.code == 1 and "only the director records a digest sent" in c.err
+            and c.o["gh-calls"] == "" and c.o["digests"] == "")
+    lane_cmd("digest-sent", repo, env, "zd1:p1", "digest", "--repo", REALCASE, "--sent", sha)
+    gh_since("digest-sent", calls)
+    f.check("digest-sent", lambda c: c.code == 0 and [
+        {k: v for k, v in json.loads(x).items() if k != "at"} for x in c.o["digests"].splitlines()] == [
+        {"kind": "digest", "repo": REALCASE, "days": ["2026-11-28"], "prs": [51, 52, 53],
+         "sha256": hashlib.sha256(day.rstrip("\n").rpartition("\n\nsha256 ")[0].encode()).hexdigest(), "sent": True}])
+    calls = len((store / "log").read_text().splitlines())
+    lane_cmd("digest-none", repo, env, "zd1:p1", "digest", "--repo", REALCASE)
+    gh_since("digest-none", calls)
+    f.check("digest-none", lambda c: c.code == 0 and c.out.startswith("No merge digest due (") and c.o["gh-calls"] == "")
+
+
+def sha_line(out: str) -> bool:
+    """Whether OUT ends with `sha256 <12 hex>`, the sha256 of the text above it after one blank line."""
+    text, _, sha = out.rstrip("\n").rpartition("\n\nsha256 ")
+    return bool(text) and sha == hashlib.sha256(text.encode()).hexdigest()[:12]
 
 
 def drive_pilot_pr(f: Feature) -> None:

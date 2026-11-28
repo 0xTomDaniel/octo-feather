@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn, cast
 
+import merge_digest
 from correction_lanes import DIRECTOR_LOG
 from handoff_log import encode
 from tracker_calls import gh, tracker
@@ -489,7 +490,17 @@ def write(path: Path, text: str, mode: str, made: str, err: type[Exception]) -> 
 def start(args: list[str], lanes: Path, err: type[Exception]) -> str:
     """Start the lane ARGS name, its record in LANES (the session's lanes dir); the line to print.
     Every failure raises ERR naming its step and what the start made so far; a rerun continues
-    from that step, each done one skipped (stopped, Kept)."""
+    from that step, each done one skipped (stopped, Kept). First, the merge digest's due line when
+    any day is due (merge_digest.due, every record's), printed whatever the start does after; a
+    check that fails is named on stderr and the start goes on."""
+    try:
+        due = merge_digest.due(lanes.parent, None, err)
+    except err as e:
+        sys.stderr.write(f"octo-feather-lane start: digest due check: {e}\n")
+        due = None
+    if due:
+        sys.stdout.write(f"{due.line}\n")
+        sys.stdout.flush()
     ask = parse(args, err)
     lane = read(ask, err)
     wt, top = lane.worktree, lane.checkout
