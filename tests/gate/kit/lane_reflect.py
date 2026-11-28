@@ -336,5 +336,26 @@ def refusals(s: Scratch) -> None:
     changes(ls)
 
 
+def malformed(s: Scratch) -> None:
+    """A hand-off log line with a wrong-typed field (its session an object, #1131): archive
+    refuses naming the log, the line number and the field, no traceback, every file in place."""
+    ls = Lanes(s)
+    ls.seed("gh9")
+    log = ls.lanes / "gh9.handoffs.jsonl"
+    with log.open("a") as f:
+        f.write(
+            '{"at":"2026-10-28T00:20:00Z","kind":"parked","pane":"w9:p2","session":{"id":"x"}}\n'
+        )
+    lines = log.read_text().splitlines()
+    log.write_text("\n".join([lines[0], lines[2], lines[1]]) + "\n")  # the bad line is line 2
+    before = tree(ls.top)
+    out, seen = ls.lane("archive", "gh9", want=1)
+    assert "Traceback" not in out, f"traceback: {out}"
+    for word in ("gh9.handoffs.jsonl", "line 2", "session"):
+        assert word in out, f"refusal does not name {word!r}: {out}"
+    assert not seen, "the lane reflector ran on a malformed log"
+    assert tree(ls.top) == before, "the refusal changed files"
+
+
 if __name__ == "__main__":
-    main(alone, archive_findings, refusals)
+    main(alone, archive_findings, refusals, malformed)

@@ -224,8 +224,11 @@ line's fields: comms spec `#handoff-fields`.
 ## Send a message
 
 ```
-herdr-say [--timeout SECONDS] TARGET MESSAGE
+herdr-say [--timeout SECONDS] TARGET [MESSAGE]
 ```
+
+No MESSAGE: it comes from stdin, `herdr-say --parent < report.md` (the
+script's header).
 
 Wraps `herdr agent prompt TARGET TEXT --wait --until working --until idle
 --timeout MS`. A send never hangs or fails silently (#666): the wait is bounded
