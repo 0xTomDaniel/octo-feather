@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """The parity lever (#577, #606): a rewritten kit test catches what the test it replaces caught.
 
-  tests/parity/lever.py CASE
+  tests/parity/lever.py [--background] CASE
 
 CASE is a dir here, tests/parity/CASE/: case.toml names the old test (`old`, a tests/*.sh
 path or a pytest item id PATH::ITEM, and `old_at`, a commit holding it, as it is gone from HEAD
@@ -47,6 +47,21 @@ line N: X: No such file or directory" or "... command not found" from the old te
 file it sources (a failed `source` lets a test carry on without its library, print its pass
 line and exit 0).
 
+Restoring (#1361, #953): the old test and every file of its `needs` come out of old_at by git
+itself (`git checkout OLD_AT -- PATH...` in the copy, which holds old_at through refs/kit/head),
+never as blob bytes written by the lever, so each keeps the mode and the link git holds there: an
+executable stand-in stays executable, a symlink stays a symlink to its target. Each restored path
+is then checked on disk against old_at's tree (mode 100755 executable, 100644 not, 120000 a
+symlink); one git cannot reproduce faithfully (a submodule, mode 160000, or a checkout that lands
+another kind) is refused, naming it.
+
+No network (#1343, owner ruling 2026-11-28): every old and new run goes through bubblewrap
+(`bwrap --dev-bind / / --unshare-net`, the tool the qc sandbox's srt drives for its network
+namespace): the same files and user, in a network namespace of its own holding only its own
+loopback, so no route out exists (a test reaching for a host, a proxy or a server on the
+caller's loopback fails to connect); uv runs offline from its cache, and mise and just from their
+installs, as the gate always does. Without a working bwrap the lever refuses to run at all.
+
 Re-anchoring (#1154): when scripts/check-parity names a case's patch, the change that moved its
 code remakes that patch against the code as it now is, seeding the same defect (and points the
 case's `ran` at the file it now patches), then runs `tests/parity/lever.py CASE` to exit 0; a
@@ -62,18 +77,44 @@ branch holds them and the gate judges no item of the run as changed (what counts
 the lever's own copy is so committed; a real gate run reads no new variable, flag or option and
 still judges every changed item.
 
-The caller's GATE_WORKERS reaches each run. The copy: under the git common dir's
-octo-feather/, removed after, as is the runs' own mise state dir (the caller's is never
-written); each run's output: in the log dir printed last, kept.
+Background (--background, #1368; owner ruling 2026-11-28 #1343, director's terms #1343
+issuecomment-7240021242): for a pass running the lever beside lanes' work (the parity survey, the
+weekly parity pass). The lever and every run it starts go at the lowest priority (nice 19,
+ionice's idle class), single-process (GATE_WORKERS 0: the copy's `just test` runs pytest -n 0, no
+xdist worker), and take no fast-run turn (tests/gate/heavy_slot.py, fast_runs), so no lane's
+`just fast` waits behind them: the lever writes its own run record, lever-PID.run.json (pid, cwd,
+since, case), in the box's slots dir (${XDG_STATE_HOME:-~/.local/state}/octo-feather/slots,
+octo-feather-slot --help, Files), removed when it ends, and a fast-tier run started under it is
+nested by heavy_slot.py's own rule (an ancestor's record there) and takes none. The record is in
+the slots dir every run's is, so the run stays visible to the slot's records; only the lever's own
+runs descend from it, and a real gate run reads no new variable, flag or option. The fast-run cap
+guards memory (five fast runs at once got earlyoom kills on this 15 GiB box, lane gh1186), so
+before the case starts the lever reads the box's available memory (/proc/meminfo MemAvailable)
+and waits while it is under the floor, 3 GiB, printing its check, and each wait's start, end and
+the memory seen (read every 5 s). The floor: a whole background run's peak memory, measured as
+its own cgroup's memory.peak (page cache included) from a scope round it (`systemd-run --user
+--scope -p MemoryAccounting=yes -- tests/parity/lever.py --background CASE`, the scope's
+memory.peak read as the lever exits; 2026-11-28, this box): 540 MiB for check-ts (tsc and eslint,
+the box's heaviest tools), 236 MiB for lane-correction-counts. Once such a run takes its peak, a
+3 GiB start leaves about 2.4 GiB available, three times the line where this box's earlyoom starts
+killing (-m 5: 5% of 15.6 GiB, 0.8 GiB), the margin covering what others start while it runs, as
+the floor is read only at the start. An old test marked e2e is no fast-tier run and still asks the
+heavy slot (heavy_slot.py).
+
+The caller's GATE_WORKERS reaches each run (but under --background). The copy: under the git
+common dir's octo-feather/, removed after, as is the runs' own mise state dir (the caller's is
+never written); each run's output: in the log dir printed last, kept.
 """
 
 import json
 import os
 import re
 import shutil
+import stat
 import subprocess
 import sys
 import tempfile
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn, cast
@@ -93,11 +134,17 @@ DROP = (
 # Git with the copy's commit identity; COPY: the copy's first commit, every run's start.
 GIT = ["git", "-c", "user.name=lever", "-c", "user.email=lever@t", "-c", "commit.gpgsign=false"]
 COPY = "refs/lever/copy"
+# Every old and new run's prefix: the same files, in a network namespace of its own (--help).
+OFFLINE = ["bwrap", "--dev-bind", "/", "/", "--unshare-net", "--die-with-parent", "--"]
 # What an old test names under tests/: a sourced file beside it, a kit path.
 SOURCED = re.compile(
     r'^\s*(?:source|\.)\s+"\$\(dirname "\$(?:0|\{BASH_SOURCE\[0\]\})"\)/([^"]+)"', re.MULTILINE
 )
 KIT_PATH = re.compile(r'\$\{?kit\}?"?/(tests/[A-Za-z0-9_./-]+)')
+# --background (--help, Background): the switch, the memory floor (GiB) and how often a wait reads.
+BACKGROUND = "--background"
+FLOOR_GIB = 3
+POLL_SECONDS = 5
 
 
 class RefusedError(Exception):
@@ -144,16 +191,83 @@ def copy(dest: Path) -> None:
     subprocess.run([*GIT, *fetch], cwd=dest, capture_output=True, check=True)
 
 
+def lowest() -> None:
+    """The lever, and every process it starts, at the lowest processor and disk priority; its
+    runs single-process (--help, Background)."""
+    os.setpriority(os.PRIO_PROCESS, 0, 19)
+    subprocess.run(["ionice", "-c", "3", "-p", str(os.getpid())], check=True)  # noqa: S607
+    os.environ["GATE_WORKERS"] = "0"
+    sys.stdout.write("lever: background: nice 19, idle IO, GATE_WORKERS 0, no fast-run turn\n")
+
+
+def available() -> float:
+    """The box's MemAvailable (/proc/meminfo), in GiB."""
+    m = re.search(r"^MemAvailable:\s+(\d+) kB$", Path("/proc/meminfo").read_text(), re.MULTILINE)
+    if m is None:
+        refuse("/proc/meminfo has no MemAvailable: the memory floor cannot be read")
+    return int(m[1]) / 2**20
+
+
+def memory_floor() -> None:
+    """Waited while MemAvailable is under FLOOR_GIB, the check and each wait printed."""
+    seen = available()
+    floor = f"the floor {FLOOR_GIB} GiB"
+    if seen >= FLOOR_GIB:
+        sys.stdout.write(f"lever: memory: MemAvailable {seen:.1f} GiB, {floor}: no wait\n")
+        sys.stdout.flush()
+        return
+    start, since = time.monotonic(), time.strftime("%Y-%m-%dT%H:%M:%S%z")
+    sys.stdout.write(
+        f"lever: memory: waiting from {since}: MemAvailable {seen:.1f} GiB, under {floor}\n"
+    )
+    sys.stdout.flush()
+    while seen < FLOOR_GIB:
+        time.sleep(POLL_SECONDS)
+        seen = available()
+    sys.stdout.write(
+        f"lever: memory: wait ended {time.strftime('%Y-%m-%dT%H:%M:%S%z')} after "
+        f"{time.monotonic() - start:.0f} s: MemAvailable {seen:.1f} GiB, {floor}\n"
+    )
+    sys.stdout.flush()
+
+
+def turnless(name: str) -> Path | None:
+    """The lever's run record in the box's slots dir: a fast-tier run under it takes no fast-run
+    turn (--help, Background). None where the dir cannot be made or written: heavy_slot.py takes no
+    turn there either."""
+    state = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
+    rec = state / "octo-feather" / "slots" / f"lever-{os.getpid()}.run.json"
+    since = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    run = {"pid": os.getpid(), "cwd": str(Path.cwd()), "since": since, "case": name}
+    try:
+        rec.parent.mkdir(parents=True, exist_ok=True)
+        rec.write_text(json.dumps(run))
+    except OSError:
+        return None
+    return rec
+
+
+def offline() -> None:
+    """Refused unless OFFLINE starts a command here: no run goes with the caller's network."""
+    p = subprocess.run([*OFFLINE, "true"], capture_output=True, check=False)
+    if p.returncode:
+        refuse(f"bwrap cannot give a run a network of its own here: {p.stderr.decode().strip()}")
+
+
 def old_files(old: str, old_at: str, needs: list[str]) -> dict[str, bytes]:
     """The old test and each file of NEEDS (a dir: every file under it) at OLD_AT, by path;
-    refused when OLD_AT lacks one."""
+    refused when OLD_AT lacks one, or holds a submodule there (git restores none faithfully)."""
     out: dict[str, bytes] = {}
     for n in [old.partition("::")[0], *needs]:
-        listed = git("ls-tree", "-r", "--name-only", old_at, "--", n).stdout.decode().split()
-        if not listed:
+        tree = git("ls-tree", "-r", "-z", old_at, "--", n).stdout.decode().split("\0")
+        rows = [t.partition("\t") for t in filter(None, tree)]
+        if not rows:
             refuse(
                 f"{n} is not at {old_at}: drop it from needs, or set old_at to a commit holding it"
             )
+        if subs := [p for m, _, p in rows if m.startswith("160000")]:
+            refuse(f"{', '.join(subs)} at {old_at}: a submodule, which git restores as no file")
+        listed = [p for _, _, p in rows]
         for p in listed:
             body = at(old_at, p)
             assert body is not None, p
@@ -297,6 +411,32 @@ def check_ran(how: dict[str, str], trace: Trace | None, cov: set[str]) -> list[s
     return missing
 
 
+def restore(k: Path, old_at: str, paths: list[str]) -> None:
+    """PATHS checked out of OLD_AT into the copy K by git (mode and links as git holds them), then
+    each checked on disk against OLD_AT's tree; refused where one is not as git holds it."""
+    co = subprocess.run(
+        ["git", "--literal-pathspecs", "checkout", old_at, "--", *paths],  # noqa: S607
+        cwd=k,
+        capture_output=True,
+        check=False,
+    )
+    if co.returncode:
+        refuse(f"git checkout {old_at} in the copy: {co.stderr.decode().strip()}")
+    tree = git("--literal-pathspecs", "ls-tree", "-r", "-z", old_at, "--", *paths, cwd=k)
+    for meta, _, p in (t.partition("\t") for t in filter(None, tree.stdout.decode().split("\0"))):
+        mode, f = meta.split()[0], k / p
+        st = f.lstat() if os.path.lexists(f) else None
+        reg = st is not None and stat.S_ISREG(st.st_mode)
+        held = {
+            "120000": st is not None and stat.S_ISLNK(st.st_mode),
+            "100755": reg and st is not None and st.st_mode & 0o100 != 0,
+            "100644": reg and st is not None and st.st_mode & 0o100 == 0,
+        }.get(mode, False)
+        if not held:
+            got = stat.filemode(st.st_mode) if st else "nothing"
+            refuse(f"{p} is mode {mode} at {old_at}, restored as {got}: git cannot reproduce it")
+
+
 def settle(k: Path) -> None:
     """What the run adds to the copy (restored files, a defect) committed on its branch: the
     copy's default branch then holds it, so the gate judges none of it changed (--help, budget)."""
@@ -328,17 +468,13 @@ class Lever:
     files: dict[str, bytes]
 
     def run_old(self, name: str, how: dict[str, str] | None) -> int:
-        """The old test with FILES restored (committed, settle(): the coverage map sees it as the
-        kit's, the budget as unchanged);
+        """The old test with FILES restored by git (restore(); committed, settle(): the coverage
+        map sees it as the kit's, the budget as unchanged), with no network (OFFLINE);
         with HOW (the clean run), traced and measured, and refused unless it ran every file HOW
         names."""
         k, logs, files, old = self.k, self.logs, self.files, self.case["old"]
-        for p, body in files.items():
-            (k / p).parent.mkdir(parents=True, exist_ok=True)
-            (k / p).write_bytes(body)
+        restore(k, self.case["old_at"], sorted(files))
         item = "::" in old  # a pytest item id: run as itself, its file restored above
-        if not item:
-            (k / old).chmod(0o755)
         settle(k)
         log = logs / f"{name}.old.log"
         cmd = [
@@ -349,7 +485,7 @@ class Lever:
             old if item else f"tests/gate/test_gate.py::test_script[{old}]",
         ]
         if how is None:
-            return sh(cmd, k, log)
+            return sh([*OFFLINE, *cmd], k, log)
         with tempfile.TemporaryDirectory(prefix="lever-old-") as w:
             cov, tr = Path(w) / "cov", Path(w) / "trace"
             cov.mkdir()
@@ -386,7 +522,7 @@ class Lever:
                     str(tr / "t"),
                     *cmd,
                 ]
-            rc = sh(cmd, k, log, env)
+            rc = sh([*OFFLINE, *cmd], k, log, env)
             missing = check_ran(
                 how,
                 Trace(tr) if traced else None,
@@ -418,7 +554,8 @@ class Lever:
         reset(k)
         apply(k, patch)
         settle(k)
-        new_rc = sh(["just", "test", "-x", "-rA", case["new"]], k, logs / f"{name}.new.log")
+        new = [*OFFLINE, "just", "test", "-x", "-rA", case["new"]]
+        new_rc = sh(new, k, logs / f"{name}.new.log")
         reset(k)
         said = {0: "pass"}
         line = (
@@ -433,16 +570,20 @@ class Lever:
 
 
 def main() -> int:
-    if len(sys.argv) != 2 or sys.argv[1] in ("-h", "--help"):
+    args = sys.argv[1:]
+    background = BACKGROUND in args
+    if background:
+        args.remove(BACKGROUND)
+    if len(args) != 1 or args[0] in ("-h", "--help"):
         sys.stdout.write(__doc__ or "")
-        return 0 if len(sys.argv) == 2 else 2
-    d = ROOT / "tests" / "parity" / sys.argv[1]
+        return 0 if len(args) == 1 else 2
+    d = ROOT / "tests" / "parity" / args[0]
     if not (d / "case.toml").is_file():
-        sys.exit(f"lever: no case {sys.argv[1]}: no file {d / 'case.toml'}")
+        sys.exit(f"lever: no case {args[0]}: no file {d / 'case.toml'}")
     case = tomllib.loads((d / "case.toml").read_text())
     old, old_at = case["old"], case["old_at"]
     defects = sorted(d.glob("*.patch"))
-    logs = Path(tempfile.mkdtemp(prefix=f"parity-{sys.argv[1]}-"))
+    logs = Path(tempfile.mkdtemp(prefix=f"parity-{args[0]}-"))
     # The copy outside /tmp, where the kit itself lives: the qc sandbox makes /tmp private, so a
     # kit under /tmp holding a test's own kit copy under /tmp is a setup the real kit never has.
     common = git("rev-parse", "--path-format=absolute", "--git-common-dir").stdout.decode().strip()
@@ -456,8 +597,14 @@ def main() -> int:
         # where the link dangles once the copy goes (#664).
         os.environ["MISE_STATE_DIR"] = ms
         k = Path(t)
+        record = None
         try:
+            if background:
+                lowest()
+                memory_floor()
+                record = turnless(args[0])
             how = facts(case, defects)
+            offline()
             files = old_files(old, old_at, case.get("needs", []))
             copy(k)
             for b in unrestored(old, old_at, files, k):  # a hint only: the run's facts decide
@@ -471,6 +618,9 @@ def main() -> int:
         except RefusedError as e:
             sys.stderr.write(f"lever: refused: {e}\n")
             return 2
+        finally:
+            if record is not None:
+                record.unlink(missing_ok=True)
     want = [0] + [1] * len(defects)
     good = all(
         (o == 0) == (w == 0) and (n == 0) == (w == 0)

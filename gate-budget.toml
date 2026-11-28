@@ -23,3 +23,12 @@ eval_slots = 1
 slot_grace_seconds = 60
 # slot_bound_seconds: the slot queue's bound for a holder's first run (#977), what it means: octo-feather-slot --help.
 slot_bound_seconds = 1200
+# parity_pass_period_days, parity_pass_wall_seconds, parity_pass_cpu_seconds: the post-merge parity pass (#1363;
+# quality #acceptance-parity-pass-due, #acceptance-parity-pass-capped; what each means: octo-feather-lane --help,
+# post-merge step 5), read at the merge commit. The period: the first merge more than this many days after the last
+# pass began starts one (director's terms on #1343: weekly). The caps: a pass stops at either, the cases it did not
+# reach owed to the next. From #1343 issuecomment-7238566714: about 3.3 min wall per case, 115 cases, a full pass
+# about 6.5 h at nice 19, about half of it CPU; each cap about half a pass, so every case is proved within two passes.
+parity_pass_period_days = 7
+parity_pass_wall_seconds = 14400
+parity_pass_cpu_seconds = 7200
