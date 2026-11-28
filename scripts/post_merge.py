@@ -1243,7 +1243,7 @@ def map_end(lanes: Path, result: str, status: str, show: Callable[[str], None]) 
 # and cpu its caps, tree, dead: each dead case's part of the director's message), last (the last
 # pass's end: merge, lane, pr, began, ended, result done|capped|failed, why, ran, owed: the cases it
 # did not reach, wall, cpu) and cases (each case's last run: result pass|fails|refused, exit, line,
-# merge, at, log, logs: the lever's own log dir), each null until known.
+# merge, at, pass: when its pass began, log, logs: the lever's own log dir), each null until known.
 PARITY_KEYS = ("parity_pass_period_days", "parity_pass_wall_seconds", "parity_pass_cpu_seconds")
 PARITY_GRACE = 300  # s past the wall cap: the unit's limit, the pass's end (record, message) in it
 PARITY_STOP = 30  # s a lever run stopped at the wall cap has after SIGINT, then SIGKILL
@@ -1305,13 +1305,14 @@ def _oldest_first(cases: list[str], seen: dict[str, Any]) -> list[str]:
 
 
 def _owed(cases: list[str], seen: dict[str, Any], began: str) -> list[str]:
-    """The CASES not run in the pass that began at BEGAN, oldest proof first."""
+    """The CASES not run in the pass that began at BEGAN (their record's pass is another's),
+    oldest proof first."""
 
-    def at(c: str) -> str:
+    def ran_in(c: str) -> str:
         e = seen.get(c)
-        return str(cast("dict[str, Any]", e).get("at") or "") if isinstance(e, dict) else ""
+        return str(cast("dict[str, Any]", e).get("pass") or "") if isinstance(e, dict) else ""
 
-    return [c for c in _oldest_first(cases, seen) if at(c) < began]
+    return [c for c in _oldest_first(cases, seen) if ran_in(c) != began]
 
 
 def _pass(pm: PostMerge) -> str:  # noqa: PLR0911 (one line per outcome)
@@ -1523,7 +1524,7 @@ def pass_job(lanes: Path, show: Callable[[str], None]) -> int:  # noqa: PLR0915 
             kept = re.findall(r"logs: (\S+)$|, log (\S+)/[^/\s]+\)", out, re.MULTILINE)
             kept = [a or b for a, b in kept]
             result = "pass" if rc == 0 else DEAD.get(rc, "fails")
-            e = {"result": result, "exit": rc, "line": line, "merge": m, "at": now()}
+            e = {"result": result, "exit": rc, "line": line, "merge": m, "at": now(), "pass": began}
             e |= {"log": str(logs / f"{case}.log"), "logs": kept[-1] if kept else None}
             dead = ""
             if rc:

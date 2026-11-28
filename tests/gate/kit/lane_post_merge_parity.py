@@ -185,17 +185,21 @@ class World:
         """The pass record: the last pass began BEGAN_DAYS before; each case of CASES proved at B
         that many days before."""
         self.d.mkdir(parents=True, exist_ok=True)
+        began = ago(began_days)
         seen = {
-            c: {"result": "pass", "exit": 0, "merge": self.b, "at": ago(n)}
+            c: {"result": "pass", "exit": 0, "merge": self.b, "at": ago(n), "pass": began}
             for c, n in cases.items()
         }
-        rec = {"began": ago(began_days), "running": None, "last": None, "cases": seen}
+        rec = {"began": began, "running": None, "last": None, "cases": seen}
         (self.d / "pass.json").write_text(json.dumps(rec))
 
     def age(self, days: float) -> None:
-        """The last pass's start moved DAYS back, as if it began then."""
+        """The last pass moved DAYS back, as if it began then: its start, and each case it ran."""
         rec = self.record()
-        rec["began"] = ago(days)
+        was, rec["began"] = rec["began"], ago(days)
+        for e in rec["cases"].values():
+            if e.get("pass") == was:
+                e["pass"] = rec["began"]
         (self.d / "pass.json").write_text(json.dumps(rec))
 
     def post_merge(self, n: int, **env: str) -> Ran:
