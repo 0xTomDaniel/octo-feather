@@ -51,6 +51,7 @@ extend-include = [
   "scripts/check-decision-log",
   "scripts/check-evals",
   "scripts/check-fake-gh",
+  "scripts/check-lane-dispatch",
   "scripts/check-gate-free",
   "scripts/check-languages",
   "scripts/check-owner-field",

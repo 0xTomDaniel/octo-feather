@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""check-lane-dispatch: the lazy dispatcher rule (owner ruling 2026-11-28 #1274, ticket #1338) over
+scripts/octo-feather-lane; `just check-lane-dispatch` runs it.
+
+The rule: check_lane_dispatch in scripts/check_rules.py, imported by name (Python puts this
+script's own directory, symlinks resolved, first on sys.path; never a load by file path). This
+command reads the dispatcher of the tree it sits in, prints the Report's lines, each to its stream,
+and exits with its code: 0 ok, 1 an import the rule refuses or the dispatcher unreadable, 2 an
+internal error (fails closed, never ok).
+"""
+
+import sys
+from pathlib import Path
+
+from check_rules import Stream, check_lane_dispatch
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def say(stream: Stream, line: bytes) -> None:
+    out = sys.stdout.buffer if stream == "out" else sys.stderr.buffer
+    out.write(line + b"\n")
+    out.flush()  # each line in order when both streams go to one place
+
+
+def main() -> int:
+    report = check_lane_dispatch(ROOT)
+    for stream, line in report.lines:
+        say(stream, line)
+    return report.code
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as e:  # noqa: BLE001  fail closed: an internal error is never ok
+        say("err", f"check-lane-dispatch: error: {type(e).__name__}: {e}".encode())
+        sys.exit(2)
