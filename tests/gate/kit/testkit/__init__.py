@@ -55,6 +55,7 @@ FAKES = {
 # too), and gh.py (above) on a PATH of its own; systemd.py as systemd-run (a transient unit;
 # agent_scope.py runs the box's real one); each file's header says what it answers.
 # provider.py stands in for a model provider, a server its caller starts (its header).
+# clock/sitecustomize.py stands in for the clock, Python's datetime now, once clock() sets it.
 # tests/fixtures/install-check/pi stands in for Pi at its version and its model proxy, the
 # install-check items' one (install_check.py, its header).
 # pi_agent.py with FAKE_QC set: the qc sandbox items' demo Pi (qc_box.py; its docstring).
@@ -80,6 +81,16 @@ QUIET_GIT = {"maintenance.auto": "false", "gc.auto": "0"}
 
 class MissingFixtureError(FileNotFoundError):
     pass
+
+
+CLOCK = HERE / "clock"
+
+
+def clock(s: Scratch, at: str) -> None:
+    """Every Python command S runs from now on reading UTC time AT as now, the clock's stand-in
+    (clock/sitecustomize.py, its header) first on their PYTHONPATH."""
+    path = [p for p in s.env.get("PYTHONPATH", "").split(os.pathsep) if p and p != str(CLOCK)]
+    s.env |= {"PYTHONPATH": os.pathsep.join([str(CLOCK), *path]), "TESTKIT_NOW": at}
 
 
 def fixture(name: str) -> str:

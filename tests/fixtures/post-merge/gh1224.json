@@ -1,0 +1,109 @@
+{
+ "lane": "gh1224",
+ "pr": 1242,
+ "head": "9cd63d32a3ab498d11c6a8a6dcaf8ca8d29ced95",
+ "merge": "7f1c2bf574b1ab8c91bd9049a3b7dcca7dcc748a",
+ "base": "main",
+ "steps": [
+  {
+   "number": 1,
+   "name": "merged",
+   "outcome": "ok",
+   "line": "PR #1242 (gh1224) merged into main at head 9cd63d32a3ab, merge commit 7f1c2bf574b1",
+   "at": "2026-11-24T20:20:51+00:00"
+  },
+  {
+   "number": 2,
+   "name": "main CI",
+   "outcome": "ok",
+   "line": "1 push run on 7f1c2bf574b1 concluded success: check https://github.com/0xTomDaniel/octo-feather/actions/runs/45479846090",
+   "at": "2026-11-24T20:29:39+00:00"
+  },
+  {
+   "number": 3,
+   "name": "kit refresh",
+   "outcome": "ok",
+   "line": "kit install /home/exedev/src/octo-feather-kit fast-forwarded 38ae99fff479..7f1c2bf574b1; octo-feather-mise-install . ok; just vendored-fetch ok; uv sync --locked ok; pnpm install --frozen-lockfile ok; just install-check /home/exedev/src/octo-feather-gh1224 ok",
+   "at": "2026-11-24T20:29:50+00:00"
+  },
+  {
+   "number": 4,
+   "name": "checkout",
+   "outcome": "ok",
+   "line": "checkout /home/exedev/src/octo-feather fast-forwarded 38ae99fff479..7f1c2bf574b1",
+   "at": "2026-11-24T20:29:50+00:00"
+  },
+  {
+   "number": 5,
+   "name": "stale agents",
+   "outcome": "ok",
+   "line": "stale: w2:p1C director role director: agents/director.md changed, .agents/skills/herdr-comms/ changed, .agents/skills/github-pr/ changed, .agents/skills/github-issues/ changed; stale: w9B:p5 implementer-gh1241 role implementer: .agents/skills/github-pr/ changed; stale: w9B:p7 implementer-gh1226 role implementer: .agents/skills/github-pr/ changed; stale: w9B:pA gh1224 role supervisor: agents/supervisor.md changed, .agents/skills/github-pr/ changed, .agents/skills/herdr-comms/ changed; stale: w9C:pE gh1234 role supervisor: agents/supervisor.md changed, .agents/skills/github-pr/ changed, .agents/skills/herdr-comms/ changed; unknown: w2:pN shaper-mockups role shaper: no launch set recorded for session 782d5480-2495-4ead-a440-144e6c66d54a in /home/exedev/.local/state/octo-feather/launch-sets; unknown: w2:pP shaper-roadmap role shaper: no launch set recorded for session c5b5c6b2-c196-4cff-8533-03352448c46d in /home/exedev/.local/state/octo-feather/launch-sets; unknown: w2:pQ shaper-factory-setup role shaper: no launch set recorded for session c47b32a7-549c-4afd-9d03-55718ca5733e in /home/exedev/.local/state/octo-feather/launch-sets; unknown: w2:pY shaper-factory-runtime role shaper: no launch set recorded for session 2b0b5cf0-9adf-4bac-b685-fb5bf404a80a in /home/exedev/.local/state/octo-feather/launch-sets; unknown: w65:p6 adhoc-luna-watch role unknown: no Pi launched with --session-id (started by hand); stale agents: 5 stale, 5 unknown, 7 current of 17 live",
+   "at": "2026-11-24T20:29:52+00:00"
+  },
+  {
+   "number": 6,
+   "name": "tell supervisors",
+   "outcome": "ok",
+   "line": "merge 7f1c2bf574b1 of 0xTomDaniel/octo-feather, rule files: docs/specs/issue-lifecycle.status.json; NOT told: none; told: gh1234 w9C:pE, gh1249 w9D:p2, gh1255 w9E:p2; already told: none; not woken: none; gone: director to resume or archive: none",
+   "at": "2026-11-24T20:30:05+00:00"
+  },
+  {
+   "number": 7,
+   "name": "teardown",
+   "outcome": "ok",
+   "line": "space w9B closed; worktree /home/exedev/src/octo-feather-gh1224 removed (1 mise config links into it pruned); no open PR based on gh1224; local branch gh1224 deleted; remote branch gh1224 deleted from origin",
+   "at": "2026-11-24T20:36:06+00:00"
+  }
+ ],
+ "close": {
+  "findings": [
+   "lane gh1224: 6 findings",
+   "director: 8 findings"
+  ],
+  "corrections": [
+   "correction lane: commented https://github.com/0xTomDaniel/octo-feather/issues/372#issuecomment-7143794920 on 372 in github-issues 0xTomDaniel/octo-feather for reflection-missed:"
+  ],
+  "done": [],
+  "open": [
+   "tickets unread: tracker script github-issues/issue-view gh1224 failed (issue-view: gh1224 is not a GitHub issue key): fix the cause it names, then rerun"
+  ],
+  "lines": [
+   "reflection: lane gh1224, 6 findings, questions caught-by-hand, slow-or-from-memory, undetected-rule, check-misfired, mechanical-step, writer-mistake, reflection-missed: appended to /home/exedev/.local/state/octo-feather/lanes/gh1224.handoffs.jsonl",
+   "  finding check-misfire (check-misfired) -> scripts/merge_ask.py review-carry proof and just integrate merge structure: Integration wrapped a reviewed main-resolution merge in a same-tree merge, which merge-ask rejected as not main, forcing another full review. Make integration and review-carry support the same merge structure, retaining exact tree and resolution proofs. Evidence: /home/exedev/.local/state/octo-feather/lanes/gh1224.handoffs.jsonl:58-62.",
+   "  finding lost-gate-failure (check-misfired) -> just fast gate runner failure-artifact capture: The worker filtered away the failing test's identity, then handed off after an immediate green rerun without knowing what failed. Persist failed item IDs and full output before presentation filtering, and print the artifact path on failure. Evidence: /home/exedev/.pi/agent/sessions/--home-exedev-src-octo-feather-gh1224-1226--/2026-11-23T21-25-49-955Z_7753b6c9-c365-4487-87a2-e088c24d6e45.jsonl:251,254.",
+   "  finding synthetic-recording (writer-mistake) -> tests/gate/kit/testkit recording replay interface: Rework invented a null GitHub note body by modifying a recording; round 2 review caught it. Replay raw recorded responses through one interface that verifies emitted status, headers and body against the tape, rather than letting scenarios rewrite responses. Evidence: /home/exedev/.local/state/octo-feather/lanes/gh1224.handoffs.jsonl:35,38.",
+   "  finding unvalidated-edge (writer-mistake) -> scripts/tracker_calls.py validated tracker-read interface: New issue-note and repository reads used json.loads plus casts without validation, caught only in review. Make the shared read interface validate external answers and return typed records so callers cannot mistake parsed JSON for validated data. Evidence: /home/exedev/.local/state/octo-feather/lanes/gh1224.handoffs.jsonl:25,30.",
+   "  finding unobserved-sandbox-denial (check-misfired) -> scripts/octo-feather-qc-sandbox mask registration and attempt-record integration coverage: Pi sessions were masked but not watched, so report silently passed with \u201cskill reach: none\u201d and replay could misclassify unavailable input. Derive masks and their observation from one registration structure, with command-level coverage proving denied reads produce attempt records. Evidence: /home/exedev/.pi/agent/sessions/--home-exedev-src-octo-feather-gh1224-1241--/2026-11-23T22-25-40-298Z_8d7c56f8-aa0e-49e4-975e-920991a1205c.jsonl:72,187.",
+   "  finding unlocked-runtime-dependencies (slow-or-from-memory) -> .github/workflows/check.yml Pi installation dependency lock: CI failed before testing because pinned Pi still resolved a newly published transitive dependency whose tarball was unavailable; agents investigated registry timing and reran CI. Install Pi from a committed dependency lock so identical lane inputs do not select newly published dependencies. Evidence: /home/exedev/.local/state/octo-feather/lanes/gh1224.handoffs.jsonl:53; /home/exedev/.pi/agent/sessions/--home-exedev-src-octo-feather-gh1224--/2026-11-23T19-53-42-236Z_3c094098-3d3b-409d-bb09-52308771bfb0.jsonl:430-431.",
+   "reflection: director, 8 findings, questions owner-asked, answered-from-memory, rework-decision, unblocking-first, outside-owner-gates, fact-already-recorded, writer-route, director-mechanical-step, director-reflection-missed: appended to /home/exedev/.local/state/octo-feather/director.handoffs.jsonl",
+   "  finding idle-with-queue (owner-asked) -> durable ready queue, capacity report and lane-start triggers: Owner challenged the claim that merge approvals explained factory idleness. Director acknowledged four unblocked items, zero working lanes and repeated idle reports without dispatch. Persist readiness and dependencies, report startable work alongside capacity, and trigger dispatch on existing park/completion edges. Evidence: /home/exedev/.local/state/octo-feather/director.handoffs.jsonl:3562,3567.",
+   "  finding unsupported-recording-limit (answered-from-memory) -> .agents/skills/tdd/mocking.md ordered recording examples: Director claimed recordings could cover only reads, then proposed recording merges and closes. Owner caught the contradiction; director conceded ordered tapes can replay state-changing sequences. Add a concrete ordered mutation/read example distinguishing fixed replay from simulation. Evidence: director transcript moments 2026-11-24T20:10:16Z and 20:14:22Z.",
+   "  finding unmeasured-migration-size (answered-from-memory) -> octo-feather-lane report test-double inventory: Director justified gradual migration by claiming a ban would break most lane-machinery tests without measuring. After owner demanded a harder ratchet, counting found 23 affected files rather than most of the suite. Surface affected files, denominators and measurement scope before migration recommendations. Evidence: /home/exedev/.local/state/octo-feather/director.handoffs.jsonl:3580; director transcript moment 2026-11-24T20:21:34Z.",
+   "  finding policy-before-shaping (rework-decision) -> director correction-intake workflow and role-workflow evals: Director prepared a correction brief spanning a new ban, exceptions, capture tooling, templates and burn-down policy. Owner asked whether this needed shaping; director agreed and rewrote the brief into existing-policy repairs plus a separately accepted shaping slice. Exercise this distinction at intake, before briefing implementation. Evidence: /home/exedev/.local/state/octo-feather/director.handoffs.jsonl:3580,3590,3592; director transcript moment 2026-11-24T20:23:21Z.",
+   "  finding unnecessary-owner-gate (outside-owner-gates) -> director dispatch role-workflow evals: Director repeatedly asked permission to start the reduced, already-due correction lane and forward a shaping brief. These operational actions needed notification, not another owner gate; reserve questions for unresolved policy, scope or access. Add eval cases separating routine dispatch from acceptance of the resulting policy. Evidence: director transcript moments 2026-11-24T20:23:21Z, 20:25:23Z, 20:29:25Z and 20:30:05Z.",
+   "  finding synthetic-recording (writer-route) -> testkit capture command and immutable ordered replay interface: Two code-review findings across gh851 and gh1224 involved invented recordings. Writers could construct or modify external answers, while the simulator also accepted invalid tracker keys. Make captured command output the replay input, with no scenario response rewriting or fallback; keep capture and replay behind one interface. Evidence: director transcript 2026-11-24T20:09:56Z quoting correction issue #1252; /home/exedev/.local/state/octo-feather/lanes/gh1224.handoffs.jsonl:71.",
+   "  finding premature-start-record (director-mechanical-step) -> octo-feather-lane start lifecycle-event ownership: Director appended \u201cstarted\u201d although lane start refused because the kit install lagged main, then appended a correction. The command already emits successful spawn/start records. Give it sole ownership of lifecycle events and distinguish director intent from observed completion. Evidence: /home/exedev/.local/state/octo-feather/director.handoffs.jsonl:3580-3581,3588-3589.",
+   "  finding reflection-missed (director-reflection-missed) -> reflection/questions.json writer-route question: The previous reflection cycle filed the twice-seen synthetic-recording class with \u201cRoute: none given by a reflection\u201d; owner subsequently had to challenge the simulator and recording policy. Reword writer-route to ask: \u201cWhich recurring classes still lack a writer-side mechanism, and do differently named stand-ins reproduce the same failure?\u201d Evidence: director transcript moments 2026-11-24T19:48:01Z, 20:09:56Z and 20:13:41Z.",
+   "correction lane: commented https://github.com/0xTomDaniel/octo-feather/issues/372#issuecomment-7143794920 on 372 in github-issues 0xTomDaniel/octo-feather for reflection-missed:",
+   "  Recurrence of class reflection-missed (comms spec #reflection-correction), added by `octo-feather-lane reflect`: 1 new finding; running count 234.",
+   "",
+   "  - director 2026-11-24T20:35:47Z reflection (director-reflection-missed), route reflection/questions.json writer-route question: The previous reflection cycle filed the twice-seen synthetic-recording class with \u201cRoute: none given by a reflection\u201d; owner subsequently had to challenge the simulator and recording policy. Reword writer-route to ask: \u201cWhich recurring classes still lack a writer-side mechanism, and do differently named stand-ins reproduce the same failure?\u201d Evidence: director transcript moments 2026-11-24T19:48:01Z, 20:09:56Z and 20:13:41Z.",
+   "archived: /home/exedev/.local/state/octo-feather/lanes/archive/gh1224.toml sha256=2329f0f80dfab2ca3fe1243f596d7e25ba7ee3e83f76f2df23b484e417f16edb",
+   "archived: /home/exedev/.local/state/octo-feather/lanes/archive/gh1224.handoffs.jsonl sha256=3c8eed593e841adf31e92f730cb6d251736e03a7d48235ba61bbb1ab7d8ce180",
+   "archived: /home/exedev/.local/state/octo-feather/lanes/archive/gh1224.results"
+  ],
+  "at": "2026-11-24T20:36:01+00:00"
+ },
+ "unit": {
+  "name": "octo-feather-teardown-gh1224",
+  "how": "systemd-run --user",
+  "started": "2026-11-24T20:36:01+00:00",
+  "ended": "2026-11-24T20:36:07+00:00",
+  "result": "success",
+  "status": "exited 0"
+ },
+ "told": [
+  "step 6 tell supervisors stopped: herdr-say failed: gh1234 w9C:pE exit 77 (herdr-say: supervisor may message only up its chain (its parent w2:p1C; docs/adr/0015), not w9C:pE); re-send by hand: herdr-say w9C:pE 'main moved to 7f1c2bf574b1 (#1242 A correction lane'\"'\"'s new check is replayed on its findings in the qc sandbox before its merge ask); rule files changed: docs/specs/issue-lifecycle.status.json; re-read the changed ones before your next step.'; herdr-say failed: gh1249 w9D:p2 exit 77 (herdr-say: supervisor may message only up its chain (its parent w2:p1C; docs/adr/0015), not w9D:p2); re-send by hand: herdr-say w9D:p2 'main moved to 7f1c2bf574b1 (#1242 A correction lane'\"'\"'s new check is replayed on its findings in the qc sandbox before its merge ask); rule files changed: docs/specs/issue-lifecycle.status.json; re-read the changed ones before your next step.'; herdr-say failed: gh1255 w9E:p2 exit 77 (herdr-say: supervisor may message only up its chain (its parent w2:p1C; docs/adr/0015), not w9E:p2); re-send by hand: herdr-say w9E:p2 'main moved to 7f1c2bf574b1 (#1242 A correction lane'\"'\"'s new check is replayed on its findings in the qc sandbox before its merge ask); rule files changed: docs/specs/issue-lifecycle.status.json; re-read the changed ones before your next step.'; no prod line for these: fix each, then rerun (a rerun skips lanes told); merge 7f1c2bf574b1 of 0xTomDaniel/octo-feather, rule files: docs/specs/issue-lifecycle.status.json; NOT told: gh1234 w9C:pE, gh1249 w9D:p2, gh1255 w9E:p2; told: none; already told: none; not woken: none; gone: director to resume or archive: none",
+  "end"
+ ]
+}
