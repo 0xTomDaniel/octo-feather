@@ -230,17 +230,35 @@ MERGE_PARENTS = 2  # a merge of main has two parents (spec #lanes-one-head)
 
 
 @dataclass(frozen=True)
+class Wrap:
+    """A merge W whose second parent is itself a two-parent merge M, read as integrate's landing
+    of a worker's merge of main (spec #lanes-one-head, #1332): MERGE, M; LANE, W's first parent;
+    MAIN, M's second parent; BESIDE, the files W changes beside M (git diff --name-only M W; none:
+    W's tree is M's); KEPT, LANE is an ancestor of M; FIRST, MAIN is on the base's first-parent
+    history."""
+
+    merge: str
+    lane: str
+    main: str
+    beside: tuple[str, ...]
+    kept: bool
+    first: bool
+
+
+@dataclass(frozen=True)
 class Merge:
     """A two-parent merge's facts: ONTO, its second parent is an ancestor of the base; CONFLICT,
     git merge-tree of its parents conflicts; BEYOND, the files it changes beyond git's automatic
     merge (git diff --name-only, split on whitespace), None when its tree is that merge's;
     RESOLUTION, the files its resolution changed (resolution_files), read only when it conflicts
-    or changes something beyond."""
+    or changes something beyond; WRAP, a merge not onto the base whose second parent is a merge:
+    its wrapper facts."""
 
     onto: bool
     conflict: bool = False
     beyond: tuple[str, ...] | None = None
     resolution: tuple[str, ...] = ()
+    wrap: Wrap | None = None
 
 
 @dataclass(frozen=True)
@@ -713,7 +731,7 @@ def _lane_diff(raw: dict[str, str], patch: str) -> dict[str, str]:
 def _merge(c: str, ours: str, theirs: str, base: str, err: type[Exception]) -> Merge:
     """Merge's reads for merge C of OURS and THEIRS: the rest only when THEIRS is on BASE."""
     if git("merge-base", "--is-ancestor", theirs, base, ok=(0, 1), err=err)[0]:
-        return Merge(onto=False)
+        return Merge(onto=False, wrap=_wrap(c, ours, theirs, base, err))
     rc, out = git("merge-tree", "--write-tree", "--no-messages", ours, theirs, ok=(0, 1), err=err)
     auto, tree = (
         out.split("\n", 1)[0].strip(),
@@ -724,6 +742,40 @@ def _merge(c: str, ours: str, theirs: str, base: str, err: type[Exception]) -> M
     )
     resolution = tuple(resolution_files(c, err=err)) if rc or beyond is not None else ()
     return Merge(onto=True, conflict=bool(rc), beyond=beyond, resolution=resolution)
+
+
+def _wrap(c: str, ours: str, theirs: str, base: str, err: type[Exception]) -> Wrap | None:
+    """Wrap's reads for merge C of OURS and THEIRS; None when THEIRS is no two-parent merge."""
+    parents = git("rev-list", "--parents", "-n", "1", theirs, err=err)[1].split()[1:]
+    if len(parents) != MERGE_PARENTS:
+        return None
+    beside = git("diff", "--name-only", "--no-renames", "-z", theirs, c, err=err)[1]
+    kept = not git("merge-base", "--is-ancestor", ours, theirs, ok=(0, 1), err=err)[0]
+    line = git("rev-list", "--first-parent", base, err=err)[1].split()
+    return Wrap(
+        theirs, ours, parents[1], tuple(filter(None, beside.split("\0"))), kept, parents[1] in line
+    )
+
+
+def _unwrapped(w: Wrap, base: str) -> list[str]:
+    """Each condition wrapper W fails (spec #lanes-one-head, #1332), naming the commits."""
+    m = w.merge[:12]
+    failed: list[str] = []
+    if w.beside:
+        failed.append(
+            f"condition 1 fails: it changes {', '.join(w.beside)} beside {m} (adds to it)"
+        )
+    if not w.kept:
+        failed.append(
+            f"condition 2 fails: its first parent {w.lane[:12]} is not an ancestor of {m} "
+            "(drops lane commits)"
+        )
+    if not w.first:
+        failed.append(
+            f"condition 3 fails: {m}'s second parent {w.main[:12]} is not on {base}'s "
+            "first-parent history (a merge of another branch, not of main)"
+        )
+    return failed
 
 
 def _status(files: list[str]) -> frozenset[str] | Unread:
@@ -1452,6 +1504,7 @@ def head_proof(  # noqa: C901, PLR0912, PLR0913, PLR0915  one branch per commit 
     why: list[str] = []
     qc: list[str] = []
     merges: list[str] = []
+    wrapped: list[tuple[str, str]] = []  # (W, M): integrate's wrapper of a merge of main
     touched: set[str] = set()
     reviewed: dict[str, list[str]] = {}
     gone = set(g.walks[judged.lower()])
@@ -1476,10 +1529,23 @@ def head_proof(  # noqa: C901, PLR0912, PLR0913, PLR0915  one branch per commit 
                 qc.append(c)
                 touched |= k.files
         elif len(parents) != MERGE_PARENTS or k.merge is None or not k.merge.onto:
-            why.append(
-                f"merge {c[:12]} {s[:60]!r} brings in {', '.join(p[:12] for p in parents[1:])}, "
-                f"not {base}: only a merge of main keeps {kept}; {rerun}"
-            )
+            w = k.merge.wrap if k.merge else None
+            failed = _unwrapped(w, base) if w else []
+            if w and not failed:  # it counts as M, which the walk checks (spec #lanes-one-head)
+                wrapped.append((c, w.merge))
+            elif w:
+                why.append(
+                    f"merge {c[:12]} {s[:60]!r} wraps merge {w.merge[:12]}, but "
+                    f"{'; '.join(failed)}: only a merge of main, or integrate's merge of a "
+                    f"worker's merge of main adding nothing and dropping nothing, keeps {kept}; "
+                    f"{rerun}"
+                )
+            else:
+                why.append(
+                    f"merge {c[:12]} {s[:60]!r} brings in "
+                    f"{', '.join(p[:12] for p in parents[1:])}, not {base}: only a merge of main "
+                    f"keeps {kept}; {rerun}"
+                )
         else:
             m = k.merge
             hint = (
@@ -1538,6 +1604,7 @@ def head_proof(  # noqa: C901, PLR0912, PLR0913, PLR0915  one branch per commit 
                 f"{(resolved or {})[c]}"
                 for c, fs in reviewed.items()
             )
+    proof += "".join(f"; wrapper {w[:12]} of {m[:12]} carries it (tree equal)" for w, m in wrapped)
     return (None, why) if why else (proof, [])
 
 
