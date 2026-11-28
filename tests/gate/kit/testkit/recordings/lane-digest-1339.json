@@ -1,0 +1,28 @@
+[
+ {
+  "request": "repo view 0xTomDaniel/octo-feather-realcase --json defaultBranchRef",
+  "out": "{\"defaultBranchRef\":{\"name\":\"main\"}}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh repo view 0xTomDaniel/octo-feather-realcase --json defaultBranchRef",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 digest recording (#1339), scratch world, 2026-11-28T03:33:01.391972+00:00"
+  }
+ },
+ {
+  "request": "pr list --state merged --base main --search merged:2026-11-27..2026-11-29 --limit 1000 --json number,title,url,mergedAt,mergeCommit,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+  "out": "[{\"headRefOid\":\"89b41d28466fe80d6b4ee6fbca4f218692f284d6\",\"mergeCommit\":{\"oid\":\"314973bac9fc7dae78d44d592b38617133701eea\"},\"mergedAt\":\"2026-11-28T03:32:08Z\",\"number\":53,\"title\":\"[gh1337] digest recording: merged outside the merge command (#1339)\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/53\"},{\"headRefOid\":\"f347b73fdd849cd4cc0da2ba0f5a2dbbc283d76d\",\"mergeCommit\":{\"oid\":\"54fd326c27d4d5629a7a6edc5efb834f92df814d\"},\"mergedAt\":\"2026-11-28T03:30:28Z\",\"number\":52,\"title\":\"[gh1337] digest recording: a tier 2 merge, one clarifies call (#1339)\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/52\"},{\"headRefOid\":\"20122274399cbf7289e131868e2cfd1637bdf701\",\"mergeCommit\":{\"oid\":\"8afc34adbdcad4bd4c5627a597a432d7a4599587\"},\"mergedAt\":\"2026-11-28T03:29:51Z\",\"number\":51,\"title\":\"[gh1337] digest recording: a tier 1 merge (#1339)\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/51\"}]\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr list --state merged --base main --search merged:2026-11-27..2026-11-29 --limit 1000 --json number,title,url,mergedAt,mergeCommit,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 digest recording (#1339), scratch world, 2026-11-28T03:33:02.359369+00:00"
+  }
+ }
+]

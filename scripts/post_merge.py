@@ -37,11 +37,16 @@ Interface:
         and base from it; SHOW gets each of those, with "recorded". Then the next steps run in
         order, each while every step before it is ok, SHOW getting each as it finishes, with
         "ran", and the record is rewritten after each: the kept steps, then this run's, and the
-        kept record's close, unit and told. A record of another merge is replaced. The record
+        kept record's close, unit, told and ask. A record of another merge is replaced. The record
         after the run.
     read(records, lane) -> Record | None
         The lane's record; None when it has none. Unreadable(message) when it cannot be read or is
         no record; run, update and tell raise it too, nothing run or written.
+    asked(records, lane, pr, head, ask) -> Record
+        Under the lane's lock, ASK (Ask) set on the lane's record of the merge of PR at HEAD (as
+        run tells one), a record of another merge or none replaced by one of this merge with no
+        step yet: octo-feather-lane merge's write once gh merged, before the routine, which keeps
+        it.
     update(records, lane, change) -> Record | None
         Under the lane's lock, the lane's record replaced by CHANGE(record) (dataclasses.replace of
         its close or unit); None, nothing written, when it has none.
@@ -56,14 +61,23 @@ in a record written before them: close (null, or what the archive recorded for t
 message: {findings, corrections, done, open, lines, at}, each but at a list of lines), unit (null,
 or the teardown unit: {name, how, started, ended, result, status}, ended, result and status ""
 while it runs; result systemd's SERVICE_RESULT), told (the keys the director was told: "end", or
-a stop). Written whole each time (a temp file renamed over it), so a reader never sees half of one.
+a stop), ask (null, or the ask `octo-feather-lane merge` merged on, written once gh merged it,
+as that merge read it: {tier, allowed, relay, proof, calls, optouts}: tier the tier block it
+printed, one line each (`Tier: <n>`, each `- <reason>`, `Waits for: <whom>`); allowed how the
+merge went, "tier" (its tier waits for nobody), "relay" (the director's relay of that head) or
+"relay carried" (a relay of an earlier head carried over); relay that relay's `at` ("" by the
+tier); proof the carried relay's proof line ("" otherwise); calls each spec call the lane diff
+added, {spec (its log's slug), line (the whole call, one JSON object as its log holds it)};
+optouts each behaviour-neutral opt-out, {commit, reason (`Behaviour-neutral: <reason>`)}; the
+merge's own reads, no other: octo-feather-lane digest reads it). Written whole each time (a
+temp file renamed over it), so a reader never sees half of one.
 """
 
 __all__ = [
-    "STEPS", "Body", "Close", "Merge", "Outcome", "PostMerge", "Ran", "Record", "Refused", "Step",
-    "Unit", "Unreadable", "archived", "bounded", "git_here", "kit_install", "manager", "now",
-    "post_merge", "read", "records", "run", "stale_report", "tell", "tell_director", "top",
-    "transient", "unit_end", "update",
+    "STEPS", "Allowed", "Ask", "Body", "CallLine", "Close", "Merge", "OptOut", "Outcome",
+    "PostMerge", "Ran", "Record", "Refused", "Step", "Unit", "Unreadable", "archived", "asked",
+    "bounded", "git_here", "kit_install", "manager", "now", "post_merge", "read", "records",
+    "run", "stale_report", "tell", "tell_director", "top", "transient", "unit_end", "update",
 ]  # fmt: skip
 
 import contextlib
@@ -106,6 +120,7 @@ from tracker_calls import (
 )
 
 Outcome = Literal["ok", "stopped", "pending"]
+Allowed = Literal["tier", "relay", "relay carried"]  # how a merge went: Ask.allowed
 
 
 class Merge(Protocol):
@@ -167,6 +182,34 @@ class Unit:
 
 
 @dataclass(frozen=True)
+class CallLine:
+    """A spec call the lane diff added: its spec's slug and its whole call-log line."""
+
+    spec: str
+    line: str
+
+
+@dataclass(frozen=True)
+class OptOut:
+    """A behaviour-neutral opt-out: its commit and its `Behaviour-neutral: <reason>`."""
+
+    commit: str
+    reason: str
+
+
+@dataclass(frozen=True)
+class Ask:
+    """The ask the merge command merged on (the module docstring)."""
+
+    tier: tuple[str, ...]
+    allowed: Allowed
+    relay: str
+    proof: str
+    calls: tuple[CallLine, ...]
+    optouts: tuple[OptOut, ...]
+
+
+@dataclass(frozen=True)
 class Record:
     """A lane's post-merge record (the module docstring)."""
 
@@ -179,6 +222,7 @@ class Record:
     close: Close | None = None
     unit: Unit | None = None
     told: tuple[str, ...] = ()
+    ask: Ask | None = None
 
 
 def _path(records: Path, lane: str) -> Path:
@@ -209,6 +253,7 @@ def _record(raw: object) -> Record:
     keys |= {"base": str, "steps": list}
     nullable = (dict, type(None))
     later: dict[str, type | tuple[type, ...]] = {"close": nullable, "unit": nullable, "told": list}
+    later["ask"] = nullable
     present = set(cast("dict[str, object]", raw)) if isinstance(raw, dict) else set[str]()
     keys |= {k: t for k, t in later.items() if k in present}
     d = _fields(cast("object", raw), keys)
@@ -249,6 +294,29 @@ def _record(raw: object) -> Record:
         close,
         unit,
         _lines(d.get("told", []), "told"),
+        _ask(d.get("ask")),
+    )
+
+
+def _ask(raw: object) -> Ask | None:
+    """RAW, a record's parsed ask (None for none), as an Ask; as _record's errors."""
+    if raw is None:
+        return None
+    want: dict[str, type | tuple[type, ...]] = {"tier": list, "allowed": str, "relay": str}
+    want |= {"proof": str, "calls": list, "optouts": list}
+    a = _fields(raw, want)
+    if a["allowed"] not in get_args(Allowed):
+        msg = f"ask allowed {a['allowed']!r}"
+        raise ValueError(msg)
+    calls = [_fields(c, {"spec": str, "line": str}) for c in cast("list[object]", a["calls"])]
+    outs = [_fields(o, {"commit": str, "reason": str}) for o in cast("list[object]", a["optouts"])]
+    return Ask(
+        _lines(a["tier"], "tier"),
+        cast("Allowed", a["allowed"]),
+        str(a["relay"]),
+        str(a["proof"]),
+        tuple(CallLine(str(c["spec"]), str(c["line"])) for c in calls),
+        tuple(OptOut(str(o["commit"]), str(o["reason"])) for o in outs),
     )
 
 
@@ -312,9 +380,9 @@ def run(
     with _locked(records, lane):
         was = read(records, lane)
         kept: list[Step] = []
-        more: tuple[Close | None, Unit | None, tuple[str, ...]] = (None, None, ())
+        more: tuple[Close | None, Unit | None, tuple[str, ...], Ask | None] = (None, None, (), None)
         if was is not None and _same(was, pm):
-            more = (was.close, was.unit, was.told)
+            more = (was.close, was.unit, was.told, was.ask)
             for (name, _), s in zip(steps, was.steps, strict=False):
                 if (s.number, s.name, s.outcome) != (len(kept) + 1, name, "ok"):
                     break
@@ -336,6 +404,18 @@ def run(
             rec = Record(lane, pm.pr, pm.head, pm.merge, pm.base, tuple(done), *more)
             _write(records, rec)
             show(done[-1], "ran")
+        return rec
+
+
+def asked(records: Path, lane: str, pr: int, head: str, ask: Ask) -> Record:
+    """ASK recorded as the merge of PR at HEAD's, under the lane's lock (the module docstring)."""
+    records.mkdir(parents=True, exist_ok=True)
+    with _locked(records, lane):
+        was = read(records, lane)
+        new = Record(lane, pr, head, "", "", ())
+        same = was is not None and _same(was, cast("Merge", new))  # _same reads only
+        rec = replace(was if was is not None and same else new, ask=ask)
+        _write(records, rec)
         return rec
 
 
