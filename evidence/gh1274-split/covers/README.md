@@ -17,7 +17,12 @@ covers from the tree before 91d3c2a8 had replaced them:
 
     $L/covers.py write measure-e9e16e570896.json --declared e9e16e570896c680abe3ceb76bcd177eb1f5d432
 
-check-before.txt: that check on 91d3c2a8's qc.toml, exit 1 (171 paths lost, 63 criteria).
+`check` with no flag compares with qc.toml at HEAD's merge base with the default branch (`octo-feather-gate base`);
+`write` and `regen` also compare the written file with the declarations they read before writing. check-before.txt:
+`check`, no flags, in a clone at 91d3c2a8: exit 1 (171 paths lost, 63 criteria).
+
+gh PR JSON (`gh pr list`, `gh pr view`, prs.json, prs-overlap.json.gz) is read only through gh_records.py: validated
+with the pinned jsonschema, unknown fields rejected, into typed records.
 
 ## The counts (counts.md)
 
@@ -44,7 +49,8 @@ check-before.txt: that check on 91d3c2a8's qc.toml, exit 1 (171 paths lost, 63 c
     $L/why.py probe /tmp/main-tree measure-main-<main12>.json probe-main-<main12>.json --main <main>
     $L/why.py report measure-main-<main12>.json probe-main-<main12>.json --prs prs.json --main <main>
 
-## Collisions (collide.md)
+## Overlap and conflicts (collide.md)
 
     $L/collide.py fetch prs.json prs-overlap.json.gz
     $L/collide.py report prs.json prs-overlap.json.gz --split <split head> --exclude 79
+    $L/conflicts.py --since 2026-11-12 --split <split head>    # after git fetch origin
