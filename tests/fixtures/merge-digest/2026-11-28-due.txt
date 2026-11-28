@@ -1,0 +1,7 @@
+Merge digest 2026-11-28 (0xTomDaniel/octo-feather-realcase, merged in [2026-11-28 00:00Z, 2026-11-29 00:00Z)): 3 merged
+
+#51 [gh1337] digest recording: a tier 1 merge (#1339) (tier 1, merged 03:29Z) https://github.com/0xTomDaniel/octo-feather-realcase/pull/51
+
+#52 [gh1337] digest recording: a tier 2 merge, one clarifies call (#1339) (tier not recorded: no merge record) https://github.com/0xTomDaniel/octo-feather-realcase/pull/52, merge 54fd326c27d4d5629a7a6edc5efb834f92df814d
+
+#53 [gh1337] digest recording: merged outside the merge command (#1339) (tier not recorded: no merge record) https://github.com/0xTomDaniel/octo-feather-realcase/pull/53, merge 314973bac9fc7dae78d44d592b38617133701eea

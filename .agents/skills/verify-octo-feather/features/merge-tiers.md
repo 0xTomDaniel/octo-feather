@@ -48,8 +48,8 @@ Each case replays one recorded run of the realcase (0xTomDaniel/octo-feather-rea
 ## How to get to it (user POV)
 
 - A supervisor runs `octo-feather-lane merge-ask PR --status FILE` in its lane worktree, reads the tier block, and either runs `octo-feather-lane merge PR HEAD` itself (Waits for: nobody) or sends the ask up (agents/supervisor.md).
-- The director, on a `merge digest due for <days>` line (the merge's tell, or the first line `octo-feather-lane start` prints), runs `octo-feather-lane digest`, sends the owner its text as printed, then `octo-feather-lane digest --sent <sha12>` (agents/director.md); `digest DAY` prints one UTC day's.
-- The director, on the owner's veto of a merge a sent digest listed, runs `octo-feather-lane veto PR --said "<his words>" [--repo O/R]`, then the `octo-feather-lane start` line it prints (agents/director.md).
+- The director runs the digest on a `merge digest due` line: agents/director.md, Merges (the merge digest step).
+- The director acts on the owner's veto: agents/director.md, Merges (the veto step).
 - The director reads a sent-up ask and replies; it relays a merge with `octo-feather-lane relay PR HEAD` from its own pane (agents/director.md).
 
 ## Driving it with verify-octo-feather
