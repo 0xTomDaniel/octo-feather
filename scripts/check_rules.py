@@ -39,9 +39,9 @@ Interface:
         ROOT, TRACKED and a Skillfile that cannot be read as check_dashes. Hit lines `path:n:line`
         as grep printed them in C.UTF-8 (a word boundary is Unicode's). A binary file, as grep
         calls it (a NUL byte: none of its lines; a matching line not UTF-8: not that line), gets
-        the err line `check-refs: PATH: binary file matches` after its lines: a finding for scans
-        3 to 5, none for retired words (#1117). No finding: the out line `refs: ok (N files)`, N
-        the files of scan 5, code 0.
+        the err line `check-refs: PATH: binary file matches` after its lines: a finding in every
+        scan, a retired word refused by name whatever the file's bytes (#1117). No finding: the
+        out line `refs: ok (N files)`, N the files of scan 5, code 0.
     Report: the exact lines the command prints, each with its stream, in order (no newline), and
         the exit code.
 """
@@ -252,13 +252,11 @@ def check_refs(root: Path, tracked: Sequence[str]) -> Report:
         why = f"cannot read {path} ({e.strerror or e}); fix the scan, the check cannot pass"
         lines.append(("err", f"check-refs: retired-words scanner error: {why}".encode()))
     found = scan(texts, own, RETIRED, retired)
-    lines += [
-        f for f in found if f[0] == "err"
-    ]  # a binary file's retired words: no finding (#1117)
     if unread:
+        lines += [f for f in found if f[0] == "err"]
         bad = True
     else:
-        fail([f for f in found if f[0] == "out"], RETIRED_FIX)
+        fail(found, RETIRED_FIX)  # a binary file refused by name, never passed (#1117)
     fail(scan(texts, lane, LANE), LANE_FIX)
     fail(scan(texts, skills, SKILL_TOOL), SKILL_TOOL_FIX)
     fail(scan(texts, files, OCTO_LITE), OCTO_LITE_FIX)
