@@ -191,12 +191,12 @@ perl -pi -e 's/then it prints ok\./then it prints done./ if /acceptance-b/' "$es
 show; crit_line acceptance-b | grep -qF "STALE: record 20261029T100000Z-0b0b0b0b captured at ${cap:0:12}; criterion text changed since ${cap:0:12}" \
   || fail "changed text not stale: $out"
 git -C "$e" checkout -q -- docs/specs
-# A fallback-built criterion (record, no declared demo): no covers or tests, so only its text makes it stale.
+# A built criterion with no declared demo (record, no demo): no covers or tests, so only its text makes it stale.
 perl -0pi -e 's/\[demo."demo#acceptance-b"\].*//s' "$e/qc.toml"; git -C "$e" commit -qam "no demo for b"; fb="$(git -C "$e" rev-parse HEAD)"
 "$S" built "$ES" 7 acceptance-b --record 20261029T100000Z-0c0c0c0c --commit "$fb"; git -C "$e" commit -qam "qc: built acceptance-b (judged ${fb:0:12})"
 echo v3 >"$e/src/b"; git -C "$e" commit -qam "change b's code"
-show; crit_line acceptance-b | grep -qF "current: record 20261029T100000Z-0c0c0c0c captured at ${fb:0:12} by the agent fallback" \
-  || fail "fallback-built not current: $out"
+show; crit_line acceptance-b | grep -qF "current: record 20261029T100000Z-0c0c0c0c captured at ${fb:0:12}, no declared demo (no covers or tests" \
+  || fail "built with no declared demo not current: $out"
 # A legacy built row (status and PR only) passes check and shows as no evidence link, never stale.
 "$S" built "$ES" 7 acceptance-b; run "$e"; want 0 "legacy built row"
 show; crit_line acceptance-b | grep -qF "acceptance-b: built (PR #7), no evidence link" || fail "legacy row: $out"

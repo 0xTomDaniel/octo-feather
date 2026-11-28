@@ -73,7 +73,7 @@ def claims_gate(s: Scratch) -> None:
     """The full tier told the starter claim (Repo.claims_gate): its run a full tier (full_tier);
     `octo-feather-lane report` (fake gh and herdr) shows the repo's gate budget block from it
     against the template's gate-budget.toml, `merge-ask` on its head its Gate time block; then
-    just qc judges the criterion from its record (Repo.qc_judges)."""
+    `just qc` judges the criterion from its record (Repo.qc_judges)."""
     r = Repo(s, "typescript")
     r.gate_recipes("check-scripts")
     h = r.git("rev-parse", "HEAD")

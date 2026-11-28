@@ -113,7 +113,7 @@ accepted, and its status: below accepted threshold, no accepted threshold or mee
 merge-ask, on pass, prints each such comment as one line under `Model judgments` after the section, beside the
 review verdict; no gate reads one (spec judgment #rule-advisory): merge-ask passes or fails the same without it.
 
-`verdict` writes through gh (never under the qc judge). REPORT is the code review's
+`verdict` writes through gh (never under the qc sandbox's offline gh). REPORT is the code review's
 report, a file or - for stdin. Its fields (the verdict, the check field, the Owner field) and the
 reader scope: .agents/skills/code-review/SKILL.md step 4, **Report fields**. The last verdict line
 in scope is the verdict, and lines that disagree are refused. What the check field classifies:
@@ -151,7 +151,7 @@ cleared: [sha], errors} from the owner decision and `Opt-out cleared:` lines (er
 other `Name: value` line in scope (Name: a capital, then letters or -, in words one space apart: `Prior art`). Exit 0; 1 on an unreadable report.
 The factory evals' field_lines fact runs it (scripts/octo-feather-qa).
 
-`merge-ask` reads through `gh pr view --json` (also under the qc judge's offline gh) and
+`merge-ask` reads through `gh pr view --json` (also under the qc sandbox's offline gh) and
 the git repo of the current directory (the lane worktree, PR head and BASE fetched; BASE
 defaults to the PR's base branch on origin): the PR's commits and their subjects (BASE..head:
 `gh pr view --json commits` lists at most 100; `verdict` reads them the same way), the judged
@@ -349,12 +349,12 @@ layer-only-ticket, its fix naming the Creates form. A ticket body
 is read outside column-0 ``` or ~~~ fences and HTML comments `<!--` to `-->`; no lists, indented code
 or code spans; a literal `<!--` in prose opens a comment (#145, #121 D18 D21). Checks are
 structural facts only, never what the prose means: whether the demo shows the behavior What to
-build describes is review's and the qc judge's (docs/adr/0008, #118). Each failure prints
+build describes is review's and qc's (docs/adr/0008, #118). Each failure prints
 `<ticket>: class: <class>: <problem>; fix: <fix>`. Exit 0 all pass, 1 a ticket fails,
 2 nothing could be checked (gh, file, specs or justfile error; nothing printed as passed).
 `tickets` reads tickets only through the target's tracker skill's `issue-view` (the parent's
 `children`, then each body; GitHub Issues or Linear, from the .octo-feather.toml of the git repo
-at the current directory; on GitHub it works under the qc judge's offline gh).
+at the current directory; on GitHub it works under the qc sandbox's offline gh).
 
 A ticket's skills (spec issue-lifecycle #lanes-tickets): one line at column 0, outside fences and HTML comments as
 the body is read above, `Skills: <skill>, <skill>` (a name may be backticked; a trailing .;:!? is no part of it)

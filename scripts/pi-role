@@ -90,7 +90,7 @@ would commit refuses to start without it, naming the setting and how to set it;
 no placeholder, no fallback. Would commit:
 its tools include bash (git runs only through bash; no tools key: Pi's default
 tools, bash among them), unless its contract never commits: read-only (READ_ONLY:
-the code reviewer and the qc judge) or editing and writing without committing
+the code reviewer) or editing and writing without committing
 (NO_COMMIT: the general worker). Such a role starts with no identity set, and gets
 the identity's env like any role when one is set.
   --print-env      print the environment the launch applies (KEY=VALUE lines), or refuse
@@ -133,7 +133,7 @@ IDENTITY = "identity"
 IDENTITY_ENV = {"GIT_AUTHOR_NAME": "name", "GIT_AUTHOR_EMAIL": "email",
                 "GIT_COMMITTER_NAME": "name", "GIT_COMMITTER_EMAIL": "email"}
 # Roles whose contract never commits (their Never: no edit, no commit); every other role with bash would.
-READ_ONLY = ("code-reviewer", "qc-judge")
+READ_ONLY = ("code-reviewer",)
 # Roles whose contract never commits though they have edit and write (spec roles#general-purpose-workers).
 NO_COMMIT = ("general-worker",)
 

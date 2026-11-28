@@ -6,11 +6,13 @@ no route anywhere, proved), bounded as a whole by QC_TEST_TIMEOUT s (default 600
 QC_TEST_RUN_TIMEOUT s (default 90): a hang fails naming what hung (#55). Needs unprivileged user
 namespaces. A Box is then the item's world: a throwaway HOME holding a "live" box (a live Herdr
 session, gh and git credentials, live and archived lanes, another repo, Pi's auth.json and
-models.json), the judged test repo, the reports dir, a per-run token, and run, report, jr, copycase
-and piok.
+models.json), the judged test repo (its qc.toml declaring acceptance-a's demo, `pi qc-demo`: the
+stand-in Pi's turn in FAKE_QC's mode, run in the demo's qc sandbox, and acceptance-b's, a failing
+one), the reports dir, a per-run token, and run, report, jr, copycase and piok.
 
 Stand-ins, only for systems the kit does not own: Pi, the testkit's pi_agent.py with FAKE_QC set
-(its docstring: the judge's turn per mode); Herdr, the testkit's herdr (FAKES), in a dir of its own
+(its docstring: the turn per mode; the advisory's classify run gets it too); Herdr, the testkit's
+herdr (FAKES), in a dir of its own
 after the Pi's, as the pane case's real-Herdr mode (QC_TEST_HERDR=real, `just qc-real-herdr`)
 takes it off PATH. Real: the qc sandbox, user namespaces, srt, mise, just (the kit's mise.lock
 pin), git, gh (offline, so every call fails, as on the old box).
@@ -42,6 +44,15 @@ if TYPE_CHECKING:
     from types import TracebackType
 
 STATUS = "docs/specs/demo.status.json"
+# The judged repo's contract (quality spec #qc-contract): acceptance-a's demo the stand-in Pi's
+# turn, b's a failure.
+DEMOS = (
+    'format = 1\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n'
+    '[demo."demo#acceptance-a"]\ncommand = "pi qc-demo"\ncovers = ["src/a"]\n'
+    'tests = ["tests/a.sh"]\n'
+    '[demo."demo#acceptance-b"]\ncommand = "echo b broke >&2; exit 1"\ncovers = ["src/b"]\n'
+    'tests = ["tests/b.sh"]\n'
+)
 PI = HERE / "pi_agent.py"
 
 
@@ -241,7 +252,7 @@ class Box:
 
     def judged(self) -> None:
         """The judged test repo: the good demo spec accepted, its status file initialized, then
-        scratch/ ignored, each a commit."""
+        scratch/ ignored and the contract (DEMOS), each a commit; self.head that last one."""
         r = self.repo
         (r / "docs" / "specs").mkdir(parents=True)
         shutil.copy(FIXTURES / "spec-status" / "good" / "demo.spec.html", r / "docs" / "specs")
@@ -252,8 +263,10 @@ class Box:
         spec = kit("octo-feather-spec-status")
         self.s.run([spec, "init", "docs/specs/demo.spec.html", short], cwd=r)
         (r / ".gitignore").write_text("scratch/\n")
+        (r / "qc.toml").write_text(DEMOS)
         self.git("add", "-A")
         self.git("commit", "-qm", "spec")
+        self.head = self.git("rev-parse", "HEAD")
 
     def __enter__(self) -> Self:
         return self
@@ -312,8 +325,10 @@ class Box:
         env: Mapping[str, str] | None = None,
         unset: Sequence[str] = (),
     ) -> str:
-        """`octo-feather-qc ARGS` with the judge in MODE (FAKE_QC); fails unless it exits WANT.
-        Its output, kept as self.out."""
+        """`octo-feather-qc ARGS` at self.head (a passed demo's status commit undone: never carried)
+        with the demo in MODE (FAKE_QC); fails unless it exits WANT. Its output, kept as
+        self.out."""
+        self.git("reset", "-q", "--hard", self.head)
         rc, self.out = self.bounded(
             [kit("octo-feather-qc"), *args], {**(env or {}), "FAKE_QC": mode}, unset
         )
@@ -323,26 +338,38 @@ class Box:
             fail(f"{what} want exit {want}, got {rc}: {self.out}")
         return self.out
 
-    def report(self, *keys: str) -> object:
+    def report(self, *keys: str | int) -> object:
         """The newest report's value at KEYS."""
         newest = max((self.t / "reports").glob("*.json"), key=lambda p: p.stat().st_mtime)
         return at(json.loads(newest.read_text()), *keys)
 
     def jr(self, *keys: str) -> object:
-        """KEYS of acceptance-a's agent fallback run in the newest report."""
-        return self.report("fallback", "acceptance-a", *keys)
+        """KEYS of acceptance-a's demo sandbox record in the newest report (its capture)."""
+        return self.report("captures", 0, "sandbox", *keys)
 
     def started(self) -> bool:
-        """Whether acceptance-a's judge started, by the newest report (it holds its stdout)."""
-        fb = self.report("fallback", "acceptance-a")
-        return isinstance(fb, dict) and "stdout" in fb
+        """Whether acceptance-a's demo ran, by the newest report (its capture's exit)."""
+        caps = self.report("captures")
+        ran = caps != [] and self.report("captures", 0, "exit") is not None
+        return isinstance(caps, list) and ran
 
-    def judge(self) -> str:
-        """The judge's stdout in the newest report."""
-        return str(self.jr("stdout"))
+    def demo_out(self) -> str:
+        """The demo's stdout and stderr, from its evidence record (the newest report names it)."""
+        rid = self.report("captures", 0, "record")
+        ev = [
+            kit("octo-feather-evidence"),
+            "read",
+            "--repo",
+            ".",
+            "--criterion",
+            "demo#acceptance-a",
+        ]
+        found = json.loads(self.s.run([*ev, "--json"], cwd=self.repo).out)
+        d = Path(next(str(x["dir"]) for x in found if at(x, "record", "id") == rid)) / "outputs"
+        return (d / "demo.stdout").read_text() + (d / "demo.stderr").read_text()
 
     def copycase(self, mode: str, *gone: str) -> None:
-        """One judge in MODE, its credential copies GONE gone, the worktree pristine and no Pi
+        """One demo run in MODE, its credential copies GONE gone, the worktree pristine and no Pi
         credential left (tests/qc-copies.sh, tests/qc-oauth.sh)."""
         self.run(0, mode, STATUS, "5", "acceptance-a")
         for f in gone:
@@ -366,7 +393,7 @@ class Box:
         same = self.pa.read_bytes() == (self.t / "auth0").read_bytes()
         if not (same and self.pm.read_bytes() == (self.t / "models0").read_bytes()):
             fail(f"{name}: box auth.json or models.json changed (never written back)")
-        if "auth_writeback" in self.out + repr(self.jr("sandbox")):
+        if "auth_writeback" in self.out + repr(self.jr()):
             fail(f"{name}: auth_writeback still reported")
 
     def left(self, rx: str) -> list[str]:

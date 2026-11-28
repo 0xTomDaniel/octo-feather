@@ -56,7 +56,7 @@ web=',mcp__parallel__*,mcp__exa__*;web'
 # roles#fm-extensions: a role's own extensions on top of every role's; only director and supervisor load results-on-wake.ts.
 every="resume-on-error.ts spend-ledger.ts skills-loaded.ts"
 # One launch per role, read by one python3 for both facts (the CPU budget, #1323): its tools;mcp and its extensions.
-roles=(director supervisor implementer code-reviewer corrector general-worker reflector shaper qc-judge)
+roles=(director supervisor implementer code-reviewer corrector general-worker reflector shaper)
 for role in "${roles[@]}"; do (cd "$t/gh1" && "$kit/scripts/pi-role" --json "$kit/agents/$role.md" 2>/dev/null >"$t/json.$role"); done
 python3 - "$t" "${roles[@]}" >"$t/launch" <<'PY'
 import json, os, sys
@@ -66,7 +66,7 @@ for role in sys.argv[2:]:
     ext = " ".join(sorted(os.path.basename(a[i + 1]) for i, x in enumerate(a) if x == "--extension" and os.path.basename(a[i + 1]) != "web-servers.ts"))
     print(f"{role}|{tools}|{ext}")
 PY
-for rt in "director:$ro$web" "code-reviewer:$ro$web" "qc-judge:$ro;--no-mcp" "supervisor:$rw;--no-mcp" "implementer:$rw$web" "general-worker:$rw$web" "corrector:$rw$web" "shaper:read,grep,find,ls,bash,edit,write,codemode$web"; do
+for rt in "director:$ro$web" "code-reviewer:$ro$web" "supervisor:$rw;--no-mcp" "implementer:$rw$web" "general-worker:$rw$web" "corrector:$rw$web" "shaper:read,grep,find,ls,bash,edit,write,codemode$web"; do
   role="${rt%%:*}"; want="${rt#*:}"
   got="$(grep "^$role|" "$t/launch" | cut -d'|' -f2)"
   [[ "$got" == "$want" ]] || { echo "pi-role test: $role --tools is $got, want $want" >&2; exit 1; }

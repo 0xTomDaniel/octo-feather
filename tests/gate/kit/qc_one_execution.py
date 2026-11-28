@@ -23,7 +23,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from testkit import FIXTURES, ROOT, Ran, Scratch, kit, main, tool_homes
+from testkit import ROOT, Ran, Scratch, kit, main, tool_homes
 from testkit.qc import RID, STATUS, qc, reports, target
 
 JUSTFILE = """set positional-arguments
@@ -58,7 +58,6 @@ SKIP = (
 )
 CASE = "tests/gate/test_gate.py::test_script[{}]"
 CLAIMS = "OCTO_FEATHER_QC_CLAIMS"
-STUB_JUDGE = str(FIXTURES / "qc-judge")  # the stub qc judge, first on the sandbox's PATH
 
 
 def build(p: Scratch) -> None:
@@ -239,9 +238,7 @@ def judged_from_records(s: Scratch) -> None:
         f"qc ran a demo or the fallback: {q.err}"
     )
     log = s.root / "pi.log"
-    assert not (log.exists() and "qc-judge" in log.read_text()), (
-        f"an agent judge ran: {log.read_text()}"
-    )
+    assert not log.exists(), f"a model was called: {log.read_text()}"
     rep = json.loads(Path(ls[-1].rpartition("; report ")[2]).read_text())
     assert rep["captures"] == [], rep
     assert "fallback" not in rep, rep
@@ -338,8 +335,8 @@ def partial(s: Scratch) -> None:
 
 def metadata_only(s: Scratch) -> None:
     """Format 2: an entry without a command is per-criterion metadata, never a demo. acceptance-b,
-    its tagged test gone and its entry holding only covers, has neither a record nor a demo: the
-    agent fallback's (the stub judge tests/fixtures/qc-judge/pi first on the sandbox's PATH)."""
+    its tagged test gone and its entry holding only covers, has neither a record nor a demo:
+    insufficient evidence naming that it has neither, nothing run (quality spec #qc-fallback)."""
     r = world(s)
     s.git(r, "rm", "-q", "tests/skip.sh")
     (r / "qc.toml").write_text(
@@ -347,11 +344,15 @@ def metadata_only(s: Scratch) -> None:
         '[demo."demo#acceptance-b"]\ncovers = ["tests"]\n'
     )
     s.git(r, "commit", "-qam", "acceptance-b: metadata only")
-    q = qc(s, r, "9", "acceptance-b", want=0, env={"OCTO_FEATHER_QC_PATH": STUB_JUDGE})
-    assert not re.search(r"KeyError|qc: demo ", q.err), q.err
+    q = qc(s, r, "9", "acceptance-b", want=2)
+    assert not re.search(r"KeyError|qc: demo |qc sandbox", q.err), q.err
     ls = q.out.splitlines()
-    n = next(i for i, x in enumerate(ls) if x.startswith("PASS acceptance-b: "))
-    assert any("decision agent fallback" in x for x in ls[n + 1 : n + 3]), q.out
+    n = next(i for i, x in enumerate(ls) if x.startswith("INSUFFICIENT EVIDENCE acceptance-b: "))
+    want = [
+        "  missing: no tagged acceptance test and no declared demo",
+        "  evidence incomplete; decision none; record none",
+    ]
+    assert ls[n + 1 : n + 3] == want, q.out
 
 
 def artifacts_missing(s: Scratch) -> None:
@@ -369,9 +370,7 @@ def artifacts_missing(s: Scratch) -> None:
     (r / "qc.toml").write_text(QC_TOML + demo_b)
     s.git(r, "commit", "-qam", "accept.sh leaves no out/a.txt; acceptance-b a demo")
     gate(s, claims="demo#acceptance-a")
-    q = qc(
-        s, r, "9", "acceptance-a", "acceptance-b", want=2, env={"OCTO_FEATHER_QC_PATH": STUB_JUDGE}
-    )
+    q = qc(s, r, "9", "acceptance-a", "acceptance-b", want=2)
     for cid, f in (("a", "out/a.txt"), ("b", "out/none.txt")):
         ls = q.out.splitlines()
         n = next(
@@ -449,7 +448,7 @@ def two_specs(s: Scratch) -> None:
     assert len(records(s)) == 3, "qc reran something"
     assert not re.search(r"agent fallback|qc: demo ", q.err), q.err
     log = s.root / "pi.log"
-    assert not (log.exists() and "qc-judge" in log.read_text()), log.read_text()
+    assert not log.exists(), log.read_text()
     reps = [
         json.loads(Path(x.rpartition("; report ")[2]).read_text())
         for x in ls

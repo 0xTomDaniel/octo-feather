@@ -29,11 +29,8 @@
       ]
     },
     "acceptance-autonomous-local": {
-      "status": "built",
-      "pr": 882,
-      "record": "20261118T202458Z-b91d0670",
-      "commit": "f28674d5a21b6594263fbfc0d65a9d9fc646eac9",
-      "tests": []
+      "status": "planned",
+      "pr": null
     },
     "acceptance-real-blocker": {
       "status": "built",
@@ -43,11 +40,8 @@
       "tests": []
     },
     "acceptance-no-routine-traffic": {
-      "status": "built",
-      "pr": 882,
-      "record": "20261118T203120Z-8f62fafe",
-      "commit": "f28674d5a21b6594263fbfc0d65a9d9fc646eac9",
-      "tests": []
+      "status": "planned",
+      "pr": null
     },
     "acceptance-queued-completion": {
       "status": "built",

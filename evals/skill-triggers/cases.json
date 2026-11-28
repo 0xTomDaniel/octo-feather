@@ -1000,38 +1000,6 @@
     "task": "Do not change any file and do not commit. Which finding class tags already appear in notes/handoffs.jsonl? List them."
   },
   {
-    "id": "qc-prove-greet-plain",
-    "role": "qc-judge",
-    "fixture": "lane-mini",
-    "should_trigger": true,
-    "split": "train",
-    "task": "Judge criterion greet-plain of docs/specs/greet.spec.html at HEAD: pass or fail, with the command you ran and its output."
-  },
-  {
-    "id": "qc-prove-greet-json",
-    "role": "qc-judge",
-    "fixture": "lane-mini",
-    "should_trigger": true,
-    "split": "held-out",
-    "task": "Does this head meet greet-json (docs/specs/greet.spec.html)? Give one verdict with its evidence."
-  },
-  {
-    "id": "qc-prove-near-list-ids",
-    "role": "qc-judge",
-    "fixture": "lane-mini",
-    "should_trigger": false,
-    "split": "train",
-    "task": "Do not change any file and do not commit. Judge nothing. List the acceptance criterion ids in docs/specs/greet.spec.html."
-  },
-  {
-    "id": "qc-prove-near-app-command",
-    "role": "qc-judge",
-    "fixture": "lane-mini",
-    "should_trigger": false,
-    "split": "held-out",
-    "task": "Do not change any file and do not commit. Which command does AGENTS.md give for running the app? Quote it; run nothing."
-  },
-  {
     "id": "rev-tdd-shout-tests",
     "role": "code-reviewer",
     "fixture": "python-app-shout",

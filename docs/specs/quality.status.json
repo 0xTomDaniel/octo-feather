@@ -363,12 +363,11 @@
     },
     "acceptance-qc-fallback": {
       "status": "built",
-      "pr": 420,
-      "record": "20261030T041940Z-172a1f47",
-      "commit": "b8060c2a7e98a796fb77658c2d0e65b83cb95c46",
+      "pr": 1321,
+      "record": "20261128T054339Z-07a6260a",
+      "commit": "9c230c81e5b8bcacf3b345625094693c35b6cd6f",
       "tests": [
-        "tests/qc-fallback.sh",
-        "tests/lane-merge-ask.sh"
+        "tests/qc-fallback.sh"
       ]
     },
     "acceptance-qc-eval-verdict": {

@@ -4,7 +4,10 @@
 accepted with criteria a, b, c (tests/fixtures/spec-status/revision/accepted.spec.html) is
 initialized, a built with an evidence link, b built without, a logged call names c; the owner
 accepts a revision dropping c and adding d (revised.spec.html). What init does then:
-`octo-feather-spec-status` usage, its init paragraph."""
+`octo-feather-spec-status` usage, its init paragraph.
+
+Also `planned` (docs/adr/0035; #1320), on the same accepted spec. What planned does: that usage's
+planned paragraph."""
 
 from __future__ import annotations
 
@@ -176,5 +179,48 @@ def revision(s: Scratch) -> None:
     invalid(r, c2)
 
 
+def planned(s: Scratch) -> None:
+    """a built with a fallback's link (no tests), b built without, c built: `planned` a b drops
+    their PRs and links, c's row byte for byte, check passes; then each refusal leaves the file
+    as it was."""
+    r = Repo(s)
+    c1 = r.spec_from("accepted.spec.html", "accepted")
+    r.init(c1)
+    r.built("7", "acceptance-a", "--record", "20261029T100000Z-0a0a0a0a", "--commit", c1)
+    r.built("8", "acceptance-b")
+    r.built("9", "acceptance-c")
+    r.commit("a, b and c built")
+    text = r.st.read_text()
+    rc = row(text, "acceptance-c")
+    r.s.run([S, "planned", str(r.st), "acceptance-a", "acceptance-b"])
+    want = text.replace(row(text, "acceptance-a"), f'    "acceptance-a": {PLANNED}')
+    want = want.replace(row(text, "acceptance-b"), f'    "acceptance-b": {PLANNED}')
+    assert r.st.read_text() == want, f"planned a b wrote:\n{r.st.read_text()}"
+    assert row(want, "acceptance-c") == rc, want
+    assert r.s.run([S, "check", str(r.dir)]).out == "spec-status: ok (1 status files)"
+    for ids, said in (
+        (["acceptance-a"], "acceptance-a is already planned"),
+        (["acceptance-c", "acceptance-z"], "no criterion acceptance-z in"),
+        (["*"], "no criterion * in"),
+    ):
+        refused_planned(r, ids, said)
+    before = r.st.read_bytes()
+    r.s.run([S, "planned", str(r.st)], want=64)
+    assert r.st.read_bytes() == before, r.st.read_text()
+    r.with_row("acceptance-b", {"status": "planned", "pr": 8})
+    refused_planned(r, ["acceptance-c"], "acceptance-b: a planned criterion has pr null")
+    r.st.write_text('{"spec": ')
+    refused_planned(r, ["acceptance-c"], "demo.status.json")
+
+
+def refused_planned(r: Repo, ids: list[str], said: str) -> None:
+    """planned IDS exits 1 naming SAID and that nothing was written, the status file unchanged."""
+    before = r.st.read_bytes()
+    err = r.s.run([S, "planned", str(r.st), *ids], want=1).err
+    for w in (said, f"planned: nothing written to {r.st}"):
+        assert w in err, f"planned {ids} did not name {w!r}: {err}"
+    assert r.st.read_bytes() == before, f"planned {ids} changed {r.st}: {r.st.read_text()}"
+
+
 if __name__ == "__main__":
-    main(revision)
+    main(revision, planned)

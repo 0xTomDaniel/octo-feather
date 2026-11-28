@@ -1084,7 +1084,7 @@ def criteria(  # noqa: C901, PLR0912  one branch per row gap, in the order print
             miss.append(
                 f"criterion table: {'no judged column' if old else 'missing'}; add `| criterion "
                 "| qc verdict | judged | evidence |` with one row per claimed criterion, judged "
-                "naming the head just qc judged"
+                "naming the head `just qc` judged"
             )
     else:
         for ln in lines[t + 1 :]:

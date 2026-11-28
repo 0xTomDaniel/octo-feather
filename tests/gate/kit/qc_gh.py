@@ -1,30 +1,18 @@
-"""The qc judge's GitHub evidence (#34; octo-feather-qc --help, GitHub evidence; docs/adr/0022), no
-network (each qc run under `unshare -cn`: no route) and no model: the testkit's fake gh stands
-in for GitHub outside the sandbox (the caller's auth is GH_TOKEN), octo-feather-qc-ghsnap
-snapshots it before every run, and the fake judge pi (testkit/judge.py) inside the sandbox reads
-it through the offline gh (.agents/skills/github-pr/scripts/gh): issue view, pr view --json, api
-GET answer; issue comment and api -X POST are refused, counted in the cleanup line and the
-report. Also: the brief names the evidence, the snapshot is read-only inside (an escape check:
-e2e, quality spec #test-kinds), refetched per run and removed after, also from a run killed
-mid-judge; no GitHub remote skips cleanly; a failed fetch aborts before the judge (67) unless
---no-github; PR 0 is refused before the judge; a failed status commit leaves the status file
-unmodified; the status commit's Owner field (status_commit_owner); a copy of the kit judges
-itself. One judged run is prepared once per gate run (build_run), the scenarios reading it or
-judging again from it. Each judged run starts two qc sandboxes (the judge, the advice): a run
-proves every fact its setup allows (no_github, killed); one stays separate only where its setup
-excludes another's (a kill, a kit copy, a fetched snapshot)."""
+"""GitHub beside `just qc` (octo-feather-qc --help; ADR 0022, ADR 0035), no network (each qc run
+under `unshare -cn`: no route) and no model. qc's own run takes no GitHub snapshot, whatever the
+remote: a target on GitHub with a declared demo calls gh never (refused_args, status_commit_fails,
+status_commit_owner); PR 0 is refused before anything runs; a failed status commit leaves the
+status file unmodified; the status commit's Owner field; a copy of the kit judges itself. The
+snapshot a merge ask's replay takes (octo-feather-qc-ghsnap) and the offline gh that serves it,
+no sandbox: snapshot_misses, diff_too_large, notes_query, on the testkit's fake gh's store. One
+judged run is prepared once per gate run (build_run), the scenarios reading it."""
 
 from __future__ import annotations
 
 import json
-import os
-import queue
 import re
 import shutil
-import signal
 import subprocess
-import threading
-import time
 from pathlib import Path
 from typing import Any
 
@@ -128,16 +116,23 @@ def build(p: Scratch) -> None:
     g.store("api/repos/o/r/commits/abc123/check-runs.json", {"total_count": 0, "check_runs": []})
 
 
-def judge(s: Scratch, kit_dir: Path = ROOT) -> None:
-    """The fake judge (testkit/judge.py, of the kit at KIT_DIR) as S's pi."""
-    (s.bin / "pi").unlink()
-    (s.bin / "pi").symlink_to(kit_dir / "tests" / "gate" / "kit" / "testkit" / "judge.py")
+# acceptance-a's declared demo (quality spec #qc-contract): the qc target's contract.
+CONTRACT = (
+    'format = 1\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n'
+    '[demo."demo#acceptance-a"]\ncommand = "echo a ok"\n'
+    'covers = ["src/a"]\ntests = ["tests/a.sh"]\n'
+)
 
 
-def world(s: Scratch, name: str = "qc-gh") -> None:
-    """S filled with prepared NAME (build, or build_run), the fake judge its pi."""
-    s.prepare(name, build if name == "qc-gh" else build_run)
-    judge(s)
+def build_demo(p: Scratch) -> None:
+    """The target with origin o/r on GitHub (never contacted) and acceptance-a's declared demo."""
+    r = target(p, {"qc.toml": CONTRACT})
+    p.git(r, "remote", "add", "origin", "https://github.com/o/r.git")
+
+
+def world(s: Scratch, name: str = "qc-gh-demo") -> None:
+    """S filled with prepared NAME (build_demo, or build_run)."""
+    s.prepare(name, build_demo if name == "qc-gh-demo" else build_run)
 
 
 def qc(
@@ -148,14 +143,8 @@ def qc(
     return s.run(cmd, want=want, cwd=repo or s.root / "repo", env=env)
 
 
-def judged(r: Ran) -> tuple[dict[str, Any], str]:
-    """Run R's report (the path its last line names) and acceptance-a's fallback judge's stdout."""
-    rep = json.loads(Path(r.out.splitlines()[-1].rpartition("; report ")[2]).read_text())
-    return rep, rep["fallback"]["acceptance-a"]["stdout"]
-
-
 def build_run(p: Scratch) -> None:
-    """The target judged once, GitHub its evidence; the run's stdout, stderr and report path (under
+    """The demo target judged once; the run's stdout, stderr and report path (under
     this scratch, as <scratch>) and what it left in TMPDIR, in run.json."""
     world(p)
     r = qc(p, STATUS, "5", "acceptance-a", want=0)
@@ -167,12 +156,12 @@ def build_run(p: Scratch) -> None:
     )
 
 
-def prepared_run(s: Scratch) -> tuple[dict[str, Any], dict[str, Any], str]:
-    """The prepared run (build_run) in this scratch: its run.json, report and judge's stdout."""
+def prepared_run(s: Scratch) -> tuple[dict[str, Any], dict[str, Any]]:
+    """The prepared run (build_run) in this scratch: its run.json and report."""
     world(s, "qc-gh-run")
     run = json.loads((s.root / "run.json").read_text())
     rep = json.loads((s.root / run["report"]).read_text())
-    return run, rep, rep["fallback"]["acceptance-a"]["stdout"]
+    return run, rep
 
 
 def unchanged(s: Scratch, base: str) -> None:
@@ -182,8 +171,8 @@ def unchanged(s: Scratch, base: str) -> None:
 
 
 def refused_args(s: Scratch) -> None:
-    """PR 0 (and a non-number) refused before the judge or any fetch, status untouched; an id given
-    twice refused."""
+    """PR 0 (and a non-number) refused before anything runs, status untouched; an id given twice
+    refused."""
     world(s)
     base = s.git(s.root / "repo", "rev-parse", "HEAD")
     for pr in ("0", "-3", "x", "07"):
@@ -196,154 +185,10 @@ def refused_args(s: Scratch) -> None:
     assert "ids given twice" in r.err + r.out, r.err
 
 
-def snapshot_read(s: Scratch) -> None:
-    """A GitHub repo: fetched outside, reads answered inside through the offline gh, writes refused
-    and counted, the brief naming the evidence; the snapshot scratch removed after the run."""
-    run, rep, j = prepared_run(s)
-    err = run["err"]
-    line = (
-        rf"{PROOF} of o/r at .*issues 2, prs 1, runs 1, branches 1, full views 3; read-only, "
-        rf"served by the offline gh \({re.escape(str(OFFLINE_GH))}\)"
-    )
-    assert re.search(line, err), f"no github proof line: {err}"
-    lines = j.splitlines()
-    assert f"gh is {OFFLINE_GH}" in lines, f"the judge's gh is not the offline gh: {j}"
-    brief = "\n".join(ln[6:] for ln in lines if ln.startswith("BRIEF "))
-    assert "history only:" in brief, brief
-    assert "GitHub: `gh` is an offline, read-only snapshot of o/r" in brief, brief
-    assert "R1 Evidence issue OPEN" in lines, j
-    r2 = next(ln for ln in lines if ln.startswith("R2 "))
-    assert re.sub(r"\s", "", r2[3:]) == '{"isDraft":true,"title":"DraftPR"}', r2
-    assert "R3 2" in lines, j
-    assert re.search(
-        rf"^W1 {REFUSED}.*not in the read-only snapshot.*no writes", j, re.MULTILINE
-    ), j
-    assert re.search(rf"^W2 {REFUSED}.*write refused", j, re.MULTILINE), j
-    assert "offline gh refusals 2" in run["out"] + err, run["out"]
-    assert rep["gh_misses"] == 2, rep["gh_misses"]
-    assert rep["github"]["repo"] == "o/r", rep["github"]
-    assert rep["github"]["snapshot"]["counts"]["issues"] == 2, rep["github"]
-    log = s.gh.log()
-    assert not any(ln.startswith(("issue comment", "api -X")) or "POST" in ln for ln in log), (
-        f"a judge write reached gh: {log}"
-    )
-    assert not [f for f in run["left"] if f.startswith(f"qc-ghsnap-{rep['run_id']}-")], (
-        f"snapshot scratch left: {run['left']}"
-    )
-
-
-def snapshot_read_only(s: Scratch) -> None:
-    """The sandbox's escape check (e2e: quality spec #test-kinds): the judge cannot write the
-    snapshot it reads."""
-    _, _, j = prepared_run(s)
-    assert "ESCAPE" not in j, f"snapshot writable inside the sandbox: {j}"
-
-
-def killed(s: Scratch) -> None:
-    """A run killed mid-judge as a timeout kills it (TERM to it, then to its process group, the 2nd
-    send landing during qc's cleanup as on a loaded box, #235) leaves no snapshot behind, and its
-    judge does not survive. The kill waits on readiness (the proof line said, the judge started),
-    never a sleep. It is the prepared target's second run: its snapshot fetched anew."""
-    world(s, "qc-gh-run")
-    s.git(s.root / "repo", "reset", "-q", "--hard", "HEAD~1")  # the prepared status commit undone
-    mark = f"9{os.getpid()}{time.monotonic_ns() % 1000}"  # the judge's sleep, unique to this run
-    cmd = [
-        "unshare",
-        "-cn",
-        "timeout",
-        "-k",
-        "5",
-        LIMIT_S,
-        kit("octo-feather-qc"),
-        STATUS,
-        "5",
-        "acceptance-a",
-    ]
-    p = subprocess.Popen(
-        cmd,
-        cwd=s.root / "repo",
-        env={**s.env, "FAKE_PI_HANG": mark},
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    lines: queue.Queue[str | None] = queue.Queue()
-    said: list[str] = []
-
-    def read() -> None:
-        assert p.stderr
-        for ln in p.stderr:
-            lines.put(ln)
-        lines.put(None)
-
-    threading.Thread(target=read, daemon=True).start()
-    while True:
-        ln = lines.get(timeout=float(LIMIT_S))
-        assert ln is not None, f"the judge never started: {''.join(said)}"
-        said.append(ln)
-        if ln.startswith(PROOF):
-            break
-    while not alive(mark):
-        assert p.poll() is None, f"qc ended before its judge started: {''.join(said)}"
-        time.sleep(0.01)  # a process-state wait: the judge's sleep is running
-    os.kill(p.pid, signal.SIGTERM)
-    while True:  # until the group is gone: its leader reaped (poll) and every member exited
-        p.poll()
-        try:
-            os.killpg(p.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            break
-        time.sleep(0.0005)
-    rc = p.wait()
-    assert rc != 0, "the killed run exited 0"
-    views = [ln for ln in s.gh.log() if ln.startswith("repo view")]
-    assert len(views) == 2, f"the snapshot was not refetched per run: {s.gh.log()}"
-    left = [f.name for f in (s.root / "tmp").iterdir()]
-    assert left == [], f"the killed run left scratch: {left}"
-    end = time.monotonic() + 10
-    while alive(mark):
-        assert time.monotonic() < end, "the killed run's judge survived"
-        time.sleep(0.01)
-
-
-def alive(mark: str) -> bool:
-    """Whether a process `sleep MARK` runs."""
-    want = f"sleep\0{mark}\0".encode()
-
-    def cmdline(d: Path) -> bytes:
-        try:
-            return (d / "cmdline").read_bytes()
-        except OSError:  # gone meanwhile
-            return b""
-
-    return any(cmdline(d) == want for d in Path("/proc").iterdir() if d.name.isdigit())
-
-
-def fetch_fails(s: Scratch) -> None:
-    """A fetch failure (network down, or no auth) aborts before the judge (67), naming --no-github,
-    the status file untouched."""
-    world(s)
-    base = s.git(s.root / "repo", "rev-parse", "HEAD")
-    (s.gh.dir / "down").touch()
-    r = qc(s, STATUS, "5", "acceptance-a", want=67)
-    said = r.out + r.err
-    assert re.search(
-        r"GitHub snapshot of o/r failed; judge not started.*--no-github.*error connecting",
-        said,
-        re.DOTALL,
-    ), said
-    assert "qc sandbox:" not in said, f"the sandbox started after a failed fetch: {said}"
-    unchanged(s, base)
-    (s.gh.dir / "down").unlink()
-    r = qc(s, STATUS, "5", "acceptance-a", want=67, GH_TOKEN="")
-    assert "gh auth login" in r.out + r.err, r.err
-    unchanged(s, base)
-
-
-def no_github(s: Scratch) -> None:
-    """--no-github with the fetch failing: the run judges without it (acceptance-a passes), said in
-    the proof, the offline gh refusing. Its status commit then fails (a pre-commit hook): exit 3,
-    the status file restored, nothing uncommitted."""
+def status_commit_fails(s: Scratch) -> None:
+    """A target on GitHub: acceptance-a passes from its demo, no snapshot fetched (gh never called),
+    the demo's sandbox told so. Its status commit then fails (a pre-commit hook): exit 3, the status
+    file restored, nothing uncommitted."""
     world(s)
     r = s.root / "repo"
     base = s.git(r, "rev-parse", "HEAD")
@@ -352,22 +197,21 @@ def no_github(s: Scratch) -> None:
     (hooks / "pre-commit").write_text("#!/bin/sh\nexit 1\n")
     (hooks / "pre-commit").chmod(0o755)
     s.git(r, "config", "core.hooksPath", str(hooks))
-    (s.gh.dir / "down").touch()
-    ran = qc(s, STATUS, "5", "acceptance-a", "--no-github", want=3)
-    assert "qc sandbox: ok   github: SKIPPED (--no-github; o/r not fetched" in ran.err, ran.err
+    ran = qc(s, STATUS, "5", "acceptance-a", want=3)
+    assert "qc sandbox: ok   github: none (a declared demo" in ran.err, ran.err
+    assert s.gh.log() == [], f"qc called gh: {s.gh.log()}"
     failed = re.search(r"status commit failed .*; report (\S+)$", ran.err, re.MULTILINE)
     assert failed, ran.err
     unchanged(s, base)
     rep = json.loads(Path(failed[1]).read_text())
     assert [(x["id"], x["verdict"]) for x in rep["results"]] == [("acceptance-a", "pass")], rep
-    j = rep["fallback"]["acceptance-a"]["stdout"]
-    assert re.search(rf"^R1 {REFUSED}.*\): github: SKIPPED", j, re.MULTILINE), j
+    assert "github" not in rep, rep
 
 
 def status_commit_owner(s: Scratch) -> None:
     """The prepared run's status commit: its Owner field line (who owes it:
     scripts/check-owner-field --help, Who owes it) under qc's unchanged subject."""
-    _, rep, _ = prepared_run(s)
+    _, rep = prepared_run(s)
     r = s.root / "repo"
     subject = s.git(r, "log", "-1", "--format=%s")
     assert subject == f"qc: built acceptance-a (judged {rep['head'][:12]})", subject
@@ -460,9 +304,8 @@ def recorded(name: str) -> dict[str, Any]:
 
 
 def kit_on_kit(s: Scratch) -> None:
-    """A copy of the kit judging itself (the kit inside the judged worktree), a repo with no GitHub
-    remote: the proof passes and says so; no fetch, the offline gh refusing every call, the
-    refusals counted."""
+    """A copy of the kit judging itself (the kit inside the judged worktree), a demo its contract
+    declares: the proof passes and says so; no fetch, the offline gh refusing every call."""
     kc = s.root / "kc"
     # The box's uv Pythons, uv cache and pnpm store, kept while HOME moves: octo-feather-qc collects
     # the copy's tagged tests offline through its just check-tests.
@@ -479,7 +322,6 @@ def kit_on_kit(s: Scratch) -> None:
             (kc / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, kc / rel, follow_symlinks=False)
     s.link_fakes(kc)
-    judge(s, kc)
     # The kit's own status files name accepted commits this fresh repo lacks: only zz-demo judged.
     for f in (
         *(kc / "docs" / "specs").glob("*.status.json"),
@@ -496,6 +338,11 @@ def kit_on_kit(s: Scratch) -> None:
     s.git(kc, *git, "commit", "-qm", "kit")
     short = s.git(kc, "rev-parse", "--short", "HEAD")
     s.run([kit("octo-feather-spec-status"), "init", "docs/specs/zz-demo.spec.html", short], cwd=kc)
+    with (kc / "qc.toml").open("a") as f:  # its demo: the offline gh asked, refusing
+        f.write(
+            '\n[demo."zz-demo#acceptance-a"]\ncommand = "gh issue view 1 || echo refused"\n'
+            'covers = ["src/a"]\n'
+        )
     s.git(kc, "add", "-A")
     s.git(kc, *git, "commit", "-qm", "status")
     for k, v in (("user.email", "t@t"), ("user.name", "t"), ("commit.gpgsign", "false")):
@@ -512,12 +359,12 @@ def kit_on_kit(s: Scratch) -> None:
     assert "qc sandbox: ok   HOME, /var/tmp read-only; the kit is the judged worktree" in r.err, (
         r.err
     )
-    none = "github: none (no GitHub remote); the offline gh refuses every call (exit 1)"
-    assert f"qc sandbox: ok   {none}" in r.err, r.err
+    none = "the offline gh refuses every call (exit 1)"
+    assert f"qc sandbox: ok   github: none (a declared demo, no agent judge); {none}" in r.err, (
+        r.err
+    )
     assert s.gh.log() == [], f"a run with no GitHub remote called gh: {s.gh.log()}"
-    _, j = judged(r)
-    assert re.search(rf"^R1 {REFUSED}.*\): github: none \(no GitHub remote\)", j, re.MULTILINE), j
-    assert "offline gh refusals 5" in r.out, r.out
+    assert "PASS acceptance-a: $ gh issue view 1 || echo refused" in r.out, r.out
 
 
 def notes_query(s: Scratch) -> None:
@@ -595,11 +442,7 @@ def notes_query(s: Scratch) -> None:
 if __name__ == "__main__":
     main(
         refused_args,
-        snapshot_read,
-        snapshot_read_only,
-        killed,
-        fetch_fails,
-        no_github,
+        status_commit_fails,
         status_commit_owner,
         snapshot_misses,
         diff_too_large,

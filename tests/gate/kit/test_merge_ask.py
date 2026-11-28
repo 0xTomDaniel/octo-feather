@@ -383,7 +383,7 @@ def test_merge_ask_judged_rows() -> None:
     assert gaps_of(old) == [
         (
             "criterion table: no judged column; add `| criterion | qc verdict | judged | evidence "
-            "|` with one row per claimed criterion, judged naming the head just qc judged"
+            "|` with one row per claimed criterion, judged naming the head `just qc` judged"
         )
     ]
     qx = sha("7")
@@ -478,12 +478,12 @@ def test_merge_ask_passes() -> None:
     report = f"{J}-20261029T090000Z-src123.json"
     qc = {
         "demo#acceptance-a": ({"id": "acceptance-a", "decision": "tagged test assertions"}, report),
-        "demo#acceptance-b": ({"id": "acceptance-b", "decision": "agent fallback"}, report),
+        "demo#acceptance-b": ({"id": "acceptance-b", "decision": "demo checks"}, report),
     }
     assert ask(replace(LANE, qc={J: qc})).sources == [
         src,
         "- demo#acceptance-a: tagged test assertions",
-        "- demo#acceptance-b: agent fallback",
+        "- demo#acceptance-b: demo checks",
     ]
 
 
@@ -817,7 +817,7 @@ def test_merge_ask_criterion_claimed() -> None:
             "no rows; add one per claimed criterion"
             if tbl
             else "missing; add `| criterion | qc verdict | judged | evidence |` with one row per "
-            "claimed criterion, judged naming the head just qc judged"
+            "claimed criterion, judged naming the head `just qc` judged"
         )
         for claimed in (
             pr8(nq, (nq, "qc: built acceptance-a (judged 0123456789ab)"), table=tbl),

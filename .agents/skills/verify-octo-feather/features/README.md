@@ -50,7 +50,7 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [qc-sandbox](./qc-sandbox.md) covers the qc sandbox run by hand (`scripts/octo-feather-qc-sandbox -- CMD`) on srt: its proof and its refused escapes.
 - [qc-sandbox-cost](./qc-sandbox-cost.md) covers the qc sandbox's CPU per run around a judge that does nothing, run after run.
 - [qc-advisory](./qc-advisory.md) covers `just qc` showing the judgment model's advisory answer beside each recorded result, the result unchanged by it.
-- [qc-fallback](./qc-fallback.md) covers `just qc` sending a criterion with no declared demo to the agent fallback: a fresh, time-capped qc judge whose report becomes that criterion's record.
+- [qc-fallback](./qc-fallback.md) covers `just qc` giving a criterion with neither a tagged test nor a declared demo insufficient evidence naming that it has neither, no judge, sandbox or model started.
 - [qc-stale](./qc-stale.md) covers `just qc` linking each built criterion to its evidence record, capture commit and tests, and `octo-feather-spec-status show` naming a built criterion current or stale.
 - [spec-revision-init](./spec-revision-init.md) covers `octo-feather-spec-status init` on an owner-accepted spec revision over its existing status file, and `check` after it (what init does then: issue-lifecycle spec `#spec-status-file`).
 - [starter-acceptance](./starter-acceptance.md) covers a template-born repo's starter criterion judged by `just qc` from the record its tagged acceptance test left in the claims gate, with no demo.
@@ -62,7 +62,7 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [merge-tiers](./merge-tiers.md) covers merge tiers and the merge guard as a supervisor and the director use them: `octo-feather-lane merge-ask`'s tier block (each reason kind, Waits for, the incomplete block), `relay` (the director's pane only), `merge` refusing or merging by tier and relay, on the realcase's recorded runs.
 - [pilot-pr](./pilot-pr.md) covers a lane's pilot recorded on its draft PR: `octo-feather-integrate`, `gh pr create --draft`, `just qc` on the pilot's criteria and `octo-feather-lane verdict`, the PR showing qc's status-only commit and the verdict naming the head it follows.
 - [one-execution](./one-execution.md) covers a target's final full gate, given the lane's claims, running a tagged acceptance test once in the qc sandbox into one evidence record, and one `just qc` naming every spec's status file judging each criterion from its record without rerunning it, in one status-only commit.
-- [one-execution-incomplete](./one-execution-incomplete.md) covers `just qc` giving insufficient evidence, never the agent fallback, for a claimed criterion whose tagged test the gate skipped.
+- [one-execution-incomplete](./one-execution-incomplete.md) covers `just qc` giving insufficient evidence for a claimed criterion whose tagged test the gate skipped.
 - [qa-runs](./qa-runs.md) covers the factory evals running each case several times (`octo-feather-qa --runs N`; criterion: quality#acceptance-qa-repeats).
 - [qa-baseline](./qa-baseline.md) covers a case's time and tokens over several runs and a baseline kit compared beside the current one (`octo-feather-qa --runs N --baseline COMMIT`; criteria: quality#acceptance-qa-cost, quality#acceptance-qa-baseline).
 - [qa-analyst](./qa-analyst.md) covers the deterministic analysis of a baseline comparison and its rerun on a stored run (`octo-feather-qa --analyze`; criterion: quality#acceptance-qa-analyst).
