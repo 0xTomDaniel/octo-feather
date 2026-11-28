@@ -666,8 +666,8 @@
     "acceptance-lane-start-usage": {
       "status": "built",
       "pr": 1359,
-      "record": "20261128T113355Z-dcf191b6",
-      "commit": "7a5fad8df32bd04b1fd0346052d84e014eee4358",
+      "record": "20261128T122704Z-3de860bc",
+      "commit": "5b6e8c914b96ca129307ffbd460652ca716b038f",
       "tests": [
         "tests/gate/kit/lane_start.py"
       ]
@@ -675,8 +675,8 @@
     "acceptance-lane-start-room": {
       "status": "built",
       "pr": 1359,
-      "record": "20261128T113356Z-084336fd",
-      "commit": "7a5fad8df32bd04b1fd0346052d84e014eee4358",
+      "record": "20261128T122704Z-2e2cf588",
+      "commit": "5b6e8c914b96ca129307ffbd460652ca716b038f",
       "tests": [
         "tests/gate/kit/lane_start.py"
       ]
@@ -684,8 +684,8 @@
     "acceptance-lane-start-clear": {
       "status": "built",
       "pr": 1359,
-      "record": "20261128T113356Z-e3cb0c12",
-      "commit": "7a5fad8df32bd04b1fd0346052d84e014eee4358",
+      "record": "20261128T122705Z-31493f7c",
+      "commit": "5b6e8c914b96ca129307ffbd460652ca716b038f",
       "tests": [
         "tests/gate/kit/lane_start.py"
       ]
@@ -693,8 +693,8 @@
     "acceptance-lane-start-unread": {
       "status": "built",
       "pr": 1359,
-      "record": "20261128T113356Z-6fd765d3",
-      "commit": "7a5fad8df32bd04b1fd0346052d84e014eee4358",
+      "record": "20261128T122705Z-bc6c3584",
+      "commit": "5b6e8c914b96ca129307ffbd460652ca716b038f",
       "tests": [
         "tests/gate/kit/lane_start.py"
       ]
@@ -702,8 +702,8 @@
     "acceptance-lane-start-carried": {
       "status": "built",
       "pr": 1359,
-      "record": "20261128T113356Z-6e6414ad",
-      "commit": "7a5fad8df32bd04b1fd0346052d84e014eee4358",
+      "record": "20261128T122705Z-d92df71b",
+      "commit": "5b6e8c914b96ca129307ffbd460652ca716b038f",
       "tests": [
         "tests/gate/kit/lane_start.py"
       ]
