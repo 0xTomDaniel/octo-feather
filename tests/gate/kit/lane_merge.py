@@ -11,6 +11,10 @@ supervisors and the director (w9:p99) live, idle, under the kit's own herdr-say.
 with gh7's supervisor's environment (SUPERVISOR: its role, the director pane its parent, its own
 Herdr pane and workspace), so herdr-say's up-chain guard (docs/adr/0015) is active as in that
 supervisor's pane (#1249). Space ids `zt*`, which no real Herdr gives.
+
+merge_starts_routine runs instead in gh1249's real case (testkit.realcase): gh answers
+only from its recorded tape (testkit/recordings/lane-merge-realcase.json), its git world the
+realcase repo's bundle, every expected value the tape's recorded answer (#1267).
 """
 
 from __future__ import annotations
@@ -23,6 +27,7 @@ from typing import TYPE_CHECKING
 from herdr_messaging import ASSETS, agent, lines
 from lane_post_merge import Lane, run1
 from testkit import Scratch, kit, main
+from testkit.realcase import REALCASE, RealCase, recorded, recordings
 
 if TYPE_CHECKING:
     from testkit import Ran
@@ -47,6 +52,7 @@ SUPERVISOR = {
     "HERDR_PANE_ID": "zt1:p1",
     "HERDR_WORKSPACE_ID": "zt1",
 }
+TAPE = "lane-merge-realcase"
 
 
 class World:
@@ -149,58 +155,63 @@ def outcomes(shown: list[str]) -> list[str]:
 
 
 def merge_starts_routine(s: Scratch) -> None:
-    """issue-lifecycle#acceptance-merge-starts-routine: `merge 7 H --repo o/r` (the ticket's
-    demo, its commands and output printed) merges pinned to H (the fake
-    gh logs the pinned merge, after the PR read), runs done on parent 70, the tracker key of the
-    record's lane key gh70 (71 then 70 closed), leaves the kit install and the director's checkout
-    at the merge commit, tells lane gh8's supervisor main moved (not gh7's own) through the
-    guard of the supervisor's environment, that line and its prod line in the director log naming
-    the post-merge routine of lane gh7 as sender, and prints steps 1-7 ok and step 8 pending;
-    exit 0. The only gh writes: the merge and the two closes. `post-merge --lane gh7` then prints
-    the record: PR, head and merge commit, steps 1-7 ok and step 8 pending. The guard still holds
-    for the supervisor's own send: its `herdr-say zt2:p1 ...` exits 77, nothing delivered."""
-    w = World(s)
-    lane = w.lane
-    m, m12 = lane.m, lane.m[:12]
-    r = w.run(0, "merge", "7", H, "--repo", "o/r")
-    log, merge = s.gh.log(), f"{MERGE} -R o/r"
-    assert merge in log, f"no pinned merge: {log}"
-    assert log.index("pr view 7 --json state,headRefOid -R o/r") < log.index(merge), log
-    writes = [x for x in log if x.startswith(("pr merge", "issue close", "pr edit", "api -X"))]
-    assert writes == [merge, "issue close 71", "issue close 70"], f"gh writes: {log}"
+    """issue-lifecycle#acceptance-merge-starts-routine on gh1249's real case (RealCase,
+    testkit.realcase, the merge tape; the ticket's demo, its commands and output printed):
+    supervisor A's `merge 14 7d7155984818 --repo REALCASE` asks gh exactly the recorded run's
+    calls, in its order, each answered by its recording: the PR read, the merge pinned to the
+    PR's recorded head, done on parent 10, the tracker key of the record's lane key gh10
+    (sub-issue 11 closed, then 10, each read back), then the routine's. It prints the merge, the
+    recorded parent's sub-issues then the parent done, steps 1-7 ok and step 8 pending, exit 0;
+    leaves the kit install (another repo's, as the recorded repo views name) unfetched and the
+    director's checkout on main at the recorded merge commit; tells lane gh12's supervisor main
+    moved (not gh10's own) through the guard of A's environment, naming the recorded PR title,
+    its line and its prod line in the director log naming the post-merge routine of lane gh10 as
+    sender. `post-merge --lane gh10` then prints the record: PR, head and merge commit, steps
+    1-7 ok and step 8 pending, no gh call. The guard still holds for the supervisor's own send:
+    its `herdr-say zt2:p1 ...` exits 77, nothing delivered."""
+    w = RealCase(s, TAPE)
+    calls = [str(x["request"]) for x in recordings(TAPE)]
+    head = json.loads(recorded(TAPE, f"pr view 14 --json state,headRefOid -R {REALCASE}"))
+    h, m = head["headRefOid"], w.merge
+    view = "issue view 10 --json number,title,body,state,url,parent,subIssues,blockedBy"
+    parent = json.loads(recorded(TAPE, view))  # done's first read of parent 10, before its closes
+    p, kids = parent["number"], [x["number"] for x in parent["subIssues"]["nodes"]]
+    title = json.loads(recorded(TAPE, f"pr view 14 --json title,url -R {REALCASE}"))["title"]
+    pr_repo, kit_repo = (
+        json.loads(recorded(TAPE, f"repo view {x} --json nameWithOwner"))["nameWithOwner"]
+        for x in (REALCASE, "https://github.com/0xTomDaniel/octo-feather")
+    )
+    r = w.lane("merge", "14", h[:12], "--repo", REALCASE)
+    assert s.gh.log() == calls, f"gh calls, want the recorded run's: {s.gh.log()}"
     out = r.out.split("\n")
-    assert out[0] == "merged: PR #7 at head 1234567890ab (lane gh7)", r.out
-    assert out[1:4] == ["71: done", "70: done", "70: parent and 1 tickets done"], r.out
+    done = [f"{k}: done" for k in [*kids, p]] + [f"{p}: parent and {len(kids)} tickets done"]
+    assert out[: 1 + len(done)] == [f"merged: PR #14 at head {h[:12]} (lane gh10)", *done], r.out
     for n, name in enumerate(STEPS[:7], 1):
         assert any(x.startswith(f"step {n} {name}: ok: ") for x in out), f"step {n}: {r.out}"
-    pending = "step 8 teardown: pending: lane gh7 not archived; its archive starts this step"
+    kept = f"step 3 kit refresh: ok: kit install unchanged: PR in {pr_repo}, install is {kit_repo}"
+    assert kept in out, r.out
+    assert not s.git(w.kit, "for-each-ref"), "kit install fetched"
+    pending = "step 8 teardown: pending: lane gh10 not archived; its archive starts this step"
     assert pending in out, r.out
     assert out[-1].endswith("step 7 tell supervisors ok; step 8 teardown pending"), r.out
-    assert lane.head() == m, f"kit install at {lane.head()}, not the merge commit"
-    assert lane.where() == (m, "main"), f"checkout at {lane.where()}"
+    where = s.git(w.checkout, "rev-parse", "HEAD"), s.git(w.checkout, "branch", "--show-current")
+    assert where == (m, w.base), f"checkout at {where}"
+    sender = "(from the post-merge routine of lane gh10)"
+    rules = "rule files changed: none; re-read the changed ones before your next step."
     told = w.told()
-    assert [x.split("\t")[0] for x in told] == ["zt2:p1"], f"told: {told}"
-    assert told[0].startswith(f"zt2:p1\tmain moved to {m12} (#7 Add foo); "), told
-    sender = "from the post-merge routine of lane gh7"
-    assert sender in told[0], told
-    prods = [
-        json.loads(x)["note"]
-        for x in lines(w.st / "director.handoffs.jsonl")
-        if json.loads(x)["kind"] == "prod"
-    ]
-    assert len(prods) == 1, prods
-    assert prods[0].startswith(f"post-merge {m} #7: main moved, told gh8 to re-read "), prods
-    assert sender in prods[0], prods
-    own = s.run([str(ASSETS / "herdr-say"), "zt2:p1", "mine"], want=77, env={"PATH": w.path})
+    assert told == [f"zt2:p1\tmain moved to {m[:12]} (#14 {title}); {rules} {sender}"], told
+    note = f"post-merge {m} #14: main moved, told gh12 to re-read none {sender}"
+    assert [(x["issue"], x["note"]) for x in w.prods()] == [("gh12", note)], w.prods()
+    own = s.run([str(ASSETS / "herdr-say"), "zt2:p1", "mine"], want=77)
     assert "supervisor may message only up its chain" in own.err, own.err
     assert w.told() == told, "the supervisor's own send delivered"
-    shown = w.shown()
-    head = w.run(0, "post-merge", "--lane", "gh7").out.split("\n")[0]
-    record = w.st / "post-merge" / "gh7.json"
-    want = f"post-merge record gh7: PR #7, head {H}, merge commit {m} ({record})"
-    assert head == want, head
+    shown = w.lane("post-merge", "--lane", "gh10").out.split("\n")
+    record = w.top / "post-merge" / "gh10.json"
+    want = f"post-merge record gh10: PR #14, head {h[:12]}, merge commit {m} ({record})"
+    assert shown[0] == want, shown[0]
     ok = [f"{n} {name} ok" for n, name in enumerate(STEPS[:7], 1)]
-    assert outcomes(shown) == [*ok, "8 teardown pending"], shown
+    assert outcomes(shown[1:]) == [*ok, "8 teardown pending"], shown
+    assert s.gh.log() == calls, f"the record's read asked gh: {s.gh.log()}"
 
 
 def resume(s: Scratch) -> None:

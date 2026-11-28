@@ -1,0 +1,411 @@
+#!/usr/bin/env python3
+"""check-fake-gh: the freeze on the hand-written fake gh's store (owner ruling 2026-11-24 #1252,
+owner-fakes-ratchet: no new test uses the hand-written fake gh, and its users only go down; ticket
+#1263); `just check-fake-gh` runs it, in the fast tier (a GATE_RECIPES recipe).
+
+It reads the kit's real test files and lists every test item that drives the fake gh's store
+(tests/gate/kit/testkit/gh.py, its simulator part), then compares that list with the baseline,
+tests/gate/kit/testkit/gh-store-users.txt (one item per line, sorted; `#` lines are comments).
+
+A use, read with Python's ast from the item's own source, never a marker:
+  - a call on a Scratch's store: `.gh.put(`, `.gh.pr(`, `.gh.store(` with any first argument but
+    the literal "tape.json" (`recorded.json` beside a store is a use);
+  - a path into the store: `.gh.dir`, except `.gh.dir / "log"` (the call log) and
+    `.gh.dir / "tape.json"` (a tape), or `FAKE_GH` anywhere in a string (a script a scenario
+    writes, an environment it sets).
+Attribution follows names: a top-level def, class or assigned name that uses the store taints
+every top-level one that names it, in its own file, a sibling module of tests/gate/kit or the
+testkit package (imports resolved by module name; testkit's own Scratch and Gh, the store's
+set-up, are no use). The unit is the gate's own: a pytest item's node id,
+`tests/gate/kit/test_NAME.py::test_FUNC`, its scenario reached through the names its test
+function holds (`case(scenario)`); a parametrized function is one line, its function's id. Each
+tests/*.sh is one item, by text: `FAKE_GH` or `testkit/gh.py` in it. A tape-only item (a tape
+stored as `tape.json`, then the call log read) is no use: replaying a recording is the policy
+(.agents/skills/tdd/mocking.md, Recordings).
+
+It fails (exit 1), naming each item:
+  - new use: an item uses the store and has no line; printed with the file:line that uses it
+    (the first use found along the names the item reaches);
+  - stale: a line whose item no longer uses the store or no longer exists: delete the line in the
+    same commit (the baseline only goes down);
+  - hand-added: a line absent from the baseline at the merge base of HEAD with the default branch,
+    found by `scripts/octo-feather-gate base` (the gate's own default-branch code, as `changed`
+    finds it: one mechanism). No default branch or no merge base (a gate's /tmp copy of the kit
+    may have neither): it says so on stdout and judges no line by this rule. No baseline file at
+    the merge base (the commit that lands it): says so and judges none.
+A rename of a listed store-using item (its test function or file renamed) reads as a new use plus
+a stale line and is refused: a rename is no carry-over. Adding the new name's line clears the new
+use, and the hand-added rule then refuses that line, as it is absent at the merge base; the item
+can land only off the store (a tape) or under its old name.
+
+`check-fake-gh --replay REV` (a correction lane's Replay rows, octo-feather-lane --help,
+merge-ask): commit REV of this repo judged as the check would have judged it on its lane, its
+baseline the check's own measurement at REV's first parent (`git archive` of both trees' kit test
+files): each new use refused as above, exit 1; none, exit 0. It reads no baseline file and judges
+no stale or hand-added line (REV's lane would have deleted a stale line in the same commit).
+
+What it cannot see (stated limits):
+  - an invented or edited tape: a hand-written tape.json, or a real recording changed before its
+    replay, is no store use (both #1252 findings, gh851 and gh1224, are this kind);
+  - an item that stores nothing yet gets the store's own synthesized answers (an unstored path's
+    404, the no-token prompt, `run list` filtering);
+  - a use reached dynamically: getattr, a store path built at run time, `.gh` held in another name
+    (`g = s.gh; g.put(...)`), a module imported by a computed name;
+  - over-counting is conservative: a bare `.gh.dir` (as in a loop over dirs) counts as a use.
+
+Kit-only: the hand-written fake gh lives only in the kit's testkit; a target's tools for recording
+and replaying are the shaped part of #1252, not this check. Stdlib only (ast, subprocess), as the
+kit's own scripts are (AGENTS.md Rules). Each file is parsed once. Exit 0 ok, 1 refused, 2 an
+internal error (fails closed, never ok).
+"""
+
+from __future__ import annotations
+
+import argparse
+import ast
+import io
+import re
+import subprocess
+import sys
+import tarfile
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+KIT = "tests/gate/kit"
+BASELINE = f"{KIT}/testkit/gh-store-users.txt"
+STORE_ATTRS = {"put", "pr", "store", "dir"}  # .gh.ATTR: the store's calls and its dir
+TOKEN = re.compile(r"\.gh\.|FAKE_GH")  # a module without it uses the store in no def of its own
+IMPORT = re.compile(r"^\s*(?:from|import)\s+([\w.]+)", re.MULTILINE)
+TAPE_ONLY = {"log", "tape.json"}  # .gh.dir / NAME that is no use
+SETUP = {("testkit", "Scratch"), ("testkit", "Gh")}  # the store's own set-up, no use
+SH_USE = re.compile(r"FAKE_GH|testkit/gh\.py")
+FIX = (
+    "check-fake-gh (synthetic-recording, #1252): a test may not drive the hand-written fake gh's"
+    " store (owner-fakes-ratchet): replay a real recording as tape.json"
+    " (.agents/skills/tdd/mocking.md, Recordings);"
+    f" a stale line is deleted from {BASELINE}; a line is never added (a renamed item too)"
+)
+
+Key = tuple[str, str]  # (module, top-level name)
+
+
+@dataclass(frozen=True)
+class Use:
+    path: str
+    line: int
+    text: str
+
+    def __str__(self) -> str:
+        return f"{self.path}:{self.line}: {self.text}"
+
+
+def is_gh(n: ast.AST) -> bool:
+    return isinstance(n, ast.Attribute) and n.attr == "gh"
+
+
+def no_use(n: ast.AST) -> set[int]:
+    """The nodes under N that are no use, by N alone: `.gh.dir / "log"` and `.gh.dir /
+    "tape.json"` (the call log, a tape), `.gh.store("tape.json", ...)`, the bare "FAKE_GH" items
+    of a tuple, list or set literal (an environment scrub's names), and a def's or class's
+    docstring (prose)."""
+    if isinstance(n, ast.BinOp) and isinstance(n.op, ast.Div):
+        left, right = n.left, n.right
+        if isinstance(left, ast.Attribute) and left.attr == "dir" and is_gh(left.value):
+            return (
+                {id(left)}
+                if isinstance(right, ast.Constant) and right.value in TAPE_ONLY
+                else set()
+            )
+    if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute) and n.args:
+        f, arg = n.func, n.args[0]
+        if f.attr == "store" and is_gh(f.value) and isinstance(arg, ast.Constant):
+            return {id(f)} if arg.value == "tape.json" else set()
+    if isinstance(n, (ast.Tuple, ast.List, ast.Set)):
+        return {id(e) for e in n.elts if isinstance(e, ast.Constant) and e.value == "FAKE_GH"}
+    if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and n.body:
+        d = n.body[0]
+        if isinstance(d, ast.Expr) and isinstance(d.value, ast.Constant):
+            return {id(d.value)}
+    return set()
+
+
+def is_use(n: ast.AST) -> bool:
+    """N uses the store by itself (the module docstring, A use), before no_use's exemptions."""
+    if isinstance(n, ast.Attribute):
+        return is_gh(n.value) and n.attr in STORE_ATTRS
+    return isinstance(n, ast.Constant) and isinstance(n.value, str) and "FAKE_GH" in n.value
+
+
+@dataclass
+class Module:
+    """One parsed module's top-level names: each def, class or assigned name's nodes, the names
+    its imports bind to kit defs and to kit modules, and its test functions."""
+
+    tops: dict[str, list[ast.stmt]]
+    names: dict[str, Key]
+    modules: dict[str, str]
+    tests: list[str]
+
+
+def imported_from(n: ast.ImportFrom, files: dict[str, Path], m: Module) -> None:
+    """The names `from X import ...` N binds in M: a kit module (a testkit submodule), or a kit
+    module's def; a relative import is testkit's own."""
+    base = (f"testkit.{n.module}" if n.module else "testkit") if n.level else n.module
+    for a in n.names:
+        local = a.asname or a.name
+        if base == "testkit" and f"testkit.{a.name}" in files:
+            m.modules[local] = f"testkit.{a.name}"
+        elif base in files:
+            m.names[local] = (base or "", a.name)
+
+
+def bound(tree: ast.Module, files: dict[str, Path], *, is_test: bool) -> Module:
+    m = Module({}, {}, {}, [])
+    for n in tree.body:
+        if isinstance(n, ast.ImportFrom):
+            imported_from(n, files, m)
+        elif isinstance(n, ast.Import):
+            m.modules |= {a.asname or a.name: a.name for a in n.names if a.name in files}
+        elif isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            m.tops.setdefault(n.name, []).append(n)
+            if is_test and n.name.startswith("test_") and not isinstance(n, ast.ClassDef):
+                m.tests.append(n.name)
+        elif isinstance(n, (ast.Assign, ast.AnnAssign)):
+            targets = n.targets if isinstance(n, ast.Assign) else [n.target]
+            for x in (x for t in targets for x in ast.walk(t)):
+                if isinstance(x, ast.Name):
+                    m.tops.setdefault(x.id, []).append(n)
+    return m
+
+
+def scan(m: Module, mod: str, name: str) -> tuple[set[Key], int]:
+    """What top-level NAME of module MOD names, and its first line using the store (0: none)."""
+    refs: set[Key] = set()
+    exempt: set[int] = set()
+    first = 0
+    for x in (x for top in m.tops[name] for x in ast.walk(top)):  # a parent before its children
+        exempt |= no_use(x)
+        if isinstance(x, ast.Name) and x.id != name:
+            ref = (mod, x.id) if x.id in m.tops else m.names.get(x.id)
+            refs |= {ref} if ref else set()
+        elif isinstance(x, ast.Attribute) and isinstance(x.value, ast.Name):
+            if x.value.id in m.modules:
+                refs.add((m.modules[x.value.id], x.attr))
+        if id(x) not in exempt and is_use(x):
+            line = getattr(x, "lineno", 0)
+            first = min(first or line, line)
+    return refs, first
+
+
+class Kit:
+    """The kit's test modules, each parsed once, and only those that can reach a store use: a
+    module whose text holds no use token and imports no module that uses the store cannot."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        kit = root / KIT
+        self.files: dict[str, Path] = {p.stem: p for p in sorted(kit.glob("*.py"))}
+        for p in sorted((kit / "testkit").glob("*.py")):
+            if p.name != "gh.py":  # the fake itself
+                self.files["testkit" if p.stem == "__init__" else f"testkit.{p.stem}"] = p
+        self.text = {m: p.read_text(encoding="utf-8") for m, p in self.files.items()}
+        self.direct: dict[Key, Use] = {}
+        self.refs: dict[Key, set[Key]] = {}
+        self.tests: list[tuple[str, str]] = []  # (module, test function)
+        self.parsed: set[str] = set()
+        for m, t in self.text.items():
+            if TOKEN.search(t):
+                self.load(m)
+        users = {k[0] for k in self.direct}
+        imports = {m: self.imported(t) for m, t in self.text.items()}
+        grew = True
+        while grew:  # every module that may import a using one, at any depth
+            grew = False
+            for m, ims in imports.items():
+                if m not in users and ims & users:
+                    users.add(m)
+                    grew = True
+        for m in users:
+            if m not in self.parsed:
+                self.load(m)
+
+    def imported(self, text: str) -> set[str]:
+        """The kit modules TEXT may import (over-approximate: every testkit module once it imports
+        from testkit)."""
+        out = {m for m in IMPORT.findall(text) if m in self.files}
+        if "testkit" in out:
+            out |= {m for m in self.files if m.startswith("testkit.")}
+        return out
+
+    def load(self, mod: str) -> None:
+        self.parsed.add(mod)
+        p, text = self.files[mod], self.text[mod]
+        m = bound(ast.parse(text, filename=str(p)), self.files, is_test=p.name.startswith("test_"))
+        self.tests += [(mod, t) for t in m.tests]
+        src = text.splitlines()
+        for name in m.tops:
+            self.refs[mod, name], first = scan(m, mod, name)
+            if first and (mod, name) not in SETUP:
+                rel = p.relative_to(self.root).as_posix()
+                self.direct[mod, name] = Use(rel, first, src[first - 1].strip())
+
+    def users(self) -> dict[str, Use]:
+        """Each store-using pytest item's node id, with the first use it reaches (breadth first,
+        so the nearest)."""
+        out: dict[str, Use] = {}
+        for mod, name in self.tests:
+            seen = {(mod, name)}
+            queue = [(mod, name)]
+            while queue:
+                k = queue.pop(0)
+                if k in self.direct:
+                    rel = self.files[mod].relative_to(self.root).as_posix()
+                    out[f"{rel}::{name}"] = self.direct[k]
+                    break
+                for r in sorted(self.refs.get(k, ())):
+                    if r not in seen and r in self.refs and r not in SETUP:
+                        seen.add(r)
+                        queue.append(r)
+        return out
+
+
+def sh_users(root: Path) -> dict[str, Use]:
+    out: dict[str, Use] = {}
+    for p in sorted((root / "tests").glob("*.sh")):
+        rel = p.relative_to(root).as_posix()
+        for i, line in enumerate(p.read_text(errors="replace").splitlines(), 1):
+            if SH_USE.search(line):
+                out[rel] = Use(rel, i, line.strip())
+                break
+    return out
+
+
+def say(line: str, *, err: bool = False) -> None:
+    out = sys.stderr if err else sys.stdout
+    out.write(line + "\n")
+    out.flush()  # each line in order when both streams go to one place
+
+
+def listed(text: str) -> list[str]:
+    return [s for s in (x.strip() for x in text.splitlines()) if s and not s.startswith("#")]
+
+
+def merge_base() -> tuple[str, str] | None:
+    """(merge base, default branch ref) from the gate's own `base`, or None when it finds none."""
+    p = subprocess.run(
+        [sys.executable, str(ROOT / "scripts" / "octo-feather-gate"), "base"],
+        cwd=ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if p.returncode == 1:
+        return None
+    if p.returncode:
+        msg = f"octo-feather-gate base exited {p.returncode}: {p.stderr.strip()}"
+        raise RuntimeError(msg)
+    sha, ref = p.stdout.split()
+    return sha, ref
+
+
+def at_base(sha: str) -> list[str] | None:
+    p = subprocess.run(
+        ["git", "-C", str(ROOT), "show", f"{sha}:{BASELINE}"],  # noqa: S607
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return listed(p.stdout) if p.returncode == 0 else None
+
+
+def measured(rev: str, into: Path) -> dict[str, Use]:
+    """The store users of commit REV's tree: its kit test files (git archive) judged in INTO."""
+    pats = [f"{KIT}/*.py", f"{KIT}/testkit/*.py", "tests/*.sh"]
+    p = subprocess.run(
+        ["git", "-C", str(ROOT), "archive", "--format=tar", rev, "--", *pats],  # noqa: S607
+        capture_output=True,
+        check=False,
+    )
+    if p.returncode:
+        msg = f"git archive {rev}: {p.stderr.decode(errors='replace').strip()}"
+        raise RuntimeError(msg)
+    with tarfile.open(fileobj=io.BytesIO(p.stdout)) as t:
+        t.extractall(into, filter="data")
+    (into / KIT / "testkit").mkdir(parents=True, exist_ok=True)
+    return Kit(into).users() | sh_users(into)
+
+
+def replay(rev: str) -> int:
+    """--replay REV (the merge ask's Replay rows): REV's tree judged as the check would have judged
+    it, its baseline its own measurement at REV's first parent (as at landing): each new use."""
+    with tempfile.TemporaryDirectory(prefix="check-fake-gh-") as t:
+        was = measured(f"{rev}^", Path(t, "parent"))
+        now = measured(rev, Path(t, "rev"))
+    new = sorted(set(now) - set(was))
+    for item in new:
+        say(f"new use: {item}: {now[item]}")
+    gone = len(set(was) - set(now))
+    say(
+        f"replay {rev}: {len(now)} store users, {len(was)} at its first parent"
+        f" ({len(new)} new, {gone} gone)"
+    )
+    if new:
+        say(FIX, err=True)
+        return 1
+    return 0
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(
+        prog="check-fake-gh",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    ap.add_argument("--replay", metavar="REV")
+    a = ap.parse_args()
+    if a.replay:
+        return replay(a.replay)
+    base_file = ROOT / BASELINE
+    if not base_file.is_file():
+        say(f"check-fake-gh: no baseline {BASELINE}; the check cannot pass", err=True)
+        return 2
+    lines = listed(base_file.read_text(encoding="utf-8"))
+    users = Kit(ROOT).users() | sh_users(ROOT)
+    bad = [f"new use: {i}: {users[i]}" for i in sorted(set(users) - set(lines))]
+    bad += [
+        f"stale: {i}: no store use found (or no such item): delete its line"
+        for i in sorted(set(lines) - set(users))
+    ]
+    mb = merge_base()
+    if mb is None:
+        only = "only-down: none judged: no default branch or no merge base with it"
+    else:
+        sha, ref = mb
+        was = at_base(sha)
+        if was is None:
+            only = f"only-down: none judged: no {BASELINE} at {sha[:12]}, the merge base with {ref}"
+        else:
+            at = f"{sha[:12]}, the merge base with {ref}"
+            bad += [
+                f"hand-added: {i}: absent from the baseline at {at}"
+                for i in sorted(set(lines) - set(was))
+            ]
+            only = f"only-down: every line in the baseline at {sha[:12]}, the merge base with {ref}"
+    for b in bad:
+        say(b)
+    say(only)
+    if bad:
+        say(FIX, err=True)
+        return 1
+    say(f"check-fake-gh: ok: {len(users)} store users, as {BASELINE} lists ({len(lines)} lines)")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as e:  # noqa: BLE001  fail closed: an internal error is never ok
+        say(f"check-fake-gh: error: {type(e).__name__}: {e}", err=True)
+        sys.exit(2)

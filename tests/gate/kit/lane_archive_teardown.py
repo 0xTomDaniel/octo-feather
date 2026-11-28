@@ -16,6 +16,12 @@ unit inherits it. Space ids `zt*`, which no real Herdr gives.
 
 The demo's commands and output are printed: the merge, the archive, the teardown unit's lines
 and the director's one message, `post-merge --lane gh7`.
+
+archive_tears_down runs instead in gh1249's real case (testkit.realcase): lane A's
+merge then its `archive gh10`, gh answering only from their recorded tapes (testkit/recordings/
+lane-merge-realcase.json, then lane-archive-realcase.json), lane A's worktree on its branch gh10 at
+the PR's recorded head, the systemd stand-in as above; every expected value the tapes' recorded
+answer (#1267).
 """
 
 from __future__ import annotations
@@ -28,9 +34,10 @@ import time
 from typing import TYPE_CHECKING
 
 from herdr_messaging import ASSETS, agent, lines
-from lane_merge import DIRECTOR, SUPERVISOR, H, World
+from lane_merge import DIRECTOR, STEPS, SUPERVISOR, H, World
 from lane_post_merge import run1
 from testkit import HERE, Scratch, kit, main, reflector
+from testkit.realcase import REALCASE, REALCASE_TAPES, RealCase, recorded, recordings
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -38,6 +45,26 @@ if TYPE_CHECKING:
     from testkit import Ran
 
 UNIT = "octo-feather-teardown-gh7"
+
+
+def systemd(s: Scratch) -> Path:
+    """The testkit's systemd stand-in as S's systemd-run (systemctl: testkit FAKES): its log."""
+    (s.bin / "systemd-run").symlink_to(HERE / "systemd.py")
+    log = s.root / "systemd.log"
+    s.env["FAKE_SYSTEMD_LOG"] = str(log)
+    return log
+
+
+def text(p: Path) -> str:
+    return p.read_text() if p.exists() else ""
+
+
+def ended(log: Path, unit: str) -> None:
+    """Waits for UNIT's end in the systemd stand-in's LOG (logged after its stop hook ran)."""
+    end = time.monotonic() + 120
+    while f"unit {unit} ended" not in text(log):
+        assert time.monotonic() < end, f"unit never ended: {text(log)}"
+        time.sleep(0.2)
 
 
 class Lane:
@@ -71,9 +98,7 @@ class Lane:
                 "url": "https://github.com/o/r/pull/9",
             },
         )
-        (s.bin / "systemd-run").symlink_to(HERE / "systemd.py")
-        self.syslog = s.root / "systemd.log"
-        s.env["FAKE_SYSTEMD_LOG"] = str(self.syslog)
+        self.syslog = systemd(s)
         self.records = w.st / "post-merge"
 
     def run(self, want: int, *args: str, cwd: str = "", **env: str) -> Ran:
@@ -101,10 +126,7 @@ class Lane:
     def ended(self) -> str:
         """The teardown unit's end, waited for (the stand-in logs it after its stop hook ran):
         its line `post-merge --lane gh7` shows then; the unit's lines printed."""
-        end = time.monotonic() + 120
-        while f"unit {UNIT} ended" not in self.text(self.syslog):
-            assert time.monotonic() < end, f"unit never ended: {self.text(self.syslog)}"
-            time.sleep(0.2)
+        ended(self.syslog, UNIT)
         out = self.text(self.records / "gh7.teardown.log")
         sys.stdout.write(f"# the teardown unit's lines ({UNIT})\n{out}")
         return self.unit()
@@ -122,7 +144,7 @@ class Lane:
 
     @staticmethod
     def text(p: Path) -> str:
-        return p.read_text() if p.exists() else ""
+        return text(p)
 
     def said(self) -> list[str]:
         """Each message Herdr delivered to the director."""
@@ -153,7 +175,14 @@ class Lane:
 
 
 def torn_down(lane: Lane, how: str) -> None:
-    """What every teardown that ended ok shows (archive_tears_down's docstring)."""
+    """What every teardown that ended ok shows, after `merge 7 H --repo o/r` (steps 1-6 ok) and
+    the supervisor's `archive gh7` from its worktree: the unit closed the lane's own space (zt1,
+    never zt2 or the director's), removed the worktree and branch gh70 (local and origin),
+    retargeted PR #9; then the director got one message, after the space closed and the worktree
+    is gone, carrying every close-report item: the routine's summary, the tickets done, what is
+    left open and where (PR #9), the reflections' finding counts, the correction lanes, what is
+    left on disk on purpose (nothing), the teardown line. `post-merge --lane gh7` shows step 8 ok,
+    the unit's success (started HOW) and the end told."""
     t = lane
     assert not t.wt.exists(), "worktree kept"
     assert not t.branch("local"), "local branch gh70 kept"
@@ -207,38 +236,89 @@ def torn_down(lane: Lane, how: str) -> None:
 
 def archive_tears_down(s: Scratch) -> None:
     """issue-lifecycle#acceptance-archive-tears-down, comms#acceptance-close-message (the ticket's
-    demo): after `merge 7 H --repo o/r` (steps 1-7 ok, the refresh recorded), the supervisor's
-    `archive gh7` from its worktree archives the lane, runs no step of the routine again, and
-    starts one transient unit through systemd-run (octo-feather-teardown-gh7, its runtime limit,
-    its stop hook, cwd the director's checkout) and exits. The unit closes the lane's own space
-    (zt1, never zt2 or the director's), removes the worktree and branch gh70 (local and origin),
-    retargets PR #9; then the director gets one message, after the space closed and the worktree
-    is gone, carrying every close-report item: the routine's summary, the tickets done, what is
-    left open and where, the reflections' finding counts, the correction lanes, what is left on
-    disk on purpose (nothing), the teardown line. Nothing else reached the director: no director
-    command ran. `post-merge --lane gh7` shows step 8 ok, the unit's success and the end told."""
-    t = Lane(s)
-    t.merged()
-    gh_before = len(s.gh.log())
-    (t.w.herdr / "prompt-watch").write_text(str(t.wt))
-    r = t.run(0, "archive", "gh7")
-    assert f"archived: {t.w.lanes}/archive/gh7.toml sha256=" in r.out, r.out
+    demo) on gh1249's real case (testkit.realcase, both tapes): after supervisor A's
+    `merge 14 7d7155984818 --repo REALCASE` (steps 1-7 ok), its `archive gh10` from its worktree
+    asks gh exactly the recorded archive's calls, in its order (its ticket read of parent 10,
+    the tracker key of lane key gh10, and its sub-issue; the teardown unit's PR list last),
+    archives the lane, runs no step of the routine again, starts one transient unit through
+    systemd-run (octo-feather-teardown-gh10, its runtime limit, its stop hook, cwd the
+    director's checkout) and exits. The unit closes the lane's own space (zt1, never zt2 or the
+    director's), removes the worktree and the local branch gh10 (never pushed: already gone from
+    origin); then the director gets one message, after the space closed and the worktree is
+    gone, carrying every close-report item: the routine's summary, the tickets done (the
+    recorded parent's sub-issues, then the parent), left open nothing (the recorded PR list
+    empty), the reflections' finding counts, the correction lanes, what is left on disk on
+    purpose (nothing), the teardown line. Nothing else reached the director: no director command
+    ran. `post-merge --lane gh10` shows step 8 ok, the unit's success and the end told. The
+    retarget of a PR left open, and a branch deleted from origin: torn_down (no_manager's,
+    test_lane_archive_teardown_no_manager)."""
+    w = RealCase(s, *REALCASE_TAPES)
+    unit = "octo-feather-teardown-gh10"
+    merge_tape, archive_tape = REALCASE_TAPES
+    pr = f"pr view 14 --json state,headRefOid -R {REALCASE}"
+    head = json.loads(recorded(merge_tape, pr))
+    view = "issue view 10 --json number,title,body,state,url,parent,subIssues,blockedBy"
+    parent = json.loads(recorded(archive_tape, view))  # the archive's ticket read
+    kids = [x["number"] for x in parent["subIssues"]["nodes"]]
+    open_ = f"pr list --base gh10 --state open --json number,url -R {REALCASE}"
+    assert json.loads(recorded(archive_tape, open_)) == [], "the recorded archive left a PR open"
+    wt = s.root / "wt"
+    s.git(w.checkout, "worktree", "add", "-q", "-b", "gh10", str(wt), head["headRefOid"])
+    syslog = systemd(s)
+    w.lane("merge", "14", head["headRefOid"][:12], "--repo", REALCASE)
+    merged = len(s.gh.log())
+    (w.herdr / "prompt-watch").write_text(str(wt))
+    r = w.lane("archive", "gh10", cwd=wt)
+    assert f"archived: {w.lanes}/archive/gh10.toml sha256=" in r.out, r.out
     assert not [x for x in r.out.split("\n") if x.startswith("step ")], f"routine rerun: {r.out}"
     assert r.out.split("\n")[-1].startswith(
-        f"teardown: started unit {UNIT} (systemd-run --user, cwd {t.t}, "
+        f"teardown: started unit {unit} (systemd-run --user, cwd {w.checkout}, "
     ), r.out
-    t.ended()
-    calls = [x for x in t.text(t.syslog).splitlines() if x.startswith("systemd-run")]
+    ended(syslog, unit)
+    sys.stdout.write(text(w.top / "post-merge" / "gh10.teardown.log"))
+    calls = [x for x in text(syslog).splitlines() if x.startswith("systemd-run")]
     assert len(calls) == 1, calls
     for part in (
-        f"--unit={UNIT}",
-        f"--working-directory={t.t}",
+        f"--unit={unit}",
+        f"--working-directory={w.checkout}",
         "RuntimeMaxSec=900",
         "ExecStopPost=",
     ):
         assert part in calls[0], f"{part}: {calls[0]}"
-    assert s.gh.log()[gh_before:], "no gh call"
-    torn_down(t, "systemd-run --user")
+    archive = [str(x["request"]) for x in recordings(archive_tape)]
+    assert s.gh.log()[merged:] == archive, f"gh calls, want the recorded archive's: {s.gh.log()}"
+    assert not wt.exists(), "worktree kept"
+    branch = ["rev-parse", "-q", "--verify", "refs/heads/gh10"]
+    for repo in (w.checkout, w.origin):  # gone: rev-parse finds no such ref, exit 1
+        s.run(["git", "-C", str(repo), *branch], want=1)
+    log = lines(w.herdr / "log")
+    closes = [x for x in log if x.startswith(("workspace close", "tab close"))]
+    assert closes == ["workspace close zt1"], f"closed: {closes}"
+    said = [x.split("\t", 1)[1] for x in w.told() if x.startswith(f"{DIRECTOR}\t")]
+    assert len(said) == 1, f"director got {len(said)} messages: {said}"
+    prompt = next(i for i, x in enumerate(log) if x.startswith(f"agent prompt {DIRECTOR}"))
+    assert log.index("workspace close zt1") < prompt, "message before the workspace closed"
+    assert lines(w.herdr / "watched")[-1] == "no", "message sent while the worktree was there"
+    ok = "; ".join(f"step {n} {x} ok" for n, x in enumerate(STEPS, 1))
+    items = (
+        f"lane gh10 closed: PR #14 merged as {w.merge[:12]}; post-merge {ok}",
+        f"tickets done: {', '.join(str(k) for k in [*kids, parent['number']])}",
+        "left open: nothing",
+        "reflection findings: lane gh10: 0 findings; director: 0 findings",
+        "correction lanes: none filed or commented",
+        "left on disk on purpose: nothing",
+        (
+            f"teardown: space zt1 closed; worktree {wt} removed (0 mise config links into it "
+            "pruned); no open PR based on gh10; local branch gh10 deleted; remote branch gh10 "
+            "already deleted from origin"
+        ),
+    )
+    assert said[0].split(" | ") == list(items), f"message: {said[0]}"
+    shown = w.lane("post-merge", "--lane", "gh10").out.split("\n")
+    assert any(x.startswith("step 8 teardown: ok at ") for x in shown), shown
+    started = f"teardown unit {unit} (systemd-run --user): started "
+    assert any(x.startswith(started) and x.endswith(": success (exited 0)") for x in shown), shown
+    assert shown[-1] == "director told: end", shown
 
 
 def shared_supervisor_kept(s: Scratch) -> None:
