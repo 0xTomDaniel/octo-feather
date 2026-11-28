@@ -1,9 +1,8 @@
 Seeded defect: a symlinked lane record or log is archived instead of refused (spec comms #acceptance-lane-archive).
-diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
-index a9b3c986..bea807a7 100755
---- a/scripts/octo-feather-lane
-+++ b/scripts/octo-feather-lane
-@@ -516,7 +516,7 @@ def cmd_archive(args: list[str]) -> int:
+diff --git a/scripts/lane_reflection.py b/scripts/lane_reflection.py
+--- a/scripts/lane_reflection.py
++++ b/scripts/lane_reflection.py
+@@ -50,7 +50,7 @@
      files = []  # regular sources, checked with lstat so a symlink is never followed
      for f in (record, log):
          try:

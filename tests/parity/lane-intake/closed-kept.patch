@@ -1,9 +1,8 @@
 Seeded defect: intake lists closed correction-lane issues beside the open ones (spec comms #acceptance-correction-intake).
-diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
-index 8925cb5f..0e3b680a 100755
---- a/scripts/octo-feather-lane
-+++ b/scripts/octo-feather-lane
-@@ -1058,7 +1058,7 @@ def cmd_intake(args: list[str]) -> int:
+diff --git a/scripts/lane_reflection.py b/scripts/lane_reflection.py
+--- a/scripts/lane_reflection.py
++++ b/scripts/lane_reflection.py
+@@ -263,7 +263,7 @@
              raise Refuse(str(e)) from e
          for i in issues:
              m = mark.search(str(i.get("title")))

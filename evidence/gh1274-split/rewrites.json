@@ -1,0 +1,1047 @@
+{
+ "inserts": {
+  "ask_of": [
+   "from lane_reporting import ReportSources"
+  ],
+  "cmd_archive_lane": [
+   "from lane_reflection import cmd_archive, director_source_args"
+  ],
+  "cmd_merge": [
+   "from lane_ticketing import cmd_done"
+  ],
+  "cmd_verdict": [
+   "from merge_ask import pr_commits"
+  ],
+  "merge_allowed": [
+   "import merge_ask",
+   "from merge_ask import ask_of",
+   "from merge_ask import lane_git as git"
+  ],
+  "reflect_director": [
+   "from lane_reporting import cmd_report"
+  ],
+  "reflect_lane": [
+   "import lane_reporting",
+   "from lane_reporting import ReportSources",
+   "herdr_agents = cast(\"Callable[[], list[dict[Any, Any]]]\", lane_reporting.herdr_agents)",
+   "report_lane = cast(\"Callable[[Path, list[dict[Any, Any]] | None, str | None, Any, list[str], list[Any], ReportSources], list[str]]\", lane_reporting.report_lane)"
+  ],
+  "skill_reach": [
+   "from pi_sessions import session_reach, sessions_dir"
+  ],
+  "skills_check": [
+   "from pi_sessions import SessionReach, session_reach, sessions_dir"
+  ]
+ },
+ "origin": {
+  "Anchors": "octo-feather-lane",
+  "Refuse": "octo-feather-lane",
+  "ReportSources": "octo-feather-lane",
+  "RoleReach": "octo-feather-lane",
+  "SessionReach": "octo-feather-lane",
+  "Surface": "octo-feather-lane",
+  "Unchecked": "octo-feather-lane",
+  "archive_waits": "octo-feather-lane",
+  "ask_of": "octo-feather-lane",
+  "by_change": "octo-feather-lane",
+  "calibration": "octo-feather-lane",
+  "call_names": "octo-feather-lane",
+  "check_body": "octo-feather-lane",
+  "check_results": "octo-feather-lane",
+  "ci_full_run": "octo-feather-lane",
+  "cmd_archive": "octo-feather-lane",
+  "cmd_archive_lane": "octo-feather-lane",
+  "cmd_ci_start": "octo-feather-lane",
+  "cmd_done": "octo-feather-lane",
+  "cmd_fields": "octo-feather-lane",
+  "cmd_intake": "octo-feather-lane",
+  "cmd_judge": "octo-feather-lane",
+  "cmd_merge": "octo-feather-lane",
+  "cmd_merge_ask": "octo-feather-lane",
+  "cmd_post_merge": "octo-feather-lane",
+  "cmd_reflect": "octo-feather-lane",
+  "cmd_relay": "octo-feather-lane",
+  "cmd_report": "octo-feather-lane",
+  "cmd_resolution": "octo-feather-lane",
+  "cmd_seam": "octo-feather-lane",
+  "cmd_skills": "octo-feather-lane",
+  "cmd_spend": "octo-feather-lane",
+  "cmd_stale": "octo-feather-lane",
+  "cmd_start": "octo-feather-lane",
+  "cmd_ticket": "octo-feather-lane",
+  "cmd_tickets": "octo-feather-lane",
+  "cmd_verdict": "octo-feather-lane",
+  "created": "octo-feather-lane",
+  "creates_why_not": "octo-feather-lane",
+  "criteria_items": "octo-feather-lane",
+  "director_reflection": "octo-feather-lane",
+  "director_source_args": "octo-feather-lane",
+  "file_corrections": "octo-feather-lane",
+  "gate_free_module": "octo-feather-lane",
+  "handoff_module": "octo-feather-lane",
+  "herdr_agents": "octo-feather-lane",
+  "implementer_offered": "octo-feather-lane",
+  "invocation": "octo-feather-lane",
+  "iso_time": "octo-feather-lane",
+  "kit_install": "post_merge.py",
+  "lane_name": "octo-feather-lane",
+  "lanes_dir": "octo-feather-lane",
+  "merge_allowed": "octo-feather-lane",
+  "merge_lane": "octo-feather-lane",
+  "merge_resolution": "octo-feather-lane",
+  "no_traceback": "octo-feather-lane",
+  "not_demo": "octo-feather-lane",
+  "openrouter_key": "octo-feather-lane",
+  "openrouter_usage": "octo-feather-lane",
+  "owner_caught": "octo-feather-lane",
+  "owner_lines": "octo-feather-lane",
+  "pending_gates": "octo-feather-lane",
+  "pm_show": "octo-feather-lane",
+  "pm_unit_run": "octo-feather-lane",
+  "pm_unit_start": "octo-feather-lane",
+  "pm_wait": "octo-feather-lane",
+  "post_comment": "octo-feather-lane",
+  "pr_commits": "octo-feather-lane",
+  "pr_number": "octo-feather-lane",
+  "program_words": "octo-feather-lane",
+  "q": "octo-feather-lane",
+  "qa_module": "octo-feather-lane",
+  "reflect_director": "octo-feather-lane",
+  "reflect_lane": "octo-feather-lane",
+  "reflect_module": "octo-feather-lane",
+  "relays_of": "octo-feather-lane",
+  "report_lane": "octo-feather-lane",
+  "review_rounds": "octo-feather-lane",
+  "rollback": "octo-feather-lane",
+  "rule_why_not": "octo-feather-lane",
+  "run_routine": "octo-feather-lane",
+  "script_arg": "octo-feather-lane",
+  "session_reach": "octo-feather-lane",
+  "sessions_dir": "octo-feather-lane",
+  "sha256": "octo-feather-lane",
+  "shell_reads": "octo-feather-lane",
+  "show_line": "octo-feather-lane",
+  "skill_operand": "octo-feather-lane",
+  "skill_reach": "octo-feather-lane",
+  "skills_check": "octo-feather-lane",
+  "skills_fails": "octo-feather-lane",
+  "skills_named": "octo-feather-lane",
+  "skills_rule_since": "octo-feather-lane",
+  "spec_anchors": "octo-feather-lane",
+  "specs_dir": "octo-feather-lane",
+  "spend_lane": "octo-feather-lane",
+  "spend_line": "octo-feather-lane",
+  "spend_record": "octo-feather-lane",
+  "spend_time": "octo-feather-lane",
+  "state_dir": "octo-feather-lane",
+  "strip_subst": "octo-feather-lane",
+  "structure": "octo-feather-lane",
+  "take_opt": "octo-feather-lane",
+  "take_repo": "octo-feather-lane",
+  "ticket_notes": "octo-feather-lane",
+  "tool_reads": "octo-feather-lane",
+  "unreflect": "octo-feather-lane",
+  "workflow_jobs": "octo-feather-lane"
+ },
+ "renames": {
+  "archive_waits": {
+   "LANE_KIT": "KIT",
+   "Unreadable": "post_merge.Unreadable",
+   "git_here": "post_merge.git_here",
+   "lane_pr_view": "pr_view",
+   "read": "post_merge.read",
+   "records": "post_merge.records"
+  },
+  "ask_of": {
+   "check": "merge_ask.check",
+   "snapshot": "merge_ask.snapshot"
+  },
+  "cmd_archive_lane": {
+   "archived": "post_merge.archived"
+  },
+  "cmd_merge_ask": {
+   "DECLARATION": "merge_ask.DECLARATION",
+   "field": "merge_ask.field"
+  },
+  "cmd_post_merge": {
+   "MAP_LIMIT": "post_merge.MAP_LIMIT",
+   "bounded": "post_merge.bounded",
+   "post_merge_map_end": "post_merge.map_end",
+   "post_merge_map_job": "post_merge.map_job",
+   "post_merge_unit_end": "post_merge.unit_end"
+  },
+  "cmd_stale": {
+   "stale_report": "post_merge.stale_report"
+  },
+  "merge_allowed": {
+   "lane_pr_view": "pr_view"
+  },
+  "pm_show": {
+   "STEPS": "post_merge.STEPS",
+   "post_merge_records": "post_merge.records",
+   "read": "post_merge.read"
+  },
+  "pm_unit_run": {
+   "bounded": "post_merge.bounded",
+   "unit_end": "post_merge.unit_end"
+  },
+  "pm_unit_start": {
+   "Unit": "post_merge.Unit",
+   "manager": "post_merge.manager",
+   "now": "post_merge.now",
+   "post_merge_records": "post_merge.records",
+   "post_merge_top": "post_merge.top",
+   "transient": "post_merge.transient",
+   "unit_end": "post_merge.unit_end",
+   "update": "post_merge.update"
+  },
+  "pr_commits": {
+   "lane_git": "git"
+  },
+  "run_routine": {
+   "PostMerge": "post_merge.PostMerge",
+   "post_merge": "post_merge.post_merge"
+  }
+ },
+ "rows": [
+  {
+   "after": 2,
+   "at": -1,
+   "class": "calls between groups",
+   "function": "reflect_lane",
+   "module": "lane_reflection",
+   "new": [
+    "import lane_reporting",
+    "from lane_reporting import ReportSources",
+    "herdr_agents = cast(\"Callable[[], list[dict[Any, Any]]]\", lane_reporting.herdr_agents)",
+    "report_lane = cast(\"Callable[[Path, list[dict[Any, Any]] | None, str | None, Any, list[str], list[Any], ReportSources], list[str]]\", lane_reporting.report_lane)"
+   ],
+   "old": ""
+  },
+  {
+   "after": 3,
+   "at": -1,
+   "class": "calls between groups",
+   "function": "reflect_director",
+   "module": "lane_reflection",
+   "new": [
+    "from lane_reporting import cmd_report"
+   ],
+   "old": ""
+  },
+  {
+   "at": 4,
+   "class": "same name, another object",
+   "function": "pr_commits",
+   "module": "merge_ask",
+   "new": [
+    "    if lane_git(\"cat-file\", \"-e\", f\"{head}^{{commit}}\", ok=(0, 1, 128))[0]:"
+   ],
+   "old": "    if git(\"cat-file\", \"-e\", f\"{head}^{{commit}}\", ok=(0, 1, 128))[0]:"
+  },
+  {
+   "at": 7,
+   "class": "same name, another object",
+   "function": "pr_commits",
+   "module": "merge_ask",
+   "new": [
+    "    if lane_git(\"rev-parse\", \"--verify\", \"-q\", f\"{base}^{{commit}}\", ok=(0, 1))[0]:"
+   ],
+   "old": "    if git(\"rev-parse\", \"--verify\", \"-q\", f\"{base}^{{commit}}\", ok=(0, 1))[0]:"
+  },
+  {
+   "at": 9,
+   "class": "same name, another object",
+   "function": "pr_commits",
+   "module": "merge_ask",
+   "new": [
+    "    out = lane_git(\"log\", \"--format=%H%x00%s\", f\"{base}..{head}\")[1]"
+   ],
+   "old": "    out = git(\"log\", \"--format=%H%x00%s\", f\"{base}..{head}\")[1]"
+  },
+  {
+   "at": -1,
+   "class": "formatted",
+   "function": "pr_commits",
+   "module": "merge_ask",
+   "new": [],
+   "old": ""
+  },
+  {
+   "after": 2,
+   "at": -1,
+   "class": "calls between groups",
+   "function": "cmd_verdict",
+   "module": "lane_review",
+   "new": [
+    "from merge_ask import pr_commits"
+   ],
+   "old": ""
+  },
+  {
+   "at": 0,
+   "class": "self-qualified",
+   "function": "ask_of",
+   "module": "merge_ask",
+   "new": [
+    "def ask_of(pr: int, repo: str | None, files: list[str], base_arg: str | None) -> \"tuple[Snapshot, Ask]\":"
+   ],
+   "old": "def ask_of(pr: int, repo: str | None, files: list[str], base_arg: str | None) -> \"tuple[merge_ask.Snapshot, merge_ask.Ask]\":"
+  },
+  {
+   "at": 11,
+   "class": "self-qualified",
+   "function": "ask_of",
+   "module": "merge_ask",
+   "new": [
+    "    s = snapshot(pr, repo, files, read, Path(os.environ.get(\"OCTO_FEATHER_QC_DIR\") or state_dir() / \"qc\"),"
+   ],
+   "old": "    s = merge_ask.snapshot(pr, repo, files, read, Path(os.environ.get(\"OCTO_FEATHER_QC_DIR\") or state_dir() / \"qc\"),"
+  },
+  {
+   "at": 13,
+   "class": "self-qualified",
+   "function": "ask_of",
+   "module": "merge_ask",
+   "new": [
+    "    return s, check(s)"
+   ],
+   "old": "    return s, merge_ask.check(s)"
+  },
+  {
+   "after": 3,
+   "at": -1,
+   "class": "calls between groups",
+   "function": "ask_of",
+   "module": "merge_ask",
+   "new": [
+    "from lane_reporting import ReportSources"
+   ],
+   "old": ""
+  },
+  {
+   "at": -1,
+   "class": "formatted",
+   "function": "ask_of",
+   "module": "merge_ask",
+   "new": [],
+   "old": ""
+  },
+  {
+   "at": 26,
+   "class": "self-qualified",
+   "function": "cmd_merge_ask",
+   "module": "merge_ask",
+   "new": [
+    "    if not field(lines, \"Checks\"):"
+   ],
+   "old": "    if not merge_ask.field(lines, \"Checks\"):"
+  },
+  {
+   "at": 45,
+   "class": "self-qualified",
+   "function": "cmd_merge_ask",
+   "module": "merge_ask",
+   "new": [
+    "    declared = [c for c in a.classes if c.endswith(DECLARATION)]   # shown only (spec issue-lifecycle #lanes-one-head)"
+   ],
+   "old": "    declared = [c for c in a.classes if c.endswith(merge_ask.DECLARATION)]   # shown only (spec issue-lifecycle #lanes-one-head)"
+  },
+  {
+   "at": -1,
+   "class": "formatted",
+   "function": "cmd_merge_ask",
+   "module": "merge_ask",
+   "new": [],
+   "old": ""
+  },
+  {
+   "after": 2,
+   "at": -1,
+   "class": "calls between groups",
+   "function": "skill_reach",
+   "module": "lane_reporting",
+   "new": [
+    "from pi_sessions import session_reach, sessions_dir"
+   ],
+   "old": ""
+  },
+  {
+   "after": 2,
+   "at": -1,
+   "class": "calls between groups",
+   "function": "skills_check",
+   "module": "lane_ticketing",
+   "new": [
+    "from pi_sessions import SessionReach, session_reach, sessions_dir"
+   ],
+   "old": ""
+  },
+  {
+   "at": -1,
+   "class": "formatted",
+   "function": "show_line",
+   "module": "post_merge",
+   "new": [],
+   "old": ""
+  },
+  {
+   "at": 2,
+   "class": "self-qualified",
+   "function": "run_routine",
+   "module": "post_merge",
+   "new": [
+    "    return post_merge(PostMerge(pr, head, lane, wait, repo, lanes_dir()), show_line).code"
+   ],
+   "old": "    return post_merge.post_merge(post_merge.PostMerge(pr, head, lane, wait, repo, lanes_dir()), show_line).code"
+  },
+  {
+   "at": -1,
+   "class": "formatted",
+   "function": "run_routine",
+   "module": "post_merge",
+   "new": [],
+   "old": ""
+  },
+  {
+   "at": 5,
+   "class": "self-qualified",
+   "function": "cmd_stale",
+   "module": "post_merge",
+   "new": [
+    "    lines, read = stale_report(state_dir())"
+   ],
+   "old": "    lines, read = post_merge.stale_report(state_dir())"
+  },
+  {
+   "at": -1,
+   "class": "formatted",
+   "function": "cmd_stale",
+   "module": "post_merge",
+   "new": [],
+   "old": ""
+  },
+  {
+   "at": -1,
+   "class": "formatted",
+   "function": "take_opt",
+   "module": "post_merge",
+   "new": [],
+   "old": ""
+  },
+  {
+   "at": 2,
+   "class": "self-qualified",
+   "function": "pm_show",
+   "module": "post_merge",
+   "new": [
+    "    records = post_merge_records(lanes_dir())"
+   ],
+   "old": "    records = post_merge.records(lanes_dir())"
+  },
+  {
+   "at": 3,
+   "class": "self-qualified",
+   "function": "pm_show",
+   "module": "post_merge",
+   "new": [
+    "    rec = read(records, lane)"
+   ],
+   "old": "    rec = post_merge.read(records, lane)"
+  },
+  {
+   "at": 10,
+   "class": "self-qualified",
+   "function": "pm_show",
+   "module": "post_merge",
+   "new": [
+    "    for n, name in enumerate(STEPS, 1):"
+   ],
+   "old": "    for n, name in enumerate(post_merge.STEPS, 1):"
+  },
+  {
+   "at": -1,
+   "class": "formatted",
+   "function": "pm_show",
+   "module": "post_merge",
+   "new": [],
+   "old": ""
+  },
+  {
+   "at": -1,
+   "class": "formatted",
+   "function": "pm_wait",
+   "module": "post_merge",
+   "new": [],
+   "old": ""
+  },
+  {
+   "at": 9,
+   "class": "self-qualified",
+   "function": "cmd_post_merge",
+   "module": "post_merge",
+   "new": [
+    "            return post_merge_map_end(lanes_dir(), os.environ.get(\"SERVICE_RESULT\", \"\"),"
+   ],
+   "old": "            return post_merge.map_end(lanes_dir(), os.environ.get(\"SERVICE_RESULT\", \"\"),"
+  },
+  {
+   "at": 13,
+   "class": "self-qualified",
+   "function": "cmd_post_merge",
+   "module": "post_merge",
+   "new": [
+    "            return post_merge_map_job(lanes_dir(), show_line)"
+   ],
+   "old": "            return post_merge.map_job(lanes_dir(), show_line)"
+  },
+  {
+   "at": 14,
+   "class": "launch path; self-qualified",
+   "function": "cmd_post_merge",
+   "module": "post_merge",
+   "new": [
+    "        result, status = bounded([str(Path(__file__).resolve().parent / \"octo-feather-lane\"), \"post-merge\", \"--map-job\"],"
+   ],
+   "old": "        result, status = post_merge.bounded([str(Path(__file__).resolve()), \"post-merge\", \"--map-job\"],"
+  },
+  {
+   "at": 15,
+   "class": "self-qualified",
+   "function": "cmd_post_merge",
+   "module": "post_merge",
+   "new": [
+    "                                            MAP_LIMIT)"
+   ],
+   "old": "                                            post_merge.MAP_LIMIT)"
+  },
+  {
+   "at": 16,
+   "class": "self-qualified",
+   "function": "cmd_post_merge",
+   "module": "post_merge",
+   "new": [
+    "        return post_merge_map_end(lanes_dir(), result, status, show_line)"
+   ],
+   "old": "        return post_merge.map_end(lanes_dir(), result, status, show_line)"
+  },
+  {
+   "at": 18,
+   "class": "self-qualified",
+   "function": "cmd_post_merge",
+   "module": "post_merge",
+   "new": [
+    "        return post_merge_unit_end(lanes_dir(), lane, os.environ.get(\"SERVICE_RESULT\", \"\"),"
+   ],
+   "old": "        return post_merge.unit_end(lanes_dir(), lane, os.environ.get(\"SERVICE_RESULT\", \"\"),"
+  },
+  {
+   "at": -1,
+   "class": "formatted",
+   "function": "cmd_post_merge",
+   "module": "post_merge",
+   "new": [],
+   "old": ""
+  },
+  {
+   "at": -1,
+   "class": "formatted",
+   "function": "merge_lane",
+   "module": "post_merge",
+   "new": [],
+   "old": ""
+  },
+  {
+   "at": 3,
+   "class": "same name, another object",
+   "function": "merge_allowed",
+   "module": "post_merge",
+   "new": [
+    "    d = cast(\"dict[str, object]\", lane_pr_view(pr, \"state,headRefOid\", repo))"
+   ],
+   "old": "    d = cast(\"dict[str, object]\", pr_view(pr, \"state,headRefOid\", repo))"
+  },
+  {
+   "after": 3,
+   "at": -1,
+   "class": "calls between groups",
+   "function": "merge_allowed",
+   "module": "post_merge",
+   "new": [
+    "import merge_ask",
+    "from merge_ask import ask_of",
+    "from merge_ask import lane_git as git"
+   ],
+   "old": ""
+  },
+  {
+   "at": -1,
+   "class": "formatted",
+   "function": "merge_allowed",
+   "module": "post_merge",
+   "new": [],
+   "old": ""
+  },
+  {
+   "at": -1,
+   "class": "formatted",
+   "function": "relays_of",
+   "module": "post_merge",
+   "new": [],
+   "old": ""
+  },
+  {
+   "at": -1,
+   "class": "formatted",
+   "function": "cmd_relay",
+   "module": "post_merge",
+   "new": [],
+   "old": ""
+  },
+  {
+   "after": 1,
+   "at": -1,
+   "class": "calls between groups",
+   "function": "cmd_merge",
+   "module": "post_merge",
+   "new": [
+    "from lane_ticketing import cmd_done"
+   ],
+   "old": ""
+  },
+  {
+   "at": -1,
+   "class": "formatted",
+   "function": "cmd_merge",
+   "module": "post_merge",
+   "new": [],
+   "old": ""
+  },
+  {
+   "at": 30,
+   "class": "self-qualified",
+   "function": "cmd_archive_lane",
+   "module": "post_merge",
+   "new": [
+    "    archived(lanes_dir(), name, rec, printed.getvalue().splitlines())"
+   ],
+   "old": "    post_merge.archived(lanes_dir(), name, rec, printed.getvalue().splitlines())"
+  },
+  {
+   "after": 3,
+   "at": -1,
+   "class": "calls between groups",
+   "function": "cmd_archive_lane",
+   "module": "post_merge",
+   "new": [
+    "from lane_reflection import cmd_archive, director_source_args"
+   ],
+   "old": ""
+  },
+  {
+   "at": -1,
+   "class": "formatted",
+   "function": "cmd_archive_lane",
+   "module": "post_merge",
+   "new": [],
+   "old": ""
+  },
+  {
+   "at": 4,
+   "class": "self-qualified",
+   "function": "archive_waits",
+   "module": "post_merge",
+   "new": [
+    "    def ok(r: \"Record | None\") -> bool:"
+   ],
+   "old": "    def ok(r: \"post_merge.Record | None\") -> bool:"
+  },
+  {
+   "at": 7,
+   "class": "self-qualified",
+   "function": "archive_waits",
+   "module": "post_merge",
+   "new": [
+    "        was = read(records(lanes_dir()), name)"
+   ],
+   "old": "        was = post_merge.read(post_merge.records(lanes_dir()), name)"
+  },
+  {
+   "at": 8,
+   "class": "self-qualified",
+   "function": "archive_waits",
+   "module": "post_merge",
+   "new": [
+    "    except Unreadable as e:"
+   ],
+   "old": "    except post_merge.Unreadable as e:"
+  },
+  {
+   "at": 12,
+   "class": "same name, another object",
+   "function": "archive_waits",
+   "module": "post_merge",
+   "new": [
+    "    head = was.head if was is not None and was.pr == pr else str(cast(\"dict[str, object]\", lane_pr_view(pr, \"headRefOid\", repo))[\"headRefOid\"]).lower()"
+   ],
+   "old": "    head = was.head if was is not None and was.pr == pr else str(cast(\"dict[str, object]\", pr_view(pr, \"headRefOid\", repo))[\"headRefOid\"]).lower()"
+  },
+  {
+   "at": 14,
+   "class": "self-qualified",
+   "function": "archive_waits",
+   "module": "post_merge",
+   "new": [
+    "    before = git_here(\"-C\", str(install), \"rev-parse\", \"HEAD\").stdout"
+   ],
+   "old": "    before = post_merge.git_here(\"-C\", str(install), \"rev-parse\", \"HEAD\").stdout"
+  },
+  {
+   "at": 17,
+   "class": "self-qualified",
+   "function": "archive_waits",
+   "module": "post_merge",
+   "new": [
+    "    now = read(records(lanes_dir()), name)"
+   ],
+   "old": "    now = post_merge.read(post_merge.records(lanes_dir()), name)"
+  },
+  {
+   "at": 24,
+   "class": "same name, another object; self-qualified",
+   "function": "archive_waits",
+   "module": "post_merge",
+   "new": [
+    "    if git_here(\"-C\", str(install), \"rev-parse\", \"HEAD\").stdout != before and os.path.realpath(install) == os.path.realpath(LANE_KIT):"
+   ],
+   "old": "    if post_merge.git_here(\"-C\", str(install), \"rev-parse\", \"HEAD\").stdout != before and os.path.realpath(install) == os.path.realpath(KIT):"
+  },
+  {
+   "at": -1,
+   "class": "formatted",
+   "function": "archive_waits",
+   "module": "post_merge",
+   "new": [],
+   "old": ""
+  },
+  {
+   "at": 3,
+   "class": "launch path; self-qualified",
+   "function": "pm_unit_start",
+   "module": "post_merge",
+   "new": [
+    "    unit, me, top = f\"octo-feather-teardown-{name}\", Path(__file__).resolve().parent / \"octo-feather-lane\", post_merge_top()"
+   ],
+   "old": "    unit, me, top = f\"octo-feather-teardown-{name}\", Path(__file__).resolve(), post_merge.top()"
+  },
+  {
+   "at": 4,
+   "class": "self-qualified",
+   "function": "pm_unit_start",
+   "module": "post_merge",
+   "new": [
+    "    records = post_merge_records(lanes_dir())"
+   ],
+   "old": "    records = post_merge.records(lanes_dir())"
+  },
+  {
+   "at": 7,
+   "class": "self-qualified",
+   "function": "pm_unit_start",
+   "module": "post_merge",
+   "new": [
+    "    managed = manager()"
+   ],
+   "old": "    managed = post_merge.manager()"
+  },
+  {
+   "at": 9,
+   "class": "self-qualified",
+   "function": "pm_unit_start",
+   "module": "post_merge",
+   "new": [
+    "    update(records, name, lambda r: dataclasses.replace(r, unit=Unit(unit, how, now(), \"\", \"\", \"\")))"
+   ],
+   "old": "    post_merge.update(records, name, lambda r: dataclasses.replace(r, unit=post_merge.Unit(unit, how, post_merge.now(), \"\", \"\", \"\")))"
+  },
+  {
+   "at": 11,
+   "class": "self-qualified",
+   "function": "pm_unit_start",
+   "module": "post_merge",
+   "new": [
+    "    why = transient(unit, run, hook=hook, fallback=[*run, \"--unit-run\"], cwd=top, limit=PM_UNIT_LIMIT,"
+   ],
+   "old": "    why = post_merge.transient(unit, run, hook=hook, fallback=[*run, \"--unit-run\"], cwd=top, limit=PM_UNIT_LIMIT,"
+  },
+  {
+   "at": 15,
+   "class": "self-qualified",
+   "function": "pm_unit_start",
+   "module": "post_merge",
+   "new": [
+    "        unit_end(lanes_dir(), name, \"start failed\", why, show_line, repo=repo)"
+   ],
+   "old": "        post_merge.unit_end(lanes_dir(), name, \"start failed\", why, show_line, repo=repo)"
+  },
+  {
+   "at": -1,
+   "class": "formatted",
+   "function": "pm_unit_start",
+   "module": "post_merge",
+   "new": [],
+   "old": ""
+  },
+  {
+   "at": 3,
+   "class": "launch path",
+   "function": "pm_unit_run",
+   "module": "post_merge",
+   "new": [
+    "    run = [str(Path(__file__).resolve().parent / \"octo-feather-lane\"), \"post-merge\", str(pr), head, \"--lane\", lane, *([\"--repo\", repo] if repo else [])]"
+   ],
+   "old": "    run = [str(Path(__file__).resolve()), \"post-merge\", str(pr), head, \"--lane\", lane, *([\"--repo\", repo] if repo else [])]"
+  },
+  {
+   "at": 4,
+   "class": "self-qualified",
+   "function": "pm_unit_run",
+   "module": "post_merge",
+   "new": [
+    "    result, status = bounded(run, PM_UNIT_LIMIT)"
+   ],
+   "old": "    result, status = post_merge.bounded(run, PM_UNIT_LIMIT)"
+  },
+  {
+   "at": 5,
+   "class": "self-qualified",
+   "function": "pm_unit_run",
+   "module": "post_merge",
+   "new": [
+    "    return unit_end(lanes_dir(), lane, result, status, show_line, repo=repo)"
+   ],
+   "old": "    return post_merge.unit_end(lanes_dir(), lane, result, status, show_line, repo=repo)"
+  },
+  {
+   "at": -1,
+   "class": "formatted",
+   "function": "pm_unit_run",
+   "module": "post_merge",
+   "new": [],
+   "old": ""
+  },
+  {
+   "at": 4,
+   "class": "the hub's own docstring",
+   "function": "cmd_start",
+   "module": "start_lane",
+   "new": [
+    "        doc = help_doc() or \"\""
+   ],
+   "old": "        doc = __doc__ or \"\""
+  },
+  {
+   "at": -1,
+   "class": "formatted",
+   "function": "cmd_start",
+   "module": "start_lane",
+   "new": [],
+   "old": ""
+  }
+ ],
+ "table": [
+  "note: placed by the rule: ask_of -> merge_ask (serves lane_reporting, merge_ask, post_merge; its logic is merge_ask.py's (owner decision 1))",
+  "note: placed by the rule: relays_of -> post_merge (serves post_merge's group only)",
+  "note: placed by the rule: cmd_relay -> post_merge (serves post_merge's group only)",
+  "note: constant NAME read by lane_cli, lane_reporting, post_merge: lane_cli",
+  "note: constant KIT read by ci_start, lane_cli, lane_review, lane_ticketing, post_merge: lane_cli",
+  "note: constant gh read by ci_start, lane_reporting, lane_review, post_merge: lane_cli",
+  "note: constant pr_view read by ci_start, lane_reporting, lane_review, merge_ask, post_merge: lane_cli",
+  "note: constant check_runs has no reader: dropped",
+  "note: binding git read by ci_start, lane_review, merge_ask, post_merge reads merge_ask: one per module",
+  "note: binding pr_base read by ci_start, lane_review, merge_ask reads merge_ask: one per module",
+  "note: dtm: lane_cli binds `dtm = datetime` (the hub's import alias); each module reads it from there",
+  "note: binding git: post_merge.py and start_lane.py read it from merge_ask.py where the call is",
+  "note: lanes_dir reads __file__ for its directory only (Path(__file__).resolve().with_name): lane_cli.py sits beside the hub, unchanged",
+  "justfile install-check: kit_install read from scripts/lane_cli.py, not the lane script (one line)",
+  "lane_cli.py kit_install: moved from post_merge.py unchanged (design section 1: lane_cli holds it)",
+  "post_merge.py docstring: its interface line says kit_install() is lane_cli.py's, imported there",
+  "lane_reflection.py reflect_lane: calls between groups: inserted `import lane_reporting; from lane_reporting import ReportSources; herdr_agents = cast(\"Callable[[], list[dict[Any, Any]]]\", lane_reporting.herdr_agents); report_lane = cast(\"Callable[[Path, list[dict[Any, Any]] | None, str | None, Any, list[str], list[Any], ReportSources], list[str]]\", lane_reporting.report_lane)`",
+  "lane_reflection.py reflect_director: calls between groups: inserted `from lane_reporting import cmd_report`",
+  "merge_ask.py pr_commits line 5: same name, another object: `if git(\"cat-file\", \"-e\", f\"{head}^{{commit}}\", ok=(0, 1, 128))[0]:` -> `if lane_git(\"cat-file\", \"-e\", f\"{head}^{{commit}}\", ok=(0, 1, 128))[0]:`",
+  "merge_ask.py pr_commits line 8: same name, another object: `if git(\"rev-parse\", \"--verify\", \"-q\", f\"{base}^{{commit}}\", ok=(0, 1))[0]:` -> `if lane_git(\"rev-parse\", \"--verify\", \"-q\", f\"{base}^{{commit}}\", ok=(0, 1))[0]:`",
+  "merge_ask.py pr_commits line 10: same name, another object: `out = git(\"log\", \"--format=%H%x00%s\", f\"{base}..{head}\")[1]` -> `out = lane_git(\"log\", \"--format=%H%x00%s\", f\"{base}..{head}\")[1]`",
+  "merge_ask.py pr_commits: formatted (ruff format, line noqa; check 1 compares its ast)",
+  "lane_review.py cmd_verdict: calls between groups: inserted `from merge_ask import pr_commits`",
+  "merge_ask.py ask_of line 1: self-qualified: `def ask_of(pr: int, repo: str | None, files: list[str], base_arg: str | None) -> \"tuple[merge_ask.Snapshot, merge_ask.Ask]\":` -> `def ask_of(pr: int, repo: str | None, files: list[str], base_arg: str | None) -> \"tuple[Snapshot, Ask]\":`",
+  "merge_ask.py ask_of line 12: self-qualified: `s = merge_ask.snapshot(pr, repo, files, read, Path(os.environ.get(\"OCTO_FEATHER_QC_DIR\") or state_dir() / \"qc\"),` -> `s = snapshot(pr, repo, files, read, Path(os.environ.get(\"OCTO_FEATHER_QC_DIR\") or state_dir() / \"qc\"),`",
+  "merge_ask.py ask_of line 14: self-qualified: `return s, merge_ask.check(s)` -> `return s, check(s)`",
+  "merge_ask.py ask_of: calls between groups: inserted `from lane_reporting import ReportSources`",
+  "merge_ask.py ask_of: formatted (ruff format, line noqa; check 1 compares its ast)",
+  "merge_ask.py cmd_merge_ask line 27: self-qualified: `if not merge_ask.field(lines, \"Checks\"):` -> `if not field(lines, \"Checks\"):`",
+  "merge_ask.py cmd_merge_ask line 46: self-qualified: `declared = [c for c in a.classes if c.endswith(merge_ask.DECLARATION)]   # shown only (spec issue-lifecycle #lanes-one-head)` -> `declared = [c for c in a.classes if c.endswith(DECLARATION)]   # shown only (spec issue-lifecycle #lanes-one-head)`",
+  "merge_ask.py cmd_merge_ask: formatted (ruff format, line noqa; check 1 compares its ast)",
+  "lane_reporting.py skill_reach: calls between groups: inserted `from pi_sessions import session_reach, sessions_dir`",
+  "lane_ticketing.py skills_check: calls between groups: inserted `from pi_sessions import SessionReach, session_reach, sessions_dir`",
+  "post_merge.py show_line: formatted (ruff format, line noqa; check 1 compares its ast)",
+  "post_merge.py run_routine line 3: self-qualified: `return post_merge.post_merge(post_merge.PostMerge(pr, head, lane, wait, repo, lanes_dir()), show_line).code` -> `return post_merge(PostMerge(pr, head, lane, wait, repo, lanes_dir()), show_line).code`",
+  "post_merge.py run_routine: formatted (ruff format, line noqa; check 1 compares its ast)",
+  "post_merge.py cmd_stale line 6: self-qualified: `lines, read = post_merge.stale_report(state_dir())` -> `lines, read = stale_report(state_dir())`",
+  "post_merge.py cmd_stale: formatted (ruff format, line noqa; check 1 compares its ast)",
+  "post_merge.py take_opt: formatted (ruff format, line noqa; check 1 compares its ast)",
+  "post_merge.py pm_show line 3: self-qualified: `records = post_merge.records(lanes_dir())` -> `records = post_merge_records(lanes_dir())`",
+  "post_merge.py pm_show line 4: self-qualified: `rec = post_merge.read(records, lane)` -> `rec = read(records, lane)`",
+  "post_merge.py pm_show line 11: self-qualified: `for n, name in enumerate(post_merge.STEPS, 1):` -> `for n, name in enumerate(STEPS, 1):`",
+  "post_merge.py pm_show: formatted (ruff format, line noqa; check 1 compares its ast)",
+  "post_merge.py pm_wait: formatted (ruff format, line noqa; check 1 compares its ast)",
+  "post_merge.py cmd_post_merge line 10: self-qualified: `return post_merge.map_end(lanes_dir(), os.environ.get(\"SERVICE_RESULT\", \"\"),` -> `return post_merge_map_end(lanes_dir(), os.environ.get(\"SERVICE_RESULT\", \"\"),`",
+  "post_merge.py cmd_post_merge line 14: self-qualified: `return post_merge.map_job(lanes_dir(), show_line)` -> `return post_merge_map_job(lanes_dir(), show_line)`",
+  "post_merge.py cmd_post_merge line 15: launch path; self-qualified: `result, status = post_merge.bounded([str(Path(__file__).resolve()), \"post-merge\", \"--map-job\"],` -> `result, status = bounded([str(Path(__file__).resolve().parent / \"octo-feather-lane\"), \"post-merge\", \"--map-job\"],`",
+  "post_merge.py cmd_post_merge line 16: self-qualified: `post_merge.MAP_LIMIT)` -> `MAP_LIMIT)`",
+  "post_merge.py cmd_post_merge line 17: self-qualified: `return post_merge.map_end(lanes_dir(), result, status, show_line)` -> `return post_merge_map_end(lanes_dir(), result, status, show_line)`",
+  "post_merge.py cmd_post_merge line 19: self-qualified: `return post_merge.unit_end(lanes_dir(), lane, os.environ.get(\"SERVICE_RESULT\", \"\"),` -> `return post_merge_unit_end(lanes_dir(), lane, os.environ.get(\"SERVICE_RESULT\", \"\"),`",
+  "post_merge.py cmd_post_merge: formatted (ruff format, line noqa; check 1 compares its ast)",
+  "post_merge.py merge_lane: formatted (ruff format, line noqa; check 1 compares its ast)",
+  "post_merge.py merge_allowed line 4: same name, another object: `d = cast(\"dict[str, object]\", pr_view(pr, \"state,headRefOid\", repo))` -> `d = cast(\"dict[str, object]\", lane_pr_view(pr, \"state,headRefOid\", repo))`",
+  "post_merge.py merge_allowed: calls between groups: inserted `import merge_ask; from merge_ask import ask_of; from merge_ask import lane_git as git`",
+  "post_merge.py merge_allowed: formatted (ruff format, line noqa; check 1 compares its ast)",
+  "post_merge.py relays_of: formatted (ruff format, line noqa; check 1 compares its ast)",
+  "post_merge.py cmd_relay: formatted (ruff format, line noqa; check 1 compares its ast)",
+  "post_merge.py cmd_merge: calls between groups: inserted `from lane_ticketing import cmd_done`",
+  "post_merge.py cmd_merge: formatted (ruff format, line noqa; check 1 compares its ast)",
+  "post_merge.py cmd_archive_lane line 31: self-qualified: `post_merge.archived(lanes_dir(), name, rec, printed.getvalue().splitlines())` -> `archived(lanes_dir(), name, rec, printed.getvalue().splitlines())`",
+  "post_merge.py cmd_archive_lane: calls between groups: inserted `from lane_reflection import cmd_archive, director_source_args`",
+  "post_merge.py cmd_archive_lane: formatted (ruff format, line noqa; check 1 compares its ast)",
+  "post_merge.py archive_waits line 5: self-qualified: `def ok(r: \"post_merge.Record | None\") -> bool:` -> `def ok(r: \"Record | None\") -> bool:`",
+  "post_merge.py archive_waits line 8: self-qualified: `was = post_merge.read(post_merge.records(lanes_dir()), name)` -> `was = read(records(lanes_dir()), name)`",
+  "post_merge.py archive_waits line 9: self-qualified: `except post_merge.Unreadable as e:` -> `except Unreadable as e:`",
+  "post_merge.py archive_waits line 13: same name, another object: `head = was.head if was is not None and was.pr == pr else str(cast(\"dict[str, object]\", pr_view(pr, \"headRefOid\", repo))[\"headRefOid\"]).lower()` -> `head = was.head if was is not None and was.pr == pr else str(cast(\"dict[str, object]\", lane_pr_view(pr, \"headRefOid\", repo))[\"headRefOid\"]).lower()`",
+  "post_merge.py archive_waits line 15: self-qualified: `before = post_merge.git_here(\"-C\", str(install), \"rev-parse\", \"HEAD\").stdout` -> `before = git_here(\"-C\", str(install), \"rev-parse\", \"HEAD\").stdout`",
+  "post_merge.py archive_waits line 18: self-qualified: `now = post_merge.read(post_merge.records(lanes_dir()), name)` -> `now = read(records(lanes_dir()), name)`",
+  "post_merge.py archive_waits line 25: same name, another object; self-qualified: `if post_merge.git_here(\"-C\", str(install), \"rev-parse\", \"HEAD\").stdout != before and os.path.realpath(install) == os.path.realpath(KIT):` -> `if git_here(\"-C\", str(install), \"rev-parse\", \"HEAD\").stdout != before and os.path.realpath(install) == os.path.realpath(LANE_KIT):`",
+  "post_merge.py archive_waits: formatted (ruff format, line noqa; check 1 compares its ast)",
+  "post_merge.py pm_unit_start line 4: launch path; self-qualified: `unit, me, top = f\"octo-feather-teardown-{name}\", Path(__file__).resolve(), post_merge.top()` -> `unit, me, top = f\"octo-feather-teardown-{name}\", Path(__file__).resolve().parent / \"octo-feather-lane\", post_merge_top()`",
+  "post_merge.py pm_unit_start line 5: self-qualified: `records = post_merge.records(lanes_dir())` -> `records = post_merge_records(lanes_dir())`",
+  "post_merge.py pm_unit_start line 8: self-qualified: `managed = post_merge.manager()` -> `managed = manager()`",
+  "post_merge.py pm_unit_start line 10: self-qualified: `post_merge.update(records, name, lambda r: dataclasses.replace(r, unit=post_merge.Unit(unit, how, post_merge.now(), \"\", \"\", \"\")))` -> `update(records, name, lambda r: dataclasses.replace(r, unit=Unit(unit, how, now(), \"\", \"\", \"\")))`",
+  "post_merge.py pm_unit_start line 12: self-qualified: `why = post_merge.transient(unit, run, hook=hook, fallback=[*run, \"--unit-run\"], cwd=top, limit=PM_UNIT_LIMIT,` -> `why = transient(unit, run, hook=hook, fallback=[*run, \"--unit-run\"], cwd=top, limit=PM_UNIT_LIMIT,`",
+  "post_merge.py pm_unit_start line 16: self-qualified: `post_merge.unit_end(lanes_dir(), name, \"start failed\", why, show_line, repo=repo)` -> `unit_end(lanes_dir(), name, \"start failed\", why, show_line, repo=repo)`",
+  "post_merge.py pm_unit_start: formatted (ruff format, line noqa; check 1 compares its ast)",
+  "post_merge.py pm_unit_run line 4: launch path: `run = [str(Path(__file__).resolve()), \"post-merge\", str(pr), head, \"--lane\", lane, *([\"--repo\", repo] if repo else [])]` -> `run = [str(Path(__file__).resolve().parent / \"octo-feather-lane\"), \"post-merge\", str(pr), head, \"--lane\", lane, *([\"--repo\", repo] if repo else [])]`",
+  "post_merge.py pm_unit_run line 5: self-qualified: `result, status = post_merge.bounded(run, PM_UNIT_LIMIT)` -> `result, status = bounded(run, PM_UNIT_LIMIT)`",
+  "post_merge.py pm_unit_run line 6: self-qualified: `return post_merge.unit_end(lanes_dir(), lane, result, status, show_line, repo=repo)` -> `return unit_end(lanes_dir(), lane, result, status, show_line, repo=repo)`",
+  "post_merge.py pm_unit_run: formatted (ruff format, line noqa; check 1 compares its ast)",
+  "start_lane.py cmd_start line 5: the hub's own docstring: `doc = __doc__ or \"\"` -> `doc = help_doc() or \"\"`",
+  "start_lane.py cmd_start: formatted (ruff format, line noqa; check 1 compares its ast)"
+ ],
+ "where": {
+  "Anchors": "lane_ticketing",
+  "Refuse": "lane_cli",
+  "ReportSources": "lane_reporting",
+  "RoleReach": "lane_reporting",
+  "SessionReach": "pi_sessions",
+  "Surface": "lane_ticketing",
+  "Unchecked": "lane_cli",
+  "archive_waits": "post_merge",
+  "ask_of": "merge_ask",
+  "by_change": "lane_ticketing",
+  "calibration": "lane_review",
+  "call_names": "pi_sessions",
+  "check_body": "lane_ticketing",
+  "check_results": "lane_reporting",
+  "ci_full_run": "ci_start",
+  "cmd_archive": "lane_reflection",
+  "cmd_archive_lane": "post_merge",
+  "cmd_ci_start": "ci_start",
+  "cmd_done": "lane_ticketing",
+  "cmd_fields": "lane_review",
+  "cmd_intake": "lane_reflection",
+  "cmd_judge": "lane_review",
+  "cmd_merge": "post_merge",
+  "cmd_merge_ask": "merge_ask",
+  "cmd_post_merge": "post_merge",
+  "cmd_reflect": "lane_reflection",
+  "cmd_relay": "post_merge",
+  "cmd_report": "lane_reporting",
+  "cmd_resolution": "lane_review",
+  "cmd_seam": "lane_ticketing",
+  "cmd_skills": "lane_ticketing",
+  "cmd_spend": "lane_reporting",
+  "cmd_stale": "post_merge",
+  "cmd_start": "start_lane",
+  "cmd_ticket": "lane_ticketing",
+  "cmd_tickets": "lane_ticketing",
+  "cmd_verdict": "lane_review",
+  "created": "lane_ticketing",
+  "creates_why_not": "lane_ticketing",
+  "criteria_items": "lane_ticketing",
+  "director_reflection": "lane_reporting",
+  "director_source_args": "lane_reflection",
+  "file_corrections": "lane_reflection",
+  "gate_free_module": "lane_ticketing",
+  "handoff_module": "lane_ticketing",
+  "herdr_agents": "lane_reporting",
+  "implementer_offered": "lane_ticketing",
+  "invocation": "lane_ticketing",
+  "iso_time": "lane_ticketing",
+  "kit_install": "lane_cli",
+  "lane_name": "lane_cli",
+  "lanes_dir": "lane_cli",
+  "merge_allowed": "post_merge",
+  "merge_lane": "post_merge",
+  "merge_resolution": "lane_review",
+  "no_traceback": "lane_cli",
+  "not_demo": "lane_ticketing",
+  "openrouter_key": "lane_reporting",
+  "openrouter_usage": "lane_reporting",
+  "owner_caught": "lane_reporting",
+  "owner_lines": "lane_review",
+  "pending_gates": "lane_reporting",
+  "pm_show": "post_merge",
+  "pm_unit_run": "post_merge",
+  "pm_unit_start": "post_merge",
+  "pm_wait": "post_merge",
+  "post_comment": "lane_review",
+  "pr_commits": "merge_ask",
+  "pr_number": "lane_cli",
+  "program_words": "lane_ticketing",
+  "q": "lane_cli",
+  "qa_module": "lane_review",
+  "reflect_director": "lane_reflection",
+  "reflect_lane": "lane_reflection",
+  "reflect_module": "lane_cli",
+  "relays_of": "post_merge",
+  "report_lane": "lane_reporting",
+  "review_rounds": "lane_review",
+  "rollback": "lane_reflection",
+  "rule_why_not": "lane_ticketing",
+  "run_routine": "post_merge",
+  "script_arg": "lane_ticketing",
+  "session_reach": "pi_sessions",
+  "sessions_dir": "pi_sessions",
+  "sha256": "lane_reflection",
+  "shell_reads": "pi_sessions",
+  "show_line": "post_merge",
+  "skill_operand": "pi_sessions",
+  "skill_reach": "lane_reporting",
+  "skills_check": "lane_ticketing",
+  "skills_fails": "lane_ticketing",
+  "skills_named": "lane_ticketing",
+  "skills_rule_since": "lane_ticketing",
+  "spec_anchors": "lane_ticketing",
+  "specs_dir": "lane_ticketing",
+  "spend_lane": "lane_reporting",
+  "spend_line": "lane_reporting",
+  "spend_record": "lane_reporting",
+  "spend_time": "lane_reporting",
+  "state_dir": "lane_cli",
+  "strip_subst": "lane_ticketing",
+  "structure": "lane_ticketing",
+  "take_opt": "post_merge",
+  "take_repo": "lane_cli",
+  "ticket_notes": "lane_ticketing",
+  "tool_reads": "pi_sessions",
+  "unreflect": "lane_reflection",
+  "workflow_jobs": "ci_start"
+ }
+}

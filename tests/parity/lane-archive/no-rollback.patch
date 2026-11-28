@@ -1,9 +1,8 @@
 Seeded defect: a failed move leaves the files already linked into archive/ (spec comms #acceptance-lane-archive: no partial archive).
-diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
-index 8925cb5f..deaf4e3b 100755
---- a/scripts/octo-feather-lane
-+++ b/scripts/octo-feather-lane
-@@ -891,7 +891,6 @@ def cmd_archive(args: list[str]) -> int:
+diff --git a/scripts/lane_reflection.py b/scripts/lane_reflection.py
+--- a/scripts/lane_reflection.py
++++ b/scripts/lane_reflection.py
+@@ -102,7 +102,6 @@
          if moved:
              results.rename(archive / results.name)   # last: nothing after it can fail
      except Exception as e:

@@ -1,9 +1,16 @@
 Seeded defect: intake searches only the lanes' trackers, never the kit's own (spec comms #reflection-correction).
-diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
-index 8925cb5f..ece68135 100755
---- a/scripts/octo-feather-lane
-+++ b/scripts/octo-feather-lane
-@@ -1047,8 +1047,6 @@ def cmd_intake(args: list[str]) -> int:
+diff --git a/scripts/lane_reflection.py b/scripts/lane_reflection.py
+--- a/scripts/lane_reflection.py
++++ b/scripts/lane_reflection.py
+@@ -11,7 +11,6 @@
+ from correction_lanes import (
+     DIRECTOR,
+     DIRECTOR_LOG,
+-    KIT_REPO,
+     MARK_WORD,
+     Refused,
+     correction_issues,
+@@ -252,8 +251,6 @@
              continue
          if isinstance(repo, str) and repo and repo not in repos:
              repos.append(repo)

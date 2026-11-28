@@ -120,10 +120,12 @@ import tempfile
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, NamedTuple, ParamSpec, Protocol, TypedDict, TypeVar, cast
+from typing import Any, Literal, NamedTuple, ParamSpec, Protocol, TypedDict, TypeVar, cast
 
+import lane_cli
 import tomllib
 from correction_lanes import MARK, Refused, lane_logs, lane_record, quoted
+from lane_cli import Refuse, lanes_dir, pr_number, pr_view, state_dir, take_repo
 from tracker_calls import KIT, ci_workflows, gh, head_matches, tracker, utc
 
 # GitHub's closing keywords: a PR body line with one closes that GitHub issue at merge, named
@@ -3834,3 +3836,322 @@ def _sample(s: Snapshot, cls: str, repo: str | None, lanes: Path) -> tuple[str, 
             continue
         found.append((last, lane))
     return tuple(lane for _, lane in sorted(found, reverse=True)[:SAMPLE])
+
+
+# --- moved from scripts/octo-feather-lane (ticket #1333, evidence/gh1274-split/split.py): merge-ask; help: octo-feather-lane --help ---  # noqa: E501
+
+
+lane_git = functools.partial(git, err=Refuse)
+no_traceback = cast("Callable[[Any], Callable[[list[str]], int]]", lane_cli.no_traceback)
+
+
+def pr_commits(pr: int, head: str, base: str) -> list[tuple[str, str]]:
+    """PR's commits, (sha, subject) each, newest first, read from this directory's repo: `git log BASE..HEAD`, HEAD the
+    PR's head (gh's headRefOid), BASE its base branch on origin or --base; never `gh pr view --json commits`, which
+    lists at most 100. Refused when either is not a commit here: the lane worktree with both fetched."""  # noqa: E501
+    if lane_git("cat-file", "-e", f"{head}^{{commit}}", ok=(0, 1, 128))[0]:
+        raise Refuse(  # noqa: TRY003
+            f"PR #{pr}'s head {head[:12]} is not a commit in this repo: run it in the lane worktree after "  # noqa: E501, EM102
+            "git fetch origin (the PR's commits are read from git)"
+        )
+    if lane_git("rev-parse", "--verify", "-q", f"{base}^{{commit}}", ok=(0, 1))[0]:
+        raise Refuse(  # noqa: TRY003
+            f"base {base} is not a commit here: git fetch origin, or pass --base REF (the PR's base branch)"  # noqa: E501, EM102
+        )
+    out = lane_git("log", "--format=%H%x00%s", f"{base}..{head}")[1]
+    return [cast("tuple[str, str]", tuple(l.split("\0", 1))) for l in out.split("\n") if "\0" in l]  # noqa: E741
+
+
+def ask_of(
+    pr: int, repo: str | None, files: list[str], base_arg: str | None
+) -> "tuple[Snapshot, Ask]":
+    """The merge ask check of PR as it stands, read fresh (merge_ask.snapshot) and judged (merge_ask.check): merge-ask's
+    and the merge's one read of it (--help, merge-ask, merge)."""  # noqa: E501
+    from lane_reporting import ReportSources  # noqa: PLC0415
+
+    def read() -> tuple[dict[str, object], list[tuple[str, str]] | str]:
+        """The PR as gh prints it, and its commits or why they are unread (named with the other gaps)."""  # noqa: E501
+        d = pr_view(pr, "body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments", repo)
+        try:
+            return d, pr_commits(
+                pr,
+                cast("str", d["headRefOid"]),
+                pr_base(cast("str | None", d["baseRefName"]) or "", base_arg),
+            )
+        except Refuse as e:
+            return d, str(e)
+
+    s = snapshot(
+        pr,
+        repo,
+        files,
+        read,
+        Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state_dir() / "qc"),
+        trend=state_dir() / ReportSources.TREND,
+        err=Refuse,
+        lanes=lanes_dir(),
+        base=base_arg,
+    )
+    return s, check(s)
+
+
+@no_traceback
+def cmd_merge_ask(args: list[str]) -> int:  # noqa: C901, PLR0912, PLR0915
+    args, repo = take_repo(args)
+    files, rest, i, base_arg = [], [], 0, None
+    while i < len(args):
+        if args[i] == "--status" and i + 1 < len(args):
+            files.append(args[i + 1])
+            i += 2
+        elif args[i] == "--base" and i + 1 < len(args):
+            base_arg = args[i + 1]
+            i += 2
+        else:
+            rest.append(args[i])
+            i += 1
+    if len(rest) != 1:
+        raise Refuse(  # noqa: TRY003
+            f"usage: octo-feather-lane merge-ask PR [--status FILE...] [--base REF] [--repo O/R] (got {' '.join(args) or 'nothing'})"  # noqa: E501, EM102
+        )
+    pr = pr_number(rest[0])
+    s, a = ask_of(pr, repo, cast("list[str]", files), base_arg)
+    head = s.head
+    tier = (
+        a.tier.lines if a.tier else []
+    )  # spec #gates-tiers; incomplete on a failing ask, stderr only
+    incomplete = ["", "Incomplete merge ask (it fails below; never send this tier):", *tier]
+    if a.refusal:
+        print(  # noqa: T201
+            "\n".join([*a.order, *incomplete]), file=sys.stderr
+        )  # shown only (spec #gates-merge-order)
+        raise Refuse(a.refusal)
+    if a.abort:  # a read the full pass needs failed
+        print("\n".join(incomplete).strip(), file=sys.stderr)  # noqa: T201
+        raise Refuse(a.abort)
+    miss = list(a.head)
+    lines = a.section
+
+    if not field(lines, "Checks"):
+        miss.append("Checks: missing; add `Checks: <the head's checks, all passing>`")
+    miss += [
+        *a.checks,
+        *a.judged,
+        *a.carried,
+        *a.full,
+        *a.review,
+    ]  # the full pass: every lane, one building no criterion too
+    no_ci, carried, gate_time = a.no_ci, a.carried_ok, a.gate_time  # the gate time: shown only
+    if miss:
+        print(  # noqa: T201
+            "\n".join([*gate_time, "", *a.order, *incomplete]), file=sys.stderr
+        )  # shown only (spec #gates-merge-order)
+        raise Refuse(
+            f"PR #{pr} merge ask incomplete ({len(miss)} item{'s' * (len(miss) > 1)}), head {head[:12]}:\n"  # noqa: E501
+            + "\n".join(f"  - {x}" for x in miss)
+        )
+    print("\n".join(lines).strip())  # noqa: T201
+    print("\n" + "\n".join(tier))  # the tier block, inside the section (spec #gates-tiers)  # noqa: T201
+    if no_ci:
+        print(f"\nChecks: {no_ci}")  # noqa: T201
+    if carried:
+        print(  # noqa: T201
+            "\nChecks carried from the judged head (issue-lifecycle #lanes-one-head):\n"
+            + "\n".join(carried)
+        )
+    if a.sources:
+        print("\n" + "\n".join(a.sources))  # noqa: T201
+    if a.judgments:  # shown only, after the pass was decided above
+        print(  # noqa: T201
+            "\nModel judgments (advisory, spec judgment#rule-advisory: no gate reads them; this merge ask is ready or not without them):"  # noqa: E501
+        )
+        print("\n".join(a.judgments))  # noqa: T201
+    declared = [
+        c for c in a.classes if c.endswith(DECLARATION)
+    ]  # shown only (spec issue-lifecycle #lanes-one-head)
+    print("\nReview check classes (from the verdict comment, docs/adr/0008):")  # noqa: T201
+    print(  # noqa: T201
+        "\n".join(f"- {c}" for c in a.classes if c not in declared)
+        or "- none but the declaration checks below"
+    )
+    if declared:
+        print(f"\nDeclaration checks (stopgaps; owner rules at merge): {len(declared)}")  # noqa: T201
+        print("\n".join(f"- {c}" for c in declared))  # noqa: T201
+    if a.rounds:
+        print("\nReview rounds (from the verdict comment, issue-lifecycle #lanes-one-head):")  # noqa: T201
+        print("\n".join(a.rounds))  # noqa: T201
+    if a.replay:  # a correction lane's (--help, merge-ask)
+        print("\n" + a.replay)  # noqa: T201
+    print("\n" + "\n".join(gate_time))  # noqa: T201
+    print(  # noqa: T201
+        "\n" + "\n".join(a.order)
+    )  # shown only, after the pass was decided above (spec #gates-merge-order)
+    print(  # noqa: T201
+        f"next: octo-feather-lane merge {pr} {head} (it merges, or names whom the merge waits for)",
+        file=sys.stderr,
+    )
+    return 0
+
+
+# This module's chunks of octo-feather-lane --help, joined in lane_cli.HELP_ORDER by lane_cli.help_doc.  # noqa: E501
+HELP = {
+    "merge-ask-usage": """\
+  octo-feather-lane merge-ask PR [--status FILE...] [--base REF] [--repo O/R]
+                                   check the PR body's `## Merge ask` section; print it on pass
+""",
+    "merge-ask": """\
+`merge-ask` reads through `gh pr view --json` (also under the qc judge's offline gh) and
+the git repo of the current directory (the lane worktree, PR head and BASE fetched; BASE
+defaults to the PR's base branch on origin): the PR's commits and their subjects (BASE..head:
+`gh pr view --json commits` lists at most 100; `verdict` reads them the same way), the judged
+head's qc.toml for a lane with criterion rows, and the history when the PR head is not the judged head. The PR body carries the
+parent line (spec issue-lifecycle #gates-pr-line): the target's tracker skill's `pr-line` for
+the key its `key-from-branch` reads from the PR's branch (Closes #82 on GitHub, Tracks ENG-123
+on Linear), and no other line closes a GitHub issue. The section, up to the next `## ` heading:
+
+  ## Merge ask
+  Head: <sha>                     the PR's head H' (7+ hex prefix)
+  Checks: <summary>               verified: every check on that head SUCCESS, none pending; a SKIPPED one only
+                                  as the judged head's green run, carried by the Judged proof (#lanes-one-head);
+                                  none reported (an empty rollup, never a skipped check)
+                                  passes only when both hold, else fails naming the one that does not or
+                                  could not be read: the no-CI fact for that head (post-merge step 2), and
+                                  the PR base's required-check policy requires no check: `gh api
+                                  repos/<repo>/branches/<base>` protection.required_status_checks empty, and
+                                  `gh api repos/<repo>/rules/branches/<base>` no required_status_checks rule
+                                  (its plan-has-no-rulesets 403 counts as none). Printed after the section
+                                  as `Checks: no CI: ...`, naming each fact and source
+  Judged: <proof>                 = the line the check prints for H to H' (below)
+  | criterion | qc verdict | judged | evidence |
+  |---|---|---|---|
+  | <spec>#<id> | pass | judged <sha> | <report path, command> |   one row per claimed criterion
+  Review verdict: <comment URL>   this PR's verdict comment: head H, verdict clear
+  Built: <id> <id>                = status entries built with this PR, each named by one of its `qc: built` commits
+  Failed: none                    or `Failed:` then one `- <id>: <triage>` line per fail row
+
+Every row names one judged head H (7+ hex), a commit of the PR: the head qc and the code
+review both judged, in parallel (spec #lanes-one-head). H to H' may hold only (a) `qc: built
+... (judged <sha>)` commits changing only the --status files and (b) merges of BASE that keep
+the verdict by the rule of spec #lanes-one-head, the lane's own diff against BASE read from
+BASE's merge base to the head, status files aside, hunk by hunk (what a file's hunks are:
+scripts/merge_ask.py, _lane_diff), so main's changes elsewhere in a lane file keep it. Anything else fails naming the commit and
+file: run just qc and the review again. `Judged:` is the proof: `<H12> is the PR head`, or
+`<H12> to <H'12>:` the qc commits and files, and per main merge `lane hunks identical (N files, sha256 <12 hex>)`.
+Ids are <spec slug>#<id> or a bare id one --status file names; pass --status once per spec.
+Every lane's PR head needs a current recorded full gate pass (the rule: spec #lanes-checkpoints): the record
+`octo-feather-gate passed` prints for it, or for a lane commit it stands for by the same H to H' check, whose
+record is clean and whose gate_config and list are the head's own (`octo-feather-gate config`); else `Full pass:` fails naming the head.
+Insufficient evidence (quality spec #qc-results) is never triaged: the check fails naming each criterion whose row
+says it, or whose latest result in the qc reports at the judged head says it (octo-feather-qc --help, Report;
+OCTO_FEATHER_QC_DIR as there), with what is missing, until a rerun of just qc gives it pass or fail.
+The verdict comment must also carry its check classes (`Checks: none` or `Check:` lines, no
+`class: proxy`), and its rounds (verdict, above) must chain from BASE to its Head: walking back from the last round
+while each starts where the one before it ended, the first is a full round starting off the PR's commits or a
+legacy comment; else the check names the range the rounds cover and the lane before them no posted round covers.
+Pass prints them under `Review rounds`, after `Review check classes`. Pass: the section on stdout, then `Decision sources`, one line per row: the decision source
+of the criterion's latest result in the qc reports at the judged head (as for insufficient evidence, above), or
+`no qc result at the judged head`, shown only (quality spec #qc-results); `Review check classes` (below); then `Gate time`, the full gate on the final head (the passed
+full run, check-runs.jsonl in the state dir, on the PR head or the latest lane commit before it that has one)
+against gate-budget.toml at the PR head, in the report's lines (report, above; the trend: passed full runs on the
+head's history), flagged and shown only: the code reviewer judges it, no gate reads it, and the ask passes or
+fails the same without it (spec issue-lifecycle #lanes-checkpoints; on a failure the block goes to stderr before
+the items). `Review check classes` lists the comment's
+lines for the owner, its `class: declaration` lines (the class: docs/adr/0008 rung 2) under `Declaration checks (stopgaps; owner rules
+at merge): <n>` after it (how: spec issue-lifecycle #lanes-one-head), shown only (send it all with herdr-say --parent). Failure: each missing item
+with its fix on stderr, exit 1. A pass ends with `next: octo-feather-lane merge <PR> <head>` on stderr, outside
+what is sent: merge (below) decides whether it goes.
+
+The tier (spec issue-lifecycle #gates-tiers, #gates-tier-relay): every ask is sorted into tier 1, 2 or 3, the
+highest any reason gives (no reason: 1), printed on a pass right after the section's lines, on stdout:
+
+  Tier: N
+  - <reason>                      one line per reason
+  Waits for: nobody | the director's order (PR #N: <why>) | the owner
+
+Reasons (tier): each criterion the section's `Failed:` lists, with its triage (3); each line of the section that
+starts at column 0 with `Owner decision` and holds a colon (`Owner decision: <text>`, `Owner decision 1 (<what>):
+<text>`), shown as written (3): any agent raises the tier by adding one; each such line in the header of the
+verdict comment `Review verdict:` links (verdict, above), shown as written (3); each behaviour-neutral opt-out
+the kit's check-behavior-smoke prints for the lane (`--base` the merge base of the head and BASE, `--head` the
+head: its `opt-out <sha>` lines), `opt-out <sha> cleared by the review verdict: Behaviour-neutral: <reason>`
+when that comment is clear and an `Opt-out cleared:` line in its header names the commit (2), else `opt-out <sha>
+not cleared by the review verdict: ...` (3); opt-outs that could not be read, naming why (3); each `Check:` line
+of that comment's header classed `class: declaration` (Declaration checks, above) when the comment is clear,
+`declaration check: <the line after `Check: `>` (3): the owner rules on it before the merge; each spec call the lane diff adds (a
+line of a `*.calls.jsonl` the diff from the merge base to the PR head changes, read at both ends with git show,
+not at the merge base: the same call with or without `denied`, as `octo-feather-spec-status calls` counts it),
+named `spec call <slug> <at> <kind> <anchors>`: denied by the owner, `: denied <at>` (2); clarifies (2); any
+other kind (3, `: no ruling linked`), unless its `ruling` URL's issue or issue comment was created before its
+`at` (GitHub's created_at, `gh api ... --jq .created_at`) and the header of the review verdict comment the
+section links carries `Ruling covers: <that URL>` (verdict, above): then `: ruled by <url> (<created_at>), the
+review verdict covers it` (2); else the reason it is not, `ruling <url> is no GitHub issue or issue comment
+URL`, `not read (...)`, `made <created_at>, not before the call` or `not confirmed: the review verdict carries no
+...` (3); a log not read, `spec calls not
+read: <why>` (3); each path the lane changes (git diff from
+the merge base of the head and BASE to the head, a rename as its two paths) whose owners in the code owners file at the
+head or at the merge base (each end's first of .github/CODEOWNERS, CODEOWNERS, docs/CODEOWNERS, GitHub's order; either
+only raises, so a lane editing it never lowers its own tier; none at either: no path) include `@<owner>`,
+the owner login of --repo O/R (else of `gh repo view`; an `@org/team` never counts): `code owner: <path> is @<owner>'s
+(<file>[ at the merge base <sha12>] line N: `<line>`)` (3), the head's file named first. The line is the last one matching the path, as GitHub takes it, each line matched
+by git's own matcher (`git check-ignore --no-index`, one line at a time: scripts/merge_ask.py, _owned). A line
+of either file whose pattern git reads otherwise than GitHub (each such syntax and why: merge_ask.CODE_OWNERS_DIFFER) fails the
+ask, `code owners: <file> line N `<line>`: <why>; ...`, each named, and no path is sorted. A tier 3 ask waits for the owner;
+a tier 1 or 2 ask whose merge order (below) names an open PR this merge sets back (its head conflicts with this head,
+or this merge stales its pinned run), or one of whose reads failed (a `- not read:` line: it cannot prove none is set
+back), waits for the director's order, naming each (`PR #N: <why>`, `PR #N: its pinned run <run> not read`,
+`not read: <what>`; `; ` between), its tier unchanged; else for nobody. A failing ask prints the block on stderr alone, after the line `Incomplete
+merge ask (it fails below; never send this tier):`, after the merge order and before the items, never on stdout.
+
+`Merge order` (spec issue-lifecycle #gates-merge-order), shown only, after `Gate time` on a pass, and on stderr
+after it, before the items, on a failure (before the refusal when nothing can be judged): the ask passes or fails
+the same without it. It names each other open PR on the PR's base (`gh pr list --state open --base <base>`), its
+head fetched (`git fetch origin pull/N/head`) when the repo lacks it, that this merge would set back: `- PR #N
+(<branch>): its head conflicts with this head in <files>` (git merge-tree of the two heads), and `- PR #N
+(<branch>): this merge stales its pinned run RUN/SUITE/CASE: <items>` for each `octo-feather-qa --verdict` pin its
+qc.toml demos name at its head (none without a qc.toml), the items that command names stale for it at BASE merged
+with this head (a git commit-tree, no ref moved) and not at BASE, each run in a scratch detached worktree
+(freshness: octo-feather-qa --help, Verdict). A read that fails, or a pin that command judges no freshness for, is
+one `- not read: ...` line; nothing named prints `- none: <n> other open pull requests on <base>, none this merge
+would stale or conflict with`.
+
+A correction lane (spec issue-lifecycle #lanes-correction, #1226): the parent issue (key-from-branch, read with
+the tracker skill's issue-view) carries `reflect`'s title marker `[correction-lane <class>]`, and the verdict
+comment lists a Check line. Its PR body then carries a `## Replay` section, a table `| finding | case | command |
+result |` read as GitHub renders it (markdown-it-py, merge_ask.REPLAY_TABLE: a table in a fence or an HTML
+comment is none, `\\|` is a pipe in its cell, each of the four cells filled), one row per finding (id
+`<lane> <at>`, from the finding lines of the issue's body and comments as
+`reflect` quotes them: `- <lane> <at> <source>: ...`), or one row `trigger` when it quotes none, and one row
+`clean <lane>` per lane of the clean sample: lanes archived in the state dir (lanes/archive) whose record's
+`repository` is the PR's, whose hand-off log's last line is dated before the PR's first commit (its earliest
+committer time) and holds no finding of the class, newest last line first, 5 (fewer if fewer exist). Result:
+`caught`, `missed`, `pass` or `not replayable: <why>`. merge-ask runs each other row's command itself, only
+ever inside the qc sandbox, each row in its own (octo-feather-qc sandboxed(), the shape its demos run in: `sh -c`
+at this worktree's top, which must be at the PR head; writes discarded, no network, no Pi, 120 s at most) with
+the offline read-only gh over one GitHub snapshot per merge ask (octo-feather-qc github_snapshot(), naming the
+parent issue and each `#N` of the rows' case cells, so older tickets are in full): its program must be a path on
+a verdict Check line; `caught` holds on a non-zero exit whose output names the class, `missed` and `pass` on exit
+0. A row the sandbox cannot serve (the worktree not at the PR head, no snapshot, the sandbox unavailable or its
+proof failed, an attempt it refused: an offline gh refusal, a write to GitHub included, a masked path (Pi's
+sessions included) or a host, or 120 s passed) is shown `not replayable: <reason>`, never judged and never run
+outside it. Stated limit: the sandbox unsets the caller's Herdr pane (HERDR_PANE_ID) and masks Pi's sessions, so a
+check that needs the pane (`skills`) cannot run there; its rows declare `not replayable: <reason>`. It fails naming each
+finding and clean lane with no row (all of them with no section), each row whose program is on no Check line,
+and each whose claim differs from its run, with the run's exit and the end of its output. Pass prints
+`Replay: caught k of n (m not replayable); false refusals f of c clean` (c: clean rows run, f: those caught)
+after `Review rounds`, then one line per row: what its run showed and the worktree writes the sandbox
+discarded; a low k is never refused: the owner judges it. Not detected: a parent with no marker.
+
+A lane that builds no criterion (spec #lanes-one-head) says `Built: none` and `Failed: none` with no
+criterion row (no table, or its header alone), and its PR holds no `qc: built` commit and no --status
+entry built with it; --status is then optional. Its judged head H is the review verdict comment's Head:
+the check needs Head, Checks, the parent line and Review verdict, and `Judged:` only when H is not the
+PR head (the same proof as above).
+
+A review verdict on a head before the judged head (or, building no criterion, before the PR head) holds when the
+same proof carries it there, with each main merge that resolved a conflict or changed anything beyond git's
+automatic merge allowed when a clear `verdict --resolution` comment names it, and only its resolution's files moved
+in the lane diff; the section then needs `Reviewed: <proof>`, the line the check prints, naming the reviewed head,
+each merge, its files and its resolution verdict's URL. Without it the check names the merge. A lane that claims any criterion (a Built or Failed id, a qc commit,
+a status entry built with the PR) with no row is refused naming the criterion table.
+
+""",  # noqa: E501
+}

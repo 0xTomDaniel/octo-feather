@@ -1,9 +1,8 @@
 Seeded defect: a run listing fewer jobs than its workflow defines counts as started, though a job waiting on needs is not created yet (issue-lifecycle #acceptance-ci-alongside).
-diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
-index a9b3c986..f4651bea 100755
---- a/scripts/octo-feather-lane
-+++ b/scripts/octo-feather-lane
-@@ -1817,7 +1817,7 @@ def ci_full_run(head: str, repo: str | None) -> tuple[list[str], list[str]]:
+diff --git a/scripts/ci_start.py b/scripts/ci_start.py
+--- a/scripts/ci_start.py
++++ b/scripts/ci_start.py
+@@ -120,7 +120,7 @@
          n = workflow_jobs(head, path)
          if n is None:
              why.append(f"{path or 'its workflow'} at {head[:12]} is unreadable: no job count to compare")

@@ -1,9 +1,8 @@
 Seeded defect: a skipped job counts as CI's full run started (issue-lifecycle #acceptance-ci-alongside).
-diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
-index a9b3c986..990cabb8 100755
---- a/scripts/octo-feather-lane
-+++ b/scripts/octo-feather-lane
-@@ -1820,7 +1820,7 @@ def ci_full_run(head: str, repo: str | None) -> tuple[list[str], list[str]]:
+diff --git a/scripts/ci_start.py b/scripts/ci_start.py
+--- a/scripts/ci_start.py
++++ b/scripts/ci_start.py
+@@ -123,7 +123,7 @@
          elif len(jobs) < n:
              why.append(f"run {r.get('id')} lists {len(jobs)} of the {n} jobs {path} defines (a job waiting on `needs` is not created yet)")
          why += [f"run {r.get('id')} job {k} {c or s}" for k, (s, c) in state.items()
