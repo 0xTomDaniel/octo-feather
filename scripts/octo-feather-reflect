@@ -41,7 +41,8 @@ from typing import Any, cast
 
 import tomllib  # stdlib since 3.11; ruff, at the 3.10 floor, sorts it as third-party
 from correction_lanes import TARGET  # beside this file: the module's docstring, how it is found
-from handoff_log import MalformedLineError, encode  # noqa: F401 (octo-feather-lane catches r.MalformedLineError)
+from handoff_log import MalformedLineError as MalformedLineError  # noqa: PLC0414 (lane catches it)
+from handoff_log import encode
 
 KIT = Path(__file__).resolve().parent.parent
 QUESTIONS = KIT / "reflection" / "questions.json"

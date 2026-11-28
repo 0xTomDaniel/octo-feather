@@ -343,7 +343,9 @@ def malformed(s: Scratch) -> None:
     ls.seed("gh9")
     log = ls.lanes / "gh9.handoffs.jsonl"
     with log.open("a") as f:
-        f.write('{"at":"2026-10-28T00:20:00Z","kind":"parked","pane":"w9:p2","session":{"id":"x"}}\n')
+        f.write(
+            '{"at":"2026-10-28T00:20:00Z","kind":"parked","pane":"w9:p2","session":{"id":"x"}}\n'
+        )
     lines = log.read_text().splitlines()
     log.write_text("\n".join([lines[0], lines[2], lines[1]]) + "\n")  # the bad line is line 2
     before = tree(ls.top)
