@@ -3,15 +3,17 @@ command (testkit.main): scripts/octo-feather-lane post-merge step 5, the parity 
 quality #acceptance-parity-pass-due, #acceptance-parity-pass-capped, #acceptance-parity-pass-told,
 #acceptance-parity-network-free), offline.
 
-The world, as tests/gate/kit/lane_post_merge_map.py's: a target repo's origin (main: B, then three
-merge commits M1, M2, M3) and its clone, the director's checkout, on main at B; a kit install clone
-of another repo (step 3 leaves it unchanged); the fake gh holding PRs 7, 8 and 9 (lanes gh7, gh8,
-gh9) merged as M1, M2 and M3, with no CI workflow; the Herdr stand-in with the director's pane
-w9:p99 under the kit's own herdr-say; the systemd stand-in as systemd-run and systemctl; a scratch
-state dir, its slots dir holding the box's fast-run turns. The target has no fast-map recipe (the
-map is skipped: its own scenarios prove it). At B it holds four parity cases, a, b, c and d (b's
-patch changes scripts/x, c needs tests/fixtures/c), its gate-budget.toml's pass period (7 days), a
-wall cap of 60 s (10 s from M2 on) and a CPU cap of 1 s, and a stand-in lever
+The world: a target repo's origin (main: B, then three merge commits M1, M2, M3) and its clone, the
+director's checkout, on main at B. PR 7, 8 and 9 (lanes gh7, gh8, gh9) were merged as M1, M2 and M3:
+each routine is resumed at step 5, its lane's post-merge record holding steps 1-4 ok for its merge
+and the checkout at that merge, as a merge's run leaves them (the routine's own resume,
+octo-feather-lane --help, post-merge; steps 1-4 are proven by their own scenarios,
+tests/gate/kit/lane_post_merge.py), so no gh is asked. The Herdr stand-in holds the director's pane
+w9:p99 under the kit's own herdr-say; the systemd stand-in answers as systemd-run and systemctl; a
+scratch state dir, its slots dir holding the box's fast-run turns. The target has no fast-map recipe
+(the map is skipped: its own scenarios prove it). At B it holds four parity cases, a, b, c and d
+(b's patch changes scripts/x, c needs tests/fixtures/c), its gate-budget.toml's pass period (7
+days), a wall cap of 60 s (10 s from M2 on) and a CPU cap of 1 s, and a stand-in lever
 (tests/parity/lever.py, committed): it logs each call (case, HEAD, nice value, checkout, the agent
 identity it was given) to LEVER_LOG, then does what LEVER_PLAN's entry for the case says (burn: CPU
 seconds; sleep: seconds; exit: 0 parity holds, 1 parity fails, 2 refused), printing a line as the
@@ -110,7 +112,7 @@ def _commit(p: Scratch, seed: Path, files: dict[str, str], n: int) -> None:
 
 
 def _origin(p: Scratch, commits: list[dict[str, str]]) -> None:
-    """origin.git holding COMMITS on main, the target clone of it, the kit install."""
+    """origin.git holding COMMITS on main, and the target, a clone of it."""
     o, seed = p.root / "origin.git", p.root / "seed"
     p.run(["git", "init", "-q", "--bare", "-b", "main", str(o)])
     p.git(p.root, "init", "-q", "-b", "main", str(seed))
@@ -118,8 +120,6 @@ def _origin(p: Scratch, commits: list[dict[str, str]]) -> None:
         _commit(p, seed, files, n)
     p.git(seed, "push", "-q", str(o), "HEAD:main")
     p.run(["git", "clone", "-q", str(o), str(p.root / "target")])
-    p.run(["git", "clone", "-q", str(o), str(p.root / "kit")])
-    p.git(p.root / "kit", "remote", "set-url", "origin", "https://github.com/o/kit.git")
 
 
 def build(p: Scratch) -> None:
@@ -164,14 +164,6 @@ class World:
         s.git(self.t, "checkout", "-q", "-B", "main", self.b)
         self.d = self.t / ".git" / "octo-feather" / "parity-pass"
         self.unit = ""
-        s.gh.store("repo.json", {"nameWithOwner": "o/r"})
-        s.gh.store("api/repos/o/kit.json", {"nameWithOwner": "o/kit"})
-        for n, m in zip((7, 8, 9), self.m, strict=True):
-            pr = {"state": "MERGED", "headRefOid": H, "mergeCommit": {"oid": m}}
-            pr |= {"baseRefName": "main", "headRefName": f"gh{n}", "title": f"t{n}"}
-            s.gh.put(n, pr | {"url": f"https://github.com/o/r/pull/{n}"})
-            tree = [{"path": "README.md", "type": "blob", "sha": "r"}]  # no CI workflow
-            s.gh.store(f"api/repos/o/r/git/trees/{m}.json", {"sha": m, "tree": tree})
         self.herdr = herdr_world(s, {DIRECTOR: agent(DIRECTOR, "director", "idle")})
         self.state = s.root / "state"
         (self.state / "octo-feather" / "slots").mkdir(parents=True)
@@ -183,7 +175,6 @@ class World:
             s.env.pop(k, None)
         s.env |= {
             "XDG_STATE_HOME": str(self.state),
-            "OCTO_FEATHER_KIT_INSTALL": str(s.root / "kit"),
             "FAKE_SYSTEMD_LOG": str(self.syslog),
             "LEVER_LOG": str(self.log),
             "LEVER_PLAN": str(s.root / "plan.json"),
@@ -208,6 +199,20 @@ class World:
         (self.d / "pass.json").write_text(json.dumps(rec))
 
     def post_merge(self, n: int, **env: str) -> Ran:
+        """PR N's routine (lane ghN), resumed at step 5: its record holds steps 1-4 ok for PR N's
+        merge, as a merge's run leaves them (the routine's own resume: octo-feather-lane --help,
+        post-merge), and the checkout is at that merge, as step 4 leaves it."""
+        m = self.m[n - 7]
+        self.s.git(self.t, "merge", "-q", "--ff-only", m)
+        done = ("merged", "main CI", "kit refresh", "checkout")
+        steps = [
+            {"number": i, "name": x, "outcome": "ok", "line": f"{x} for {m[:12]}", "at": ago(0)}
+            for i, x in enumerate(done, 1)
+        ]
+        rec = {"lane": f"gh{n}", "pr": n, "head": H, "merge": m, "base": "main", "steps": steps}
+        records = self.state / "octo-feather" / "post-merge"
+        records.mkdir(parents=True, exist_ok=True)
+        (records / f"gh{n}.json").write_text(json.dumps(rec | {"close": None, "unit": None}))
         r = self.s.run(
             [kit("octo-feather-lane"), "post-merge", str(n), H, "--lane", f"gh{n}"],
             want=3,
