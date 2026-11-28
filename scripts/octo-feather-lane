@@ -773,7 +773,8 @@ before its end) and `director told: <each>`; exit 0, 1 with no or an unreadable 
                    its last run's time, so the cases a capped pass did not reach run first in the next), each only
                    once a fast-run turn is free (as the map job), with no Herdr agent identity (HERDR_PANE_ID,
                    OCTO_FEATHER_ROLE, OCTO_FEATHER_PARENT unset), so no run of it asks the heavy slot
-                   (octo-feather-slot --help). Every lever run reaches no host by the lever's own isolation (lever.py
+                   (octo-feather-slot --help), and GATE_WORKERS unset (the gate's default workers, over the fast
+                   tier's cap), so none is a fast-tier run holding a fast-run turn (tests/gate/heavy_slot.py). Every lever run reaches no host by the lever's own isolation (lever.py
                    --help, No network). Each case's result goes in the record as it ends (pass exit 0, fails exit 1
                    or another, refused exit 2; its lever line, its last; the merge, when, its log and the lever's log
                    dir). The wall cap counts from the pass's start, waiting included: a lever run still going at it

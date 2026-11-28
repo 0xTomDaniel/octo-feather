@@ -1392,9 +1392,12 @@ def _capped(t0: float, c0: float, wall: float, cpu: float) -> str:
 
 def _lever(tree: Path, case: str, log: Path, left: float) -> tuple[int, str] | None:
     """CASE's lever run in TREE, its lines to LOG, with no agent identity (so no run of it asks a
-    slot: octo-feather-slot --help), its group stopped past LEFT seconds (SIGINT, PARITY_STOP s,
-    SIGKILL): its exit and output, None when stopped."""
-    env = {k: v for k, v in os.environ.items() if k not in {*AGENT_VARS, "HERDR_PANE_ID"}}
+    slot: octo-feather-slot --help) and no fast-run turn taken, its group stopped past LEFT seconds
+    (SIGINT, PARITY_STOP s, SIGKILL): its exit and output, None when stopped."""
+    # GATE_WORKERS unset too: its runs at the gate's default workers, over the fast tier's cap, so
+    # none is a fast-tier run holding a fast-run turn a fast run would wait for (heavy_slot.py)
+    gone = {*AGENT_VARS, "HERDR_PANE_ID", "GATE_WORKERS"}
+    env = {k: v for k, v in os.environ.items() if k not in gone}
     env["PYTHONUNBUFFERED"] = "1"  # its lines in the order it wrote them, the refusal last
     with log.open("w") as f:
         try:
@@ -1516,7 +1519,9 @@ def pass_job(lanes: Path, show: Callable[[str], None]) -> int:  # noqa: PLR0915 
             rc, out = got
             said = [x for x in out.splitlines() if x.strip()]
             line = said[-1][:500] if said else f"exit {rc}, no output"
-            kept = re.findall(r"logs: (\S+)$", out, re.MULTILINE)
+            # the lever's log dir: printed last (`logs: DIR`), or a refusal's run log in it
+            kept = re.findall(r"logs: (\S+)$|, log (\S+)/[^/\s]+\)", out, re.MULTILINE)
+            kept = [a or b for a, b in kept]
             result = "pass" if rc == 0 else DEAD.get(rc, "fails")
             e = {"result": result, "exit": rc, "line": line, "merge": m, "at": now()}
             e |= {"log": str(logs / f"{case}.log"), "logs": kept[-1] if kept else None}
