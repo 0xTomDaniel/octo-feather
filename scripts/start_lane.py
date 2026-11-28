@@ -321,7 +321,10 @@ def read(ask: Ask, lanes: Path, err: type[Exception]) -> Lane:
         and (lanes / f"{tracker('lane-key', ask.ticket, err=err).strip()}.start.json").exists()
     )
     if not rerun:
-        sys.stdout.write(lane_brake.brake(os.environ).line + "\n")
+        verdict = lane_brake.brake(os.environ)
+        if isinstance(verdict, lane_brake.Refused):
+            raise err(verdict.line)
+        sys.stdout.write(verdict.line + "\n")
         sys.stdout.flush()
     ticket = ask.ticket if isinstance(ask.ticket, str) else file_parent(ask.ticket, err)
     key = tracker("lane-key", ticket, err=err).strip()
