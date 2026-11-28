@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
-"""The kit's check rules: each a function of a repo dir and its tracked files, returning a Report.
+"""The kit's check rules: each a function of a repo dir (and its tracked files, for a rule that
+scans them), returning a Report.
 
 A kit module, imported by name, never loaded by file path: by its commands (scripts/check-dashes,
-scripts/check-refs; how: correction_lanes.py's docstring) and by tests (how: pyproject.toml,
-[tool.pytest.ini_options] pythonpath). Standard library only (AGENTS.md Rules, kit scripts).
+scripts/check-refs, scripts/check-lane-dispatch; how: correction_lanes.py's docstring) and by
+tests (how: pyproject.toml, [tool.pytest.ini_options] pythonpath). Standard library only
+(AGENTS.md Rules, kit scripts).
 
 Interface:
 
@@ -42,15 +44,27 @@ Interface:
         the err line `check-refs: PATH: binary file matches` after its lines: a finding for scans
         3 to 5, none for retired words (#1117). No finding: the out line `refs: ok (N files)`, N
         the files of scan 5, code 0.
+    check_lane_dispatch(root) -> Report
+        The lazy dispatcher (owner ruling 2026-11-28 #1274, design #1274 section 1): ROOT's
+        scripts/octo-feather-lane, read by ast from its source, imports only lane_cli and the
+        standard library (sys.stdlib_module_names, by first dotted part) at module level: every
+        Import and ImportFrom that runs on import, under top-level if, try, with or class bodies
+        too, but none inside a function or lambda (loading a command's module when that command
+        runs is the laziness). A relative import fails. Each other import an out line
+        `scripts/octo-feather-lane:n:line`, then the err line asking for the fix, code 1. A
+        dispatcher that cannot be read or parsed: an err line naming it, code 1 (fail closed).
+        Else the out line `lane-dispatch: ok (N imports)`, N the module-level imports, code 0.
     Report: the exact lines the command prints, each with its stream, in order (no newline), and
         the exit code.
 """
 
-__all__ = ["Report", "Stream", "check_dashes", "check_refs"]
+__all__ = ["Report", "Stream", "check_dashes", "check_lane_dispatch", "check_refs"]
 
+import ast
 import os
 import re
-from collections.abc import Callable, Sequence
+import sys
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -265,3 +279,42 @@ def check_refs(root: Path, tracked: Sequence[str]) -> Report:
     if not bad:
         lines.append(("out", f"refs: ok ({len(files)} files)".encode()))
     return Report(tuple(lines), 1 if bad else 0)
+
+
+DISPATCHER = "scripts/octo-feather-lane"
+DISPATCH_FIX = (
+    "check-lane-dispatch: the dispatcher imports only lane_cli and the standard library at module"
+    " level (owner ruling 2026-11-28 #1274): move it into the module of the command that uses it,"
+    " which the dispatcher loads when that command runs (COMMANDS)"
+)
+
+
+def module_level(node: ast.AST) -> Iterator[ast.Import | ast.ImportFrom]:
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, ast.Import | ast.ImportFrom):
+            yield child
+        elif not isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
+            yield from module_level(child)  # a function body runs only when called
+
+
+def check_lane_dispatch(root: Path) -> Report:
+    try:
+        text = (root / DISPATCHER).read_bytes()
+        tree = ast.parse(text, DISPATCHER)
+    except (OSError, SyntaxError) as e:
+        why = f"check-lane-dispatch: cannot read {DISPATCHER}: {e}; the check cannot pass"
+        return Report((("err", why.encode()),), 1)
+    rows = text.split(b"\n")
+    imports = list(module_level(tree))
+    lines: list[tuple[Stream, bytes]] = []
+    for node in imports:
+        if isinstance(node, ast.Import):
+            names = [a.name for a in node.names]
+        else:
+            names = [(node.module or "") if node.level == 0 else ""]  # a relative import: "" fails
+        if any(n != "lane_cli" and n.split(".")[0] not in sys.stdlib_module_names for n in names):
+            row = rows[node.lineno - 1]
+            lines.append(("out", DISPATCHER.encode() + f":{node.lineno}:".encode() + row))
+    if lines:
+        return Report((*lines, ("err", DISPATCH_FIX.encode())), 1)
+    return Report((("out", f"lane-dispatch: ok ({len(imports)} imports)".encode()),), 0)
