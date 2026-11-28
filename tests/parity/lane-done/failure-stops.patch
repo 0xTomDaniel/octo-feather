@@ -1,9 +1,8 @@
 Seeded defect: the first ticket the tracker cannot move stops the close, the others not tried (octo-feather-lane --help, done).
-diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
-index a9b3c986..06d987cc 100755
---- a/scripts/octo-feather-lane
-+++ b/scripts/octo-feather-lane
-@@ -2782,6 +2782,7 @@ def cmd_done(args: list[str]) -> int:
+diff --git a/scripts/lane_ticketing.py b/scripts/lane_ticketing.py
+--- a/scripts/lane_ticketing.py
++++ b/scripts/lane_ticketing.py
+@@ -613,6 +613,7 @@
              print(f"{k}: done")
          except Refuse as e:
              failed.append(f"  - {k}: {e}")

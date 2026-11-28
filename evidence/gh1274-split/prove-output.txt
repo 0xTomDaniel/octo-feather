@@ -1,0 +1,27 @@
+same: octo-feather-lane archive: exit 1, 0 bytes out, 139 err
+same: octo-feather-lane reflect: exit 1, 0 bytes out, 139 err
+same: octo-feather-lane verdict: exit 1, 0 bytes out, 119 err
+same: octo-feather-lane fields: exit 1, 0 bytes out, 81 err
+same: octo-feather-lane merge-ask: exit 1, 0 bytes out, 126 err
+same: octo-feather-lane ci-start: exit 1, 0 bytes out, 141 err
+same: octo-feather-lane resolution: exit 1, 0 bytes out, 106 err
+same: octo-feather-lane judge: exit 1, 0 bytes out, 110 err
+same: octo-feather-lane tickets: exit 2, 0 bytes out, 138 err
+same: octo-feather-lane done: exit 1, 0 bytes out, 125 err
+same: octo-feather-lane ticket: exit 2, 0 bytes out, 143 err
+same: octo-feather-lane seam: exit 2, 0 bytes out, 116 err
+same: octo-feather-lane skills: exit 2, 0 bytes out, 115 err
+same: octo-feather-lane spend: exit 0, 615 bytes out, 0 err
+same: octo-feather-lane report: exit 0, 380 bytes out, 0 err
+same: octo-feather-lane intake: exit 1, 0 bytes out, 193 err
+same: octo-feather-lane merge: exit 1, 0 bytes out, 156 err
+same: octo-feather-lane relay: exit 1, 0 bytes out, 176 err
+same: octo-feather-lane post-merge: exit 1, 0 bytes out, 229 err
+same: octo-feather-lane stale: exit 1, 236 bytes out, 0 err
+same: octo-feather-lane start -h: exit 0, 4210 bytes out, 0 err
+same: octo-feather-lane fields -: exit 0, 228 bytes out, 0 err
+same: octo-feather-lane ticket -: exit 2, 0 bytes out, 162 err
+same: octo-feather-lane post-merge --lane nosuch: exit 1, 0 bytes out, 208 err
+same: octo-feather-lane merge-ask abc: exit 1, 0 bytes out, 70 err
+same: octo-feather-lane merge 0 abc: exit 1, 0 bytes out, 80 err
+same: octo-feather-lane verdict 1 xyz -: exit 1, 0 bytes out, 78 err

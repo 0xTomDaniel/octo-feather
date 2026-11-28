@@ -21,8 +21,9 @@ Interface:
         then the end or the stop told, its rerun keeping --repo REPO (octo-feather-lane --help,
         archive).
     stale_report(state) -> (lines, read): step 6's report, `stale`'s output; STATE the state dir.
-    kit_install(), top(), git_here(*args), records(lanes), now(): the install step 3 moves, the
-        director's checkout, git in the current directory, the records' dir, a record's time.
+    kit_install() (lane_cli.py's, imported here), top(), git_here(*args), records(lanes), now():
+        the install step 3 moves, the director's checkout, git in the current directory, the
+        records' dir, a record's time.
     manager(), transient(unit, run, hook=, fallback=, cwd=, limit=, log=, managed=) -> why,
     bounded(run, limit) -> (result, status)
         Whether a systemd user manager answers; RUN started in one finite transient unit, its stop
@@ -67,6 +68,7 @@ __all__ = [
 ]  # fmt: skip
 
 import contextlib
+import dataclasses
 import datetime as dt
 import fcntl
 import functools
@@ -93,6 +95,20 @@ import tomllib  # stdlib since 3.11; ruff, at the 3.10 floor, sorts it as third-
 import tracker_calls
 from correction_lanes import DIRECTOR_LOG
 from handoff_log import encode, read_log
+from lane_cli import KIT as LANE_KIT
+from lane_cli import (
+    NAME,
+    Refuse,
+    dtm,
+    gh,
+    kit_install,
+    lane_name,
+    lanes_dir,
+    pr_number,
+    state_dir,
+    take_repo,
+)
+from lane_cli import pr_view as lane_pr_view
 from tracker_calls import (
     KIT,
     SHA,
@@ -699,12 +715,6 @@ REFRESH = (
     ("uv", "sync", "--locked"),
     ("pnpm", "install", "--frozen-lockfile"),
 )
-
-
-def kit_install() -> Path:
-    """The live kit install, the one rule for which dir it is: just install-check asks this too
-    (#422)."""
-    return Path(os.environ.get("OCTO_FEATHER_KIT_INSTALL") or KIT)
 
 
 def _git(
@@ -2445,3 +2455,794 @@ def _resend(pane: object, path: Path, msg: str) -> str:
         f"(`pane` in {path}, which the director writes at its launch; else the director's agent "
         "in herdr agent list)"
     )
+
+
+# --- moved from scripts/octo-feather-lane (ticket #1333, evidence/gh1274-split/split.py): merge, relay, post-merge, archive and stale; help: octo-feather-lane --help ---  # noqa: E501
+
+
+post_merge_map_end = map_end
+post_merge_map_job = map_job
+post_merge_records = records
+post_merge_top = top
+post_merge_unit_end = unit_end
+
+
+# --- post-merge: the routine's command (owner ruling 2026-10-29 on issue 206; the steps: scripts/post_merge.py) ---  # noqa: E501
+
+
+def show_line(line: str) -> None:
+    print(line, flush=True)  # noqa: T201
+
+
+def run_routine(pr: int, head: str, lane: str, wait: int, repo: str | None) -> int:
+    """post_merge.post_merge for LANE, each line printed as it comes; post-merge's exit code (--help, post-merge)."""  # noqa: E501
+    return post_merge(PostMerge(pr, head, lane, wait, repo, lanes_dir()), show_line).code
+
+
+# --- stale launch sets (issue 1079; rules: --help, stale) ---
+
+
+def cmd_stale(args: list[str]) -> int:
+    if args:
+        raise Refuse(f"usage: octo-feather-lane stale (no arguments; got {' '.join(args)})")  # noqa: EM102, TRY003
+    lines, read = stale_report(state_dir())
+    print("\n".join(lines), flush=True)  # noqa: T201
+    return 0 if read else 1
+
+
+def take_opt(args: list[str], flag: str) -> tuple[list[str], str | None]:
+    if flag not in args:
+        return args, None
+    i = args.index(flag)
+    if i + 1 >= len(args):
+        raise Refuse(f"{flag} needs a value")  # noqa: EM102, TRY003
+    return args[:i] + args[i + 2 :], args[i + 1]
+
+
+def pm_show(lane: str) -> int:
+    """`post-merge --lane NAME`: the lane's record (--help, post-merge)."""
+    records = post_merge_records(lanes_dir())
+    rec = read(records, lane)
+    if rec is None:
+        raise Refuse(  # noqa: TRY003
+            f"no post-merge record for lane {lane} in {records}: its routine never ran "  # noqa: EM102
+            f"(octo-feather-lane merge, or post-merge PR HEAD --lane {lane})"
+        )
+    print(  # noqa: T201
+        f"post-merge record {lane}: PR #{rec.pr}, head {rec.head}, merge commit {rec.merge or 'unknown'} "  # noqa: E501
+        f"({records / (lane + '.json')})"
+    )
+    by = {s.number: s for s in rec.steps}
+    for n, name in enumerate(STEPS, 1):
+        s = by.get(n)
+        print(  # noqa: T201
+            f"step {n} {name}: {s.outcome} at {s.at}: {s.line}"
+            if s
+            else f"step {n} {name}: not run"
+        )
+    if u := rec.unit:
+        print(  # noqa: T201
+            f"teardown unit {u.name} ({u.how}): started {u.started}, "
+            + (
+                f"ended {u.ended}: {u.result} ({u.status})"
+                if u.ended
+                else "running or ended unrecorded"
+            )
+        )
+    if rec.told:
+        print(f"director told: {'; '.join(rec.told)}")  # noqa: T201
+    return 0
+
+
+def pm_wait(wait: str | None) -> int:
+    if wait is not None and not wait.isdigit():
+        raise Refuse(f"--wait needs whole seconds, got {wait!r}")  # noqa: EM102, TRY003
+    return int(wait or 300)
+
+
+def cmd_post_merge(args: list[str]) -> int:
+    args, repo = take_repo(args)
+    args, lane = take_opt(args, "--lane")
+    args, wait = take_opt(args, "--wait")
+    unit_end, unit_run = (
+        "--unit-end" in args,
+        "--unit-run" in args,
+    )  # the teardown unit's (--help, archive)
+    map_job, map_end = (
+        "--map-job" in args,
+        "--map-end" in args,
+    )  # step 5's job and its stop hook (--help, step 5)
+    args = [a for a in args if a not in ("--unit-end", "--unit-run", "--map-job", "--map-end")]
+    if (map_job or map_end) and not args and lane is None and wait is None and repo is None:
+        if map_end:
+            return post_merge_map_end(
+                lanes_dir(),
+                os.environ.get("SERVICE_RESULT", ""),
+                f"{os.environ.get('EXIT_CODE', '')} {os.environ.get('EXIT_STATUS', '')}".strip(),
+                show_line,
+            )
+        if not unit_run:
+            return post_merge_map_job(lanes_dir(), show_line)
+        result, status = bounded(
+            [str(Path(__file__).resolve().parent / "octo-feather-lane"), "post-merge", "--map-job"],
+            MAP_LIMIT,
+        )
+        return post_merge_map_end(lanes_dir(), result, status, show_line)
+    if unit_end and not args and lane and NAME.fullmatch(lane):
+        return post_merge_unit_end(
+            lanes_dir(),
+            lane,
+            os.environ.get("SERVICE_RESULT", ""),
+            f"{os.environ.get('EXIT_CODE', '')} {os.environ.get('EXIT_STATUS', '')}".strip(),
+            show_line,
+            repo=repo,
+        )
+    if not args and lane and NAME.fullmatch(lane) and wait is None and repo is None:
+        return pm_show(lane)
+    if len(args) != 2 or not lane or not NAME.fullmatch(lane):  # noqa: PLR2004
+        raise Refuse(  # noqa: TRY003
+            "usage: octo-feather-lane post-merge PR HEAD --lane NAME [--wait SECONDS] [--repo O/R] "  # noqa: EM102
+            f"(the merged PR, the head it was merged at, the lane's name; got {' '.join(args) or 'nothing'}), "  # noqa: E501
+            "or post-merge --lane NAME (its record)"
+        )
+    if not SHA.fullmatch(args[1]):
+        raise Refuse(f"HEAD must be the pinned head the PR merged at, 7 to 40 hex, got {args[1]!r}")  # noqa: EM102, TRY003
+    pr, head, secs = pr_number(args[0]), args[1].lower(), pm_wait(wait)
+    return (
+        pm_unit_run(pr, head, lane, repo) if unit_run else run_routine(pr, head, lane, secs, repo)
+    )
+
+
+# --- merge: the supervisor's merge, then done and the post-merge routine (issue 1133; rules: --help, merge) ---  # noqa: E501
+
+
+def merge_lane(pr: int, nothing: str = "nothing merged") -> tuple[str, dict[str, object]]:
+    """The open lane record whose `pr` is PR: its name and record; none or two refuses, saying NOTHING."""  # noqa: E501
+    import tomllib  # noqa: PLC0415
+
+    lanes, hits = lanes_dir(), list[tuple[str, dict[str, object]]]()
+    for p in sorted(lanes.glob("*.toml")):
+        try:
+            rec: dict[str, object] = tomllib.loads(p.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+            raise Refuse(f"cannot read lane record {p} ({e}): fix it, then rerun; {nothing}")  # noqa: B904, EM102, TRY003
+        if rec.get("pr") == pr:
+            hits.append((p.stem, rec))
+    if not hits:
+        raise Refuse(  # noqa: TRY003
+            f"no open lane record in {lanes} has pr = {pr}: set `pr = {pr}` in the lane's record "  # noqa: EM102
+            f"(octo-feather-lane --help, report), then rerun; {nothing}"
+        )
+    if len(hits) > 1:
+        raise Refuse(  # noqa: TRY003
+            f"lane records {', '.join(n + '.toml' for n, _ in hits)} in {lanes} all have pr = {pr}: "  # noqa: E501, EM102
+            f"keep it only in the lane's own, then rerun; {nothing}"
+        )
+    name, rec = hits[0]
+    if (
+        not isinstance(rec.get("issue"), (int, str))
+        or isinstance(rec.get("issue"), bool)
+        or not str(rec.get("issue")).strip()
+    ):
+        raise Refuse(  # noqa: TRY003
+            f"lane record {lanes / (name + '.toml')} has no `issue` (the parent ticket key): set it, then rerun; "  # noqa: E501, EM102
+            f"{nothing}"
+        )
+    return name, rec
+
+
+def merge_allowed(pr: int, head: str, repo: str | None, lane: str) -> str:
+    """Whether lane LANE's merge of PR at HEAD may go, the one place the merge asks it (the rule: --help, merge,
+    allowed). The PR's full head, the one the merge pins; refuses naming why."""  # noqa: E501
+    import merge_ask  # noqa: PLC0415
+    from merge_ask import ask_of  # noqa: PLC0415
+    from merge_ask import lane_git as git  # noqa: PLC0415
+
+    d = cast("dict[str, object]", lane_pr_view(pr, "state,headRefOid", repo))
+    oid = str(d["headRefOid"])
+    if d["state"] != "OPEN":
+        raise Refuse(  # noqa: TRY003
+            f"PR #{pr} is {d['state']}, not open: nothing merged; a merged PR's routine resumes with "  # noqa: E501, EM102
+            f"`octo-feather-lane post-merge {pr} {head} --lane <lane>`"
+        )
+    if not head_matches(head, oid) or not SHA.fullmatch(oid):
+        raise Refuse(  # noqa: TRY003
+            f"PR #{pr}'s head is {oid[:12]}, not the approved head {head}: nothing merged; "  # noqa: EM102
+            "what would merge is not what was approved, ask for the merge again at its head"
+        )
+    oid = oid.lower()
+    top = Path(git("rev-parse", "--show-toplevel")[1].strip())
+    files = [
+        str(p) for p in sorted((top / "docs" / "specs").glob("*.status.json"))
+    ]  # every spec's: Failed resolves
+    s, a = ask_of(pr, repo, files, None)
+    t, stays = a.tier, f"nothing merged, PR #{pr} stays open"
+    sec = merge_ask.section(s.body)
+    unread = (
+        merge_ask.failed(s, sec)[0]
+        if sec is not None
+        else ["`## Merge ask` section: none in the PR body"]
+    )
+    if a.refusal or unread or t is None:
+        raise Refuse(  # noqa: TRY003
+            f"PR #{pr}'s merge ask at {oid[:12]} cannot be sorted into a tier ({'; '.join([a.refusal, *unread]).strip('; ')}): "  # noqa: E501, EM102
+            f"{stays}; fix the merge ask (octo-feather-lane merge-ask {pr} names each fix), then rerun"  # noqa: E501
+        )
+    block = "; ".join(t.lines)
+    if t.n <= 2 and t.waits == "nobody":  # noqa: PLR2004
+        print(  # noqa: T201
+            f"allowed: PR #{pr} at {oid[:12]}, its merge ask ({block})", file=sys.stderr, flush=True
+        )
+        return oid
+    relays = relays_of(lane, pr)
+    if not relays:
+        raise Refuse(  # noqa: TRY003
+            f"PR #{pr} at {oid[:12]}: its merge waits for {t.waits}, and no relay of its merge is on record "  # noqa: E501, EM102
+            f"({block}): {stays}; send up the section `octo-feather-lane merge-ask {pr}` prints, as printed (herdr-say "  # noqa: E501
+            "--parent), then rerun this merge once the director says it relayed it"
+        )
+    rh = str(relays[-1]["head"])
+    if any(head_matches(str(x["head"]), oid) for x in relays):
+        print(  # noqa: T201
+            f"allowed: PR #{pr} at {oid[:12]} on the director's relay of that head, its merge ask ({block})",  # noqa: E501
+            file=sys.stderr,
+            flush=True,
+        )
+        return oid
+    try:
+        full = git("rev-parse", "--verify", "--quiet", f"{rh}^{{commit}}")[1].strip()
+        why: list[str] = []
+    except Refuse as e:
+        full, why = (
+            "",
+            [
+                f"commit {rh} is not in this repo ({e}): run the merge in the lane worktree after git fetch origin"  # noqa: E501
+            ],
+        )
+    if full:
+        proof, why = merge_ask.relay_proof(s, full, oid)
+        if proof:
+            print(  # noqa: T201
+                f"relay carried: the director's relay of PR #{pr} at {rh[:12]} carries to {oid[:12]}: {proof}",  # noqa: E501
+                flush=True,
+            )
+            print(  # noqa: T201
+                f"allowed: PR #{pr} at {oid[:12]} on the director's relay carried, its merge ask ({block})",  # noqa: E501
+                file=sys.stderr,
+                flush=True,
+            )
+            return oid
+    raise Refuse(  # noqa: TRY003
+        f"PR #{pr}: the director's relay on record allows head {rh[:12]}, the merge was given head {oid[:12]} "  # noqa: E501, EM102
+        f"({'; '.join(why)}): {stays}; its merge waits for {t.waits} ({block})"
+    )
+
+
+def relays_of(lane: str, pr: int) -> list[dict[str, object]]:
+    """The director's relay lines (--help, relay) for lane LANE's PR, oldest first."""
+    log = lanes_dir().parent / DIRECTOR_LOG
+    if not log.exists():
+        return []
+    try:
+        lines, _ = read_log(log)
+    except OSError as e:
+        raise Refuse(  # noqa: B904, TRY003
+            f"cannot read the director's hand-off log {log} ({e}): fix it, then rerun; nothing merged"  # noqa: E501, EM102
+        )
+    return [
+        x
+        for x in lines
+        if x.get("kind") == "relay"
+        and x.get("lane") == lane
+        and x.get("pr") == pr
+        and isinstance(x.get("head"), str)
+        and SHA.fullmatch(str(x["head"]))
+    ]
+
+
+def cmd_relay(args: list[str]) -> int:
+    """`relay` (--help): the director's record of a merge it relays."""
+    import tomllib  # noqa: PLC0415
+
+    args, link = take_opt(args, "--link")
+    if len(args) != 2 or not SHA.fullmatch(args[1]):  # noqa: PLR2004
+        raise Refuse(  # noqa: TRY003
+            "usage: octo-feather-lane relay PR HEAD [--link <where the word is written>] (the lane's PR and the "  # noqa: E501, EM102
+            f"head its merge ask named, 7 to 40 hex; got {' '.join(args) or 'nothing'})"
+        )
+    toml = lanes_dir().parent / "director.toml"
+    try:
+        director = tomllib.loads(toml.read_text(encoding="utf-8")).get("pane")
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        director = f"unread ({type(e).__name__})"
+    me = os.environ.get("HERDR_PANE_ID", "")
+    if not me or not isinstance(director, str) or me != director:
+        raise Refuse(  # noqa: TRY003
+            f"only the director relays a merge: this pane is {me or 'unset (no HERDR_PANE_ID)'}, the director's "  # noqa: E501, EM102
+            f"pane in {toml} is {director if isinstance(director, str) else 'unset'}; nothing recorded, no relay "  # noqa: E501
+            "is on record: send the merge ask up (herdr-say --parent)"
+        )
+    pr, head = pr_number(args[0]), args[1].lower()
+    lane, _ = merge_lane(pr, "nothing recorded")
+    line: dict[str, object] = {
+        "at": f"{dtm.datetime.now(dtm.timezone.utc):%Y-%m-%dT%H:%M:%SZ}",
+        "kind": "relay",
+        "lane": lane,
+        "pr": pr,
+        "head": head,
+        **({"link": link} if link else {}),
+    }
+    log = lanes_dir().parent / DIRECTOR_LOG
+    with log.open("a", encoding="utf-8") as f:
+        f.write(encode(line) + "\n")
+    print(  # noqa: T201
+        f"relayed: PR #{pr} at head {head[:12]} (lane {lane}){', link ' + link if link else ''}; recorded in {log}"  # noqa: E501
+    )
+    return 0
+
+
+def cmd_merge(args: list[str]) -> int:
+    from lane_ticketing import cmd_done  # noqa: PLC0415
+
+    args, repo = take_repo(args)
+    args, wait = take_opt(args, "--wait")
+    if len(args) != 2:  # noqa: PLR2004
+        raise Refuse(  # noqa: TRY003
+            "usage: octo-feather-lane merge PR HEAD [--wait SECONDS] [--repo O/R] "  # noqa: EM102
+            f"(the lane's PR and the head its merge ask named; got {' '.join(args) or 'nothing'})"
+        )
+    if not SHA.fullmatch(args[1]):
+        raise Refuse(f"HEAD must be the approved head, 7 to 40 hex, got {args[1]!r}")  # noqa: EM102, TRY003
+    pr, head, secs = pr_number(args[0]), args[1].lower(), pm_wait(wait)
+    lane, rec = merge_lane(pr)
+    oid = merge_allowed(pr, head, repo, lane)
+    gh(
+        [
+            "pr",
+            "merge",
+            str(pr),
+            "--merge",
+            "--match-head-commit",
+            oid,
+            *(["-R", repo] if repo else []),
+        ],
+        f"nothing merged unless gh pr view {pr} reads MERGED; check it, then rerun",
+    )
+    print(f"merged: PR #{pr} at head {oid[:12]} (lane {lane})", flush=True)  # noqa: T201
+    parent, rc = str(rec["issue"]), 0
+    try:
+        cmd_done(
+            [tracker_calls.parent_key(parent, err=Refuse)]
+        )  # the record's lane key, as a tracker key
+    except Refuse as e:
+        print(f"octo-feather-lane merge: done {parent}: {e}", file=sys.stderr, flush=True)  # noqa: T201
+        rc = 1
+    routine = run_routine(pr, head, lane, secs, repo)
+    return rc or (0 if routine in (0, 3) else 1)
+
+
+PM_UNIT_LIMIT = 900
+
+
+def cmd_archive_lane(args: list[str]) -> int:
+    """`archive`: a lane record with a `pr` waits for its routine's steps 1-3 (archive_waits), is archived (cmd_archive),
+    records the archive's part and starts its teardown unit; one with none archives as cmd_archive alone."""  # noqa: E501
+    from lane_reflection import cmd_archive, director_source_args  # noqa: I001, PLC0415
+    import contextlib, io, tomllib  # noqa: E401, PLC0415
+
+    name = lane_name(director_source_args(args)[0])
+    try:
+        rec: dict[str, object] = tomllib.loads(
+            (lanes_dir() / f"{name}.toml").read_text(encoding="utf-8")
+        )
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+        rec = {}  # cmd_archive refuses it, naming why
+    pr = rec.get("pr")
+    if pr is None:
+        return cmd_archive(args)
+    if not isinstance(pr, int) or isinstance(pr, bool):
+        raise Refuse(  # noqa: TRY003
+            f"lane record {lanes_dir() / (name + '.toml')} has pr = {pr!r}, no PR number: fix it, then rerun; nothing archived"  # noqa: E501, EM102
+        )
+    repo = (
+        rec.get("repository")
+        if isinstance(rec.get("repository"), str) and rec.get("repository")
+        else None
+    )
+    head = archive_waits(name, pr, cast("str | None", repo), args)
+
+    out = sys.stdout
+
+    class Tee(io.StringIO):  # what the archive prints, shown and kept
+        def write(self, s: str) -> int:
+            out.write(s)
+            return super().write(s)
+
+        def flush(self) -> None:
+            out.flush()
+
+    printed = Tee()
+    with contextlib.redirect_stdout(printed):
+        rc = cmd_archive(args)
+    sys.stdout.flush()
+    archived(lanes_dir(), name, rec, printed.getvalue().splitlines())
+    return rc or pm_unit_start(name, pr, head, cast("str | None", repo))
+
+
+def archive_waits(name: str, pr: int, repo: str | None, args: list[str]) -> str:
+    """Steps 1-3 of lane NAME's routine for PR recorded ok, else run here, the archive re-executing itself on the
+    refreshed kit when step 3 moved the install this script runs from; still not ok, Refuse naming the stop, nothing
+    archived. The routine's head."""  # noqa: E501
+
+    def ok(r: "Record | None") -> bool:
+        return r is not None and r.pr == pr and [s.outcome for s in r.steps[:3]] == ["ok"] * 3
+
+    try:
+        was = read(records(lanes_dir()), name)
+    except Unreadable as e:
+        raise Refuse(f"{e}; nothing archived")  # noqa: B904, EM102, TRY003
+    if was is not None and ok(was):
+        return was.head
+    head = (
+        was.head
+        if was is not None and was.pr == pr
+        else str(
+            cast("dict[str, object]", lane_pr_view(pr, "headRefOid", repo))["headRefOid"]
+        ).lower()
+    )
+    install = kit_install()
+    before = git_here("-C", str(install), "rev-parse", "HEAD").stdout
+    print(  # noqa: T201
+        f"archive: steps 1-3 of lane {name}'s post-merge routine not recorded ok for PR #{pr}: running it",  # noqa: E501
+        flush=True,
+    )
+    run_routine(pr, head, name, pm_wait(None), repo)
+    now = read(records(lanes_dir()), name)
+    if now is None or not ok(now):
+        stop = next((s for s in now.steps[:3] if s.outcome != "ok"), None) if now else None
+        what = (
+            f"step {stop.number} {stop.name} {stop.outcome}: {stop.line}"
+            if stop
+            else "steps 1-3 not run"
+        )
+        raise Refuse(  # noqa: TRY003
+            f"archive waits: {what}; nothing archived, every file left in {lanes_dir()}: "  # noqa: EM102
+            "the stop names its fix, then rerun the archive"
+        )
+    script = install / "scripts" / "octo-feather-lane"
+    if git_here("-C", str(install), "rev-parse", "HEAD").stdout != before and os.path.realpath(
+        install
+    ) == os.path.realpath(LANE_KIT):
+        print(  # noqa: T201
+            f"archive: step 3 moved the kit install {install}: re-running the archive on it",
+            flush=True,
+        )
+        raise SystemExit(subprocess.run([str(script), "archive", *args], check=False).returncode)
+    return now.head
+
+
+def pm_unit_start(name: str, pr: int, head: str, repo: str | None) -> int:
+    """The archive's last act: step 8 in one finite transient unit outside the lane's workspace, cwd the director's
+    checkout (--help, archive). A unit that cannot start is a stop the director is told once; exit 1."""  # noqa: E501
+    unit, me, top = (
+        f"octo-feather-teardown-{name}",
+        Path(__file__).resolve().parent / "octo-feather-lane",
+        post_merge_top(),
+    )
+    records = post_merge_records(lanes_dir())
+    log = records / f"{name}.teardown.log"
+    run = [
+        str(me),
+        "post-merge",
+        str(pr),
+        head,
+        "--lane",
+        name,
+        *(["--repo", repo] if repo else []),
+    ]
+    managed = manager()
+    how = "systemd-run --user" if managed else "start_new_session"
+    update(records, name, lambda r: dataclasses.replace(r, unit=Unit(unit, how, now(), "", "", "")))
+    hook = [
+        str(me),
+        "post-merge",
+        "--lane",
+        name,
+        "--unit-end",
+        *(["--repo", repo] if repo else []),
+    ]
+    why = transient(
+        unit,
+        run,
+        hook=hook,
+        fallback=[*run, "--unit-run"],
+        cwd=top,
+        limit=PM_UNIT_LIMIT,
+        log=log,
+        managed=managed,
+    )
+    if why:
+        print(f"teardown: unit {unit} not started ({why})", flush=True)  # noqa: T201
+        unit_end(lanes_dir(), name, "start failed", why, show_line, repo=repo)
+        return 1  # no teardown runs, whether or not the director was told
+    print(  # noqa: T201
+        f"teardown: started unit {unit} ({how}, cwd {top}, limit {PM_UNIT_LIMIT}s, its lines in {log}); "  # noqa: E501
+        "the director gets one message when it ends",
+        flush=True,
+    )
+    return 0
+
+
+def pm_unit_run(pr: int, head: str, lane: str, repo: str | None) -> int:
+    """The unit where no systemd user manager answers: the routine under PM_UNIT_LIMIT, then its end
+    (post_merge.unit_end)."""
+    run = [
+        str(Path(__file__).resolve().parent / "octo-feather-lane"),
+        "post-merge",
+        str(pr),
+        head,
+        "--lane",
+        lane,
+        *(["--repo", repo] if repo else []),
+    ]
+    result, status = bounded(run, PM_UNIT_LIMIT)
+    return unit_end(lanes_dir(), lane, result, status, show_line, repo=repo)
+
+
+# This module's chunks of octo-feather-lane --help, joined in lane_cli.HELP_ORDER by lane_cli.help_doc.  # noqa: E501
+HELP = {
+    "archive-merged": """\
+Archive of a merged lane (issue 1134; issue-lifecycle #gates-main-moved, comms #transport-close-space): a lane record
+with a `pr` first asks the lane's post-merge record (`post-merge`, below) for that PR. Steps 1-3 not recorded ok, the
+archive runs the routine itself (PR, the recorded head or else the PR's, the record's `repository` as --repo), its
+lines printed, and re-executes itself on the kit install when step 3 moved the install this script runs from; still
+not ok, it refuses, `archive waits: step <n> <name> stopped: <line>`, exit 1, nothing archived. Then the reflections
+and the move as above; then it records its part in the lane's post-merge record (close: the reflections' finding
+counts, the correction lane lines, the tickets done and what is left open and where, as issue-view (of the tracker key
+of the record's `issue`, as merge's done step maps it, below), `gh pr list
+--base <lane-key>` and the Spec Chat registries read them then, and every line it printed). Its last act starts
+step 8 in one transient unit outside the lane's workspace, as herdr-close stops every process of the closed pane's
+agent scope (herdr-comms herdr_scope.py close): `systemd-run --user --unit=octo-feather-teardown-<lane>`, never a
+service or timer, running `post-merge PR HEAD --lane <lane>` in the director's checkout (`git worktree list`, first
+entry) with the archive's environment, bounded by RuntimeMaxSec 900, its lines appended to
+$(octo-feather-state)/post-merge/<lane>.teardown.log, its end (any exit, killed or timed out) recorded by its stop
+hook (ExecStopPost: `post-merge --lane <lane> --unit-end [--repo O/R]`, reading systemd's SERVICE_RESULT, EXIT_CODE,
+EXIT_STATUS). Where no systemd user manager answers (`systemctl --user is-system-running`; macOS), the same run in
+its own session (start_new_session, `post-merge PR HEAD --lane <lane> --unit-run`), killed past the same limit, then
+the same end. Prints `teardown: started unit ...`. A unit that cannot start is named, told as a stop, exit 1. A
+lane record with no `pr` archives as above alone.
+
+""",  # noqa: E501
+    "merge": """\
+  octo-feather-lane merge PR HEAD [--wait SECONDS] [--repo O/R]
+                                   the supervisor's merge of its lane's PR at the HEAD its merge ask named, then
+                                   `done` on the lane's parent and the post-merge routine for the lane
+
+`merge` (issue 1133, 1266; issue-lifecycle #gates-main-moved, #gates-merge-guard) merges only what its merge ask's
+tier or the director's relay allows (allowed, below). In order, each refusal before the merge exit 1 on stderr, nothing merged and nothing recorded:
+  lane     the open lane record ($(octo-feather-state)/lanes/*.toml) whose `pr` is PR, its name the lane's, its
+           `issue` the parent; none, two or more, or one with no `issue` refuses naming the fix
+  allowed  merge_allowed, the one place the merge asks whether it may go (issue-lifecycle #gates-merge-guard):
+           `gh pr view PR` reads it OPEN and its head is HEAD (7+ hex prefix); a PR closed or merged, or at another
+           head, refuses. Then the merge ask check, run here afresh as merge-ask runs it (never a stored print),
+           with --status every docs/specs/*.status.json of the repo's top: an ask with no `## Merge ask` section, a
+           Failed list it cannot read, or one merge-ask refuses outright, refuses (no tier to sort). An ask of tier
+           1 or 2 waiting for nobody goes, `allowed: PR #<n> at <sha12>, its merge ask (<the tier block>)` on stderr
+           (`on the director's relay ...` when a relay let it). Any other goes only on the director's relay of lane NAME's merge on
+           record (relay, below) naming HEAD, or naming an earlier head when the commits between are only merges
+           of main the one-head check proves clean (#lanes-one-head; printed `relay carried: ...`). No relay
+           refuses, `its merge waits for <whom>` (the owner; the director's order, naming each set-back PR) with
+           the tier block (its form: merge-ask) and `PR #<n> stays open`; a relay naming another head refuses
+           naming the head it allows, the head given and why it does not carry
+  merge    `gh pr merge PR --merge --match-head-commit <the PR's full head>`, printing `merged: PR #<n> at head
+           <sha12> (lane <name>)`; a gh failure refuses, naming it
+  done     `done <key>` (below), its lines, <key> the tracker key of the record's `issue`, a lane key (comms
+           #lane-record), as tracker_calls.py parent_key maps it (#1249); a failure is named on stderr and the
+           routine still runs
+  routine  the post-merge routine for the lane, PR and HEAD (below), its lines and summary as `post-merge` prints
+           them, its record written
+Exit 0 when merged, done, and steps 1-7 ok (step 8 pending or ok); 1 otherwise. A merged lane's routine resumes
+with `post-merge PR HEAD --lane <name>`.
+
+  octo-feather-lane relay PR HEAD [--link <where the word is written>]
+                                   the director's relay of lane PR's merge at HEAD, on record
+
+`relay` (issue 1266; issue-lifecycle #gates-merge-guard, #gates-tier-relay) runs only in the director's pane:
+HERDR_PANE_ID must be the `pane` of $(octo-feather-state)/director.toml, else it refuses, `only the director relays
+a merge`, nothing recorded. The open lane record whose `pr` is PR names the lane (merge's rule above). It appends
+one line to $(octo-feather-state)/director.handoffs.jsonl, {"at", "kind": "relay", "lane", "pr", "head"} and
+"link" when given (stored, never required or checked), and prints `relayed: PR #<n> at head <sha12> (lane
+<name>)`. merge reads these lines (above). Check class: declaration (docs/adr/0008): for a tier 3 ask the line
+proves the director's relay, not the owner's word. Exit 0 recorded; 1 refused or bad arguments.
+
+  octo-feather-lane post-merge PR HEAD --lane NAME [--wait SECONDS] [--repo O/R]
+                                   the post-merge routine for lane NAME, its steps in order
+  octo-feather-lane post-merge --lane NAME
+                                   lane NAME's post-merge record
+  octo-feather-lane post-merge --lane NAME --unit-end [--repo O/R]
+                                   the teardown unit's stop hook (archive, above): its end recorded, then the
+                                   director told (below)
+  octo-feather-lane post-merge --map-job [--unit-run]
+  octo-feather-lane post-merge --map-end
+                                   step 5's map job, run in its unit, and its stop hook (step 5, below)
+
+`post-merge` is the routine after a lane merges (owner ruling 2026-10-29 on issue 206; docs/adr/0008 Duties): `merge`
+(above) runs it; `archive` (above) runs it for step 8 in its teardown unit; the director reruns it after a stop. The
+director's message (issue 1134): a run that stops tells the director's pane (director.toml) the stop, `post-merge
+<lane> PR #<n> stopped: step <n> <name> stopped: <line>; fix it, then rerun ...` (the run's --repo kept, and its --wait when not 300); a run whose steps are
+all ok, on a record the archive recorded its part in, sends the one message for the merge: the summary, tickets done, left open,
+reflection findings, correction lanes, left on disk on purpose (the teardown's kept items) and the teardown line,
+` | ` between them; a teardown unit that ended before its routine finished (killed, timed out) tells that. Each
+once: the record's told keeps what was told (the end, or the stop's line), and a run telling it again sends nothing
+(`director already told`). Sent as step 7 sends (herdr-say --timeout 20, killed 15 s past); a failed send prints
+`director NOT told: <why>; re-send by hand: herdr-say ...` (no pane in director.toml: DIRECTOR_PANE and where
+to find it), exit 1, nothing recorded. Every send of the routine (step 7, the director's messages, the teardown
+unit's end) is the routine's own, not its caller's: herdr-say runs without the caller's OCTO_FEATHER_ROLE and
+OCTO_FEATHER_PARENT, so the up-chain guard of the supervisor whose pane runs merge or archive does not refuse it
+(#1249; docs/adr/0015 holds for that supervisor's own herdr-say). One run of a lane at a
+time: a second waits for the first (a lock per lane). Each run records each step it runs, its outcome, line and
+time, in the lane's record, $(octo-feather-state)/post-merge/<lane>.json (its form: scripts/post_merge.py). A rerun for the same merge (its PR, and a
+head one of the two is a prefix of) runs no step recorded ok before the first one not ok: each prints its recorded
+line as `step <n> <name>: ok: <what> (recorded <time>, not rerun)`, and the routine resumes at the first step not
+ok; a record of another merge is replaced. Each step is idempotent, and step 7 tells no lane twice. With only
+--lane NAME it prints the lane's record: `post-merge record <lane>: PR #<n>, head <head>, merge commit <sha> (<file>)`,
+then per step `step <n> <name>: <outcome> at <time>: <line>` or `step <n> <name>: not run`, then, when recorded,
+`teardown unit <name> (<how>): started <time>, ended <time>: <result> (<status>)` (`running or ended unrecorded`
+before its end) and `director told: <each>`; exit 0, 1 with no or an unreadable record.
+  step 1 merged    `gh pr view PR`: the PR is MERGED, its head is HEAD (7+ hex prefix), and it has a merge commit
+  step 2 main CI   `gh run list --commit <merge commit> --event push`: waits up to --wait SECONDS (default 300)
+                   for a run to appear, then `gh run watch <id> --exit-status` on each run until every run gh
+                   lists is completed; ok only when every run concluded success, or cancelled and superseded. A run
+                   cancelled (a later push's concurrency cancel-in-progress) is superseded by the first later push
+                   run of its workflow (`gh run list --branch <base> --event push --workflow <name>`, a higher run
+                   id) whose headSha contains the merge commit (`gh api repos/<repo>/compare/<merge>...<headSha>`
+                   ahead or identical): watched to its end, ok on success naming both runs, red stops; cancelled in
+                   turn, its own successor counts; none within --wait stops as red. A red run (any other
+                   conclusion) stops at once, `main CI red on <m>: <wf> <conclusion> <url>`, each rerun with that
+                   same line (the director told once), until a later push run of its workflow on the base (that
+                   list, read once, never waited for) containing the merge commit concluded success: the first
+                   such makes it ok, `main CI red on <m>: <wf> <url>, green since in <url> on <sha12> (contains
+                   <m>)`, then the other runs' line; the archive reruns it (#gates-main-moved). The no-CI
+                   fact: while gh lists no run, `gh api repos/<repo>/git/trees/<merge commit>` (then .github,
+                   then workflows) finds no
+                   .github/workflows/*.yml or *.yaml file; then step 2 is ok at once, `no CI: no workflow file
+                   ...`, with no wait. merge-ask reads the same fact at the PR head
+  step 3 kit refresh  the live kit install (this script's kit dir, or env OCTO_FEATHER_KIT_INSTALL): only when
+                   `gh repo view` names the PR's repo and the install's origin alike, else `kit install unchanged:
+                   PR in <repo>, install is <repo>`. The live-run rule (issue-lifecycle #gates-main-moved): a
+                   live run of the box's slots (heavy: gate and qc runs; eval: octo-feather-qa; live while its
+                   lock is held: octo-feather-slot --help, Files) whose recorded process works in the install
+                   (its cwd) or runs a program from it (its executable, argv[0] or script) is waited for, up to
+                   --wait, re-read each second; then step 3 stops, nothing moved, `kit refresh waits: <kind> run
+                   pid <pid> of lane <lane> since <since> reads <install>`. Where /proc is absent (macOS), or a
+                   process is not read, any live run counts. Stops, nothing changed, on what issue-lifecycle
+                   #gates-main-moved refuses, checked on the install and on step 4's checkout before either moves
+                   (an install that is step 4's checkout as that checkout), named `kit install|checkout <path> is
+                   dirty (...)`, `is on <branch|a detached HEAD>, not <base>` or `has diverged ...`; after `git
+                   fetch origin`, one behind it
+                   fast-forwards (`git merge --ff-only`, a detached HEAD stays detached), one at or past it does
+                   not move. Then in the install, each failure stopping named: `octo-feather-mise-install .` (the
+                   kit's own locked mise tools, never the user's global ones; only with a mise.toml there), `just vendored-fetch`, `uv sync --locked` (env UV_PYTHON_DOWNLOADS=never: a
+                   pinned Python (.python-version) not installed stops, naming `uv python install --no-bin <pin>`),
+                   `pnpm install --frozen-lockfile`, `just install-check <the current repo's top>`. No service
+                   restart; each run of step 3 reruns these
+  step 4 checkout  the director's own checkout of the target: the main checkout of the repo post-merge runs in (`git
+                   worktree list`, first entry), for any target repo; when it is the kit install, step 3 is its
+                   one move (`checkout <path> is the kit install, which step 3 moves`). Step 3's rules on it, nothing
+                   changed when it stops, the line naming the checkout and why: dirty (git status --porcelain), on
+                   a branch other than the PR's base or a detached HEAD (`is on <branch>, not <base>`), or diverged
+                   from the merge commit; one behind it on the base fast-forwards (`git merge --ff-only`), one at
+                   or past it does not move. `git fetch origin` only when the merge commit is missing there
+  step 5 coverage map  where the repo builds a coverage map (`just --summary` in step 4's checkout names a fast-map
+                   recipe; else `coverage map: skipped: <checkout> has no fast-map recipe (just --summary)`),
+                   its map for the merge commit is built by the clone's one map job, never waited for (quality
+                   #acceptance-map-after-merge, #acceptance-map-full-daily, #acceptance-map-build-failed). The
+                   map dir, <git common dir>/octo-feather/fast-map/ (octo-feather-gate --help, map), holds its
+                   record, build.json (its form: scripts/post_merge.py, step 5), under build.lock. Its line:
+                   `coverage map: already done: <map file>` when the merge's map exists; `already started` or
+                   `already queued` when the record has that merge; `queued: <m>, after unit <unit>'s build
+                   of <r>[, replacing queued <q>, never mapped]` while a build runs (one merge queued at
+                   most, a newer one replacing it); else `started: unit <unit> (<how>, limit 3600s, its lines
+                   in <map dir>/build.log) builds the map for <m>; the routine goes on without it`. The job
+                   is one transient unit per clone, octo-feather-fast-map-<clone id> (the teardown unit's
+                   start: `systemd-run --user`, RuntimeMaxSec 3600, ExecStopPost `post-merge --map-end`;
+                   where no systemd user manager answers, its own session, `post-merge --map-job
+                   --unit-run`, killed past the same limit, then the same end), cwd the checkout, running
+                   `post-merge --map-job`: at the lowest processor and disk priority (nice 19, ionice
+                   idle), and only once a fast-run turn is free (no fast run waiting for one: the slots
+                   dir's fast-I.lock, octo-feather-slot --help, Files), in a scratch worktree at the merge
+                   commit (`git worktree add --detach` in the map dir, removed at the build's end) it runs
+                   `just fast-map --since-newest` (re-mapping only the test items changed since the newest
+                   map: the justfile's fast-map), or a full `just fast-map` when the record holds no full
+                   map built less than a day before that is still an ancestor's map: a fast-tier run, no
+                   heavy slot. It then builds the queued merge, if any, and ends. Each build's end goes in
+                   the record (last: merge, result, why, items run, mapped, not passed, wall, CPU). A build
+                   that writes no map for its merge (just failed, killed, timed out, the unit not started)
+                   leaves every map as it was, so select keeps the previous one, and tells the merge's
+                   lane's director once (`coverage map build for <m> (lane <lane>, PR #<n>) failed: <why>;
+                   ...`, as the routine's stops are told); a unit ended while building has that recorded
+                   by its stop hook, its scratch worktree removed and the queued merge dropped. Always ok:
+                   it never stops the routine
+  step 6 stale agents  `stale`'s report (below), its lines joined by `; `; always ok: it never stops the routine,
+                   and a Herdr it cannot read is named in its line (`stale agents: not read: ...`)
+  step 7 tell supervisors  each open lane record but --lane's, of the PR's repo (every lane when the PR is the kit
+                   install's origin repo: every lane runs kit roles), whose supervisor pane `herdr agent get` finds
+                   gets one herdr-say: "main moved to <merge sha12> (#PR <title>); rule files changed: <list or
+                   none>; re-read the changed ones before your next step. (from the post-merge routine of lane
+                   <lane>)", <lane> the merging lane, its sender. Rule files: what the merge commit
+                   changed against its first parent (git in the current repo, fetched from origin when missing)
+                   under agents/*.md, .agents/skills/, .skillfile/patches/, AGENTS.md, docs/adr/, docs/specs/.
+                   A pane Herdr does not find (agent_not_found, read from stderr or stdout) is never sent to (why:
+                   herdr-comms SKILL.md, herdr-say) and never stops the step: listed `not woken: <lane> <pane>`
+                   (parked) when the lane's latest parked line in <lane>.handoffs.jsonl beside its record names
+                   that pane, else `gone: director to resume or archive: <lane> <pane>`; any other herdr failure
+                   stops the step, named. A lane whose supervisor is the merging lane's (its record, open or
+                   archived: that supervisor runs this routine, mid-turn) is never sent to, listed `told: <lane>
+                   <pane> (the merging supervisor)`. Each lane told gets one line in
+                   $(octo-feather-state)/director.handoffs.jsonl, {"at", "kind": "prod", "issue", "note":
+                   "post-merge <merge sha> #PR: main moved, told <lane> to re-read <files|none> (from the
+                   post-merge routine of lane <merging lane>)"} (spec comms
+                   #handoff-director-prod); a rerun skips a lane whose prod line names that merge (`already told`).
+                   Each send is bounded (#619, #666): `herdr-say --timeout 20`, Herdr's own wait bound (herdr-say
+                   exit 124 past it); a herdr-say still running 15 s past it is killed. A failed send (timed out,
+                   exit 75 blocked, or other) is loud (director rule #619): that supervisor is NOT told, named
+                   with its lane, pane, why (a timeout: `NOT told: <lane> <pane>: send timed out after 20s`) and
+                   the command that re-sends it by hand (`re-send by hand: herdr-say <pane> '<message>'`); it
+                   writes no prod line; the step goes on to the other supervisors, then stops. Its line:
+                   `NOT told: ...; told: ...; already told: ...; not woken: ...; gone: director to resume or
+                   archive: ...`
+  step 8 teardown  only once $(octo-feather-state)/lanes/archive/<lane>.toml exists (`octo-feather-lane archive`
+                   moves it there, then starts this step in its teardown unit), else `pending: lane <lane> not
+                   archived; its archive starts this step`; an archived record whose `pr` is not PR stops. In order, each stop keeping the
+                   rest: first step 3's live-run rule on a run whose recorded process works in the lane's
+                   worktree (its cwd; any live run where /proc is absent), `teardown waits: <kind> run pid
+                   <pid> of lane <lane> since <since> reads <worktree>`, nothing closed or removed; then
+                   the lane's own space (the archived `supervisor` pane id's prefix, when no open lane
+                   record's supervisor and not director.toml's `pane` has it) closed with `herdr-close <space>`,
+                   else only its tab with `herdr-close <supervisor pane>`; one Herdr no longer finds is `already
+                   closed`. Neither closed, nothing in another record changed, when an open lane record but
+                   <lane>'s names that very pane as its `supervisor` (`kept: supervisor <pane> (tab <tab>) still
+                   supervises <lane>, ...`, the tab as `herdr agent list` names it, else `(tab unknown: <why>)`)
+                   or director.toml's `pane` is it (`... is the director`) (#892). The worktree
+                   on branch `lane-key <record issue>` (tracker skill), from `git worktree
+                   list --porcelain` in the current repo, removed with `git worktree remove` (a dirty one refused in
+                   git's words), then the user's mise tracked-configs and trusted-configs links whose target is that
+                   worktree or under it pruned (MISE_STATE_DIR, else mise's default; the count named); kept, named, when it is the kit install, the main worktree, or the root of a Spec
+                   Chat review row (${XDG_STATE_HOME:-~/.local/state}/spec-chat/hosting/*/registry.toml); kept, the
+                   local branch with it (`kept: local branch <branch>: checked out in kept worktree <path>`), when
+                   a live agent outside the space or tab closed works in it or under it (an AgentInfo `cwd` or
+                   `foreground_cwd` of `herdr agent list`, read before the close): `kept: worktree <path>: <pane>
+                   works in it`; that list not read, `kept: worktree <path>: who works in it unknown (<why>)`,
+                   never removed blind (comms #transport-close-space). Each open PR
+                   based on the branch retargeted to the merged PR's base (`gh pr edit N --base`); the local branch
+                   deleted only when it is an ancestor of the merge commit; then `git push origin --delete <branch>`
+                   when origin has it. Gone already prints `already`; review rows, spools and records stay
+Each step prints one line as it finishes, `step <n> <name>: ok: <what>` or `step <n> <name>: stopped: <why>`;
+a stopped step runs no later step. The last line is the summary, each step's outcome (ok, stopped, not run):
+`post-merge <lane> PR #<n>: step 1 merged ok; step 2 main CI ok`, ending `; NOT told: <lane> <pane>, ... (step 7
+names each re-send)` when step 7 failed a send. Exit 0 when every step is ok, 1 when one (not merged, merged at another head, a red run named by its URL, no run within the bound, a watch that failed,
+a checkout kept, a supervisor not told, a teardown refusal), 3 when steps 1-7 are ok and step 8 is pending (the run at the merge; the
+archive starts step 8), 1 with usage on stderr for bad arguments.
+
+  octo-feather-lane stale          the live agents on a stale launch set, and those with none recorded
+
+`stale` (issue 1079; stale and unknown: spec roles#launch-set; the record: pi-role --help, Launch set) reads
+each agent `herdr agent list` names (checked against Herdr's AgentInfo, a malformed answer named), its session from
+the `--session-id` of its Pi process (`herdr pane process-info`, as herdr-close --park reads it), and asks the
+recorded launcher for the set now with the recorded args and working directory. Its Herdr extension (herdr-spawn's
+per-launch copy, under herdr-pi/ in the state dir) is compared with what a launch would install now, a fresh
+`herdr integration install pi` into a temp dir (one per report), never with the agent's own copy; that install
+failing is `launches no more`. A current agent is not named.
+Lines, kit paths relative to the launcher's kit, skill folders with a trailing /:
+  stale: <pane> <name> role <role>: <path> changed|added|gone, ...
+  stale: <pane> <name> role <role>: <role file> launches no more from <cwd> (<why>)
+  unknown: <pane> <name> role <role|unknown>: no Pi launched with --session-id (started by hand)
+  unknown: <pane> <name> role <role|unknown>: no launch set recorded for session <id> in <dir>
+  unknown: <pane> <name> role <role|unknown>: launch-set record <file> unreadable|malformed (<what>)
+  unknown: <pane> <name>: its process not read (<Herdr's error>)
+  stale agents: <n> stale, <n> unknown, <n> current of <n> live
+It relaunches nothing. Exit 0; 1 when Herdr's agent list cannot be read or is malformed, its one line `stale
+agents: not read: <why>`. post-merge step 6 prints the same report.
+
+""",  # noqa: E501
+}

@@ -1,0 +1,93 @@
+note: placed by the rule: ask_of -> merge_ask (serves lane_reporting, merge_ask, post_merge; its logic is merge_ask.py's (owner decision 1))
+note: placed by the rule: relays_of -> post_merge (serves post_merge's group only)
+note: placed by the rule: cmd_relay -> post_merge (serves post_merge's group only)
+note: constant NAME read by lane_cli, lane_reporting, post_merge: lane_cli
+note: constant KIT read by ci_start, lane_cli, lane_review, lane_ticketing, post_merge: lane_cli
+note: constant gh read by ci_start, lane_reporting, lane_review, post_merge: lane_cli
+note: constant pr_view read by ci_start, lane_reporting, lane_review, merge_ask, post_merge: lane_cli
+note: constant check_runs has no reader: dropped
+note: binding git read by ci_start, lane_review, merge_ask, post_merge reads merge_ask: one per module
+note: binding pr_base read by ci_start, lane_review, merge_ask reads merge_ask: one per module
+note: dtm: lane_cli binds `dtm = datetime` (the hub's import alias); each module reads it from there
+note: binding git: post_merge.py and start_lane.py read it from merge_ask.py where the call is
+note: lanes_dir reads __file__ for its directory only (Path(__file__).resolve().with_name): lane_cli.py sits beside the hub, unchanged
+justfile install-check: kit_install read from scripts/lane_cli.py, not the lane script (one line)
+lane_cli.py kit_install: moved from post_merge.py unchanged (design section 1: lane_cli holds it)
+post_merge.py docstring: its interface line says kit_install() is lane_cli.py's, imported there
+lane_reflection.py reflect_lane: calls between groups: inserted `import lane_reporting; from lane_reporting import ReportSources; herdr_agents = cast("Callable[[], list[dict[Any, Any]]]", lane_reporting.herdr_agents); report_lane = cast("Callable[[Path, list[dict[Any, Any]] | None, str | None, Any, list[str], list[Any], ReportSources], list[str]]", lane_reporting.report_lane)`
+lane_reflection.py reflect_director: calls between groups: inserted `from lane_reporting import cmd_report`
+merge_ask.py pr_commits line 5: same name, another object: `if git("cat-file", "-e", f"{head}^{{commit}}", ok=(0, 1, 128))[0]:` -> `if lane_git("cat-file", "-e", f"{head}^{{commit}}", ok=(0, 1, 128))[0]:`
+merge_ask.py pr_commits line 8: same name, another object: `if git("rev-parse", "--verify", "-q", f"{base}^{{commit}}", ok=(0, 1))[0]:` -> `if lane_git("rev-parse", "--verify", "-q", f"{base}^{{commit}}", ok=(0, 1))[0]:`
+merge_ask.py pr_commits line 10: same name, another object: `out = git("log", "--format=%H%x00%s", f"{base}..{head}")[1]` -> `out = lane_git("log", "--format=%H%x00%s", f"{base}..{head}")[1]`
+merge_ask.py pr_commits: formatted (ruff format, line noqa; check 1 compares its ast)
+lane_review.py cmd_verdict: calls between groups: inserted `from merge_ask import pr_commits`
+merge_ask.py ask_of line 1: self-qualified: `def ask_of(pr: int, repo: str | None, files: list[str], base_arg: str | None) -> "tuple[merge_ask.Snapshot, merge_ask.Ask]":` -> `def ask_of(pr: int, repo: str | None, files: list[str], base_arg: str | None) -> "tuple[Snapshot, Ask]":`
+merge_ask.py ask_of line 12: self-qualified: `s = merge_ask.snapshot(pr, repo, files, read, Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state_dir() / "qc"),` -> `s = snapshot(pr, repo, files, read, Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state_dir() / "qc"),`
+merge_ask.py ask_of line 14: self-qualified: `return s, merge_ask.check(s)` -> `return s, check(s)`
+merge_ask.py ask_of: calls between groups: inserted `from lane_reporting import ReportSources`
+merge_ask.py ask_of: formatted (ruff format, line noqa; check 1 compares its ast)
+merge_ask.py cmd_merge_ask line 27: self-qualified: `if not merge_ask.field(lines, "Checks"):` -> `if not field(lines, "Checks"):`
+merge_ask.py cmd_merge_ask line 46: self-qualified: `declared = [c for c in a.classes if c.endswith(merge_ask.DECLARATION)]   # shown only (spec issue-lifecycle #lanes-one-head)` -> `declared = [c for c in a.classes if c.endswith(DECLARATION)]   # shown only (spec issue-lifecycle #lanes-one-head)`
+merge_ask.py cmd_merge_ask: formatted (ruff format, line noqa; check 1 compares its ast)
+lane_reporting.py skill_reach: calls between groups: inserted `from pi_sessions import session_reach, sessions_dir`
+lane_ticketing.py skills_check: calls between groups: inserted `from pi_sessions import SessionReach, session_reach, sessions_dir`
+post_merge.py show_line: formatted (ruff format, line noqa; check 1 compares its ast)
+post_merge.py run_routine line 3: self-qualified: `return post_merge.post_merge(post_merge.PostMerge(pr, head, lane, wait, repo, lanes_dir()), show_line).code` -> `return post_merge(PostMerge(pr, head, lane, wait, repo, lanes_dir()), show_line).code`
+post_merge.py run_routine: formatted (ruff format, line noqa; check 1 compares its ast)
+post_merge.py cmd_stale line 6: self-qualified: `lines, read = post_merge.stale_report(state_dir())` -> `lines, read = stale_report(state_dir())`
+post_merge.py cmd_stale: formatted (ruff format, line noqa; check 1 compares its ast)
+post_merge.py take_opt: formatted (ruff format, line noqa; check 1 compares its ast)
+post_merge.py pm_show line 3: self-qualified: `records = post_merge.records(lanes_dir())` -> `records = post_merge_records(lanes_dir())`
+post_merge.py pm_show line 4: self-qualified: `rec = post_merge.read(records, lane)` -> `rec = read(records, lane)`
+post_merge.py pm_show line 11: self-qualified: `for n, name in enumerate(post_merge.STEPS, 1):` -> `for n, name in enumerate(STEPS, 1):`
+post_merge.py pm_show: formatted (ruff format, line noqa; check 1 compares its ast)
+post_merge.py pm_wait: formatted (ruff format, line noqa; check 1 compares its ast)
+post_merge.py cmd_post_merge line 10: self-qualified: `return post_merge.map_end(lanes_dir(), os.environ.get("SERVICE_RESULT", ""),` -> `return post_merge_map_end(lanes_dir(), os.environ.get("SERVICE_RESULT", ""),`
+post_merge.py cmd_post_merge line 14: self-qualified: `return post_merge.map_job(lanes_dir(), show_line)` -> `return post_merge_map_job(lanes_dir(), show_line)`
+post_merge.py cmd_post_merge line 15: launch path; self-qualified: `result, status = post_merge.bounded([str(Path(__file__).resolve()), "post-merge", "--map-job"],` -> `result, status = bounded([str(Path(__file__).resolve().parent / "octo-feather-lane"), "post-merge", "--map-job"],`
+post_merge.py cmd_post_merge line 16: self-qualified: `post_merge.MAP_LIMIT)` -> `MAP_LIMIT)`
+post_merge.py cmd_post_merge line 17: self-qualified: `return post_merge.map_end(lanes_dir(), result, status, show_line)` -> `return post_merge_map_end(lanes_dir(), result, status, show_line)`
+post_merge.py cmd_post_merge line 19: self-qualified: `return post_merge.unit_end(lanes_dir(), lane, os.environ.get("SERVICE_RESULT", ""),` -> `return post_merge_unit_end(lanes_dir(), lane, os.environ.get("SERVICE_RESULT", ""),`
+post_merge.py cmd_post_merge: formatted (ruff format, line noqa; check 1 compares its ast)
+post_merge.py merge_lane: formatted (ruff format, line noqa; check 1 compares its ast)
+post_merge.py merge_allowed line 4: same name, another object: `d = cast("dict[str, object]", pr_view(pr, "state,headRefOid", repo))` -> `d = cast("dict[str, object]", lane_pr_view(pr, "state,headRefOid", repo))`
+post_merge.py merge_allowed: calls between groups: inserted `import merge_ask; from merge_ask import ask_of; from merge_ask import lane_git as git`
+post_merge.py merge_allowed: formatted (ruff format, line noqa; check 1 compares its ast)
+post_merge.py relays_of: formatted (ruff format, line noqa; check 1 compares its ast)
+post_merge.py cmd_relay: formatted (ruff format, line noqa; check 1 compares its ast)
+post_merge.py cmd_merge: calls between groups: inserted `from lane_ticketing import cmd_done`
+post_merge.py cmd_merge: formatted (ruff format, line noqa; check 1 compares its ast)
+post_merge.py cmd_archive_lane line 31: self-qualified: `post_merge.archived(lanes_dir(), name, rec, printed.getvalue().splitlines())` -> `archived(lanes_dir(), name, rec, printed.getvalue().splitlines())`
+post_merge.py cmd_archive_lane: calls between groups: inserted `from lane_reflection import cmd_archive, director_source_args`
+post_merge.py cmd_archive_lane: formatted (ruff format, line noqa; check 1 compares its ast)
+post_merge.py archive_waits line 5: self-qualified: `def ok(r: "post_merge.Record | None") -> bool:` -> `def ok(r: "Record | None") -> bool:`
+post_merge.py archive_waits line 8: self-qualified: `was = post_merge.read(post_merge.records(lanes_dir()), name)` -> `was = read(records(lanes_dir()), name)`
+post_merge.py archive_waits line 9: self-qualified: `except post_merge.Unreadable as e:` -> `except Unreadable as e:`
+post_merge.py archive_waits line 13: same name, another object: `head = was.head if was is not None and was.pr == pr else str(cast("dict[str, object]", pr_view(pr, "headRefOid", repo))["headRefOid"]).lower()` -> `head = was.head if was is not None and was.pr == pr else str(cast("dict[str, object]", lane_pr_view(pr, "headRefOid", repo))["headRefOid"]).lower()`
+post_merge.py archive_waits line 15: self-qualified: `before = post_merge.git_here("-C", str(install), "rev-parse", "HEAD").stdout` -> `before = git_here("-C", str(install), "rev-parse", "HEAD").stdout`
+post_merge.py archive_waits line 18: self-qualified: `now = post_merge.read(post_merge.records(lanes_dir()), name)` -> `now = read(records(lanes_dir()), name)`
+post_merge.py archive_waits line 25: same name, another object; self-qualified: `if post_merge.git_here("-C", str(install), "rev-parse", "HEAD").stdout != before and os.path.realpath(install) == os.path.realpath(KIT):` -> `if git_here("-C", str(install), "rev-parse", "HEAD").stdout != before and os.path.realpath(install) == os.path.realpath(LANE_KIT):`
+post_merge.py archive_waits: formatted (ruff format, line noqa; check 1 compares its ast)
+post_merge.py pm_unit_start line 4: launch path; self-qualified: `unit, me, top = f"octo-feather-teardown-{name}", Path(__file__).resolve(), post_merge.top()` -> `unit, me, top = f"octo-feather-teardown-{name}", Path(__file__).resolve().parent / "octo-feather-lane", post_merge_top()`
+post_merge.py pm_unit_start line 5: self-qualified: `records = post_merge.records(lanes_dir())` -> `records = post_merge_records(lanes_dir())`
+post_merge.py pm_unit_start line 8: self-qualified: `managed = post_merge.manager()` -> `managed = manager()`
+post_merge.py pm_unit_start line 10: self-qualified: `post_merge.update(records, name, lambda r: dataclasses.replace(r, unit=post_merge.Unit(unit, how, post_merge.now(), "", "", "")))` -> `update(records, name, lambda r: dataclasses.replace(r, unit=Unit(unit, how, now(), "", "", "")))`
+post_merge.py pm_unit_start line 12: self-qualified: `why = post_merge.transient(unit, run, hook=hook, fallback=[*run, "--unit-run"], cwd=top, limit=PM_UNIT_LIMIT,` -> `why = transient(unit, run, hook=hook, fallback=[*run, "--unit-run"], cwd=top, limit=PM_UNIT_LIMIT,`
+post_merge.py pm_unit_start line 16: self-qualified: `post_merge.unit_end(lanes_dir(), name, "start failed", why, show_line, repo=repo)` -> `unit_end(lanes_dir(), name, "start failed", why, show_line, repo=repo)`
+post_merge.py pm_unit_start: formatted (ruff format, line noqa; check 1 compares its ast)
+post_merge.py pm_unit_run line 4: launch path: `run = [str(Path(__file__).resolve()), "post-merge", str(pr), head, "--lane", lane, *(["--repo", repo] if repo else [])]` -> `run = [str(Path(__file__).resolve().parent / "octo-feather-lane"), "post-merge", str(pr), head, "--lane", lane, *(["--repo", repo] if repo else [])]`
+post_merge.py pm_unit_run line 5: self-qualified: `result, status = post_merge.bounded(run, PM_UNIT_LIMIT)` -> `result, status = bounded(run, PM_UNIT_LIMIT)`
+post_merge.py pm_unit_run line 6: self-qualified: `return post_merge.unit_end(lanes_dir(), lane, result, status, show_line, repo=repo)` -> `return unit_end(lanes_dir(), lane, result, status, show_line, repo=repo)`
+post_merge.py pm_unit_run: formatted (ruff format, line noqa; check 1 compares its ast)
+start_lane.py cmd_start line 5: the hub's own docstring: `doc = __doc__ or ""` -> `doc = help_doc() or ""`
+start_lane.py cmd_start: formatted (ruff format, line noqa; check 1 compares its ast)
+baseline: ruff codes for scripts/octo-feather-lane: E501 E702 T201
+baseline: ruff codes for scripts/lane_cli.py: ANN001 ANN201 E501 EM101 EM102 ICN001 N818 TRY003
+baseline: ruff codes for scripts/lane_ticketing.py: ANN001 ANN201 ANN202 ANN204 B007 B018 B905 C901 E501 E702 E731 E741 EM101 EM102 FURB167 FURB188 PERF203 PLC0415 PLR0911 PLR0912 PLR0915 PLR2004 PLW1510 PTH117 RUF005 S607 T201 TRY003 TRY301 UP034
+baseline: ruff codes for scripts/lane_reporting.py: ANN001 ANN201 ANN204 B904 BLE001 C901 E501 E702 EM101 EM102 ICN001 PERF203 PLC0415 PLR0124 PLR0912 PLR0913 PLR0915 PLR0917 PLR2004 PLW1510 RUF021 S602 S607 T201 TRY003 TRY004 TRY301
+baseline: ruff codes for scripts/lane_review.py: ANN201 B904 C901 E501 E702 E741 EM101 EM102 PLC0415 PLR0912 PLR0913 PLR0915 PLR0917 PLR2004 PLW1510 T201 TRY003
+baseline: ruff codes for scripts/lane_reflection.py: B904 C901 E401 E501 E702 EM101 EM102 FBT001 FBT002 I001 ICN001 PLC0415 PLR0912 PLR0915 RUF005 SIM105 T201 TRY003 TRY301
+baseline: ruff codes for scripts/pi_sessions.py: C901 E501 EM101 FURB167 PLR0912 PLR0915 PLR2004 RUF021 TRY003
+baseline: ruff codes for scripts/ci_start.py: B904 C901 E501 E702 EM101 EM102 PLR0912 S607 T201 TRY003
+baseline: format exclude: scripts/ci_start.py, scripts/lane_cli.py, scripts/lane_reflection.py, scripts/lane_reporting.py, scripts/lane_review.py, scripts/lane_ticketing.py, scripts/octo-feather-lane, scripts/pi_sessions.py
+baseline: basedpyright entries moved to ./scripts/lane_cli.py, ./scripts/lane_reflection.py, ./scripts/lane_reporting.py, ./scripts/lane_review.py, ./scripts/lane_ticketing.py, ./scripts/merge_ask.py

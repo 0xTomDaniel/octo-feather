@@ -1,9 +1,8 @@
 Seeded defect: an owner-caught finding with no readable at counts in the week before (comms #acceptance-report-owner-caught-headline).
-diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
-index 8925cb5f..2b7fc478 100755
---- a/scripts/octo-feather-lane
-+++ b/scripts/octo-feather-lane
-@@ -2703,7 +2703,7 @@ def owner_caught(state: Path, now, unread: list[str]) -> tuple[str, list[str]]:
+diff --git a/scripts/lane_reporting.py b/scripts/lane_reporting.py
+--- a/scripts/lane_reporting.py
++++ b/scripts/lane_reporting.py
+@@ -312,7 +312,7 @@
              if s[1] is None or t is not None and ((u := utc(cast("object", s[1]))) is None or t > u):
                  s[1] = d.get("at")
              if t is None:

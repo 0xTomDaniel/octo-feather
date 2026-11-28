@@ -25,6 +25,7 @@ from typing import NoReturn, cast
 
 from correction_lanes import DIRECTOR_LOG
 from handoff_log import encode
+from lane_cli import Refuse, help_doc, kit_install, lanes_dir
 from tracker_calls import gh, tracker
 
 KIT = Path(__file__).resolve().parent.parent
@@ -565,3 +566,71 @@ def supervisor(ticket: str, wt: Path, made: str, err: type[Exception]) -> dict[s
         )
         raise err(msg)
     return {"pane": pane, "name": name, "workspace": spawned.get("workspace", "?")}
+
+
+# --- moved from scripts/octo-feather-lane (ticket #1333, evidence/gh1274-split/split.py): start; help: octo-feather-lane --help ---  # noqa: E501
+
+
+def cmd_start(args: list[str]) -> int:
+    """`start` (--help): the logic in scripts/start_lane.py. -h or --help prints its --help entry
+    alone, before anything is read (issue 1159: agents/director.md points to it for the steps)."""
+    if "-h" in args or "--help" in args:
+        doc = help_doc() or ""
+        print(  # noqa: T201
+            doc[
+                doc.index("  octo-feather-lane start ") : doc.index("\nOne subcommand per function")
+            ].rstrip()
+        )
+        return 0
+    import start_lane  # noqa: PLC0415
+
+    start_lane.current_kit(kit_install(), Refuse)
+    print(start_lane.start(args, lanes_dir(), Refuse), flush=True)  # noqa: T201
+    return 0
+
+
+# This module's chunks of octo-feather-lane --help, joined in lane_cli.HELP_ORDER by lane_cli.help_doc.  # noqa: E501
+HELP = {
+    "start": """\
+  octo-feather-lane start TICKET|--new TITLE --body-file FILE --goal TITLE --outcome TEXT --brief-file FILE
+                                   the director's lane start, one command, in its checkout of a target
+  octo-feather-lane start ... [--shown goal|brief] [--absent goal|brief]
+                                   its rerun after an unknown send, naming what the supervisor's pane shows
+  octo-feather-lane start -h|--help this entry alone, nothing read or made
+
+`start` (spec issue-lifecycle #acceptance-lane-start) first fetches the kit install's origin (the kit dir this command
+runs from, or OCTO_FEATHER_KIT_INSTALL: the install post-merge's step 3 refreshes) and refuses, exit 1 with nothing
+made, when main there has a commit the install lacks, naming the install, its commit, main's and the fix (post-merge's
+kit refresh, or a fast-forward of the install; #acceptance-lane-start-current-kit). Then it reads the lane key (the target's tracker skill's lane-key, as
+octo-feather-start resolves it), the ticket (issue-view), the repository (gh repo view) and the caller's
+$HERDR_PANE_ID (the director pane), each answer validated and refused naming its field before anything is made
+(arguments by argparse). The lane's parent ticket: TICKET, or with --new TITLE --body-file FILE instead (spec
+issue-lifecycle #acceptance-lane-start-files) one filed once the director pane, checkout and repository are read: the
+tracker skill's issue-create with that title and FILE, a top-level issue, never --parent; it prints `filed=<key>` at
+once, so a start that stops later is rerun naming that key as TICKET. A ticket issue-view shows with a parent (a
+sub-issue of another issue) is refused naming that parent, before anything is made (#acceptance-lane-start-sub-issue).
+It refuses a lane that exists (spec #acceptance-lane-start-exists): when any of lanes/<key>.toml,
+the worktree, the branch `<key>` or a Herdr workspace labelled <key> (herdr workspace list) is there and no stopped
+start left it, exit 1 naming each, nothing changed, no supervisor started; fetches origin and adds the worktree `<checkout>-<key>` beside the checkout on a
+new branch `<key>` from origin's main; starts the supervisor with the octo-feather-start beside this command
+(`--issue TICKET --cwd WORKTREE`); writes lanes/<supervisor name>.toml (comms spec #lane-record: supervisor,
+repository, issue, goal TITLE, started_at, waiting_on ""); sends the supervisor with herdr-say `/goal TEXT for <key>,
+delivered through implement-spec; done when ...`, then the brief: a header (lane key, parent issue, director pane,
+worktree, branch, main commit), then FILE's text; appends one director log line (comms spec
+#handoff-director-prod: issue, note); prints `key=<key> pane=<pane> issue=<TICKET>` (with --new, the filed key). Each step that fails stops it,
+exit 1, naming the step and what it made so far; a failed herdr-say is never retried within a run. A stopped start keeps
+lanes/<key>.start.json beside the record (its ticket, title, outcome and brief's sha256, then each done step's fact:
+main commit, supervisor pane, name and workspace, started_at, goal_sent, brief_sent, and goal_unknown or
+brief_unknown: a send begun, or one herdr-say ended neither delivered nor rejected); the same start run again
+(spec #acceptance-lane-start-rerun) continues from the step that stopped, skipping each done one, so the lane gets one
+worktree, one supervisor, one record, the goal and the brief once each and one director log line; a rerun with
+another title, outcome or brief is refused naming that file. A send herdr-say rejected (exit 64, 69, 75 or 77: nothing
+typed) is sent on the rerun. A send left unknown (any other failure, a timeout 124 or a stall among them; comms spec
+#delivery-unknown) is never sent again blind: the rerun refuses, exit 1, naming the step, the supervisor's pane and
+what to look at there; look, then rerun the same start with --shown STEP when the pane shows the message (counted
+sent), or --absent STEP when it does not and the pane is not compacting (sent once more). Naming either for a step
+with no unknown send is refused. Once the start finishes the file is gone, and a rerun
+is refused as any existing lane.
+
+""",  # noqa: E501
+}

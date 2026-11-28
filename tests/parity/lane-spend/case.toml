@@ -10,4 +10,4 @@ new = "tests/gate/kit/test_lane_spend.py"
 
 # How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit script run by the kit venv's python: coverage.py measures it.
 [ran]
-"scripts/octo-feather-lane" = "coverage"
+"scripts/lane_reporting.py" = "coverage"
