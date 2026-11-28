@@ -618,9 +618,9 @@ tier or the director's relay allows (allowed, below). In order, each refusal bef
            the tier block (its form: merge-ask) and `PR #<n> stays open`; a relay naming another head refuses
            naming the head it allows, the head given and why it does not carry
   merge    `gh pr merge PR --merge --match-head-commit <the PR's full head>`, printing `merged: PR #<n> at head
-           <sha12> (lane <name>)`; a gh failure refuses, naming it. Once merged, the ask it went on (its tier
-           block, how allowed, the spec calls and opt-outs allowed read) is the `ask` of the lane's post-merge
-           record (its form: scripts/post_merge.py docstring), no gh call added: `digest` (below) reads it
+           <sha12> (lane <name>)`; a gh failure refuses, naming it. Once merged, the ask allowed went on is
+           recorded, no gh call added: the post-merge record's `ask` (scripts/post_merge.py docstring), which
+           `digest` (below) reads
   done     `done <key>` (below), its lines, <key> the tracker key of the record's `issue`, a lane key (comms
            #lane-record), as tracker_calls.py parent_key maps it (#1249); a failure is named on stderr and the
            routine still runs

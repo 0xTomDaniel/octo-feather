@@ -1,6 +1,6 @@
 """The scenarios of tests/gate/kit/test_lane_digest.py (its items), this file their command
-(testkit.main): `octo-feather-lane merge` records the ask it merged on and `octo-feather-lane
-digest` prints that UTC day's merge digest (issue-lifecycle #gates-digest,
+(testkit.main): `octo-feather-lane merge` and `octo-feather-lane digest` (what each does:
+`octo-feather-lane --help`, merge, digest; issue-lifecycle #gates-digest,
 #acceptance-merge-digest; issue 1339), offline, gh answering only real gh's recorded answers.
 
 The real case (testkit.realcase DIGEST, lane gh1337's recording, #1339): on
@@ -57,11 +57,9 @@ def digest_lists_the_day(s: Scratch) -> None:
     recorded runs' calls (the merge adds no gh call to record its ask) and exit 0. Then
     `digest 2026-11-28 --repo <realcase>` asks gh only the recorded digest's two reads (the
     default branch, the merged PRs of the search window), no merge ask check rerun for any PR,
-    and prints, in merge order: #51 in one line, tier 1 and its merged time; #52 in full, its
-    PR line, merged time, head and merge commit, the tier block the merge printed, and the one
-    clarifying call with every field of its call-log line (the line as the bundle's merged main
-    holds it); #53, merged outside the merge command, `tier not recorded` with its url and merge
-    commit, never a tier. Exit 0."""
+    and prints #51 (tier 1), #52 (tier 2, its one clarifying call as the bundle's merged main
+    holds it) and #53 (merged outside the merge command, no recorded ask) in merge order, each
+    in the form `octo-feather-lane --help`, digest, gives. Exit 0."""
     w = RealCase(s, DIGEST.tape, TAPE_B, TAPE_DAY, case=DIGEST)
     with (w.lanes / f"{DIGEST.other}.toml").open("a") as f:
         f.write(f"pr = {PR_B}\n")  # lane gh50's PR, as its supervisor recorded it
