@@ -454,6 +454,22 @@ covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/lane_br
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
 covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/lane_brake.py", "tests/gate/kit/testkit/provider.py", "tests/gate/kit/fixtures/lane-brake/unauthorized/v1-models.json", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
 
+# Proven by tests/gate/kit/test_lane_start.py's usage item; the demo is the lane-start drive's `usage` case: the box's
+# usage_reserve 0.5 (the scratch kit install's gate-budget.toml), the route replaying the real recording, `octo-feather-lane
+# start 910 ...` exits 1 naming 7d 19% at the answer's Date, the burn, the reset, course 62% over the 50% line, the reset
+# to wait for and usage_reserve's file to change; nothing made, the reading stored.
+[demo."issue-lifecycle#acceptance-lane-start-usage"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
+covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/lane_brake.py", "gate-budget.toml", "tests/gate/kit/testkit/provider.py", "tests/gate/kit/fixtures/lane-brake/v1-models.json", "tests/gate/kit/fixtures/lane-brake/v1-messages.json", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
+
+# Proven by tests/gate/kit/test_lane_start.py's carried item; the demo is the lane-start drive's `carried` case: after
+# the usage case stored its reading, the route at a closed port and OCTO_FEATHER_NOW an hour after the recorded Date, the
+# same start exits 1 naming the clock override, the last reading, its time and the course carried from it (62%, over
+# 50%); nothing made, nothing more stored.
+[demo."issue-lifecycle#acceptance-lane-start-carried"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 lane-start"
+covers = ["scripts/octo-feather-lane", "scripts/start_lane.py", "scripts/lane_brake.py", "gate-budget.toml", "tests/gate/kit/testkit/provider.py", "tests/gate/kit/fixtures/lane-brake/v1-messages.json", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/features/lane-start.md"]
+
 # Proven by their tagged tests (tests/gate/kit/test_start_relaunch.py): octo-feather-start --director
 # --relaunch / --resume against the testkit's Herdr stand-in, real processes as the director's shell and Pi. Busy: a
 # working director and --wait 1, then an idle one and --wait 31 (no full gap for the fourth read): exit 75, nothing

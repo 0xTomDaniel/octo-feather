@@ -876,19 +876,31 @@ the environment), never printed, logged or stored; then GET <baseUrl>/v1/models 
 max_tokens 1, on the newest listed model whose id holds haiku (else the newest listed), 20 s each. The reading is that
 answer's anthropic-ratelimit-unified-7d*-utilization and -reset headers, one weekly window each (7d; 7d_opus or
 7d_sonnet when sent), and its Date header is now. Each reading is appended to
-${XDG_STATE_HOME:-~/.local/state}/octo-feather/usage-readings.jsonl, one line holding only that time and each window's
+${XDG_STATE_HOME:-~/.local/state}/octo-feather/usage-readings.jsonl, one line holding that time and each window's
 utilization and reset. Each window is projected to its reset: the burn the higher of the week's average (the share
 over the time since the week began, the reset less 7 days, taken over no less than its first 6 hours) and the last
 hours' (from the oldest stored reading of the same window and reset at least 1 and at most 6 hours old; none, not
-counted), the course the share plus the burn to the reset. The tightest window's course is set against the line, 1
-less usage_reserve in the kit's gate-budget.toml (0.1 when unset), and printed before `key=...`: `usage: <window>
-<share> used at <Date> (<route host>), burn <rate>/h (week average <rate>/h, last 6h <rate>/h or none), reset <time>,
-course <share> at reset, under|over <line> ...` (a course over the line refuses nothing yet). When the usage cannot be
-read (no providers.anthropic route or key, a baseUrl no request can be built on, a refused connection or a timeout, a
-non-2xx answer, an answer cut short, no model listed, no Date, no unified weekly limit headers: an API-key route, or
-a route to another provider; any other failure of the read alike) nothing is stored, it
-prints `usage: not read (<why>); no reading this week: the brake did not stop this start` (a reading of this week
-stored, by the box's clock, named in its place, not carried), and the start goes on.
+counted), the course the share plus the burn to the reset. The tightest window's course is set against the line, 1 less
+usage_reserve in the kit install's gate-budget.toml (0.1 when unset). Under it, printed before `key=...`: `usage:
+<window> <share> used at <Date> (<route host>), burn <rate>/h (week average <rate>/h, last 6h <rate>/h or none), reset
+<time>, course <share> at reset, under <line> ...`. Over it, in any window, the start is refused, exit 1 before the
+ticket is read or filed, nothing made, no supervisor (the reading still stored), in one line: `refused (usage): <the
+same figures>, over <line> (reserve <share>, usage_reserve in <install>/gate-budget.toml); no lane started, nothing
+made: wait for the reset at <time>, or change usage_reserve in <install>/gate-budget.toml`, the time the latest reset
+of the windows over the line. When the usage cannot be read (no providers.anthropic route or key, a baseUrl no request
+can be built on, a refused connection or a timeout, a non-2xx answer, an answer cut short, no model listed, no Date, no
+unified weekly limit headers: an API-key route, or a route to another provider; any other failure of the read alike)
+nothing is stored, and each window of this week stored (its reset still ahead of now) is
+carried forward from its last reading: the course that reading's share plus the burn measured then (from the readings
+stored before it) to the reset. A carried course over the line refuses the start the same way: `refused (usage,
+carried): usage not read now (<why>); last reading <window> <share> at <time>, carried at its burn then: burn ...,
+course <share> at reset, over <line> ...`; under it, it prints `usage: not read (<why>); last reading ..., under <line>
+...: the brake did not stop this start`; with no reading this week, `usage: not read (<why>); no reading this week: the
+brake did not stop this start`. Now, with no answer had, is the box's clock, or OCTO_FEATHER_NOW (an ISO time, UTC
+unless it says so) when set, and said: the line begins with `clock overridden: OCTO_FEATHER_NOW=<value>`. With an
+answer had, its Date is now: the override is ignored, the line begins with `clock overridden: OCTO_FEATHER_NOW=<value>
+ignored, the answer's Date is now` and the stored line also records that, as its clock. Whatever the brake cannot read,
+the start is refused only on a course over the line, and otherwise the start goes on.
 
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """

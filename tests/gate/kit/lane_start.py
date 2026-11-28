@@ -71,7 +71,7 @@ Seam (ticket #1159, recorded before any test): `octo-feather-lane start`, as abo
            the start entry of `octo-feather-lane --help` alone (every step agents/director.md points
            to it for: the parent filed or taken, the worktree and branch, the supervisor, the lane
            record, the goal, the brief, the director log line, the refusals, the rerun, and the
-           brake: issue 1346); no gh or herdr call and nothing made.
+           brake: issues 1346, 1348); no gh or herdr call and nothing made.
 
 Seams (ticket #1346, recorded before any test): issue-lifecycle#acceptance-lane-start-clear and
 #acceptance-lane-start-unread, `octo-feather-lane start`, the same stand-ins; every scenario's Pi
@@ -94,6 +94,22 @@ so. The brake's cases ride the scenarios above, adding no gh store entry:
            --truncated: the error body's read fails): `usage: not read (... IncompleteRead ...)`,
            the supervisor started, nothing stored.
   Each of these: the dummy key in no output and no state or Herdr file.
+
+Seams (ticket #1348, recorded before any test): issue-lifecycle#acceptance-lane-start-usage and
+#acceptance-lane-start-carried, `octo-feather-lane start`, the same stand-ins and scratch Pi config
+and state. They ride `refused` (usage_carried), adding no gh store entry: the brake refuses before
+the ticket is read.
+
+  refused  then the box's usage_reserve 0.5 (the scratch kit install's gate-budget.toml, a setting,
+           not an edited answer), the route replaying the same real recording, whose course (62%,
+           CLEAR) passes the 50% line: exit 1, stderr naming the share, the burn, the reading's
+           time, the reset, the course, the line, the reset to wait for and usage_reserve's file to
+           change (worked by hand in USAGE); nothing on stdout, no ticket read, nothing made, no
+           supervisor; the reading stored as the clear start stores it. Then the route at a closed
+           port and OCTO_FEATHER_NOW an hour after the recorded Date: exit 1, stderr the clock
+           override, then the last reading, its time and the course carried from it at its burn
+           then (62%, over 50%), why it was not read now and the reset to wait for (CARRIED);
+           nothing made, no supervisor, nothing more stored; the key nowhere.
 """
 
 from __future__ import annotations
@@ -130,6 +146,25 @@ CLEAR = (
     " gate-budget.toml usage_reserve)"
 )
 NOT_READ = "usage: not read ({why}); no reading this week: the brake did not stop this start"
+# The same reading against the line 1 - 0.5: its 62% course (CLEAR, worked above) is over 50%; the
+# wait is that window's reset, the change usage_reserve in the install's gate-budget.toml.
+RESERVE_HALF = "usage_reserve = 0.5\n"
+OVER = (
+    "over 50% (reserve 50%, usage_reserve in {budget}); no lane started, nothing made: wait for the"
+    " reset at 2026-12-03T03:00:00Z, or change usage_reserve in {budget}"
+)
+USAGE = (
+    "refused (usage): 7d 19% used at 2026-11-28T06:19:36Z ({host}), burn 0.37%/h (week average"
+    " 0.37%/h, last 6h none), reset 2026-12-03T03:00:00Z, course 62% at reset, " + OVER
+)
+# Carried from that stored reading at its own time: 19% + 0.37%/h x 116.67 h = 62%, as at the read.
+NOW = "2026-11-28T07:19:36Z"
+CARRIED = (
+    f"clock overridden: OCTO_FEATHER_NOW={NOW}; refused (usage, carried): usage not read now"
+    " ({why}); last reading 7d 19% at 2026-11-28T06:19:36Z, carried at its burn then: burn"
+    " 0.37%/h (week average 0.37%/h, last 6h none), reset 2026-12-03T03:00:00Z, course 62% at"
+    " reset, " + OVER
+)
 
 
 def show(line: str) -> None:
@@ -370,6 +405,7 @@ def refused(s: Scratch) -> None:
     assert "issue-view 905 printed title is no string" in err, err
     nothing_made(s, d, checkout)
     show(f"issue-view malformed: exit 1, {err}")
+    usage_carried(s, d, checkout)
 
 
 NEW = "Scratch lane"
@@ -662,6 +698,45 @@ def behind_kit(s: Scratch) -> None:
     show(f"kit install one commit behind: exit 1, {err}")
 
 
+def usage_carried(s: Scratch, d: Path, checkout: Path) -> None:
+    """In S's world (Herdr world D, CHECKOUT), the install's usage_reserve 0.5: a start on the
+    replayed recording refused (USAGE), its reading stored; then the route at a closed port and
+    OCTO_FEATHER_NOW at NOW, refused carried (CARRIED). Each: nothing made, no supervisor, no ticket
+    read, the key nowhere."""
+    budget = s.root / "kit-install" / "gate-budget.toml"
+    budget.write_text(RESERVE_HALF)
+    gh = len(s.gh.log())
+    cmd = [kit("octo-feather-lane"), "start", "905", "--goal", TITLE, "--outcome", OUTCOME]
+    cmd += ["--brief-file", str(s.root / "brief.md")]
+    with replaying(s, RECORDED) as host:
+        r = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1)
+    assert USAGE.format(host=host, budget=budget) in r.err, r.err
+    assert r.out == "", r.out
+    assert not [c for c in s.gh.log()[gh:] if c.startswith("issue")], s.gh.log()
+    nothing_made(s, d, checkout)
+    no_supervisor(d)
+    stored = [json.loads(x) for x in readings(s).read_text().splitlines()]
+    window = {"used": 0.19, "reset": "2026-12-03T03:00:00Z"}
+    assert stored == [{"at": "2026-11-28T06:19:36Z", "windows": {"7d": window}}], stored
+    keyless(s, r.out, r.err)
+    show(f"usage_reserve 0.5: exit 1, {r.err}")
+    show(f"nothing made, no supervisor, no ticket read; usage-readings.jsonl: {stored}")
+
+    before = readings(s).read_text()
+    host = closed(s)
+    r = s.run(cmd, cwd=checkout, env=DIRECTOR | {"OCTO_FEATHER_NOW": NOW}, want=1)
+    why = f"GET {host}/v1/models: [Errno 111] Connection refused"
+    assert CARRIED.format(why=why, budget=budget) in r.err, r.err
+    assert r.out == "", r.out
+    assert not [c for c in s.gh.log()[gh:] if c.startswith("issue")], s.gh.log()
+    nothing_made(s, d, checkout)
+    no_supervisor(d)
+    assert readings(s).read_text() == before
+    keyless(s, r.out, r.err)
+    show(f"route at a closed port, OCTO_FEATHER_NOW={NOW}: exit 1, {r.err}")
+    show("nothing made, no supervisor, nothing more stored")
+
+
 def help_(s: Scratch) -> None:
     d, checkout, _ = world(s)
     seed = s.root / "kit-seed"
@@ -686,13 +761,19 @@ def help_(s: Scratch) -> None:
         "its Date header is now",
         "${XDG_STATE_HOME:-~/.local/state}/octo-feather/usage-readings.jsonl",
         "no less than its first 6 hours",
-        "usage_reserve in the kit's gate-budget.toml",
-        "a route to another provider",
+        "usage_reserve in the kit install's gate-budget.toml",
+        "route to another provider",
+        "`refused (usage): ",
+        "wait for the reset at <time>, or change usage_reserve in <install>/gate-budget.toml",
+        "carried forward from its last reading",
+        "`refused (usage,",
+        "OCTO_FEATHER_NOW (an ISO time",
+        "the override is ignored",
     )
     for flag in ("--help", "-h"):
         out = s.run([kit("octo-feather-lane"), "start", flag], cwd=checkout, env=DIRECTOR).out
         assert out.startswith("  octo-feather-lane start TICKET|--new TITLE"), out
-        assert out.rstrip().endswith("and the start goes on."), out
+        assert out.rstrip().endswith("otherwise the start goes on."), out
         for step in steps:
             assert step in out, (step, out)
     assert s.gh.log() == [], s.gh.log()
