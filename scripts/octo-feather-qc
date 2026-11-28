@@ -7,7 +7,10 @@
 Run in a lane worktree at its integrated head. STATUS...: the first argument, then each next one ending .status.json;
 which status files and ids one run names: issue-lifecycle spec #qc-interim. Each ID is judged against the spec of
 the STATUS holding it. Which named criteria keep an earlier head's result: quality spec
-#qc-carry (code: carry below); stderr names why each other one with a built row is judged again. A named criterion a tagged test proves is judged from the record its
+#qc-carry (code: carry below; a demo of `octo-feather-qa --verdict PINS` carried only while each pin is fresh at the
+head by that command's own rule, its --help, Verdict); stderr names why each other one with a built row is judged
+again (`qc: judging <id> again: pinned run <run> <suite>/<case> stale at HEAD <h>: <path> changed (opened by the
+run)`). A named criterion a tagged test proves is judged from the record its
 head's full gate captured, never rerun, nor sent to the demo (rules: quality spec #qc-capture,
 #qc-judgment, #qc-fallback; code: capture_store, tested, tagged_cases, unrecorded below). Capture first, no model: each other
 named criterion whose contract (qc.toml, validated by octo-feather-contract) declares a demo command under
@@ -77,7 +80,7 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, NoReturn
 
-from eval_grading import DEFAULT_TIMEOUT
+from eval_grading import DEFAULT_TIMEOUT, PIN, pinned
 
 Result = dict[str, Any]   # one claimed criterion's result (quality spec #qc-results)
 
@@ -216,7 +219,7 @@ def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bo
     for n in names:   # write ends above 100 so the sandbox's dup onto fds 4-6 cannot clobber one
         r, w = pipes[n]; pipes[n] = (r, fcntl.fcntl(w, fcntl.F_DUPFD, 100)); os.close(w)
     got = {n: [] for n in names}
-    state = Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())
+    state = state_dir()
     top = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "octo-feather"
     ro = [p for p in os.environ.get("OCTO_FEATHER_QC_RO_BINDS", "").split(":") if p] + ([gh["dir"]] if "dir" in gh else []) + ([browser] if browser else [])
     pre = [p for p in os.environ.get("OCTO_FEATHER_QC_PATH", "").split(":") if p]
@@ -227,7 +230,7 @@ def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bo
     want = [worktree, common, KIT, state, top, Path.home(), *ro, *pre, *os.environ.get("PATH", "").split(":")]
     keep = sorted({str(Path(p).resolve()) for p in want if p and Path(p).exists()})
     keep = [p for p in keep if p.startswith("/tmp/")]
-    qa_dir = str(Path(os.environ.get("OCTO_FEATHER_QA_DIR") or state / "qa").resolve()) if qa else ""
+    qa_dir = str(qa_runs()) if qa else ""
     keep += [qa_dir] if qa_dir.startswith("/tmp/") and Path(qa_dir).exists() else []
     env = dict(os.environ, QC_SESSION=session, QC_STATE=str(state), QC_WORKTREE=worktree, QC_KIT=str(kit or KIT),
                QC_UID=str(os.getuid()), QC_GID=str(os.getgid()),
@@ -322,6 +325,33 @@ def browsers(root: str, ids: list[str], stem: str) -> str | None:
         die(66, f"no Playwright {pin} headless Chromium shell in {folder}; nothing ran. Install it once per box (just install-check "
                 f"names it): PLAYWRIGHT_BROWSERS_PATH={folder} npx -y playwright@{pin} install --only-shell chromium")
     return str(folder)
+
+
+def state_dir() -> Path:
+    return Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())
+
+
+def qa_runs() -> Path:
+    """The stored eval runs' dir, as octo-feather-qa names it (its --help: $OCTO_FEATHER_QA_DIR or $(octo-feather-state)/qa)."""
+    return Path(os.environ.get("OCTO_FEATHER_QA_DIR") or state_dir() / "qa").resolve()
+
+
+def verdict_pins(command: str) -> list[str]:
+    """The RUN_ID/SUITE/CASE pins of each `octo-feather-qa --verdict` in demo COMMAND, in order; none: []."""
+    try:
+        lex = shlex.shlex(command, posix=True, punctuation_chars=True)
+        lex.whitespace_split = True
+        toks = list(lex)
+    except ValueError:
+        return []
+    out: list[str] = []
+    for k, t in enumerate(toks[:-1]):
+        if Path(t).name == "octo-feather-qa" and toks[k + 1] == "--verdict":
+            for x in toks[k + 2:]:
+                if not PIN.fullmatch(x):
+                    break
+                out.append(x)
+    return out
 
 
 def contract_demos(root: str) -> dict[str, dict[str, Any]]:
@@ -784,10 +814,12 @@ def earlier(at: str, stem: str, i: str, rid: str) -> Result | None:
 
 
 def carry(ids: list[str], data: dict[str, Any], pr: int, spec: Path, stem: str, head: str, root: str,
-          tags: dict[str, list[str]]) -> dict[str, Result]:
+          tags: dict[str, list[str]], declared: dict[str, dict[str, Any]]) -> dict[str, Result]:
     """Of IDS, each quality spec #qc-carry carries, its earlier result labelled carried, read from:
     the head from its built row, the result from that head's qc report, what moved from octo-feather-spec-status's stale()
-    and the record's own versions, a test newly tagged from TAGS (tagged_cases). Each other one with a built row is named with why it is judged again."""
+    and the record's own versions, a test newly tagged from TAGS (tagged_cases), and for a demo (DECLARED) of
+    `octo-feather-qa --verdict PINS` each pin's freshness at HEAD by the verdict's own rule (eval_grading.pinned).
+    Each other one with a built row is named with why it is judged again."""
     st, ev = script("octo-feather-spec-status"), script("octo-feather-evidence")
     top, now = Path(root).resolve(), st.anchors(spec.read_text(encoding="utf-8"))
     versions = dict(zip(("contract", "fixture"), ev.contract_and_fixture(root), strict=True))
@@ -823,6 +855,10 @@ def carry(ids: list[str], data: dict[str, Any], pr: int, spec: Path, stem: str, 
                 gate = now_gate
                 moved += [f"gate configuration moved since {at[:12]}"] if any(was.get(k) != v for k, v in now_gate.items()) else []
             why = "; ".join(moved) if found else f"record {row['record']} not in the evidence store"
+        if not why and (pins := verdict_pins(str(declared.get(cid, {}).get("command", "")))):
+            qa = qa_runs()
+            why = "; ".join(f"pinned run {a.split('/', 1)[0]} {a.split('/', 1)[1]} {j.fresh}"
+                            for a in pins if (j := pinned(qa, root, head, a)).why)
         if why:
             print(f"qc: judging {cid} again: {why}", file=sys.stderr)
             continue
@@ -870,7 +906,7 @@ def sources(g: Named, pr: int, head: str, root: str, declared: dict[str, dict[st
     """Of G's ids, each carried or judged from a tagged test's record (g.tests), and each with a declared demo (g.demos);
     the rest have neither (judge)."""
     stem, text = g.stem, g.text
-    carried = carry(g.ids, g.data, pr, g.spec, stem, head, root, tags)
+    carried = carry(g.ids, g.data, pr, g.spec, stem, head, root, tags, declared)
     found = {i: tested(i, f"{stem}#{i}", head, text[i], root, tags.get(f"{stem}#{i}", [])) for i in g.ids if i not in carried}
     tests = {i: r for i, r in found.items() if r is not None}   # judged from the gate's record: no demo
     tests |= unrecorded([i for i in g.ids if i not in tests and i not in carried], tags, stem, head)

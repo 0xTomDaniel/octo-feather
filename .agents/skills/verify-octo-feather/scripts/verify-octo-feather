@@ -1581,10 +1581,18 @@ def launcher(f: Feature, r: Path) -> None:
     (r / "scripts" / "pi-role").symlink_to(f"{f.s.repo}/scripts/pi-role")
 
 
+def opens(kit: Path, files: list[str]) -> dict[str, object]:
+    """A canned stored run's sandbox.json fields `octo-feather-qa --verdict` reads besides its attempts: the proof line
+    naming the kit under test and a whole open record of FILES (eval-cases schema, Open record)."""
+    return {"proof": [f"qc sandbox: ok   kit under test {kit} is its own read-only view"],
+            "opens": {"whole": True, "files": files, "dirs": []}}
+
+
 def drive_qc_eval_verdict(f: Feature) -> None:
     """`just qc` on a scratch target whose declared demo is `octo-feather-qa --verdict` over a scratch stored eval run
     pinned at the target's first commit: pass at one head and at a second head leaving the run's files unchanged,
-    insufficient evidence naming the role file at a head that changes it (octo-feather-qa --help, Verdict)."""
+    insufficient evidence naming the role file at a head that changes it, naming NOTES.md, a file the runs opened, at a
+    head that changes it, and naming the rerun when the runs hold no open record (octo-feather-qa --help, Verdict)."""
     sc = RUN_DIR / "scratch" / "qc-eval-verdict"
     r = sc / "repo"
     shutil.rmtree(sc, ignore_errors=True)
@@ -1601,7 +1609,7 @@ def drive_qc_eval_verdict(f: Feature) -> None:
     run, pin = "20260101T000000Z-abc123", "20260101T000000Z-abc123/s1/c1"
     for rel, text in (*ROLE_FILES,
                       ("evals/s1/cases.json", json.dumps([case])), ("evals/s1/reference/expectations.json", json.dumps({"c1": {"facts": facts}})),
-                      ("evals/fixtures/fx/a.txt", "fixture\n"), ("README.md", "target\n"),
+                      ("evals/fixtures/fx/a.txt", "fixture\n"), ("README.md", "target\n"), ("NOTES.md", "notes\n"),
                       ("qc.toml", ('format = 2\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n[demo."demo#acceptance-a"]\n'
                                    f'command = "{f.s.repo}/scripts/octo-feather-qa --verdict {pin}"\ncovers = ["agents"]\n'))):
         (r / rel).parent.mkdir(parents=True, exist_ok=True)
@@ -1626,6 +1634,8 @@ def drive_qc_eval_verdict(f: Feature) -> None:
         (d / f"run-{k}" / "input.json").write_text(json.dumps({"suite": "s1", **case, "model": "m", "max_tool_calls": 12, "timeout_s": 600, **kits}))
         (d / f"run-{k}" / "grading.json").write_text(json.dumps({"facts": [dict(x, status="pass", evidence="e") for x in facts], "deciding": []}))
         (d / f"run-{k}" / "result.json").write_text(json.dumps({"suite": "s1", "id": "c1", "verdict": "PASS", **kits}))
+        (d / f"run-{k}" / "sandbox.json").write_text(json.dumps(opens(r, ["NOTES.md"])))
+        (d / f"run-{k}" / "transcript.jsonl").write_text("")
     (d / "result.json").write_text(json.dumps({"suite": "s1", "id": "c1", "verdict": "PASS", "role": "worker", "kit_ref": "HEAD", "kit_sha": kit,
                                                "runs": [{"run": k, "dir": f"run-{k}", "verdict": "PASS"} for k in (1, 2)], "runs_passed": 2}))
     f.env = {"XDG_STATE_HOME": str(sc / "state"), "OCTO_FEATHER_QC_PATH": classify_stub(f, sc)}
@@ -1633,8 +1643,14 @@ def drive_qc_eval_verdict(f: Feature) -> None:
     qc = ("just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a")
     bound = re.escape(f"qc sandbox: ok   qa runs read-only: {sc / 'state' / 'octo-feather' / 'qa'} at ")
     fresh = r"PASS s1/c1: stored PASS, run \S+, kit \w+, runs 2/2 passed; fresh at HEAD"
-    for name, at in (("fresh", head), ("second-head", None), ("stale", "role")):
+    for name, at in (("fresh", head), ("second-head", None), ("stale", "role"), ("opened", "notes"), ("no-record", "gone")):
         git("reset", "-q", "--hard", head)
+        if at == "notes":
+            (r / "NOTES.md").write_text("notes, changed\n")
+            git("commit", "-q", "-am", "notes")
+        elif at == "gone":   # the runs as stored before the open record
+            for k in (1, 2):
+                (d / f"run-{k}" / "sandbox.json").write_text("{}")
         if at is None:
             (r / "README.md").write_text("target, changed\n")
             git("commit", "-q", "-am", "readme")
@@ -1652,6 +1668,10 @@ def drive_qc_eval_verdict(f: Feature) -> None:
     f.check("second-head", lambda c: c.code == 0 and re.search(r"(?m)^PASS acceptance-a", c.out) and re.search(fresh, c.o["demo"]))
     f.check("stale", lambda c: c.code == 2 and re.search(r"(?m)^INSUFFICIENT EVIDENCE acceptance-a", c.out)
             and "agents/worker.md changed" in c.out and not re.search(r"(?m)^FAIL ", c.out))
+    f.check("opened", lambda c: c.code == 2 and re.search(r"(?m)^INSUFFICIENT EVIDENCE acceptance-a", c.out)
+            and "NOTES.md changed (opened by the run)" in c.out)
+    f.check("no-record", lambda c: c.code == 2 and re.search(r"(?m)^INSUFFICIENT EVIDENCE acceptance-a", c.out)
+            and "run-1, run-2: no open record (stored before #1229): rerun" in c.out)
     f.pre, f.env = [], {}
     say(f"qc-eval-verdict evidence: {f.d}")
 
@@ -1695,7 +1715,9 @@ def drive_qa_evidence(f: Feature) -> None:
         (rd / "input.json").write_text(json.dumps({"suite": "s1", **case, "model": "m", "fixture_head": "f" * 40, "max_tool_calls": 12,
                                                    "timeout_s": 600, **kits, "run": 1, "of": 1, "config": side}))
         (rd / "grading.json").write_text(json.dumps({"facts": [dict(say_, status=st, evidence="e")], "deciding": []}))
-        (rd / "sandbox.json").write_text(json.dumps({"attempts": [{"kind": "run", "program": "herdr-say", "argv": argv, "exit": 0}]}))
+        (rd / "sandbox.json").write_text(json.dumps({"attempts": [{"kind": "run", "program": "herdr-say", "argv": argv, "exit": 0}],
+                                                     "recorded": 1, **opens(r, [])}))
+        (rd / "transcript.jsonl").write_text("")
         (rd / "result.json").write_text(json.dumps({**one, **kits, "run": 1, "of": 1, "config": side}))
         ok = float(verdict == "PASS")
         res[side] = {**one, "role": "worker", **kits, "runs": [{"run": 1, "dir": f"{side}/run-1", "verdict": verdict, "facts": [dict(say_, status=st)]}],
@@ -1709,10 +1731,10 @@ def drive_qa_evidence(f: Feature) -> None:
     (qa / run / "summary.json").write_text(json.dumps({"run_id": run, "kit_ref": "HEAD", "kit_sha": kit, "passed": 1, "total": 1, "scores": {},
                                                        "runs": 1, "baseline": {"kit_ref": base, "kit_sha": base}, "cases": [top]}))
     pin = f"{run}/s1/c1"
+    f.pre = ["env", "-C", str(r)]   # the repo holding the run's kit: the pin's cross-check reads its files there
     f.run("block", "octo-feather-qa", "--analyze", str(qa / run), "--evidence")
     f.run("again", "octo-feather-qa", "--analyze", str(qa / run), "--evidence")
     f.env = {"OCTO_FEATHER_QA_DIR": str(qa)}
-    f.pre = ["env", "-C", str(r)]
     f.run("pin", "octo-feather-qa", "--verdict", pin)
     f.obs("again", "block", (f.d / "block.stdout").read_text())
     f.check("block", lambda c: c.code == 0 and all(x in c.out.splitlines() for x in (

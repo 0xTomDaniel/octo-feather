@@ -11,6 +11,8 @@ Drive criterion: `quality#acceptance-qc-eval-verdict`
 - `fresh` `just qc` on a scratch target whose declared demo is `octo-feather-qa --verdict <run>/s1/c1`, the stored run pinned at the target's first commit: `PASS acceptance-a`, the demo's output (`fresh.obs.demo`, from the qc report) `PASS s1/c1: stored PASS, run <id>, kit <sha>, runs 2/2 passed; fresh at HEAD <head>`, the sandbox proof line `qa runs read-only: <qa dir> at ...`; exit 0.
 - `second-head` the same at a head that changes only `README.md`: the same pass; exit 0.
 - `stale` at a head that changes the run's role file `agents/worker.md`: `INSUFFICIENT EVIDENCE acceptance-a` naming `agents/worker.md changed`, no `FAIL` line; exit 2.
+- `opened` at a head that changes `NOTES.md`, a file the runs' open record holds outside the launch set: `INSUFFICIENT EVIDENCE acceptance-a` naming `NOTES.md changed (opened by the run)`; exit 2.
+- `no-record` the runs' sandbox.json holding no open record, as every run stored before it: `INSUFFICIENT EVIDENCE acceptance-a` naming `run-1, run-2: no open record (stored before #1229): rerun`; exit 2.
 
 ## How to get to it (user POV)
 
@@ -25,10 +27,10 @@ Preconditions:
 
 Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive qc-eval-verdict`. Evidence: `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/qc-eval-verdict/`.
 
-The drive makes a scratch target (a role launching the skill `s` and the extension `e.ts`, the tracker skill pi-role needs, its `scripts/pi-role` a link to the kit's real one so the launcher answers `--launch-set` as `octo-feather-qa --verdict` asks it, suite `s1` with case `c1`, fixture `fx`, the kit's `tests/fixtures/spec-status/good/demo.spec.html` and its status file), scratch box state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/qc-eval-verdict/state`) and, in its `qa/`, a stored run of `s1/c1` in `octo-feather-qa`'s layout (two passed runs, kit sha the target's first commit). Each case resets the target to that head, then makes its change.
+The drive makes a scratch target (a role launching the skill `s` and the extension `e.ts`, the tracker skill pi-role needs, its `scripts/pi-role` a link to the kit's real one so the launcher answers `--launch-set` as `octo-feather-qa --verdict` asks it, suite `s1` with case `c1`, fixture `fx`, the kit's `tests/fixtures/spec-status/good/demo.spec.html` and its status file), scratch box state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/qc-eval-verdict/state`) and, in its `qa/`, a stored run of `s1/c1` in `octo-feather-qa`'s layout (two passed runs, kit sha the target's first commit, each run's sandbox.json a whole open record holding `NOTES.md` and the proof line naming the target the kit under test, its transcript empty). Each case resets the target to that head, then makes its change.
 
 - **Fresh** (`fresh`, `second-head`). Observe exit 0 and the lines Sub-features names.
-- **Stale** (`stale`). Observe exit 2 and the role file named.
+- **Stale** (`stale`, `opened`, `no-record`). Observe exit 2 and the role file, the opened file, the rerun named.
 - **Side effects.** Every cwd stays empty and the kit's `git status` unchanged; the real qa runs dir is never read.
 
 ## Gotchas

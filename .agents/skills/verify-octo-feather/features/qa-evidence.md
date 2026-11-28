@@ -24,7 +24,7 @@ Preconditions:
 
 Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive qa-evidence`. Evidence: `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/qa-evidence/`.
 
-The drive makes a scratch target (a role, its launcher a link to the kit's real `scripts/pi-role` as in [qc-eval-verdict](./qc-eval-verdict.md), suite `s1` with case `c1`, fixture `fx`) under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/qa-evidence/repo` and, in `scratch/qa-evidence/qa/`, a stored run of `s1/c1` in `octo-feather-qa`'s layout: baseline (sha `b` x 40) failing, its recorded `herdr-say` run not matching the fact; current (the target's commit) passing, its recorded `herdr-say --parent` message holding a newline and triple backticks. No case, sandbox or model runs.
+The drive makes a scratch target (a role, its launcher a link to the kit's real `scripts/pi-role` as in [qc-eval-verdict](./qc-eval-verdict.md), suite `s1` with case `c1`, fixture `fx`) under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/qa-evidence/repo` and, in `scratch/qa-evidence/qa/`, a stored run of `s1/c1` in `octo-feather-qa`'s layout: baseline (sha `b` x 40) failing, its recorded `herdr-say` run not matching the fact; current (the target's commit) passing, its recorded `herdr-say --parent` message holding a newline and triple backticks, its sandbox.json a whole open record (the pin's cross-check). Every command runs in the scratch target, the repo holding the run's kit. No case, sandbox or model runs.
 
 - **Block** (`block`, `again`). Observe the lines Sub-features names and `again.stdout` equal to `block.stdout` (`again.obs.block`).
 - **Pin** (`pin`). Observe exit 0 and the PASS line naming the same run and case.

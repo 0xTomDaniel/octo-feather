@@ -60,7 +60,9 @@ if TYPE_CHECKING:
 __all__ = [
     "DEFAULT_MAX_CALLS",
     "DEFAULT_TIMEOUT",
+    "PIN",
     "Judged",
+    "Pinned",
     "Plan",
     "Result",
     "Run",
@@ -73,6 +75,7 @@ __all__ = [
     "evidence",
     "export",
     "grade",
+    "pinned",
     "plan",
     "reanalysis",
     "record",
@@ -2223,6 +2226,11 @@ def evidence_block(run_dir: Path, sm: Result) -> str:
         else "- baseline kit: none",
         f"- cases passed: {sm.get('passed')}/{sm.get('total')}",
     ]
+    sha = str(sm.get("kit_sha"))
+    here = git_out("rev-parse", "--show-toplevel", cwd=str(Path.cwd()))
+    tree = next(
+        (t for top in dict.fromkeys([here, str(KIT)]) if top and (t := kit_tree(top, sha))), None
+    )
     for c in cases:
         name = f"{c.get('suite')}/{c.get('id')}"
         runs = [
@@ -2241,8 +2249,12 @@ def evidence_block(run_dir: Path, sm: Result) -> str:
             if alone
             else case_lines(c)
         )
-        ran = ran_cited(
-            run_dir / str(c.get("suite")) / str(c.get("id")), f"{rid}/{name}", [*bruns, *runs]
+        cdir = run_dir / str(c.get("suite")) / str(c.get("id"))
+        ran = ran_cited(cdir, f"{rid}/{name}", [*bruns, *runs])
+        refused = (
+            open_records(cdir, runs, tree)[0]
+            if tree is not None
+            else [f"kit sha {sha} is not a commit here nor in {KIT}: no cross-check"]
         )
         out += [
             "",
@@ -2250,7 +2262,9 @@ def evidence_block(run_dir: Path, sm: Result) -> str:
             "",
             *fenced(shown),
             "",
-            f"Pin: `octo-feather-qa --verdict {rid}/{name}`",
+            f"No pin: {'; '.join(refused)}"
+            if refused
+            else f"Pin: `octo-feather-qa --verdict {rid}/{name}`",
         ]
         if ran:
             out += [
@@ -2412,15 +2426,190 @@ def trees_changed(top: str, sha: str, head: str, names: list[str]) -> tuple[list
     return [], [f"evals/fixtures/{n} tree changed" for n in names if seen[sha][n] != seen[head][n]]
 
 
-def pinned(root: Path, top: str, head: str, arg: str) -> tuple[str, str, list[str]]:
-    """(verdict PASS, FAIL or INSUFFICIENT, its line, what makes it insufficient) for one
-    RUN_ID/SUITE/CASE."""
+def kit_tree(top: str, sha: str) -> dict[str, str] | None:
+    """{path: git mode} of every file tracked at commit SHA in the repo TOP; None when TOP holds no
+    such commit."""
+    p = run(["git", "-C", top, "ls-tree", "-r", "-z", sha])
+    if p.returncode:
+        return None
+    return {
+        path: meta.split(" ")[0]
+        for meta, _, path in (e.partition("\t") for e in p.stdout.split("\0") if e)
+    }
+
+
+PROOF_KIT = re.compile(r"kit under test (.+?) (?:is its own read-only view|inside the worktree)")
+PROOF_WT = re.compile(r"worktree (.+?) is an overlay")
+
+
+def read_paths(lines: list[str]) -> list[str]:
+    """The path of each call of Pi's read tool in transcript LINES that ended with success
+    (codemode nested reads included: each is its own tool_execution_start)."""
+    reads: dict[str, str] = {}
+    failed: set[str] = set()
+    for line in lines:
+        e = safe_json(line)
+        if not isinstance(e, dict):
+            continue
+        a = cast("Fact", e["args"]) if isinstance(e.get("args"), dict) else {}
+        if e.get("type") == "tool_execution_start" and e.get("toolName") == "read":
+            reads[str(e.get("toolCallId", ""))] = str(a.get("path", ""))
+        elif e.get("type") == "tool_execution_end" and e.get("isError"):
+            failed.add(str(e.get("toolCallId", "")))
+    return [p for i, p in reads.items() if p and i not in failed]
+
+
+def ran_kit(att: list[Fact], inp: Result, tree: dict[str, str]) -> dict[str, list[str]]:
+    """{program: the tracked kit executables (TREE) it names} of each Run record in ATT, the case's
+    stand-ins and fakes (input INP) aside: what the program resolves to in the kit."""
+    fakes = {
+        *cast("Fact", inp.get("stand_ins") or {}),
+        *(["gh"] if inp.get("fake_gh") else []),
+        *(["octo-feather-qa"] if inp.get("fake_qa") else []),
+    }
+    progs = {str(r.get("program", "")) for r in att if r.get("kind") == "run"} - fakes - {""}
+    return {
+        prog: sorted(p for p, m in tree.items() if m == "100755" and Path(p).name == prog)
+        for prog in sorted(progs)
+    }
+
+
+def cross_check(rd: Path, sb: Result, files: set[str], tree: dict[str, str]) -> list[str]:
+    """The open record FILES of the run stored in RD (SB its sandbox.json) against the real
+    artifact (--help, Verdict): each tracked kit path (TREE, at the run's kit) its transcript shows
+    Pi's read tool reading (read_paths) and each kit file a Run record's program resolves to
+    (ran_kit) must be in it. Each one missing, named; a run whose own records cannot be read names
+    that instead."""
+    proof = "\n".join(str(x) for x in cast("list[object]", sb.get("proof") or []))
+    k, w = PROOF_KIT.search(proof), PROOF_WT.search(proof)
+    att, why = attempts(sb)
+    try:
+        lines = (rd / "transcript.jsonl").read_text().splitlines()
+    except OSError:
+        return ["(no readable transcript.jsonl)"]
+    if k is None or why:
+        return [f"({why or 'no proof line names the kit under test'})"]
+    out: list[str] = []
+    for path in read_paths(lines):
+        full = Path(w.group(1) if w else "/") / Path(path).expanduser()
+        rel = os.path.relpath(os.path.normpath(full), k.group(1))
+        if rel in tree and rel not in files:
+            out.append(f"{rel} (read)")
+    for prog, cands in ran_kit(att or [], stored(rd / "input.json") or {}, tree).items():
+        if cands and not set(cands) & files:
+            out.append(f"{prog} (ran: {' or '.join(cands)})")
+    return sorted(set(out))
+
+
+def open_records(
+    d: Path, runs: list[Result], tree: dict[str, str]
+) -> tuple[list[str], set[str], set[str]]:
+    """(refusals, files, dirs): the open records (schema.md, Open record) of the case runs RUNS
+    stored under D, their files and dirs united, each cross-checked (cross_check) against TREE,
+    the run's kit; a run with none, one not whole or one the cross-check rejects is a refusal, the
+    runs with the same one named together (--help, Verdict)."""
+    whys: dict[str, list[str]] = {}
+    files: set[str] = set()
+    dirs: set[str] = set()
+    for r in runs:
+        dn = str(r.get("dir", "."))
+        sb = stored(d / dn / "sandbox.json") or {}
+        o = sb.get("opens")
+        if not isinstance(o, dict):
+            why = "no open record (stored before #1229): rerun"
+        elif cast("Result", o).get("whole") is not True:
+            why = f"open record not whole ({cast('Result', o).get('why')}): rerun"
+        else:
+            o = cast("Result", o)
+            fs = {str(x) for x in cast("list[object]", o.get("files") or [])}
+            miss = cross_check(d / dn, sb, fs, tree)
+            why = (
+                f"open record refused by the cross-check, not in it: {', '.join(miss)}: rerun"
+                if miss
+                else ""
+            )
+            files |= fs
+            dirs |= {str(x) for x in cast("list[object]", o.get("dirs") or [])}
+        if why:
+            whys.setdefault(why, []).append(dn)
+    return [f"{', '.join(dns)}: {why}" for why, dns in whys.items()], files, dirs
+
+
+def kit_opens(
+    top: str, sha: str, d: Path, runs: list[Result], pin: tuple[str, str]
+) -> tuple[list[str], tuple[set[str], set[str]]]:
+    """(refusals, (files, dirs)) of open_records at kit SHA in the repo TOP, each refusal naming
+    PIN (run id, SUITE/CASE); one refusal when TOP holds no commit SHA."""
+    tree = kit_tree(top, sha)
+    if tree is None:
+        return [f"kit sha {sha} of run {pin[0]} is not a commit in {top}"], (set(), set())
+    refused, files, dirs = open_records(d, runs, tree)
+    return [f"run {pin[0]} {pin[1]} {x}" for x in refused], (files, dirs)
+
+
+def listing(top: str, rev: str, d: str) -> set[str]:
+    """The tracked entries directly in dir D (kit-relative, "" the top) at REV."""
+    p = run(["git", "-C", top, "ls-tree", "--name-only", "-z", rev, *([f"{d}/"] if d else [])])
+    return {e for e in p.stdout.split("\0") if e}
+
+
+def opened_changed(
+    top: str, sha: str, head: str, compared: list[str], opened: tuple[set[str], set[str]]
+) -> list[str]:
+    """Each kit file the runs opened (OPENED: files, dirs) outside evals/ and outside COMPARED
+    (the role file and launch set, a dir ending in /) that differs between SHA and HEAD, and each
+    tracked entry added or deleted directly in a dir they listed."""
+    files, dirs = opened
+
+    def own(p: str) -> bool:
+        return not p.startswith("evals/") and not any(
+            p == c or (c.endswith("/") and p.startswith(c)) for c in compared
+        )
+
+    out: list[str] = []
+    paths = sorted(p for p in files if own(p))
+    if paths:
+        diff = run(
+            ["git", "-C", top, "diff", "--no-renames", "--name-status", sha, head, "--", *paths]
+        )
+        how = {"A": "added", "D": "deleted"}
+        out += [
+            f"{p} {how.get(k[:1], 'changed')} (opened by the run)"
+            for k, _, p in (ln.partition("\t") for ln in diff.stdout.splitlines())
+            if p
+        ]
+    for d in sorted(dirs):
+        rel = "" if d == "./" else d.rstrip("/")
+        if rel == "evals" or rel.startswith("evals/"):
+            continue
+        was, now = listing(top, sha, rel), listing(top, head, rel)
+        out += [f"{e} added (listed by the run)" for e in sorted(now - was)]
+        out += [f"{e} deleted (listed by the run)" for e in sorted(was - now)]
+    return out
+
+
+@dataclass(frozen=True)
+class Pinned:
+    """One RUN_ID/SUITE/CASE judged (pinned): its verdict (PASS, FAIL or INSUFFICIENT), its line,
+    what makes it insufficient, and its freshness text (`fresh at HEAD h`, `stale at HEAD h: ...`
+    or `missing: ...`)."""
+
+    word: str
+    line: str
+    why: list[str]
+    fresh: str
+
+
+def pinned(root: Path, top: str, head: str, arg: str) -> Pinned:
+    """RUN_ID/SUITE/CASE ARG, stored under ROOT, judged at HEAD of the repo TOP (--help,
+    Verdict)."""
     rid, suite, cid = arg.split("/")
     d = root / rid / suite / cid
     res = stored(d / "result.json")
     if res is None:
         why = [f"run {rid} has no readable {suite}/{cid}/result.json in {root}"]
-        return "INSUFFICIENT", f"INSUFFICIENT {suite}/{cid}: run {rid}: missing: {why[0]}", why
+        line = f"INSUFFICIENT {suite}/{cid}: run {rid}: missing: {why[0]}"
+        return Pinned("INSUFFICIENT", line, why, f"missing: {why[0]}")
     runs = [
         cast("Result", r)
         for r in cast("list[object]", res.get("runs") or [{"dir": "."}])
@@ -2448,8 +2637,8 @@ def pinned(root: Path, top: str, head: str, arg: str) -> tuple[str, str, list[st
             f"run {rid} ran with --kit-ref {res.get('kit_ref')}: its fixtures' commit is "
             "not recorded"
         )
-    if run(["git", "-C", top, "cat-file", "-e", f"{sha}^{{commit}}"]).returncode:
-        missing.append(f"kit sha {sha} of run {rid} is not a commit in {top}")
+    refused, opened = kit_opens(top, sha, d, runs, (rid, f"{suite}/{cid}"))
+    missing += refused
     review = isinstance(res.get("review"), dict)
     if review:
         mine = [x for x in review_records(root / "reviews", suite, cid) if x.get("run_id") == rid]
@@ -2505,6 +2694,7 @@ def pinned(root: Path, top: str, head: str, arg: str) -> tuple[str, str, list[st
             for rel in (f"evals/{suite}/cases.json", f"evals/{suite}/reference/expectations.json")
             if (c := entry_change(top, sha, head, rel, cid))
         ]
+        stale += opened_changed(top, sha, head, paths, opened)
     fresh = (
         f"missing: {'; '.join(missing)}"
         if missing
@@ -2513,10 +2703,11 @@ def pinned(root: Path, top: str, head: str, arg: str) -> tuple[str, str, list[st
         else f"fresh at HEAD {head[:12]}"
     )
     word = "INSUFFICIENT" if missing or stale else verdict
-    return (
+    return Pinned(
         word,
         f"{word} {suite}/{cid}: stored {verdict}, run {rid}, kit {sha[:12]}, {count}; {fresh}",
         missing + stale,
+        fresh,
     )
 
 
@@ -2545,10 +2736,10 @@ def verdict(pins: list[str], *, cwd: str, qa_dir: Path) -> Judged:
         msg = "--verdict runs in the judged repo: no git HEAD here"
         raise UsageError(msg)
     done = [pinned(qa_dir, top, head, a) for a in pins]
-    short = [f"{a}: {'; '.join(why)}" for a, (_, _, why) in zip(pins, done, strict=True) if why]
-    lines = [line for _, line, _ in done]
+    short = [f"{a}: {'; '.join(j.why)}" for a, j in zip(pins, done, strict=True) if j.why]
+    lines = [j.line for j in done]
     if short:
         return Judged(
             lines, f"octo-feather-qa: insufficient evidence: {' | '.join(short)}", INSUFFICIENT
         )
-    return Judged(lines, None, 1 if any(w == "FAIL" for w, _, _ in done) else 0)
+    return Judged(lines, None, 1 if any(j.word == "FAIL" for j in done) else 0)

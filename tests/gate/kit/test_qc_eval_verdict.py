@@ -17,8 +17,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 from eval_grading import INSUFFICIENT, Judged, UsageError, review, verdict
-from qc_eval_verdict import FILES, insufficient, same_verdict
+from qc_eval_verdict import FILES, carry, insufficient, same_verdict
 from testkit import ROOT, Scratch
+from testkit.opens import opens_whole
 from testkit.qa_box import Config, Qa
 from testkit.qc import target
 
@@ -58,8 +59,12 @@ def change(q: Qa, r: Path, base: str, files: tuple[tuple[str, str], ...]) -> Non
 
 
 def stored(q: Qa, s: Path, sha: str, *, runs: int = 2) -> str:
-    """The cases of the suite in S run RUNS times on this kit, recorded at kit SHA; its run id."""
-    return q.evaluation(s, runs=runs, configs=[Config("", ROOT, None, sha)]).run_dir.name
+    """The cases of the suite in S run RUNS times on this kit, recorded at kit SHA, each run's open
+    record whole and empty (testkit/opens.py); its run id."""
+    d = q.evaluation(s, runs=runs, configs=[Config("", ROOT, None, sha)]).run_dir
+    for c in (d / s.name).iterdir():
+        opens_whole(c, ROOT)
+    return d.name
 
 
 def judged(q: Qa, r: Path, *pins: str, want: int) -> str:
@@ -150,6 +155,7 @@ def test_verdict_insufficient(q: Qa) -> None:
         ["rv"],
         configs=[Config("", ROOT, None, q.s.git(r, "rev-parse", "HEAD"))],
     ).run_dir
+    opens_whole(rid / "s1" / "rv", ROOT)
     rpin = f"{rid.name}/s1/rv"
     out = judged(q, r, rpin, want=INSUFFICIENT)
     assert f"no maintainer verdict recorded for review case s1/rv in run {rid.name}" in out, out
@@ -174,3 +180,10 @@ def test_same_verdict(case: Case) -> None:
 @pytest.mark.criterion("quality#acceptance-qc-eval-verdict")
 def test_insufficient(case: Case) -> None:
     case(insufficient)
+
+
+@pytest.mark.e2e
+@pytest.mark.skipif(sys.platform == "darwin", reason="the qc sandbox needs Linux")
+@pytest.mark.criterion("quality#acceptance-qc-eval-verdict")
+def test_carry(case: Case) -> None:
+    case(carry)
