@@ -21,7 +21,7 @@ import subprocess
 import threading
 from typing import TYPE_CHECKING
 
-from lane_merge import H, World
+from lane_merge import World
 from lane_post_merge_teardown import World as Teardown
 from testkit import Scratch, kit, main
 
@@ -75,7 +75,7 @@ def refresh_waits(s: Scratch) -> None:
     heavy = Run(s, "heavy", "gh8", "zt2:p1", elsewhere)
     ev = Run(s, "eval", "gh7", "zt1:p1", lane.kit)
     try:
-        r = w.run(1, "merge", "7", H, "--repo", "o/r", "--wait", "0")
+        r = w.run(1, "merge", "7", w.h, "--repo", "o/r", "--wait", "0")
         stop = (
             f"step 3 kit refresh: stopped: kit refresh waits: {ev.named(lane.kit)}; nothing "
             "moved: rerun once it ends"
@@ -83,7 +83,7 @@ def refresh_waits(s: Scratch) -> None:
         assert stop in r.out.split("\n"), r.out
         assert lane.head() == lane.b, "the install moved under a live eval run"
         threading.Timer(2, ev.end).start()  # ends while the rerun waits
-        r = w.run(3, "post-merge", "7", H, "--lane", "gh7", "--repo", "o/r", "--wait", "60")
+        r = w.run(3, "post-merge", "7", w.h, "--lane", "gh7", "--repo", "o/r", "--wait", "60")
         assert ev.p.poll() is not None, "refreshed before the eval run ended"
         out = r.out.split("\n")
         assert any(x.startswith("step 3 kit refresh: ok: kit install ") for x in out), r.out
