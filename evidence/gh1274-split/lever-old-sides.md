@@ -252,7 +252,13 @@ octo-feather-lane verdict: report names no Range: add `Range: <from>..<to>`, the
 
 ## lane-tickets
 
-A gate fault, not a behaviour change: the old run exits 127 at its first git call, "git (kit stash guard ...): no git on PATH after this guard, and OCTO_FEATHER_GIT is unset", the #1324 stash guard bug (fixed on main 50418ed5). Kept, its patches retargeted to scripts/lane_ticketing.py; check-parity green.
+Changed on purpose (review r1 found the real cause; the exit 127 below was this pane's stash guard, #1324, in front of it). Rerun at this branch past the guard (`OCTO_FEATHER_GIT=/usr/bin/git GATE_WORKERS=4 uv run --locked --offline python tests/parity/lever.py lane-tickets`): exit 2, the clean old run fails with
+
+```
+lane-tickets test: 'tickets 100' want exit 0, got 2: octo-feather-lane tickets: tracker script github-issues/issue-view 101 --notes failed (issue-view: #101: no issue URL to read notes by: null): fix the cause it names, then rerun
+```
+
+The old fixture bodies carry no `Skills:` line, so `tickets` reads each ticket's notes: 94912ca0 (#1099), PR #1118, "`tickets` reads a ticket's notes when its body has no Skills: line" (every tickets fixture body gained `Skills: none` in the same commit); notes come from issue-view --notes, which needs the issue URL (844d7485, #987, PR #1008) the old test's fake GitHub never served. Retired in this branch (commit `test(parity): retire case lane-tickets`).
 
 At 67ce2d7b, lever output:
 
@@ -286,7 +292,7 @@ git (kit stash guard /tmp/gate.7STYzA/tmp.0YB3eJlw3f/sys/git): no git on PATH af
 
 ## lane-spend
 
-A lever fault, not a behaviour change: the old test passes as its gate item at 67ce2d7b (`just test "tests/gate/test_gate.py::test_script[tests/lane-spend.sh]"` in the same scratch copy, the old files restored from 644fad70: 1 passed; the fake curl, instrumented for that one run to log its stdin, received `Authorization: Bearer sk-test-123` each time) and run directly at 67ce2d7b and at the split (`bash tests/lane-spend.sh` in a copy of each tree, old files restored: lane-spend: ok), and fails only in the lever's run (its reconcile row: the fake curl answers 401). Kept, its patches retargeted to scripts/lane_reporting.py; check-parity green.
+A lever fault, not a behaviour change; not repaired here (the lever is kit-wide, #1343): the case is kept, its patches retargeted to scripts/lane_reporting.py, check-parity green, the lever not passing. Cause, exact: the lever restores a case's `needs` with `write_bytes` and no mode (tests/parity/lever.py run_old, lines 336-338; only the old test itself gets chmod 0o755), so tests/fixtures/lane-spend/curl, 100755 at 644fad70 (`git ls-tree 644fad70 tests/fixtures/lane-spend/curl`), lands non-executable; the old test puts its directory first on PATH, but a non-executable file is skipped, so the lane runs the host's /bin/curl, the real OpenRouter, which answers 401 to the test's key sk-test-123. Shown by a run: the hub's openrouter_usage instrumented to log, in a scratch copy of 67ce2d7b, `tests/parity/lever.py lane-spend` logged `key='sk-test-123' ... curl=/bin/curl path=<copy>/tests/fixtures/lane-spend:...` (shutil.which skips the non-executable fake); the same old test passes as its gate item and run directly, where the fixture keeps its mode. Rerun at this branch: exit 2, the same HTTP 401 row.
 
 At 67ce2d7b, lever output:
 

@@ -3,7 +3,7 @@
 
   uv run --locked --offline python evidence/gh1274-split/check.py [--base REV]
 
-REV (default 67ce2d7b) is the commit holding the hub before the split. Prints one line per check, `ok` or `FAIL`
+REV (default: the merge base of HEAD with origin/main) is the commit holding the hub before the split. Prints one line per check, `ok` or `FAIL`
 with what failed; exit 0 only when every check holds.
 
   source    every moved function is the hub's text with exactly the printed rewrites (rewrites.json); in post_merge.py,
@@ -38,7 +38,10 @@ import tables as T  # noqa: E402
 
 ROOT = Path(subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, check=True,
                            cwd=HERE).stdout.strip())
-BASE = sys.argv[sys.argv.index("--base") + 1] if "--base" in sys.argv else "67ce2d7b"
+# The hub before the split: --base, else the merge base with origin/main (the split reruns on each new main, #1336).
+BASE = (sys.argv[sys.argv.index("--base") + 1] if "--base" in sys.argv else
+        subprocess.run(["git", "merge-base", "HEAD", "origin/main"], cwd=ROOT, capture_output=True, text=True,
+                       check=True).stdout.strip())
 META = json.loads((HERE / "rewrites.json").read_text(encoding="utf-8"))
 UV = ["uv", "run", "--locked", "--offline", "--quiet"]
 
@@ -135,8 +138,7 @@ def check_names(tmp: Path) -> list[str]:
     if b.returncode or n.returncode:
         return [f"FAIL probe failed: {b.stderr[-800:]} {n.stderr[-800:]}"]
     old, new = json.loads(b.stdout), json.loads(n.stdout)
-    bad = [f"{fn} reads __file__, __doc__ or sys.argv and is not in the tables" for fn in old["readers"]
-           if fn not in ("lanes_dir",)]
+    bad = [f"{fn} reads __file__, __doc__ or sys.argv and is not in the tables" for fn in old["readers"]]
     for fn, o in old["names"].items():
         g = new["names"].get(fn, {})
         for k in sorted(set(o) | set(g)):
