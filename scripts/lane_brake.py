@@ -2,8 +2,8 @@
 """The lane start's brake (issue-lifecycle spec #lanes-start, #boundary-lane-start-brake): the
 box's room for one more lane, then the Claude account's weekly use, read from the box's model route,
 stored, and projected to the reset. What it reads, stores and prints: `octo-feather-lane --help`,
-start. `brake` is the lane start's one call (scripts/start_lane.py); its result is a Verdict, each
-kind its lines to print: Full a refusal, the others the start's to print before it goes on.
+start. `brake` is the lane start's one call (scripts/start_lane.py); its result is a Verdict:
+Refused one line, the others their lines to print before the start goes on.
 
   lane_brake.py record DIR   one read from the box's route through `read` below, each answer
                              written to DIR as tests/gate/kit/fixtures/lane-brake/ holds it (each
@@ -33,16 +33,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING, cast
 
 import tomllib
+from post_merge import kit_install
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
 # The interface: brake and its Verdict (the lane start's one call); `record` its command. All else
 # is the brake's own, free to change behind it (#1347 and #1348 add results, not calls).
-__all__ = ["Full", "Read", "Unread", "Verdict", "brake", "main"]
+__all__ = ["Read", "Refused", "Unread", "Verdict", "brake", "main"]
 
-KIT = Path(__file__).resolve().parent.parent
-BUDGET = KIT / "gate-budget.toml"  # the box's settings, read from the kit as octo-feather-slot does
+BUDGET = "gate-budget.toml"  # the box's settings, in the kit install (post_merge.kit_install)
 RESERVE = 0.1  # the spec's default share kept back (#lanes-start)
 LIMIT = 7  # the spec's default lane limit (#lanes-start)
 WEEK = dt.timedelta(days=7)
@@ -119,14 +119,13 @@ class Unread:
 
 
 @dataclass(frozen=True)
-class Full:
-    """The box holds its limit of open lanes: the start is refused, nothing read or made
-    (#lanes-start); LINE names the count, the limit, each open lane and the fix."""
+class Refused:
+    """The start refused (#lanes-start): LINE names what was read and what to wait for or change."""
 
     line: str
 
 
-Verdict = Read | Unread | Full
+Verdict = Read | Unread | Refused
 # The stored readings (stored): each time, and its windows by (name, reset) to the share used.
 Past = list[tuple[dt.datetime, dict[tuple[str, dt.datetime], float]]]
 
@@ -344,24 +343,27 @@ def stored(path: Path) -> Past:
     return out
 
 
-def store(path: Path, r: Reading) -> str | None:
-    """R appended to PATH: its time and each window's share and reset, nothing else; the error
-    when it is not written."""
+def store(path: Path, r: Reading, clock: str) -> str | None:
+    """R appended to PATH: its time and each window's share and reset, nothing else but CLOCK, the
+    override said (clock), when set; the error when it is not written."""
     ws = {w.name: {"used": w.used, "reset": stamp(w.reset)} for w in r.windows}
+    line: dict[str, object] = {"at": stamp(r.at), "windows": ws}
+    if clock:
+        line["clock"] = clock
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps({"at": stamp(r.at), "windows": ws}) + "\n")
+            f.write(json.dumps(line) + "\n")
     except OSError as e:
         return f"{type(e).__name__}: {e.strerror or e}"
     return None
 
 
-def reserve() -> float:
+def reserve(budget: Path) -> float:
     """usage_reserve from the box's settings (BUDGET), RESERVE when it has none; a value that is no
     share below 1 is taken as none, the line saying so (projection)."""
     try:
-        v = tomllib.loads(BUDGET.read_text(encoding="utf-8")).get("usage_reserve", RESERVE)
+        v = tomllib.loads(budget.read_text(encoding="utf-8")).get("usage_reserve", RESERVE)
     except (OSError, ValueError):
         return RESERVE
     ok = isinstance(v, (int, float)) and not isinstance(v, bool) and 0 <= v < 1
@@ -372,58 +374,112 @@ def pct(x: float, places: int = 0) -> str:
     return f"{x * 100:.{places}f}%"
 
 
-def projection(r: Reading, past: Past, keep: float) -> Read:
-    """R projected per window to its reset (#lanes-start): burn the higher of the week's average
+def course(w: Window, at: dt.datetime, past: Past) -> tuple[float, str]:
+    """W, read at AT, projected to its reset (#lanes-start): burn the higher of the week's average
     (over no less than FLOOR) and the last hours' (the oldest PAST reading of the same window and
-    reset LAST old, if any); course share + burn to the reset; the tightest window said, OVER when
-    its course passes 1 - KEEP."""
+    reset LAST old, if any); course share + burn to the reset. The course and its figures said."""
     hour = dt.timedelta(hours=1)
-    said: list[tuple[float, str]] = []
-    for w in r.windows:
-        since = r.at - (w.reset - WEEK)
-        avg = w.used / (max(since, FLOOR) / hour)
-        then = sorted(
-            (at, ws[(w.name, w.reset)])
-            for at, ws in past
-            if (w.name, w.reset) in ws and LAST[0] <= r.at - at <= LAST[1]
-        )
-        last = (w.used - then[0][1]) / ((r.at - then[0][0]) / hour) if then else None
-        burn = max(avg, last if last is not None else avg)
-        course = w.used + burn * (max(w.reset - r.at, dt.timedelta()) / hour)
-        floor = ", 6h floor" if since < FLOOR else ""
-        recent = f"last 6h {pct(last, 2)}/h" if last is not None else "last 6h none"
-        line = 1 - keep
-        side = "over" if course > line else "under"
-        text = (
-            f"usage: {w.name} {pct(w.used)} used at {stamp(r.at)} ({r.host}), burn"
-            f" {pct(burn, 2)}/h (week average {pct(avg, 2)}/h{floor}, {recent}), reset"
-            f" {stamp(w.reset)}, course {pct(course)} at reset, {side} {pct(line)} (reserve"
-            f" {pct(keep)}, gate-budget.toml usage_reserve)"
-        )
-        said.append((course, text))
-    return Read(max(said)[1])
-
-
-def unread(why: str, past: Past) -> Unread:
-    """WHY no reading, and whether one of this week is stored (a window whose reset is still to
-    come, by the box's clock: no answer's Date to go by)."""
-    now = dt.datetime.now(dt.timezone.utc)
-    week = [(at, k, v) for at, ws in past for k, v in ws.items() if k[1] > now]
-    if not week:
-        return Unread(
-            f"usage: not read ({why}); no reading this week: the brake did not stop this start"
-        )
-    at, (name, _), used = max(week)
-    return Unread(
-        f"usage: not read ({why}); last reading this week {name} {pct(used)} at {stamp(at)}, not"
-        " carried: the brake did not stop this start"
+    since = at - (w.reset - WEEK)
+    avg = w.used / (max(since, FLOOR) / hour)
+    then = sorted(
+        (t, ws[(w.name, w.reset)])
+        for t, ws in past
+        if (w.name, w.reset) in ws and LAST[0] <= at - t <= LAST[1]
+    )
+    last = (w.used - then[0][1]) / ((at - then[0][0]) / hour) if then else None
+    burn = max(avg, last if last is not None else avg)
+    c = w.used + burn * (max(w.reset - at, dt.timedelta()) / hour)
+    floor = ", 6h floor" if since < FLOOR else ""
+    recent = f"last 6h {pct(last, 2)}/h" if last is not None else "last 6h none"
+    return c, (
+        f"burn {pct(burn, 2)}/h (week average {pct(avg, 2)}/h{floor}, {recent}), reset"
+        f" {stamp(w.reset)}, course {pct(c)} at reset"
     )
 
 
-def lane_limit() -> int:
+Said = list[tuple[float, Window, str]]  # each window's course, the window, its figures said
+
+
+def over(said: Said, keep: float, budget: Path) -> str | None:
+    """The refusal's end when a course in SAID passes 1 - KEEP: the line, and what to wait for (the
+    latest reset of the windows over it) or change (usage_reserve in BUDGET); else None."""
+    line = 1 - keep
+    resets = [w.reset for c, w, _ in said if c > line]
+    if not resets:
+        return None
+    return (
+        f"over {pct(line)} (reserve {pct(keep)}, usage_reserve in {budget}); no lane started,"
+        f" nothing made: wait for the reset at {stamp(max(resets))}, or change usage_reserve in"
+        f" {budget}"
+    )
+
+
+def under(keep: float) -> str:
+    return f"under {pct(1 - keep)} (reserve {pct(keep)}, gate-budget.toml usage_reserve)"
+
+
+def tightest(said: Said) -> str:
+    return max(said, key=lambda s: s[0])[2]
+
+
+def projection(r: Reading, past: Past, keep: float, budget: Path) -> Read | Refused:
+    """R projected per window to its reset (course); the tightest window said, Refused when a
+    course passes 1 - KEEP (over)."""
+    said: Said = []
+    for w in r.windows:
+        c, figures = course(w, r.at, past)
+        said.append((c, w, f"{w.name} {pct(w.used)} used at {stamp(r.at)} ({r.host}), {figures}"))
+    if end := over(said, keep, budget):
+        return Refused(f"refused (usage): {tightest(said)}, {end}")
+    return Read(f"usage: {tightest(said)}, {under(keep)}")
+
+
+def unread(why: str, past: Past, now: dt.datetime, keep: float, budget: Path) -> Unread | Refused:
+    """WHY no reading, and PAST's windows of this week (reset after NOW) carried, each from its last
+    reading (course over PAST before it): Refused or Unread (`octo-feather-lane --help`, start)."""
+    last: dict[tuple[str, dt.datetime], tuple[dt.datetime, float]] = {}
+    for at, ws in past:
+        for k, used in ws.items():
+            if k[1] > now and (k not in last or at >= last[k][0]):
+                last[k] = (at, used)
+    if not last:
+        return Unread(
+            f"usage: not read ({why}); no reading this week: the brake did not stop this start"
+        )
+    said: Said = []
+    for (name, reset), (at, used) in last.items():
+        w = Window(name, used, reset)
+        c, figures = course(w, at, [p for p in past if p[0] < at])
+        then = f"last reading {name} {pct(used)} at {stamp(at)}, carried at its burn then"
+        said.append((c, w, f"{then}: {figures}"))
+    if end := over(said, keep, budget):
+        why_now = f"usage not read now ({why})"
+        return Refused(f"refused (usage, carried): {why_now}; {tightest(said)}, {end}")
+    go = "the brake did not stop this start"
+    return Unread(f"usage: not read ({why}); {tightest(said)}, {under(keep)}: {go}")
+
+
+NOW = "OCTO_FEATHER_NOW"  # its rule: `octo-feather-lane --help`, start
+
+
+def clock(env: Mapping[str, str]) -> tuple[dt.datetime, str]:
+    """Now when no answer's Date is had, from ENV, and the override said, empty when unset."""
+    v = env.get(NOW)
+    box = dt.datetime.now(dt.timezone.utc)
+    if v is None:
+        return box, ""
+    shown = " ".join(v.split())[:60]
+    try:
+        t = dt.datetime.fromisoformat(v.strip())
+    except ValueError:
+        return box, f"{NOW}={shown} unreadable, the box's clock used"
+    return (t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)), f"{NOW}={shown}"
+
+
+def lane_limit(budget: Path) -> int:
     """lane_limit from the box's settings (BUDGET), LIMIT when it has none or no count there."""
     try:
-        v = tomllib.loads(BUDGET.read_text(encoding="utf-8")).get("lane_limit", LIMIT)
+        v = tomllib.loads(budget.read_text(encoding="utf-8")).get("lane_limit", LIMIT)
     except (OSError, ValueError):
         return LIMIT
     return v if isinstance(v, int) and not isinstance(v, bool) and v >= 0 else LIMIT
@@ -440,32 +496,41 @@ def open_lanes(env: Mapping[str, str]) -> list[str]:
 
 
 def brake(env: Mapping[str, str]) -> Verdict:
-    """The lane start's brake on ENV: Full when the box holds its lane limit, before any read;
-    else the usage (usage), the room line before its line."""
-    keys, limit = open_lanes(env), lane_limit()
+    """The lane start's brake on ENV: Refused when the box holds its lane limit, before any read;
+    else the usage (usage), the room line before a start's line that goes on."""
+    budget = kit_install() / BUDGET
+    keys, limit = open_lanes(env), lane_limit(budget)
     if len(keys) >= limit:
-        return Full(
-            f"no room: {len(keys)} of {limit} lanes open (lane_limit {limit}, {BUDGET}):"
+        return Refused(
+            f"refused (room): {len(keys)} of {limit} lanes open (lane_limit {limit}, {budget}):"
             f" {', '.join(keys) or 'none'}; nothing made: archive a lane (octo-feather-lane"
-            f" archive NAME) or raise lane_limit in {BUDGET}, then rerun"
+            f" archive NAME) or raise lane_limit in {budget}, then rerun"
         )
-    verdict = usage(env)
+    verdict = usage(env, budget)
+    if isinstance(verdict, Refused):
+        return verdict
     return replace(verdict, line=f"room: {len(keys)} of {limit} lanes open\n{verdict.line}")
 
 
-def usage(env: Mapping[str, str]) -> Read | Unread:
-    """The usage on ENV's route: a reading stored and projected (Read), else why not
-    (Unread)."""
+def usage(env: Mapping[str, str], budget: Path) -> Verdict:
+    """The usage on ENV's route: a reading stored and projected (Read, or Refused over the line),
+    else why not (Unread, or Refused on the carried reading); BUDGET the box's settings."""
     path = store_path(env)
     past = stored(path)
+    now, override = clock(env)
     r = route(env)
     got = r if isinstance(r, NotRead) else read(r)[0]
     if isinstance(got, NotRead):
         why = got.why if isinstance(r, NotRead) else got.why.replace(r.key, "[key]")
-        return unread(" ".join(why.split())[:300], past)  # one line, whatever the route said
-    verdict = projection(got, past, reserve())
-    if err := store(path, got):
-        return Read(f"{verdict.line}; not stored in {path} ({err})")
+        why = " ".join(why.split())[:300]  # one line, whatever the route said
+        v = unread(why, past, now, reserve(budget), budget)
+        return replace(v, line=f"clock overridden: {override}; {v.line}") if override else v
+    ignored = f"{override} ignored, the answer's Date is now" if override else ""
+    verdict = projection(got, past, reserve(budget), budget)
+    if ignored:
+        verdict = replace(verdict, line=f"clock overridden: {ignored}; {verdict.line}")
+    if err := store(path, got, ignored):
+        return replace(verdict, line=f"{verdict.line}; not stored in {path} ({err})")
     return verdict
 
 

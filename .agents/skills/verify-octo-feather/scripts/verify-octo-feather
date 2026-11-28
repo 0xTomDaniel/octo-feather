@@ -4176,6 +4176,7 @@ def drive_lane_start(f: Feature) -> None:
     lane_start_files(f, w.sc, store, checkout, clean)
     lane_start_sub_issue(f, w, store, checkout)
     lane_start_unknown(f, w, store, str(checkout), str(brief))
+    lane_start_usage(f, w, store, checkout, kit)
     lane_start_room(f, w, store, str(checkout), str(brief))
     f.env, f.pre = {}, []
     say(f"lane-start evidence: {f.d}")
@@ -4290,16 +4291,17 @@ def lane_start_unknown(f: Feature, w: CommsWorld, store: Path, checkout: str, br
 
 def lane_start_room(f: Feature, w: CommsWorld, store: Path, checkout: str, brief: str) -> None:
     """issue-lifecycle#acceptance-lane-start-room: lanes gh905, gh906, gh907 and gh909 open in the director's session
-    (verify), one record in the top state dir and two in session s2's make seven, the kit's lane_limit (gate-budget.toml,
-    7): a start of 910 is refused naming the count, the limit, the file, each open lane and the fix; the route the
-    replaying provider logging each request: none; no ticket read, nothing made."""
+    (verify), one record in the top state dir and two in session s2's make seven, the lane limit (lane_limit, none in
+    the kit install's gate-budget.toml after the usage case, so 7): a start of 910 is refused on the room, though the
+    usage would refuse too, naming the count, the limit, the file, each open lane and the fix; the route the replaying
+    provider logging each request: none; no ticket read, nothing made."""
     top = w.sc / "home" / ".local" / "state" / "octo-feather"
     (top / "lanes").mkdir(exist_ok=True)
     (top / "lanes" / "gh920.toml").write_text('supervisor = "w9:p1"\n')
     (top / "sessions" / "s2" / "lanes").mkdir(parents=True)
     for k in ("gh921", "gh922"):
         (top / "sessions" / "s2" / "lanes" / f"{k}.toml").write_text('supervisor = "w9:p2"\n')
-    asked, budget = w.sc / "room-provider.log", Path(f.s.repo) / "gate-budget.toml"
+    asked, budget = w.sc / "room-provider.log", w.sc / "kit-install" / "gate-budget.toml"
     calls, gh = (w.world / "log").read_text(), (store / "log").read_text()
     replay = subprocess.Popen([sys.executable, str(Path(f.s.repo) / "tests" / "gate" / "kit" / "testkit" / "provider.py"),
                                "--replay", str(Path(f.s.repo) / LANE_RECORDED), "--log", str(asked)], stdout=subprocess.PIPE, text=True)
@@ -4321,7 +4323,7 @@ def lane_start_room(f: Feature, w: CommsWorld, store: Path, checkout: str, brief
     keys = ("gh920, gh921 (session s2), gh922 (session s2), gh905 (session verify), gh906 (session verify), gh907 (session verify),"
             " gh909 (session verify)")
     f.check("room", lambda c: c.code == 1 and c.out == "" and (
-        f"step read: no room: 7 of 7 lanes open (lane_limit 7, {budget}): {keys}; nothing made: archive a lane"
+        f"refused (room): 7 of 7 lanes open (lane_limit 7, {budget}): {keys}; nothing made: archive a lane"
         f" (octo-feather-lane archive NAME) or raise lane_limit in {budget}, then rerun") in c.err and c.o["made"] == "")
 
 
@@ -4383,6 +4385,68 @@ def lane_start_sub_issue(f: Feature, w: CommsWorld, store: Path, checkout: Path)
     f.check("sub-issue", lambda c: c.code == 1 and c.out.startswith("room: 3 of 7 lanes open\nusage: ") and c.out.count("\n") == 2
             and "ticket 908 is a sub-issue of 905" in c.err
             and c.o["made"] == "")
+
+
+# The usage and carried refusals (issue-lifecycle #acceptance-lane-start-usage, -carried): the same recording against the
+# line 1 - 0.5, its 62% course over 50%, worked by hand as tests/gate/kit/lane_start.py's USAGE and CARRIED are.
+LANE_OVER = ("over 50% (reserve 50%, usage_reserve in {budget}); no lane started, nothing made: wait for the reset at "
+             "2026-12-03T03:00:00Z, or change usage_reserve in {budget}")
+LANE_USAGE = ("refused (usage): 7d 19% used at 2026-11-28T06:19:36Z ({host}), burn 0.37%/h (week average 0.37%/h, last 6h "
+              "none), reset 2026-12-03T03:00:00Z, course 62% at reset, " + LANE_OVER)
+LANE_NOW = "2026-11-28T07:19:36Z"
+LANE_CARRIED = (f"clock overridden: OCTO_FEATHER_NOW={LANE_NOW}; refused (usage, carried): usage not read now ({{why}}); "
+                "last reading 7d 19% at 2026-11-28T06:19:36Z, carried at its burn then: burn 0.37%/h (week average 0.37%/h, "
+                "last 6h none), reset 2026-12-03T03:00:00Z, course 62% at reset, " + LANE_OVER)
+
+
+def lane_start_usage(f: Feature, w: CommsWorld, store: Path, checkout: Path, kit: Path) -> None:
+    """issue-lifecycle#acceptance-lane-start-usage, then #acceptance-lane-start-carried: the box's usage_reserve 0.5 (the
+    kit install's gate-budget.toml, a setting), the box's readings removed, the route replaying the same real recording:
+    `start 910` exits 1 naming the figures, the reset to wait for and the file to change, nothing made, the reading
+    stored; then the route at a closed port and OCTO_FEATHER_NOW an hour after the recorded Date: refused carried from
+    that reading, nothing made, nothing more stored."""
+    budget = kit / "gate-budget.toml"
+    budget.write_text("usage_reserve = 0.5\n")
+    readings = w.sc / "home" / ".local" / "state" / "octo-feather" / "usage-readings.jsonl"
+    readings.unlink(missing_ok=True)
+    say(f"usage_reserve = 0.5 in {budget}; the box's readings removed")
+    brief, log, prompts = str(w.sc / "brief.md"), w.world / "log", w.world / "prompts"
+    calls, sent, gh = len(log.read_text().splitlines()), prompts.read_text(), len((store / "log").read_text().splitlines())
+
+    def made() -> str:
+        out = [str(p) for p in (checkout.with_name("target-gh910"), w.state / "lanes" / "gh910.toml") if p.exists()]
+        out += output(["git", "-C", str(checkout), "branch", "--list", "gh910"])[1].split()
+        out += [x for x in log.read_text().splitlines()[calls:] if x.startswith(("workspace create", "tab create", "agent start"))]
+        out += ["prompt"] if prompts.read_text() != sent else []
+        out += [x for x in (store / "log").read_text().splitlines()[gh:] if x.startswith("issue")]
+        return "\n".join(out)
+
+    replay = subprocess.Popen([sys.executable, str(Path(f.s.repo) / "tests" / "gate" / "kit" / "testkit" / "provider.py"),
+                               "--replay", str(Path(f.s.repo) / LANE_RECORDED)], stdout=subprocess.PIPE, text=True)
+    try:
+        host = f"127.0.0.1:{replay.stdout.readline().strip() if replay.stdout else ''}"
+        lane_route(w.sc, host)
+        say(f"brake route {host}: the testkit provider replaying the real route's recording ({LANE_RECORDED})")
+        f.run("usage", "sh", "-c", LANE_START, "sh", str(checkout), "910", "Over the line", "a scratch proof", brief)
+    finally:
+        replay.kill()
+        replay.wait()
+    f.obs("usage", "readings", readings.read_text() if readings.exists() else "")
+    f.obs("usage", "made", made())
+    f.check("usage", lambda c: c.code == 1 and c.out == "" and LANE_USAGE.format(host=host, budget=budget) in c.err
+            and c.err.count("\n") == 1 and c.o["readings"] == LANE_STORED and c.o["made"] == "" and LANE_KEY not in c.out + c.err)
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        host = f"127.0.0.1:{sock.getsockname()[1]}"
+    lane_route(w.sc, host)
+    say(f"brake route {host}, a closed port; OCTO_FEATHER_NOW={LANE_NOW}, an hour after the recorded Date")
+    f.run("carried", "env", f"OCTO_FEATHER_NOW={LANE_NOW}", "sh", "-c", LANE_START, "sh", str(checkout), "910", "Over the line",
+          "a scratch proof", brief)
+    f.obs("carried", "readings", readings.read_text() if readings.exists() else "")
+    f.obs("carried", "made", made())
+    why = f"GET {host}/v1/models: [Errno 111] Connection refused"
+    f.check("carried", lambda c: c.code == 1 and c.out == "" and LANE_CARRIED.format(why=why, budget=budget) in c.err
+            and c.err.count("\n") == 1 and c.o["readings"] == LANE_STORED and c.o["made"] == "" and LANE_KEY not in c.out + c.err)
 
 
 
