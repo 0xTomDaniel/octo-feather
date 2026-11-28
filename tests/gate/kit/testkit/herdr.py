@@ -33,7 +33,8 @@ in the file `ready_after` later (0 without one), then reading the state in the f
 IDLE_FALLBACK s after its start `idle` (Herdr 0.9.5's screen fallback; why that is not ready:
 herdr-comms SKILL.md, Spawn an agent). Pi reports itself only when ARGS load Herdr's Pi
 integration (`--extension F`, F a file holding what `integration install pi` writes now): once it
-takes input, `agent_session` (source herdr:pi).
+takes input, `agent_session` (source herdr:pi, its value the `--session-id` in ARGS, else `s`), in
+`agent get` and `agent list` as Herdr's AgentInfo carries it.
 `integration install pi` writes that file, the text of the file `integration` when there is one
 (an upgraded Herdr's), else INTEGRATION, to $PI_CODING_AGENT_DIR/extensions (else
 $HOME/.pi/agent/extensions); with no agent dir it fails, as Herdr does, and so with a file
@@ -44,6 +45,10 @@ fail plain (`herdr: server not reachable`, exit 1), for the targets it lists, on
 every target when it is empty; a file `get-delay` holding S makes it answer no sooner than S
 seconds after the call (a slow Herdr); a file `get-answer`, a JSON object, makes a target it maps
 answer that text on stdout, exit 0 (a Herdr answer of a shape the kit must not trust).
+`agent rename T NAME` gives T's agent NAME and prints it as `agent get` does; a NAME not as
+Herdr 0.9.5 takes one (a lowercase letter, then lowercase letters, digits, - or _, 32 at most)
+fails invalid_agent_name, one another agent holds agent_name_taken, an unknown T
+agent_not_found, each exit 1.
 `agent wait T --until S... --timeout MS` returns once T reads a state S, else `timeout`: at once
 when T has booted, as its state then never changes. `agent prompt T TEXT --wait [--until S...]
 [--timeout MS]`: blocked is `agent_blocked`, nothing sent; an agent not yet taking input gets
@@ -87,7 +92,7 @@ from pathlib import Path
 
 IDLE_FALLBACK = 0.3  # s: Herdr 0.9.5 reads a booting Pi idle after about 5 s; scaled down
 # the world's own, never shown
-HIDDEN = ("ready_at", "started_at", "reports", "label", "env", "shell_pid", "pi_pid")
+HIDDEN = ("ready_at", "started_at", "reports", "session", "label", "env", "shell_pid", "pi_pid")
 INTEGRATION = "// installed by herdr\n// HERDR_INTEGRATION_ID=pi\n"  # the file Herdr writes
 
 
@@ -227,6 +232,7 @@ class World:
             {k: g[k] for k in ("pane_id", "tab_id", "workspace_id")}
             | {"agent_status": self.status(g), "terminal_id": f"term_{g['pane_id']}"}
             | {"focused": False, "revision": 0}
+            | self.reported(g)
             for g in self.agents.values()
             if not w or g["workspace_id"] == w[0]
         ]
@@ -297,6 +303,8 @@ class World:
         now = time.time()
         g |= {"name": a[2], "agent_status": status, "ready_at": now + delay, "started_at": now}
         g["reports"] = reports
+        pi = a[a.index("--") :] if "--" in a else []
+        g["session"] = opts(pi, "--session-id")[0] if opts(pi, "--session-id") else "s"
         self.save()
         return 0
 
@@ -338,9 +346,29 @@ class World:
         if g is None:
             return fail("agent_not_found")
         out = {k: v for k, v in g.items() if k not in HIDDEN} | {"agent_status": self.status(g)}
-        if g.get("reports") and not self.booting(g):
-            out["agent_session"] = {"source": "herdr:pi", "agent": "pi", "kind": "id", "value": "s"}
-        return say({"agent": out, "type": "agent_info"})
+        return say({"agent": out | self.reported(g), "type": "agent_info"})
+
+    def reported(self, g: dict[str, object]) -> dict[str, object]:
+        """G's agent_session once its Pi reports itself (the module docstring), else nothing."""
+        if not g.get("reports") or self.booting(g):
+            return {}
+        value = g.get("session", "s")
+        session = {"source": "herdr:pi", "agent": "pi", "kind": "id", "value": value}
+        return {"agent_session": session}
+
+    def agent_rename(self, a: list[str]) -> int:
+        g = self.find(a[2])
+        if g is None:
+            return fail("agent_not_found")
+        name = a[3]
+        ok = 0 < len(name) <= 32 and name[0].isascii() and name[0].islower()
+        if not ok or any(c not in "abcdefghijklmnopqrstuvwxyz0123456789-_" for c in name):
+            return fail("invalid_agent_name")
+        if any(o is not g and o["name"] == name for o in self.agents.values()):
+            return fail("agent_name_taken")
+        g["name"] = name
+        self.save()
+        return self.agent_get(["agent", "get", name])
 
     def agent_wait(self, a: list[str]) -> int:
         g = self.find(a[2])
@@ -399,6 +427,7 @@ class World:
             {k: v for k, v in g.items() if k not in HIDDEN}
             | {"agent_status": self.status(g), "terminal_id": f"term_{g['pane_id']}"}
             | {"focused": False, "revision": 0}
+            | self.reported(g)
             for g in self.agents.values()
         ]
         sys.stdout.write(json.dumps({"id": "1", "result": {"agents": agents}}) + "\n")
@@ -431,6 +460,7 @@ class World:
             ("workspace", "create"): self.workspace_create,
             ("agent", "start"): self.agent_start,
             ("agent", "get"): self.agent_get,
+            ("agent", "rename"): self.agent_rename,
             ("agent", "wait"): self.agent_wait,
             ("agent", "prompt"): self.prompt_induced,
             ("agent", "read"): self.agent_read,
