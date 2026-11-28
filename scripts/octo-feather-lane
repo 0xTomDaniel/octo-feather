@@ -3659,7 +3659,7 @@ def relays_of(lane: str, pr: int) -> list[dict[str, object]]:
 
 def director_only(does: str, after: str) -> None:
     """Refuse, `only the director DOES`, nothing recorded and AFTER, unless HERDR_PANE_ID is the `pane` of
-    $(octo-feather-state)/director.toml (`relay`, `digest --sent`: --help)."""
+    $(octo-feather-state)/director.toml (`relay`, `digest --sent`, `veto`: --help)."""
     import tomllib
     toml = lanes_dir().parent / "director.toml"
     try:
@@ -3841,6 +3841,15 @@ def cmd_digest(args: list[str]) -> int:
     return 0
 
 
+def cmd_veto(args: list[str]) -> int:
+    """`veto` (--help): the logic in scripts/merge_digest.py, imported only here."""
+    import merge_digest
+    args, said = take_opt(args, "--said")
+    director_only("records a veto", "nothing filed: run it in the director's pane on the owner's veto")
+    print(merge_digest.veto(args, said or "", state_dir(), Refuse), flush=True)
+    return 0
+
+
 def merge_digest_due(repo: str | None, lane: str) -> int:
     """merge's due check, once merged (--help, digest): any day due, the director told once through post-merge's tell
     (key `digest <day>`), unless a record's told holds it; 1 when the check fails or the director is not told."""
@@ -3885,6 +3894,7 @@ COMMANDS = {
     "stale": cmd_stale,
     "start": cmd_start,
     "digest": cmd_digest,
+    "veto": cmd_veto,
 }
 
 

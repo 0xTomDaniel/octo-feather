@@ -1,0 +1,54 @@
+[
+ {
+  "request": "pr view 48 --json state,title,url,mergedAt,mergeCommit -R 0xTomDaniel/octo-feather-realcase",
+  "out": "{\"mergeCommit\":null,\"mergedAt\":null,\"state\":\"CLOSED\",\"title\":\"gh1332 recording: integrate's wrapper of a main merge\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/48\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr view 48 --json state,title,url,mergedAt,mergeCommit -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 veto recording (#1341), scratch world, 2026-11-28T09:15:07.166541+00:00"
+  }
+ },
+ {
+  "request": "pr view 52 --json state,title,url,mergedAt,mergeCommit -R 0xTomDaniel/octo-feather-realcase",
+  "out": "{\"mergeCommit\":{\"oid\":\"54fd326c27d4d5629a7a6edc5efb834f92df814d\"},\"mergedAt\":\"2026-11-28T03:30:28Z\",\"state\":\"MERGED\",\"title\":\"[gh1337] digest recording: a tier 2 merge, one clarifies call (#1339)\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/52\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr view 52 --json state,title,url,mergedAt,mergeCommit -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 veto recording (#1341), scratch world, 2026-11-28T09:15:08.267920+00:00"
+  }
+ },
+ {
+  "request": "pr view 52 --json state,title,url,mergedAt,mergeCommit -R 0xTomDaniel/octo-feather-realcase",
+  "out": "{\"mergeCommit\":{\"oid\":\"54fd326c27d4d5629a7a6edc5efb834f92df814d\"},\"mergedAt\":\"2026-11-28T03:30:28Z\",\"state\":\"MERGED\",\"title\":\"[gh1337] digest recording: a tier 2 merge, one clarifies call (#1339)\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/52\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr view 52 --json state,title,url,mergedAt,mergeCommit -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 veto recording (#1341), scratch world, 2026-11-28T09:15:10.985582+00:00"
+  }
+ },
+ {
+  "request": "GH_REPO=0xTomDaniel/octo-feather-realcase issue create --title Veto: revert or repair PR #52 [gh1337] digest recording: a tier 2 merge, one clarifies call (#1339) --body-file \"The owner vetoed PR #52 from the merge digest (issue-lifecycle #gates-digest). A veto reverts nothing by itself: this issue is the parent of the lane that reverts or repairs the merge.\\n\\n- PR: https://github.com/0xTomDaniel/octo-feather-realcase/pull/52 ([gh1337] digest recording: a tier 2 merge, one clarifies call (#1339))\\n- Merge commit: 54fd326c27d4d5629a7a6edc5efb834f92df814d\\n- Merged: 2026-11-28T03:30:28Z\\n- Owner's words (declared by the director, `octo-feather-lane veto`): gh1337 demo veto\\n\\n## Tier, as recorded at merge\\n\\n```\\nTier: 2\\n- spec call gh1337-demo 2026-11-28T03:28:06Z clarifies gh1337-demo-rule\\nWaits for: nobody\\n```\\n\\nAllowed: by its tier.\\n\\n## Spec calls denied by this veto\\n\\nEach call below, which PR #52 added, is DENIED by this veto (issue-lifecycle #gates-call-decision). The repair lane records the denial in the call log's own way: in the commit that acts on it, it sets that call's line's `denied` field to `{\\\"at\\\": \\\"<UTC time of that commit>\\\", \\\"note\\\": \\\"vetoed by the owner from the merge digest (PR #52): gh1337 demo veto\\\"}`, the rest of the line unchanged (scripts/octo-feather-spec-status's docstring).\\n\\nSpec gh1337-demo (gh1337-demo.calls.jsonl), DENIED by this veto:\\n\\n```json\\n{\\\"at\\\": \\\"2026-11-28T03:28:06Z\\\", \\\"lane\\\": \\\"gh50\\\", \\\"role\\\": \\\"supervisor\\\", \\\"kind\\\": \\\"clarifies\\\", \\\"anchors\\\": [\\\"gh1337-demo-rule\\\"], \\\"criteria\\\": [\\\"acceptance-gh1337-demo\\\"], \\\"what\\\": \\\"The demo rule's 'a day' means a UTC calendar day, [D 00:00Z, D+1 00:00Z).\\\", \\\"why\\\": \\\"Two readers of the demo rule took 'a day' as the box's local day and as a UTC day; the criterion is unchanged, only its reading is pinned.\\\", \\\"passes_as_written\\\": false, \\\"evidence\\\": \\\"Throwaway realcase call for octo-feather #1339: the demo rule line 'merges of a day' names no time zone, while the demo criterion is checked against UTC timestamps.\\\"}\\n```\\n\\n## The work\\n\\nRevert or repair merge 54fd326c27d4d5629a7a6edc5efb834f92df814d of PR #52, through an ordinary lane, and set the `denied` field of each call above.\\n\"",
+  "out": "https://github.com/0xTomDaniel/octo-feather-realcase/issues/54\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh issue create --title Veto: revert or repair PR #52 [gh1337] digest recording: a tier 2 merge, one clarifies call (#1339) --body-file -",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 veto recording (#1341), scratch world, 2026-11-28T09:15:12.372705+00:00"
+  }
+ }
+]
