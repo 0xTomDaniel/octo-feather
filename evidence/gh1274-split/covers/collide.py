@@ -10,10 +10,10 @@ evidence/gh1274-split/covers/collide.py ...`; covers.py beside it owns the hub p
                                ALL: gzipped JSON, as its file lists hold real tracked paths that check-refs'
                                retired-words scan would read as kit wording (a tests/parity/check-refs/ patch name).
   collide.py report PRS ALL --split REF [--exclude N]...
-                               Markdown: of PRS, how many collided (a file in common with another PR whose interval
+                               Markdown: of PRS, how many overlapped (a file in common with another PR whose interval
                                overlaps), before (files as recorded) and after (the hub's hunks placed on the split
                                modules of REF: (c'), unplaced to the dispatcher; (c''), by nearest context or dropped);
-                               all files and scripts/ only; then per file the top colliders. --exclude: a PR left
+                               all files and scripts/ only; then per file the top overlapping files. --exclude: a PR left
                                out (an old open PR whose diff from today's merge base is not what it touched then).
 Interval: createdAt to mergedAt, else closedAt, else the fetch time (still open).
 """
@@ -90,7 +90,7 @@ def report(prs_file: Path, all_file: Path, split_ref: str, exclude: list[int]) -
 
     print(f"PRs measured: the {len(ours)} merged in prs.json; others: every PR whose interval overlaps theirs "
           f"({len(every)} with files, fetched {now}); left out: {exclude or 'none'}.\n")
-    print("| files | view | PRs of the 60 that collided | median colliding PRs per PR | collision pairs (PR, other "
+    print("| files | view | PRs of the 60 that overlapped | median overlapping PRs per PR | overlap pairs (PR, other "
           "PR) |\n|---|---|---|---|---|")
     tops: dict[tuple[str, str], dict[str, set[tuple[int, int]]]] = {}
     for scope in ("all", "scripts/"):
@@ -121,7 +121,7 @@ def report(prs_file: Path, all_file: Path, split_ref: str, exclude: list[int]) -
             tops[(scope, v)] = per_file
     for v in views:
         per_file = tops[("all", v)]
-        print(f"\nTop colliding files, {v}: | file | collision pairs through it | PRs of the 60 colliding through it "
+        print(f"\nTop overlapping files, {v}: | file | overlap pairs through it | PRs of the 60 overlapping through it "
               "|\n|---|---|---|")
         for x, s in sorted(per_file.items(), key=lambda kv: (-len(kv[1]), kv[0]))[:20]:
             print(f"| {x} | {len(s)} | {len({a for a, _b in s})} |")

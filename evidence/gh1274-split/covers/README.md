@@ -44,7 +44,8 @@ check-before.txt: that check on 91d3c2a8's qc.toml, exit 1 (171 paths lost, 63 c
     $L/why.py probe /tmp/main-tree measure-main-<main12>.json probe-main-<main12>.json --main <main>
     $L/why.py report measure-main-<main12>.json probe-main-<main12>.json --prs prs.json --main <main>
 
-## Collisions (collide.md)
+## Overlap and conflicts (collide.md)
 
     $L/collide.py fetch prs.json prs-overlap.json.gz
     $L/collide.py report prs.json prs-overlap.json.gz --split <split head> --exclude 79
+    $L/conflicts.py --since 2026-11-12 --split <split head>    # after git fetch origin

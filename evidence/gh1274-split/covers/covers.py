@@ -381,17 +381,25 @@ class Split:
                 if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef))]
 
     def place(self, commit: str, near: bool = False, base: str | None = None) -> set[str]:
-        """The split files COMMIT's change to the hub (BASE, default commit^1, ..commit) lands in. A hunk none of whose lines is
-        placed goes to the dispatcher; with NEAR (c''), instead to the file holding the nearest unchanged line around
-        it in the pre-image (up to NEAR_LINES each way) that exactly one split file holds: the module header or
-        help chunk it sits in; none found, the hunk is dropped."""
+        """The split files COMMIT's change to the hub (BASE, default commit^1, ..commit) lands in: the union of
+        hunks()."""
+        out: set[str] = set()
+        for _a, _an, placed in self.hunks(commit, near, base):
+            out |= placed
+        return out if near else (out or {HUB})
+
+    def hunks(self, commit: str, near: bool = False, base: str | None = None) -> list[tuple[int, int, set[str]]]:
+        """Each hunk of the hub's diff BASE (default commit^1)..COMMIT: its pre-image start and length, and the split
+        files it lands in. A hunk none of whose lines is placed goes to the dispatcher; with NEAR (c''), instead to
+        the file holding the nearest unchanged line around it in the pre-image (up to NEAR_LINES each way) that
+        exactly one split file holds: the module header or help chunk it sits in; none found, it lands nowhere."""
         base = base or f"{commit}^1"
         old = run(["git", "show", f"{base}:{HUB}"], self.repo, check=False)
         new = run(["git", "show", f"{commit}:{HUB}"], self.repo, check=False)
         od, nd = self.defs(old), self.defs(new)
         ol, nl = old.splitlines(), new.splitlines()
         diff = git(self.repo, "diff", "-U0", base, commit, "--", HUB)
-        out: set[str] = set()
+        out: list[tuple[int, int, set[str]]] = []
 
         def at(defs: list[tuple[int, int, str]], line: int) -> str | None:
             return next((name for a, b, name in defs if a <= line <= b), None)
@@ -408,16 +416,18 @@ class Split:
             placed: set[str] = set[str]().union(*(put(od, ol, k) for k in range(a, a + an)),
                                  *(put(nd, nl, k) for k in range(b, b + bn)))
             if placed or not near:
-                out |= placed or {HUB}
+                out.append((a, an, placed or {HUB}))
                 continue
+            found: set[str] = set()
             for d in range(1, NEAR_LINES + 1):
                 hold = [self.lines.get(ol[k - 1].strip(), set()) for k in (a - d, a + an - 1 + d)
                         if 0 < k <= len(ol) and len(ol[k - 1].strip()) > 3]
-                one = [h for h in hold if len(h) == 1]
+                one = [x for x in hold if len(x) == 1]
                 if one:
-                    out |= one[0]
+                    found = one[0]
                     break
-        return out if near else (out or {HUB})
+            out.append((a, an, found))
+        return out
 
 
 def changed(repo: Path, commit: str) -> list[str]:
