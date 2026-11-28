@@ -1,0 +1,210 @@
+[
+ {
+  "request": "pr view 47 --json state,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+  "out": "{\"headRefOid\":\"93135eaeebc24d85bcf486f8beca56c008ca9370\",\"state\":\"OPEN\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr view 47 --json state,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-26",
+   "caller": "lane gh1255 remerge recording (#1266, #1268), scratch world, 2026-11-26T05:51:05.671493+00:00"
+  }
+ },
+ {
+  "request": "pr view 47 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments -R 0xTomDaniel/octo-feather-realcase",
+  "out": "{\"baseRefName\":\"gh1255-remerge-base\",\"body\":\"Closes #45\\n\\nRecorded for 0xTomDaniel/octo-feather#1266 and #1268: lane A (gh45) merged by `octo-feather-lane merge`, then archived. Throwaway content.\\n\\n## Merge ask\\n\\nHead: 93135eaeebc2\\nBuilt: none\\nFailed: none\",\"comments\":[],\"headRefName\":\"gh1255-remerge-a\",\"headRefOid\":\"93135eaeebc24d85bcf486f8beca56c008ca9370\",\"statusCheckRollup\":[{\"__typename\":\"CheckRun\",\"completedAt\":\"2026-11-26T05:48:27Z\",\"conclusion\":\"SUCCESS\",\"detailsUrl\":\"https://github.com/0xTomDaniel/octo-feather-realcase/actions/runs/45763967878/job/139720297737\",\"name\":\"check\",\"startedAt\":\"2026-11-26T05:48:22Z\",\"status\":\"COMPLETED\",\"workflowName\":\"check\"}]}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr view 47 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-26",
+   "caller": "lane gh1255 remerge recording (#1266, #1268), scratch world, 2026-11-26T05:51:06.136987+00:00"
+  }
+ },
+ {
+  "request": "pr list --state open --base gh1255-remerge-base --limit 200 --json number,headRefName,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+  "out": "[{\"headRefName\":\"gh1255-remerge-a\",\"headRefOid\":\"93135eaeebc24d85bcf486f8beca56c008ca9370\",\"number\":47}]\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr list --state open --base gh1255-remerge-base --limit 200 --json number,headRefName,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-26",
+   "caller": "lane gh1255 remerge recording (#1266, #1268), scratch world, 2026-11-26T05:51:06.553063+00:00"
+  }
+ },
+ {
+  "request": "pr merge 47 --merge --match-head-commit 93135eaeebc24d85bcf486f8beca56c008ca9370 -R 0xTomDaniel/octo-feather-realcase",
+  "out": "",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr merge 47 --merge --match-head-commit 93135eaeebc24d85bcf486f8beca56c008ca9370 -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-26",
+   "caller": "lane gh1255 remerge recording (#1266, #1268), scratch world, 2026-11-26T05:51:10.891484+00:00"
+  }
+ },
+ {
+  "request": "issue view 45 --json number,title,body,state,url,parent,subIssues,blockedBy",
+  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Throwaway parent issue of realcase lane A for the gh1255 remerge recordings (0xTomDaniel/octo-feather#1266, #1268): its merge and archive are recorded, then it is closed by `octo-feather-lane merge`.\",\"number\":45,\"parent\":null,\"state\":\"OPEN\",\"subIssues\":{\"nodes\":[{\"id\":\"I_kwDOV6oJUc8AAAABipumNQ\",\"number\":46,\"state\":\"OPEN\",\"title\":\"[gh1255] remerge recording: lane A ticket\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/46\"}],\"totalCount\":1},\"title\":\"[gh1255] remerge recording: lane A parent\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/45\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh issue view 45 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "date": "2026-11-26",
+   "caller": "lane gh1255 remerge recording (#1266, #1268), scratch world, 2026-11-26T05:51:11.552145+00:00"
+  }
+ },
+ {
+  "request": "issue close 46",
+  "out": "",
+  "err": "\u2713 Closed issue 0xTomDaniel/octo-feather-realcase#46 ([gh1255] remerge recording: lane A ticket)\n",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh issue close 46",
+   "date": "2026-11-26",
+   "caller": "lane gh1255 remerge recording (#1266, #1268), scratch world, 2026-11-26T05:51:14.106157+00:00"
+  }
+ },
+ {
+  "request": "issue view 46 --json number,title,body,state,url,parent,subIssues,blockedBy",
+  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Throwaway sub-issue of the remerge recording lane A; closed by its merge.\",\"number\":46,\"parent\":{\"id\":\"I_kwDOV6oJUc8AAAABipuk-g\",\"number\":45,\"state\":\"OPEN\",\"title\":\"[gh1255] remerge recording: lane A parent\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/45\"},\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"[gh1255] remerge recording: lane A ticket\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/46\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh issue view 46 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "date": "2026-11-26",
+   "caller": "lane gh1255 remerge recording (#1266, #1268), scratch world, 2026-11-26T05:51:14.569177+00:00"
+  }
+ },
+ {
+  "request": "issue close 45",
+  "out": "",
+  "err": "\u2713 Closed issue 0xTomDaniel/octo-feather-realcase#45 ([gh1255] remerge recording: lane A parent)\n",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh issue close 45",
+   "date": "2026-11-26",
+   "caller": "lane gh1255 remerge recording (#1266, #1268), scratch world, 2026-11-26T05:51:16.139924+00:00"
+  }
+ },
+ {
+  "request": "issue view 45 --json number,title,body,state,url,parent,subIssues,blockedBy",
+  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Throwaway parent issue of realcase lane A for the gh1255 remerge recordings (0xTomDaniel/octo-feather#1266, #1268): its merge and archive are recorded, then it is closed by `octo-feather-lane merge`.\",\"number\":45,\"parent\":null,\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[{\"id\":\"I_kwDOV6oJUc8AAAABipumNQ\",\"number\":46,\"state\":\"CLOSED\",\"title\":\"[gh1255] remerge recording: lane A ticket\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/46\"}],\"totalCount\":1},\"title\":\"[gh1255] remerge recording: lane A parent\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/45\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh issue view 45 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "date": "2026-11-26",
+   "caller": "lane gh1255 remerge recording (#1266, #1268), scratch world, 2026-11-26T05:51:16.563569+00:00"
+  }
+ },
+ {
+  "request": "pr view 47 --json state,headRefOid,mergeCommit,baseRefName,headRefName -R 0xTomDaniel/octo-feather-realcase",
+  "out": "{\"baseRefName\":\"gh1255-remerge-base\",\"headRefName\":\"gh1255-remerge-a\",\"headRefOid\":\"93135eaeebc24d85bcf486f8beca56c008ca9370\",\"mergeCommit\":{\"oid\":\"a56a399b4a006a9d3530f16c905abf1668da008f\"},\"state\":\"MERGED\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr view 47 --json state,headRefOid,mergeCommit,baseRefName,headRefName -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-26",
+   "caller": "lane gh1255 remerge recording (#1266, #1268), scratch world, 2026-11-26T05:51:17.019249+00:00"
+  }
+ },
+ {
+  "request": "run list --commit a56a399b4a006a9d3530f16c905abf1668da008f --event push --json databaseId,status,conclusion,workflowName,url -R 0xTomDaniel/octo-feather-realcase",
+  "out": "[{\"conclusion\":\"\",\"databaseId\":45764270416,\"status\":\"in_progress\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/actions/runs/45764270416\",\"workflowName\":\"check\"}]\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh run list --commit a56a399b4a006a9d3530f16c905abf1668da008f --event push --json databaseId,status,conclusion,workflowName,url -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-26",
+   "caller": "lane gh1255 remerge recording (#1266, #1268), scratch world, 2026-11-26T05:51:17.623674+00:00"
+  }
+ },
+ {
+  "request": "run watch 45764270416 --exit-status -R 0xTomDaniel/octo-feather-realcase",
+  "out": "Run check (45764270416) has already completed with 'success'\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh run watch 45764270416 --exit-status -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-26",
+   "caller": "lane gh1255 remerge recording (#1266, #1268), scratch world, 2026-11-26T05:51:18.319250+00:00"
+  }
+ },
+ {
+  "request": "run list --commit a56a399b4a006a9d3530f16c905abf1668da008f --event push --json databaseId,status,conclusion,workflowName,url -R 0xTomDaniel/octo-feather-realcase",
+  "out": "[{\"conclusion\":\"success\",\"databaseId\":45764270416,\"status\":\"completed\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/actions/runs/45764270416\",\"workflowName\":\"check\"}]\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh run list --commit a56a399b4a006a9d3530f16c905abf1668da008f --event push --json databaseId,status,conclusion,workflowName,url -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-26",
+   "caller": "lane gh1255 remerge recording (#1266, #1268), scratch world, 2026-11-26T05:51:18.920903+00:00"
+  }
+ },
+ {
+  "request": "repo view 0xTomDaniel/octo-feather-realcase --json nameWithOwner",
+  "out": "{\"nameWithOwner\":\"0xTomDaniel/octo-feather-realcase\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh repo view 0xTomDaniel/octo-feather-realcase --json nameWithOwner",
+   "date": "2026-11-26",
+   "caller": "lane gh1255 remerge recording (#1266, #1268), scratch world, 2026-11-26T05:51:19.319976+00:00"
+  }
+ },
+ {
+  "request": "repo view https://github.com/0xTomDaniel/octo-feather --json nameWithOwner",
+  "out": "{\"nameWithOwner\":\"0xTomDaniel/octo-feather\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh repo view https://github.com/0xTomDaniel/octo-feather --json nameWithOwner",
+   "date": "2026-11-26",
+   "caller": "lane gh1255 remerge recording (#1266, #1268), scratch world, 2026-11-26T05:51:19.668460+00:00"
+  }
+ },
+ {
+  "request": "pr view 47 --json title,url -R 0xTomDaniel/octo-feather-realcase",
+  "out": "{\"title\":\"[gh1255] remerge recording: lane A, a tier 1 merge ask waiting for nobody (#1266, #1268)\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/47\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr view 47 --json title,url -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-26",
+   "caller": "lane gh1255 remerge recording (#1266, #1268), scratch world, 2026-11-26T05:51:20.706007+00:00"
+  }
+ }
+]

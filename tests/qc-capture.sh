@@ -5,8 +5,8 @@
 # declares a passing and a failing demo is judged twice at one head. Each run appends one evidence record per
 # demo at that head (command, exit status, output, criterion text hash, contract version) and names it; both
 # runs give pass and fail, evidence complete, decision source the demo's checks (#acceptance-qc-capture,
-# #acceptance-qc-same-verdict). A criterion with no declared demo goes to the agent fallback (a fake pi),
-# alone in its brief, its result labelled agent fallback with its own record (tests/qc-fallback.sh). An invalid demo declaration is refused before anything runs.
+# #acceptance-qc-same-verdict). A criterion with no declared demo beside one: insufficient evidence naming that it has
+# neither, no record, planned (tests/qc-fallback.sh). An invalid demo declaration is refused before anything runs.
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`), as tests/qc.sh.
 set -euo pipefail
 unset OCTO_FEATHER_CHECK_RUN   # a test harness, as tests/qc.sh: qc refuses only under the gate's marker
@@ -19,7 +19,7 @@ export HOME="$t/home" XDG_STATE_HOME="$t/state" TMPDIR="$t/tmp"
 unset XDG_CONFIG_HOME XDG_CACHE_HOME GH_CONFIG_DIR HERDR_SESSION HERDR_SOCKET_PATH HERDR_BIN_PATH HERDR_ENV OCTO_FEATHER_QC_DIR
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 mkdir -p "$HOME" "$TMPDIR" "$t/bin" "$t/repo/docs/specs"
-# Fake Herdr (the sandbox pins a per-run session through it) and a fake judge that refuses a brief naming a demo's criterion.
+# Fake Herdr (the sandbox pins a per-run session through it) and a fake pi that reaches no model (the advisory's).
 cat > "$t/bin/herdr" <<'EOF'
 #!/usr/bin/env bash
 C="${XDG_CONFIG_HOME:-$HOME/.config}/herdr"; s=default; a=()
@@ -37,9 +37,7 @@ EOF
 cat > "$t/bin/pi" <<'EOF'
 #!/usr/bin/env bash
 [[ "${1:-}" == --version ]] && exit 0
-h="$(grep -o 'head [0-9a-f]\{40\}' <<< "$*" | head -1 | cut -d' ' -f2)"
-grep -q -- '- acceptance-a:' <<< "$*" && { echo "BRIEF NAMES acceptance-a"; exit 0; }
-printf '```json\n{"head": "%s", "criteria": [{"id": "acceptance-b", "verdict": "pass", "command": "judge b", "output": "ok", "why": "judged"}]}\n```\n' "$h"
+echo "fake pi: no model here" >&2; exit 9
 EOF
 chmod +x "$t/bin/herdr" "$t/bin/pi"
 export PATH="$t/bin:$kit/scripts:$PATH"
@@ -80,7 +78,7 @@ for n in 1 2; do
   a="$(grep -A2 '^PASS acceptance-a: \$ echo "a checks pass in \$QC_REPO"$' <<< "$out" | sed -nE "s/^  evidence complete; decision demo checks; record ($rid)$/\1/p")"
   b="$(grep -A2 '^FAIL acceptance-b: \$ echo b checks fail >&2; exit 3$' <<< "$out" | sed -nE "s/^  evidence complete; decision demo checks; record ($rid)$/\1/p")"
   [[ -n "$a" && -n "$b" ]] || fail "run $n: want PASS acceptance-a and FAIL acceptance-b, evidence complete, decision demo checks, each naming its record: $out"
-  ! grep -q 'pi-role\|qc-judge' "$t/err" || fail "run $n: a judge started with every criterion declared: $(cat "$t/err")"
+  ! grep -q 'pi-role' "$t/err" || fail "run $n: a judge started with every criterion declared: $(cat "$t/err")"
   ids+=("$a" "$b")
   st="$(git show HEAD:docs/specs/demo.status.json)"
   [[ "$(git log -1 --format=%s)" == "qc: built acceptance-a (judged ${head:0:12})" ]] \
@@ -120,22 +118,23 @@ for x in recs.values():
     assert got == {"demo.cmd": cmd + "\n", "demo.exit": code + "\n", "demo.stdout": so, "demo.stderr": se}, got
 EOF
 
-# Only undeclared criteria get the agent fallback: acceptance-b without a demo goes to the (fake) judge alone; acceptance-a is captured.
+# Only declared criteria run: acceptance-a is captured; acceptance-b, with no demo, is insufficient evidence naming neither.
 git reset -q --hard "$head"; contract "" "one demo"
 qcrun
-[[ "$rc" == 0 ]] || fail "mixed run: want exit 0, got $rc: $out $(tail -20 "$t/err")"
+[[ "$rc" == 2 ]] || fail "mixed run: want exit 2, got $rc: $out $(tail -20 "$t/err")"
 grep -A2 '^PASS acceptance-a: ' <<< "$out" | grep -qE "^  evidence complete; decision demo checks; record $rid$" \
-  && grep -A2 '^PASS acceptance-b: \$ judge b$' <<< "$out" | grep -qE "^  evidence complete; decision agent fallback; record $rid$" \
-  || fail "mixed run: want acceptance-a from its demo and acceptance-b from the agent fallback: $out"
-# Each built entry names its record, the commit it was captured at and its demo's tests: none for the fallback's (#acceptance-built-links).
+  && grep -A2 '^INSUFFICIENT EVIDENCE acceptance-b: ' <<< "$out" | grep -A1 '^  missing: no tagged acceptance test and no declared demo$' \
+  | grep -qx '  evidence incomplete; decision none; record none' \
+  || fail "mixed run: want acceptance-a from its demo and acceptance-b insufficient evidence naming neither: $out"
+! grep -q 'pi-role' "$t/err" || fail "mixed run: a judge started: $(cat "$t/err")"
+# The built entry names its record, the commit it was captured at and its demo's tests (#acceptance-built-links); acceptance-b planned.
 python3 - "$(git show HEAD:docs/specs/demo.status.json)" "$out" "$(git rev-parse HEAD~1)" <<'EOF' || fail "mixed run: status links: $(git show HEAD:docs/specs/demo.status.json)"
 import json, re, sys
 c, out, h = json.loads(sys.argv[1])["criteria"], sys.argv[2], sys.argv[3]
 rec = dict(re.findall(r"(?m)^PASS (acceptance-[ab]): .*\n(?:  .*\n)*?  evidence complete; decision [a-z ]+; record (\S+)$", out))
 assert c["acceptance-a"] == {"status": "built", "pr": 9, "record": rec["acceptance-a"], "commit": h, "tests": ["tests/a.sh"]}, (c, rec)
-assert c["acceptance-b"] == {"status": "built", "pr": 9, "record": rec["acceptance-b"], "commit": h, "tests": []}, (c, rec)
+assert c["acceptance-b"] == {"status": "planned", "pr": None}, c
 EOF
-! grep -q 'BRIEF NAMES' "$(ls -t "$XDG_STATE_HOME"/octo-feather/qc/*.json | head -1)" || fail "mixed run: the judge's brief named the demo's criterion"
 
 # An invalid demo declaration: refused (exit 64) naming the problem, no demo run, no record appended.
 git reset -q --hard "$head"; contract '[demo."demo#acceptance-b"]
@@ -145,4 +144,4 @@ qcrun
 [[ "$rc" != 0 ]] && grep -q 'qc.toml is not a valid contract' "$t/err" && grep -q 'demo.demo#acceptance-b: missing covers' "$t/err" \
   || fail "invalid contract: want refused naming the missing key, got exit $rc: $(cat "$t/err")"
 [[ "$("$ev" read --repo . --json | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')" == "$before" ]] || fail "invalid contract: a record was appended"
-echo "qc-capture: ok (two runs at one head: pass and fail from the demos' checks, evidence complete, four records at the head holding command, exit status, output, criterion text hash and contract version, each named in the report; an undeclared criterion alone to the agent fallback; an invalid demo refused before running)"
+echo "qc-capture: ok (two runs at one head: pass and fail from the demos' checks, evidence complete, four records at the head holding command, exit status, output, criterion text hash and contract version, each named in the report; an undeclared criterion insufficient evidence naming neither; an invalid demo refused before running)"

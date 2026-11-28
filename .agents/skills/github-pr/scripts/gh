@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""gh: the qc judge's offline, read-only gh (docs/adr/0022).
+"""gh: the qc sandbox's offline, read-only gh (docs/adr/0022).
 scripts/octo-feather-qc-sandbox puts this dir first on the judge's PATH. It answers reads from the
 snapshot scripts/octo-feather-qc-ghsnap fetched before the run (read-only bind, never the network):
 issue view|list, pr view|list|diff|checks, run view|list, repo view, api GET, --json/-q/--jq, and one graphql

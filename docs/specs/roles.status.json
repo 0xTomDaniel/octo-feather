@@ -57,11 +57,8 @@
       "pr": null
     },
     "acceptance-web-roles": {
-      "status": "built",
-      "pr": 833,
-      "record": "20261114T040048Z-2a3e2b8c",
-      "commit": "cb4a3f3fc53acb8e46fba0d5c5b0149b38924202",
-      "tests": []
+      "status": "planned",
+      "pr": null
     },
     "acceptance-web-no-other-mcp": {
       "status": "built",
@@ -72,11 +69,8 @@
       "pr": 271
     },
     "acceptance-delegated-pr": {
-      "status": "built",
-      "pr": 882,
-      "record": "20261118T201807Z-b06030d5",
-      "commit": "f28674d5a21b6594263fbfc0d65a9d9fc646eac9",
-      "tests": []
+      "status": "planned",
+      "pr": null
     },
     "acceptance-fresh-independent-worker": {
       "status": "built",
@@ -132,11 +126,8 @@
       "tests": []
     },
     "acceptance-supervisor-delegates-execution": {
-      "status": "built",
-      "pr": 882,
-      "record": "20261118T202247Z-cf1595da",
-      "commit": "f28674d5a21b6594263fbfc0d65a9d9fc646eac9",
-      "tests": []
+      "status": "planned",
+      "pr": null
     },
     "acceptance-director-owned-remedy": {
       "status": "planned",
@@ -167,6 +158,15 @@
       "pr": 1309,
       "record": "20261125T194452Z-254295a0",
       "commit": "9d1b8996f171c7371628986c0a18d5092659c638",
+      "tests": [
+        "tests/gate/kit/launch_stash_guard.py"
+      ]
+    },
+    "acceptance-stash-guard-private-path": {
+      "status": "built",
+      "pr": 1324,
+      "record": "20261126T090401Z-084d02d6",
+      "commit": "57e5d581b7177a2f8298c299d5222d59e44f49b0",
       "tests": [
         "tests/gate/kit/launch_stash_guard.py"
       ]

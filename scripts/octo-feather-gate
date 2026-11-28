@@ -84,6 +84,11 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
       naming what it found unchanged. Content, never mtimes. DIR empty (no mise): the config
       alone; outside a git repo, the mise state alone. just check-tests runs both around every
       outermost gate run, which it gives its own TMP.
+  octo-feather-gate base
+      HEAD's merge base with the default branch, as changed finds it (the same code): `<sha> <ref>`
+      on stdout, exit 0; none found (no HEAD, no default branch, no merge base), says so on stderr
+      and exits 1. For a check that judges a change against the default branch
+      (scripts/check-fake-gh).
 
 The list is the repo root's shared-machinery.txt: one git pathspec per line, glob magic, `#`
 comment lines; git itself matches it. Maps live in the repo's git common dir,
@@ -892,6 +897,7 @@ def main() -> int:
     sub.add_parser("select")
     ch = sub.add_parser("changed")
     ch.add_argument("--since-map", action="store_true")
+    sub.add_parser("base")
     m = sub.add_parser("map")
     m.add_argument("data", type=Path)
     m.add_argument("--junit", type=Path)
@@ -918,6 +924,12 @@ def main() -> int:
         select()
     elif a.cmd == "changed":
         changed_items(since_map=a.since_map)
+    elif a.cmd == "base":
+        ref, base = main_base()
+        if not base:
+            sys.stderr.write("base: none found: no default branch or no merge base with it\n")
+            return 1
+        sys.stdout.write(f"{base} {ref}\n")
     else:
         build_map(a.data, a.junit, onto=a.onto_newest)
     return 0

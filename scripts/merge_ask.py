@@ -38,12 +38,21 @@ Interface:
         replay (Replay, #1226; read only when the verdict comment lists a Check line): its parent
         issue through the tracker skill's issue-view, the clean sample from LANES (the state
         dir's lanes/) and each `## Replay` row's command run at the head, each in its own qc
-        sandbox over one GitHub snapshot (_runs; never outside it).
+        sandbox over one GitHub snapshot (_runs; never outside it). The lane's behaviour-neutral
+        opt-outs (Snapshot.optouts, #1259): the kit's check-behavior-smoke run here, its lines.
+        The code owners files at the head and the merge base (Owned, #1260; _code_owners): their
+        lines, the repository owner's login (REPO, else gh repo view; read only when a file
+        exists) and the lane's changed paths each gives them, matched by git check-ignore
+        (_owned).
     check(s) -> Ask
         Pure, no I/O. Each refusal line the merge ask prints for S, in order, by rule, in the
         parts the command's own item goes between; none when S passes; with what a passing ask
         prints; Ask.order, the merge-order lines (spec #gates-merge-order), and Ask.gate_time,
-        never a gap.
+        never a gap. Ask.tier (Tier, spec #gates-tiers), on any Ask: the tier, its reasons and
+        whom the merge waits for (the block's form and the reasons: octo-feather-lane --help,
+        merge-ask). Its spec calls' reads (snapshot, _calls): each `*.calls.jsonl` the diff from
+        the merge base to the head changes, at both (git show), and each added call's ruling's
+        created_at (gh api).
 
 Shared with octo-feather-lane's other commands: bad_checks (lane status), check_runs, git,
 resolution_files (verdict, resolution), full_pass (ci-start: its reads, then its rule), and the
@@ -71,6 +80,7 @@ __all__ = [  # check's interface, then the helpers octo-feather-lane's other com
     "Round",
     "Sibling",
     "Snapshot",
+    "Tier",
     "Trend",
     "Unread",
     "Workflows",
@@ -94,6 +104,7 @@ __all__ = [  # check's interface, then the helpers octo-feather-lane's other com
 import contextlib
 import dataclasses
 import datetime as dt
+import functools
 import hashlib
 import importlib.machinery
 import importlib.util
@@ -351,6 +362,20 @@ class Replay:
 
 
 @dataclass(frozen=True)
+class Owned:
+    """A code owners file's facts at one end of the lane (spec #gates-tier-areas, #1260): FILE,
+    the file GitHub reads (CODE_OWNERS, the first found), ` at the merge base <sha>` after it for
+    the base's; OWNER, `@<login>` of the repository's owner; PATHS, each path the lane changes
+    whose last matching line names OWNER, with that line's number and text; REFUSED, each line
+    whose pattern git reads otherwise than GitHub (number, text, why), none matched when any is."""
+
+    file: str
+    owner: str
+    paths: tuple[tuple[str, int, str], ...] = ()
+    refused: tuple[tuple[int, str, str], ...] = ()
+
+
+@dataclass(frozen=True)
 class Snapshot:
     """A PR's facts, read once."""
 
@@ -391,6 +416,14 @@ class Snapshot:
     # the correction lane's replay (#1222): None when the lane is none or its verdict lists no
     # check
     replay: Replay | Unread | None = None
+    # the lane's behaviour-neutral opt-outs (#1259): (commit, `Behaviour-neutral: <reason>`) each
+    # as check-behavior-smoke prints them from FORK to the head, or why unread; None when not read
+    optouts: list[tuple[str, str]] | Unread | None = None
+    # the code owners files at the head and the merge base (#1260): None when neither has one
+    owners: tuple[Owned, ...] | Unread | None = None
+    # the lane's spec calls (#1258, spec #gates-tiers): CALLS, those its diff adds, read at the
+    # head, and their rulings' times; Unread naming why not (no merge base among them)
+    calls: "Calls | Unread | None" = None
 
 
 @dataclass(frozen=True)
@@ -407,7 +440,8 @@ class Ask:
     source; JUDGMENTS, the model judgment comments (shown only); ORDER, the merge-order lines
     (shown only, spec #gates-merge-order, on any Ask); NO_CI, the no-CI fact's line on a pass,
     else ''; CURRENT, the head's checks after the current-head projection (the rollup when it
-    could not be made); CARRIED_OK, a line per skipped check carried; GATE_TIME, the gate time
+    could not be made); CARRIED_OK, a line per skipped check carried; TIER, the ask's tier
+    (Tier, spec #gates-tiers: on any Ask check returns); GATE_TIME, the gate time
     lines (shown only, spec #lanes-checkpoints); ROUNDS, the verdict comment's review rounds, one
     line each, its check lines indented under it."""
 
@@ -432,6 +466,7 @@ class Ask:
     gate_time: list[str] = dataclasses.field(default_factory=list)
     rounds: list[str] = dataclasses.field(default_factory=list)
     replay: str = ""  # the correction lane's `Replay:` line (#1222), '' for none
+    tier: "Tier | None" = None  # the ask's tier (spec #gates-tiers), on any Ask check returns
 
     @property
     def gaps(self) -> list[str]:
@@ -485,10 +520,15 @@ def snapshot(  # noqa: PLR0913  each read's input, the command's reader among th
     base_branch = str(view["baseRefName"] or "")
     order = _order(pr, head, base_branch or "main", pr_base(base_branch, base), repo)
     g = _git_facts(head, pr_base(base_branch, base), files, err)
+    why = ""
     try:
         fork = git("merge-base", head, pr_base(base_branch, base), err=_Unread)[1].strip()
-    except _Unread:
-        fork = ""
+    except _Unread as e:
+        fork, why = "", str(e)
+    try:
+        calls: Calls | Unread = _calls(head, fork) if fork else Unread(why)
+    except _Unread as e:
+        calls = Unread(str(e))
     s = Snapshot(
         body,
         branch,
@@ -507,6 +547,9 @@ def snapshot(  # noqa: PLR0913  each read's input, the command's reader among th
         gate=_gate_facts(g, head),
         trend=_trend(trend, head),
         fork=fork,
+        optouts=_optouts(head, fork) if fork else Unread("no merge base of the head and the base"),
+        owners=_code_owners(head, fork, repo),
+        calls=calls,
     )
     # the judged head's check runs: read only when a check skipped on the head and a Judged proof
     # carries it (the rules' own judged head and proof, over the facts read above)
@@ -876,7 +919,7 @@ def qc_latest(d: Path, judged: str) -> dict[str, tuple[dict[str, object], str]]:
 
 
 def check(s: Snapshot) -> Ask:
-    a = _check(s)
+    a = dataclasses.replace(_check(s), tier=tier(s))
     return dataclasses.replace(a, order=merge_order(s.order)) if s.order else a
 
 
@@ -986,6 +1029,7 @@ def _check(s: Snapshot) -> Ask:
         rest += rows_against(rows, built, fails)
     gaps, replayed = replay(s)
     rest += gaps
+    rest += code_owner_gaps(s.owners)
     return Ask(
         first,
         checks,
@@ -1040,7 +1084,7 @@ def criteria(  # noqa: C901, PLR0912  one branch per row gap, in the order print
             miss.append(
                 f"criterion table: {'no judged column' if old else 'missing'}; add `| criterion "
                 "| qc verdict | judged | evidence |` with one row per claimed criterion, judged "
-                "naming the head just qc judged"
+                "naming the head `just qc` judged"
             )
     else:
         for ln in lines[t + 1 :]:
@@ -2454,6 +2498,34 @@ def check_lines(text: str) -> tuple[list[str], list[str]]:
     return lines, why
 
 
+CLEARED_LINE = re.compile(r"^Opt-out cleared:[ \t]*(.*?)\s*$")
+
+
+def decision_lines(text: str) -> tuple[list[str], list[str], list[str]]:
+    """(TEXT's owner decision lines as written, the commits its `Opt-out cleared:` lines name, why
+    a line is unusable), in the verdict reader's scope (form: .agents/skills/code-review/SKILL.md,
+    Verdict step, Report fields; #1259)."""
+    owner: list[str] = []
+    cleared: list[str] = []
+    why: list[str] = []
+    for ln in outside(text):
+        if m := CLEARED_LINE.match(ln):
+            sha = m.group(1).strip("`")
+            if SHA_NAMED.fullmatch(sha):
+                cleared.append(sha.lower())
+            else:
+                why.append(
+                    f"`{ln.strip()}` is not `Opt-out cleared: <commit sha>`, the opt-out's commit "
+                    "as `check-behavior-smoke` names it (7 to 40 hex)"
+                )
+        elif OWNER_DECISION.match(ln):
+            if ln.split(":", 1)[1].strip():
+                owner.append(ln.rstrip())
+            else:
+                why.append(f"`{ln.strip()}` names no decision: write the decision after the colon")
+    return list(dict.fromkeys(owner)), list(dict.fromkeys(cleared)), why
+
+
 # The review rounds of the verdict comment (#1220, spec #lanes-one-head): octo-feather-lane
 # verdict writes them under ROUNDS, one ROUND_LINE each, its check lines under it; merge-ask reads
 # them. A comment with no ROUNDS section (posted before rounds) is one legacy round: the whole
@@ -2712,6 +2784,369 @@ def merge_order(o: Order) -> list[str]:
     return [head, *out]
 
 
+# The tier rule, pure (spec #gates-tiers, #gates-tier-relay; issue #1257): each reason one entry
+
+
+class Reason(NamedTuple):
+    """One reason the ask found: the TIER it gives and its TEXT, the `- <text>` line printed."""
+
+    tier: int
+    text: str
+
+
+# The opt-outs check-behavior-smoke prints (that script owns what an opt-out is)
+OPT_OUT = re.compile(r"^behavior smoke: opt-out ([0-9a-f]{7,40}) Behaviour-neutral: (.*)$")
+SHA_NAMED = re.compile(r"[0-9a-fA-F]{7,40}")
+
+
+@dataclass(frozen=True)
+class Tier:
+    """The ask's tier N, its REASONS and whom its merge WAITS for (octo-feather-lane --help,
+    merge-ask)."""
+
+    n: int
+    reasons: list[Reason]
+    waits: str
+
+    @property
+    def lines(self) -> list[str]:
+        """The tier block as merge-ask prints it."""
+        reasons = [f"- {r.text}" for r in self.reasons]
+        return [f"Tier: {self.n}", *reasons, f"Waits for: {self.waits}"]
+
+
+# a column-0 line starting `Owner decision` up to its first colon (#1184 wrote `Owner decision 1
+# (...): ...`); it only raises a tier, so the looser match is the safe side
+OWNER_DECISION = re.compile(r"Owner decision[^:\n]*:", re.IGNORECASE)
+OWNER_TIER = 3  # the tier that waits for the owner, whatever the merge order names
+
+
+def sets_back(o: Order) -> list[str]:
+    """`PR #N: <why>` for each other open PR O names this merge sets back, or may: its head
+    conflicting with this one, a pinned run this merge newly stales, a pinned run not read
+    (merge_order's own findings); then `not read: <line>` for each read of O that failed. A read
+    that failed cannot prove no PR is set back, so it waits as one that is."""
+    out: list[str] = []
+    for p in o.prs:
+        files = ", ".join(p.conflicts)
+        why = [f"its head conflicts with this head in {files}"] if files else []
+        for pin in p.pins:
+            was, now = _stale(pin.main), _stale(pin.merged)
+            if was is None or now is None:
+                why.append(f"its pinned run {pin.run} not read")
+            elif [x for x in now if x not in was]:
+                why.append(f"this merge stales its pinned run {pin.run}")
+        if why:
+            out.append(f"PR #{p.number}: {' and '.join(why)}")
+    return out + [f"not read: {u}" for u in o.unread]
+
+
+def tier(s: Snapshot) -> Tier:
+    """S's tier from the records the ask already holds (the rule: octo-feather-lane --help,
+    merge-ask)."""
+    lines = section(s.body) or []
+    fails = failed(s, lines)[1]
+    reasons = [Reason(3, f"failed criterion {c}{': ' + w if w else ''}") for c, w in fails.items()]
+    hdr = _verdict_header(s, lines)
+    owner, cleared, _ = decision_lines(hdr)
+    clear = set(verdicts(hdr)) == {"clear"}
+    said = [ln.strip() for ln in lines if OWNER_DECISION.match(ln)]
+    reasons += [Reason(3, ln) for ln in dict.fromkeys([*said, *(x.strip() for x in owner)])]
+    reasons += _opt_out_reasons(s.optouts, cleared if clear else [])
+    declared = [c for c in check_lines(hdr)[0] if c.endswith(DECLARATION)] if clear else []
+    reasons += [Reason(3, "declaration check: " + c.removeprefix("Check: ")) for c in declared]
+    seen: set[str] = set()  # a path either end's file gives the owner, named once (head first)
+    for o in s.owners if isinstance(s.owners, tuple) else ():
+        for p, n, ln in o.paths:
+            if p not in seen:
+                seen.add(p)
+                reasons.append(
+                    Reason(3, f"code owner: {p} is {o.owner}'s ({o.file} line {n}: `{ln}`)")
+                )
+    reasons += call_reasons(s, lines)
+    n = max((r.tier for r in reasons), default=1)
+    back = sets_back(s.order) if s.order else []
+    if n >= OWNER_TIER:
+        waits = "the owner"
+    elif back:
+        waits = f"the director's order ({'; '.join(back)})"
+    else:
+        waits = "nobody"
+    return Tier(n, reasons, waits)
+
+
+def relay_proof(s: Snapshot, relayed: str, head: str) -> tuple[str | None, list[str]]:
+    """(proof line, []) when the director's relay recorded for the full head RELAYED carries to
+    the full HEAD over S's git facts, else (None, why) (when it carries: octo-feather-lane --help,
+    merge, allowed)."""
+    r, h = relayed.lower(), head.lower()
+    rerun = f"send a new merge ask for {h[:12]}"
+    p = _why(_proved(s, r, h, at="relayed head", kept="the director's relay", rerun=rerun))
+    if p[0] is None or r == h:
+        return p
+    g = s.git or Git("")
+    gone = set(g.walks[r])
+    fixes = [c for c in g.walks[h] if c not in gone and len(g.commits[c].parents) == 1]
+    why = [
+        f"commit {c[:12]} {g.commits[c].subject[:60]!r} after the relayed head {r[:12]} is no "
+        f"merge of main: the director's relay does not carry over; {rerun}"
+        for c in fixes
+    ]
+    return (None, why) if why else p
+
+
+def _opt_out_reasons(
+    optouts: list[tuple[str, str]] | Unread | None, cleared: list[str]
+) -> list[Reason]:
+    """A reason per behaviour-neutral opt-out, CLEARED the commits a clear verdict names (the
+    rule: octo-feather-lane --help, merge-ask)."""
+    if isinstance(optouts, Unread):
+        return [Reason(3, f"behaviour-neutral opt-outs not read: {optouts.why}")]
+    out: list[Reason] = []
+    for sha, why in optouts or []:
+        if any(c.startswith(sha) or sha.startswith(c) for c in cleared):
+            out.append(Reason(2, f"opt-out {sha} cleared by the review verdict: {why}"))
+        else:
+            out.append(Reason(3, f"opt-out {sha} not cleared by the review verdict: {why}"))
+    return out
+
+
+def _optouts(head: str, base: str) -> list[tuple[str, str]] | Unread:
+    """The lane's behaviour-neutral opt-outs, (commit, `Behaviour-neutral: <reason>`) each, as
+    the kit's check-behavior-smoke prints them for BASE..HEAD in this repo (#1259)."""
+    try:
+        top = git("rev-parse", "--show-toplevel", err=_Unread)[1].strip()
+    except _Unread as e:
+        return Unread(str(e))
+    cmd = [sys.executable, str(KIT / "scripts" / "check-behavior-smoke")]
+    p = subprocess.run(
+        [*cmd, "--base", base, "--head", head, "--repo", top],
+        capture_output=True,
+        text=True,
+        stdin=subprocess.DEVNULL,
+        check=False,
+    )
+    out = p.stdout.splitlines()
+    if p.returncode not in (0, 1) or any(ln.startswith("behavior smoke: skipped") for ln in out):
+        said = (p.stdout + p.stderr).strip().splitlines()
+        return Unread(f"check-behavior-smoke exit {p.returncode}: {said[-1] if said else ''}")
+    found = [m for ln in out if (m := OPT_OUT.match(ln))]
+    return [(m.group(1).lower(), f"Behaviour-neutral: {m.group(2)}") for m in found]
+
+
+def code_owner_gaps(o: tuple[Owned, ...] | Unread | None) -> list[str]:
+    """The code owners files' refusal lines: their read that failed, or each line whose pattern git
+    reads otherwise than GitHub, named (CODE_OWNERS_DIFFER): never a guessed owner."""
+    if isinstance(o, Unread):
+        return [f"code owners: {o.why}"]
+    return [
+        (
+            f"code owners: {f.file} line {n} `{ln}`: {why}; git's matcher would read another owner "
+            "than GitHub, so no path is sorted: write the line in syntax both read alike "
+            "(octo-feather-lane --help, merge-ask)"
+        )
+        for f in o or ()
+        for n, ln, why in f.refused
+    ]
+
+
+# The code owners file (spec #gates-tier-areas; issue #1260): where GitHub looks, in its order, the
+# first found the one read (docs.github.com, About code owners).
+CODE_OWNERS = (".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS")
+# A CODEOWNERS pattern follows gitignore's rules, matched here by git's own matcher (_owned), save
+# where GitHub reads the syntax otherwise (docs.github.com, About code owners: no `\#` escape, no
+# `!` negation, no `[ ]` range; the rest as GitHub was seen to read it, github.com/chdsbd/
+# gh-codeowners examples/CODEOWNERS). A line using one is refused, naming it, never matched.
+CODE_OWNERS_DIFFER: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"!"), "`!` negates in git, GitHub reads no negation"),
+    (re.compile(r"[\[\]]"), "`[ ]` is a range in git, GitHub has none and skips the line"),
+    (re.compile(r"\\"), "`\\` escapes in git (`\\#` a pattern starting with #), not in GitHub"),
+    (re.compile(r"\*\*\*"), "git reads `***` as `**`, GitHub skips the line"),
+    (re.compile(r"\*\*/$"), "a last `**/` matches directories only in git, files too in GitHub"),
+    (re.compile(r"^/+$"), "git reads a bare `/` otherwise than GitHub, which matches nothing"),
+    (re.compile(r"/\*$"), "a last `/*` matches direct files only in GitHub, all below in git"),
+)
+
+
+def code_owner_differs(pattern: str) -> str | None:
+    """Why git reads PATTERN, a CODEOWNERS line's first field, otherwise than GitHub; None when
+    both read it alike (CODE_OWNERS_DIFFER)."""
+    return next((why for rx, why in CODE_OWNERS_DIFFER if rx.search(pattern)), None)
+
+
+# The lane's spec calls (spec #gates-tiers, #gates-spec-calls, #gates-call-loudness; issue #1258)
+
+RULING_COVERS = re.compile(r"^Ruling covers:[ \t]*(.*?)\s*$")
+
+
+@dataclass(frozen=True)
+class Call:
+    """A spec call: its spec's SLUG (its log `<slug>.calls.jsonl`) and the fields the call log
+    holds (scripts/octo-feather-spec-status docstring): AT, KIND, ANCHORS, RULING ('' for none)
+    and DENIED, the owner's denial's `at` ('' for none)."""
+
+    slug: str
+    at: str
+    kind: str
+    anchors: tuple[str, ...]
+    ruling: str = ""
+    denied: str = ""
+
+    @property
+    def name(self) -> str:
+        return f"spec call {self.slug} {self.at} {self.kind} {', '.join(self.anchors)}"
+
+
+@dataclass(frozen=True)
+class Calls:
+    """The calls the lane diff adds (ADDED, each log's in its order), and RULINGS: for each call
+    not denied that links a ruling of its form (scripts/octo-feather-spec-status, RULING),
+    GitHub's created_at of that issue or comment, or why it was not read."""
+
+    added: list[Call]
+    rulings: dict[str, str | Unread]
+
+
+def ruling_covers(text: str) -> list[str]:
+    """Each `Ruling covers: <url>` line's value in TEXT, in the verdict reader's scope, in order
+    (octo-feather-lane verdict checks its form, ruling_form)."""
+    return [m.group(1) for ln in outside(text) if (m := RULING_COVERS.match(ln))]
+
+
+def ruling_form(url: str) -> bool:
+    """URL is of a call's ruling's form (scripts/octo-feather-spec-status, RULING)."""
+    return bool(_spec_status().RULING.fullmatch(url))
+
+
+def _verdict_header(s: Snapshot, lines: list[str]) -> str:
+    """The header of the review verdict comment the section's `Review verdict:` links ('' for
+    none): the helper's own lines, never the quoted report."""
+    rv = field(lines, "Review verdict")
+    m = COMMENT_URL.fullmatch(rv[1].strip("<>` ")) if rv else None
+    c = next((c for c in s.comments if m and c.url.endswith(f"#issuecomment-{m.group(3)}")), None)
+    if not c or not c.body.lstrip().startswith(MARKER):
+        return ""
+    return c.body.split("\n### Findings", 1)[0]
+
+
+def _instant(t: str) -> dt.datetime | None:
+    try:
+        return dt.datetime.fromisoformat(t)
+    except ValueError:
+        return None
+
+
+def call_reasons(s: Snapshot, lines: list[str]) -> list[Reason]:
+    """A reason per call the lane diff adds, by the rule and in the form octo-feather-lane --help
+    (merge-ask, the tier) states."""
+    if s.calls is None:
+        return []
+    if isinstance(s.calls, Unread):
+        return [Reason(3, f"spec calls not read: {s.calls.why}")]
+    covers = ruling_covers(_verdict_header(s, lines))
+    out: list[Reason] = []
+    for c in s.calls.added:
+        if c.denied:
+            out.append(Reason(2, f"{c.name}: denied {c.denied}"))
+        elif c.kind == "clarifies":
+            out.append(Reason(2, c.name))
+        else:
+            out.append(_ruled(c, s.calls.rulings.get(c.ruling), covers))
+    return out
+
+
+def _ruled(c: Call, made: str | Unread | None, covers: list[str]) -> Reason:
+    """Call_reasons' reason for C, of a kind other than clarifies and not denied: MADE its
+    ruling's created_at (None: no ruling of the form _calls reads), COVERS the verdict's
+    `Ruling covers:` URLs."""
+    r = c.ruling
+    if not r:
+        return Reason(3, f"{c.name}: no ruling linked")
+    if made is None:  # _calls reads every ruling of the form
+        return Reason(3, f"{c.name}: ruling {r} is no GitHub issue or issue comment URL")
+    if isinstance(made, Unread):
+        return Reason(3, f"{c.name}: ruling {r} not read ({made.why})")
+    at, when = _instant(c.at), _instant(made)
+    if not at or not when or when >= at:
+        return Reason(3, f"{c.name}: ruling {r} made {made}, not before the call")
+    if r not in covers:
+        why = f"the review verdict carries no `Ruling covers: {r}`"
+        return Reason(3, f"{c.name}: ruling {r} ({made}) not confirmed: {why}")
+    return Reason(2, f"{c.name}: ruled by {r} ({made}), the review verdict covers it")
+
+
+def _calls(head: str, fork: str) -> Calls:
+    """Calls' reads: each `*.calls.jsonl` the lane diff (FORK to HEAD) changes, at both ends; a
+    call at HEAD not at FORK (scripts/octo-feather-spec-status's identity: a call denied since is
+    the same call) is added; then each such ruling's created_at (gh api). _Unread on a log that is
+    not one JSON call per line."""
+    spec_status = _spec_status()
+    diff = git("diff", "--name-only", "--no-renames", "-z", fork, head, err=_Unread)[1]
+    added: list[Call] = []
+    for f in sorted(p for p in diff.split("\0") if p.endswith(".calls.jsonl")):
+        ends: list[list[dict[str, object]]] = []
+        for rev in (fork, head):
+            rc, text = git("show", f"{rev}:{f}", ok=(0, 128), err=_Unread)
+            got, errs = spec_status.parse_log("" if rc else text, f"{f} at {rev[:12]}")
+            if errs:
+                raise _Unread(errs[0])
+            ends.append(got)
+        seen = [spec_status.identity(c) for c in ends[0]]
+        for c in ends[1]:
+            if (k := spec_status.identity(c)) in seen:
+                seen.remove(k)
+                continue
+            denied = c.get("denied")
+            anchors = c.get("anchors")
+            added.append(
+                Call(
+                    Path(f).name.removesuffix(".calls.jsonl"),
+                    str(c.get("at", "")),
+                    str(c.get("kind", "")),
+                    tuple(map(str, cast("list[object]", anchors)))
+                    if isinstance(anchors, list)
+                    else (),
+                    str(c.get("ruling") or ""),
+                    str(cast("dict[str, object]", denied).get("at") or "denied")
+                    if isinstance(denied, dict) and denied
+                    else "",
+                )
+            )
+    rulings: dict[str, str | Unread] = {}
+    for c in added:
+        m = spec_status.RULING.fullmatch(c.ruling)
+        if c.denied or c.kind == "clarifies" or not m or c.ruling in rulings:
+            continue
+        repo, n, comment = m.groups()
+        path = f"repos/{repo}/issues/comments/{comment}" if comment else f"repos/{repo}/issues/{n}"
+        try:
+            fix = f"read the ruling {c.ruling} (gh auth status)"
+            rulings[c.ruling] = gh(["api", path, "--jq", ".created_at"], fix, err=_Unread).strip()
+        except _Unread as e:
+            rulings[c.ruling] = Unread(str(e))
+    return Calls(added, rulings)
+
+
+@functools.cache
+def _spec_status() -> "_SpecStatus":
+    """scripts/octo-feather-spec-status, the call log's owner, as a module."""
+    loader = importlib.machinery.SourceFileLoader(
+        "spec_status", str(KIT / "scripts" / "octo-feather-spec-status")
+    )
+    spec = importlib.util.spec_from_loader("spec_status", loader)
+    assert spec is not None, "a SourceFileLoader always yields a spec"
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return cast("_SpecStatus", mod)
+
+
+class _SpecStatus(Protocol):
+    RULING: re.Pattern[str]
+
+    def parse_log(self, text: str, where: str) -> tuple[list[dict[str, object]], list[str]]: ...
+    def identity(self, c: dict[str, object]) -> str: ...
+
+
 # The merge-order reads (spec #gates-merge-order)
 
 
@@ -2937,6 +3372,121 @@ def _order(pr: int, head: str, base_branch: str, base: str, repo: str | None) ->
             unread.append(f"pinned runs {' '.join(pins)}: {e}")
     prs = [Sibling(n, b, c, [Pin(p, *said[p]) for p in ps if p in said]) for n, b, c, ps in found]
     return Order(base_branch, prs, unread)
+
+
+# The code owners reads (#1260; the rule: tier, code_owner_gaps, above)
+
+
+class _Line(NamedTuple):
+    """A code owners line git and GitHub read alike: its NUMBER, TEXT, PATTERN and OWNERS."""
+
+    number: int
+    text: str
+    pattern: str
+    owners: tuple[str, ...]
+
+
+def _code_owners(head: str, fork: str, repo: str | None) -> tuple[Owned, ...] | Unread | None:
+    """The code owners file at HEAD and at FORK, the merge base (as GitHub reads the base's, so a
+    lane editing the file never lowers its own tier: either end's file only raises), each with
+    each path the lane changes (git diff FORK HEAD, renames as a delete and an add) its last
+    matching line gives to REPO's owner (None: this directory's gh repo, gh repo view); the head's
+    first. None when neither end has such a file (no FORK read: the head's alone). A line either
+    file's git and GitHub read otherwise (code_owner_differs) is refused and nothing matched."""
+    try:
+        ends = [(head, "")]
+        if fork:
+            ends.append((fork, f" at the merge base {fork[:12]}"))
+        found: list[tuple[str, list[_Line], tuple[tuple[int, str, str], ...]]] = []
+        for rev, at in ends:
+            rcs = (
+                git("cat-file", "-e", f"{rev}:{f}", ok=(0, 1, 128), err=_Unread)[0]
+                for f in CODE_OWNERS
+            )
+            file = next((f for f, rc in zip(CODE_OWNERS, rcs, strict=False) if not rc), None)
+            if file is not None:
+                text = git("show", f"{rev}:{file}", err=_Unread)[1]
+                found.append((file + at, *_code_owner_lines(text)))
+        if not found:
+            return None
+        if any(refused for *_, refused in found):
+            return tuple(Owned(f, "", refused=r) for f, _, r in found if r)
+        if repo is None:
+            out = gh(
+                ["repo", "view", "--json", "nameWithOwner"], "check gh auth status", err=_Unread
+            )
+            repo = cast("_NamedRepo", _validated(out, NAMED_REPO, "gh repo view"))["nameWithOwner"]
+        owner = f"@{repo.split('/', 1)[0]}"
+        diff = git("diff", "--name-only", "--no-renames", "-z", fork, head, err=_Unread)[1]
+        paths = sorted(filter(None, diff.split("\0")))
+        return tuple(Owned(f, owner, _owned(paths, lines, owner)) for f, lines, _ in found)
+    except _Unread as e:
+        return Unread(f"cannot read the code owners file at {head[:12]} ({e}); fix it, then rerun")
+
+
+def _code_owner_lines(text: str) -> tuple[list[_Line], tuple[tuple[int, str, str], ...]]:
+    """(the lines of code owners file TEXT git and GitHub read alike, each other line's number,
+    text and why), comments and blank lines aside; an owner field starting `#` ends the line."""
+    lines: list[_Line] = []
+    refused: list[tuple[int, str, str]] = []
+    for n, raw in enumerate(text.splitlines(), 1):
+        words = raw.split()
+        if not words or words[0].startswith("#"):
+            continue
+        if why := code_owner_differs(words[0]):
+            refused.append((n, raw.strip(), why))
+            continue
+        owners: list[str] = []
+        for w in words[1:]:
+            if w.startswith("#"):
+                break
+            owners.append(w)
+        lines.append(_Line(n, raw.strip(), words[0], tuple(owners)))
+    return lines, tuple(refused)
+
+
+def _owned(paths: list[str], lines: list[_Line], owner: str) -> tuple[tuple[str, int, str], ...]:
+    """Each of PATHS whose last matching line of LINES names OWNER (case aside, as GitHub logins),
+    with that line's number and text. git check-ignore --no-index (the real matcher, in an empty
+    scratch repo, case-sensitive as GitHub) runs one line at a time, the last first: over all the
+    lines at once git stops at the first leading directory any line matches (`*` then `*.js`
+    gives src/x.js to `*`), where GitHub takes the last line matching the path."""
+    left, out = set(paths), list[tuple[str, int, str]]()
+    env = {k: v for k, v in os.environ.items() if k not in ("GIT_DIR", "GIT_WORK_TREE")}
+    with tempfile.TemporaryDirectory(prefix="merge-ask-owners-") as tmp:
+        r, pat = Path(tmp) / "r", Path(tmp) / "pattern"
+        _run_git(["init", "-q", "--template=", str(r)], cwd=tmp, env=env)
+        for ln in reversed(lines):
+            if not left:
+                break
+            pat.write_text(ln.pattern + "\n", encoding="utf-8")
+            args = ["-c", f"core.excludesFile={pat}", "-c", "core.ignorecase=false"]
+            args += ["check-ignore", "--no-index", "-v", "-n", "-z", "--stdin"]
+            f = _run_git(args, cwd=str(r), env=env, stdin="".join(f"{p}\0" for p in sorted(left)))
+            f = f.split("\0")  # source, line number, pattern (empty: none), path; per path
+            hit = {f[i + 3] for i in range(0, len(f) - 3, 4) if f[i + 2]}
+            left -= hit
+            if owner.lower() in (o.lower() for o in ln.owners):
+                out += [(p, ln.number, ln.text) for p in hit]
+    return tuple(sorted(out))
+
+
+def _run_git(args: list[str], *, cwd: str, env: dict[str, str], stdin: str = "") -> str:
+    """git ARGS in CWD with ENV and STDIN: its stdout; _Unread naming it on an exit past 1."""
+    p = subprocess.run(
+        ["git", *args],  # noqa: S607 (git from PATH)
+        input=stdin,
+        capture_output=True,
+        text=True,
+        cwd=cwd,
+        env=env,
+        check=False,
+    )
+    if p.returncode > 1:
+        sub = next(a for a in args if a in ("init", "check-ignore"))
+        msg = f"git {sub} failed ({_said(p)})"
+        raise _Unread(msg)
+    return p.stdout
 
 
 # The correction lane's replay reads (#1222; the rule: replay, above)

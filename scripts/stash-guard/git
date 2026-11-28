@@ -1,7 +1,9 @@
 #!/bin/sh
-# The kit's stash guard (spec roles#launch-stash-guard; placement: pi-role --help, Stash guard; what it refuses:
-# scripts/stash_guard.py). This file is its fast path: an argv with no `stash` word execs the next git on PATH after
-# this one, no Python start; one with it goes to scripts/stash_guard.py.
+# The kit's stash guard (spec roles#launch-stash-guard; placement, OCTO_FEATHER_GIT and what a link or a copy of it
+# does: pi-role --help, Stash guard; what it refuses: scripts/stash_guard.py). This file is its fast path: an argv
+# with no `stash` word execs the next git on PATH after this one, no Python start; one with it goes to
+# scripts/stash_guard.py. Line 2's opening, up to its first "(", marks this file, every copy of it and every kit
+# version of it as the guard (guard_file below; pi-role's is_guard reads the same).
 # Not reached: a process calling git by absolute path (/usr/bin/git), the owner's own shell, a git alias for stash.
 set -f   # PATH split on : below, never globbed
 me="$0"
@@ -25,8 +27,39 @@ if [ -z "$past" ]; then   # run by its own path, not found through PATH: the fir
   done
   unset IFS
 fi
-[ -n "$next" ] || { echo "git (kit stash guard $me): no git on PATH after this guard" >&2; exit 127; }
+# Whether file $1 is the guard: its line 2 opens as this file's does (through any link; a copy counts). Builtins
+# only: a narrowed PATH may hold nothing else.
+guard_file() {
+  { read -r _ ; read -r theirs; } < "$1" 2>/dev/null || return 1
+  case "$theirs" in "# The kit's stash guard ("*) return 0 ;; esac
+  return 1
+}
+if [ -z "$next" ]; then   # no git after this one on PATH (a test's private PATH): the git pi-role fixed at launch
+  fixed="${OCTO_FEATHER_GIT-}"
+  case "$fixed" in
+    "") why="OCTO_FEATHER_GIT is unset" ;;
+    /*) if [ ! -f "$fixed" ] || [ ! -x "$fixed" ]; then why="OCTO_FEATHER_GIT=$fixed is no executable file"
+        elif guard_file "$fixed"; then why="OCTO_FEATHER_GIT=$fixed is this stash guard"
+        else next="$fixed"; fi ;;
+    *) why="OCTO_FEATHER_GIT=$fixed is no absolute path" ;;
+  esac
+  [ -n "$next" ] || { echo "git (kit stash guard $me): no git on PATH after this guard, and $why" >&2; exit 127; }
+fi
+# A stash the checker cannot judge is refused closed: never run unguarded.
+closed() {
+  printf '%s\n' "git stash refused (kit stash guard $me, spec roles#launch-stash-guard): $1, so this guard refuses every git call naming stash." \
+    "Set work aside with a work-in-progress commit on your own branch instead: git commit -am wip (git add -A first for new files), later git reset --soft HEAD~1 to take it back." >&2
+  exit 1
+}
+stash=""
 for a in "$@"; do
-  [ "$a" = stash ] && exec python3 "$here/../stash_guard.py" "$next" "$@"
+  [ "$a" = stash ] && stash=1
 done
-exec "$next" "$@"
+[ -n "$stash" ] || exec "$next" "$@"
+py() { command -v python3 >/dev/null 2>&1 || closed "no python3 on PATH to run its checker"; }
+real="$me"   # a link to the guard (a test's private PATH): its checker is beside the file it points at
+if [ -L "$me" ]; then py; real="$(python3 -c 'import os, sys; print(os.path.realpath(sys.argv[1]))' "$me")"; fi
+checker="${real%/*}/../stash_guard.py"
+[ -f "$checker" ] || closed "it is a copy with no scripts/stash_guard.py beside it"
+py
+exec python3 "$checker" "$next" "$@"

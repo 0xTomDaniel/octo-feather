@@ -59,7 +59,7 @@ jobs:
         with:
           version: ${{ steps.pins.outputs.mise }}
           cache: false
-      # tests/qc.sh runs the qc judge's sandbox (`unshare -rm`); Ubuntu 24.04 restricts unprivileged user namespaces.
+      # tests/qc.sh runs the qc sandbox (`unshare -rm`); Ubuntu 24.04 restricts unprivileged user namespaces.
       - run: if sysctl -n kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0; fi
       # A systemd user manager for the runner's user (linger), which the e2e agent-scope tests drive for real
       # (tests/gate/kit/agent_scope.py: herdr-spawn adopts an agent's shell into its own user scope, #1000);
@@ -133,6 +133,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # The runner's 4 CPUs are the gate's alone: one pytest worker each (local default: the justfile's check-tests).
       # Inside a probe scope, as a scoped agent runs it: a test that stops a scope not its own kills the gate (#1070).
-      - run: systemd-run --user --scope --quiet --unit "octo-feather-agent-probe-ci-$(openssl rand -hex 4)" just check
+      # Under the PATH and env a pane launch gives an agent, taken from pi-role itself (`--json`'s "path", the
+      # `--print-env` lines): the stash guard placed and OCTO_FEATHER_GIT set (pi-role --help, Stash guard; #1322).
+      # The code reviewer's launch: a role that never commits, so it needs no commit identity on the runner.
+      - run: |
+          role=agents/code-reviewer.md
+          path="$(scripts/pi-role --json "$role" | jq -r .path)"
+          launch_env="$(scripts/pi-role --print-env "$role")"
+          while IFS= read -r kv; do [[ -z "$kv" ]] || export "${kv?}"; done <<<"$launch_env"
+          PATH="$path" systemd-run --user --scope --quiet --unit "octo-feather-agent-probe-ci-$(openssl rand -hex 4)" just check
         env:
           GATE_WORKERS: 4

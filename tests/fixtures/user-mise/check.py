@@ -237,7 +237,8 @@ def preconditions() -> object:
 
 
 def target(d: Path, mise_toml: str = "") -> None:
-    """A scratch target repo under the user's HOME with the demo spec's status file."""
+    """A scratch target repo under the user's HOME with the demo spec's status file and a qc.toml
+    declaring acceptance-a's demo, the probe ($USER_MISE_T/judge/qc-probe); tag `base` its head."""
     (d / "docs/specs").mkdir(parents=True)
     spec = K / "tests/fixtures/spec-status/good/demo.spec.html"
     (d / "docs/specs/demo.spec.html").write_bytes(spec.read_bytes())
@@ -252,23 +253,35 @@ def target(d: Path, mise_toml: str = "") -> None:
     if mise_toml:
         (d / "mise.toml").write_text(mise_toml)
     (d / ".gitignore").write_text("scratch/\n")
+    (d / "qc.toml").write_text(
+        'format = 1\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n'
+        '[demo."demo#acceptance-a"]\ncommand = "qc-probe"\ncovers = ["src/a"]\n'
+        'tests = ["tests/a.sh"]\n'
+    )
     git("-C", str(d), "add", "-A")
     git("-C", str(d), "commit", "-qm", "spec")
+    git("-C", str(d), "tag", "base")
 
 
 def qc(d: Path, first: str = "", *env: str) -> tuple[int, str]:
-    """octo-feather-qc on the target in D, HOME moved as the gate's tests move it (tests/qc.sh),
-    FIRST dirs before the fake herdr ($USER_MISE_T/fake) and the stub judge ($USER_MISE_T/judge)."""
+    """octo-feather-qc on the target in D at its tag `base` (an earlier pass's status commit
+    undone: never carried), HOME moved as the gate's tests move it (tests/qc.sh), FIRST dirs before
+    the fake herdr ($USER_MISE_T/fake) and the probe and no-model pi ($USER_MISE_T/judge)."""
+    git("-C", str(d), "reset", "-q", "--hard", "base")
     cmd = ["timeout", "-k", "5", "180", "octo-feather-qc", "docs/specs/demo.status.json", "5"]
     qenv = (
         f"HOME={T}/qchome",
         f"PATH={first}{T}/fake:{K}/scripts:{UP}",
         f"OCTO_FEATHER_QC_PATH={T}/judge",
         f"OCTO_FEATHER_QC_DIR={T}/reports",
+        # The user's uv cache and Pythons, offline: octo-feather-contract validates the qc.toml.
+        f"UV_CACHE_DIR={H}/.cache/uv",
+        f"UV_PYTHON_INSTALL_DIR={H}/.local/share/uv/python",
+        "UV_OFFLINE=1",
         *COMMITTER,
         *env,
     )
-    rc, out, _ = user([*cmd, "acceptance-a", "--no-github"], cwd=d, env=qenv)
+    rc, out, _ = user([*cmd, "acceptance-a"], cwd=d, env=qenv)
     return rc, out
 
 
@@ -280,15 +293,21 @@ def own_tools_only(rc: int, out: str) -> bool:
     return rc == 0 and kit is not None and not re.search(r"(erlang|python|rust)@", ml)
 
 
-def judge_stdout() -> str:
-    """The stub judge's stdout in the newest qc report."""
+def probe_stdout(d: Path) -> str:
+    """The probe demo's stdout, from the evidence record the newest qc report names (target D)."""
     try:
         f = max((T / "reports").glob("*.json"), key=lambda p: p.stat().st_mtime)
-        report: object = json.loads(f.read_text())
-    except (ValueError, OSError):
-        return "no report"
-    out = field(report, "fallback", "acceptance-a", "stdout")
-    return out if isinstance(out, str) else "no judge stdout"
+        caps = field(json.loads(f.read_text()), "captures")
+        rid = cast("list[dict[str, object]]", caps)[0]["record"]
+        # Run by this Python: the user's python3 is a shim of a global tool not installed.
+        ev = [sys.executable, f"{K}/scripts/octo-feather-evidence", "read", "--repo", ".", "--json"]
+        _, out, _ = user(
+            [*ev, "--criterion", "demo#acceptance-a"], cwd=d, env=(f"HOME={T}/qchome",), merge=False
+        )
+        x = next(x for x in json.loads(out) if x["record"]["id"] == rid)
+        return Path(x["dir"], "outputs", "demo.stdout").read_text()
+    except (ValueError, OSError, StopIteration, KeyError, IndexError, TypeError):
+        return "no probe stdout"
 
 
 def sandbox() -> None:
@@ -306,7 +325,7 @@ def sandbox() -> None:
     rc, out = qc(tgt, "", *pinned)
     want(
         "(1) the qc sandbox proof passes with doctor exiting 1 under the moved HOME, judging only"
-        " the kit's and worktree's own tools (no global erlang, python, rust), the stub judge runs"
+        " the kit's and worktree's own tools (no global erlang, python, rust), the probe demo runs"
         f" (exit {rc})",
         own_tools_only(rc, out),
         out,
@@ -320,11 +339,11 @@ def sandbox() -> None:
         own_tools_only(rc, out),
         out,
     )
-    judge = judge_stdout()
+    probe = probe_stdout(tgt)
     want(
         "(2) a shim of a tool not installed, in the sandbox: fails, installs and writes nothing",
-        any(ln.startswith("PROBE ok ") for ln in judge.splitlines()),
-        judge + "\n" + out,
+        any(ln.startswith("PROBE ok ") for ln in probe.splitlines()),
+        probe + "\n" + out,
     )
     for stub, what in (
         ("nojson", "doctor printing no JSON"),

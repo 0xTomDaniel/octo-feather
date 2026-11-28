@@ -65,7 +65,7 @@ def rules(s: Scratch) -> None:
 
 def claims_gate(s: Scratch) -> None:
     """The full tier told the starter claim (Repo.claims_gate), its run showing each kind; then
-    just qc judges the criterion from its record (Repo.qc_judges)."""
+    `just qc` judges the criterion from its record (Repo.qc_judges)."""
     r = Repo(s, "python")
     r.gate_recipes("check-scripts")
     ran, rec = r.claims_gate(

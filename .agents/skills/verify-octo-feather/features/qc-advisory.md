@@ -16,7 +16,7 @@ Drive criterion: `quality#acceptance-qc-advisory`
 
 - A supervisor runs `just qc docs/specs/<slug>.status.json <PR> <id>...` on the lane's integrated head. Each claimed criterion whose result has an evidence record gets the kit's judgment model's answer to the closed question in `evals/judgment-criterion-evidence/question.json`, through the one classify path. The line under the result starts `advisory model judgment`; no gate reads it. The model unreachable or failing: `advisory model judgment unavailable (...)`, the result as decided. `octo-feather-qc` with no arguments prints its usage.
 
-The explicit invocation configuration is `OCTO_FEATHER_QC_ADVISORY_AUTHORITY=gpt-only-sprint-2026-11-08` together with `OCTO_FEATHER_QC_ADVISORY_SCOPE=<authorized scope>`; see `octo-feather-qc` usage and the owning exception above. Omit both for ordinary advice. Unsupported configurations fail before any demo or fallback runs.
+The explicit invocation configuration is `OCTO_FEATHER_QC_ADVISORY_AUTHORITY=gpt-only-sprint-2026-11-08` together with `OCTO_FEATHER_QC_ADVISORY_SCOPE=<authorized scope>`; see `octo-feather-qc` usage and the owning exception above. Omit both for ordinary advice. Unsupported configurations fail before any demo runs.
 
 ## Driving it with verify-octo-feather
 

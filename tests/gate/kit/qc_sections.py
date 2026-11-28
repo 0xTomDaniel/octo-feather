@@ -12,7 +12,6 @@ import json
 import os
 import re
 import shutil
-import signal
 import subprocess
 import sys
 import time
@@ -59,8 +58,9 @@ def copies(s: Scratch) -> None:
     )
 
 
-def judge(s: Scratch) -> None:
-    """tests/qc-judge.sh."""
+def status(s: Scratch) -> None:
+    """tests/qc-status.sh: --no-sandbox, and the status file's one commit, through the declared
+    demos (ADR 0035)."""
     with Box(s) as b:
         before = b.git("rev-parse", "HEAD")
         # --no-sandbox: printed, report written, status never changes.
@@ -71,90 +71,28 @@ def judge(s: Scratch) -> None:
             fail("--no-sandbox changed the status file")
         if b.report("sandbox") is not False:
             fail("--no-sandbox report must record sandbox false")
-        if "LINEAR KEY IN JUDGE ENV" in b.judge():
-            fail("--no-sandbox judge got LINEAR_API_KEY")
-        killed(b)
-
         flipped(b, before)
-        from_role(b)
     say(
-        "qc-judge: ok (--no-sandbox, killed run leaves no scratch, pass flips built, fail stays "
-        "planned, status-only commit, judge from agents/qc-judge.md; offline, runs bounded)"
+        "qc-status: ok (--no-sandbox, pass flips built, fail stays planned, status-only commit; "
+        "offline, runs bounded)"
     )
-
-
-def killed(b: Box) -> None:
-    """A run killed mid-judge (as a timeout kills it: SIGTERM to its process group) leaves no
-    scratch behind, its judge gone."""
-    tmp = b.t / "tmp"
-    hp = subprocess.Popen(
-        ["timeout", "-k", "5", b.lim, kit("octo-feather-qc"), STATUS, *A, "--no-sandbox"],  # noqa: S607
-        cwd=b.repo,
-        env=b.s.env | {"FAKE_QC": "hang"},
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    b.pids["run"] = hp.pid
-    for _ in range(100):
-        if any(tmp.glob("qc-ghmiss-*")):
-            break
-        time.sleep(0.1)
-    if not any(tmp.glob("qc-ghmiss-*")):
-        fail("hang run: no scratch before the judge (nothing to prove)")
-    hp.send_signal(signal.SIGTERM)
-    rc = hp.wait()
-    del b.pids["run"]
-    if rc == 0:
-        fail("hang run exited 0")
-    time.sleep(0.2)
-    if any(tmp.iterdir()):
-        fail(f"killed run left scratch: {sorted(p.name for p in tmp.iterdir())}")
-    if b.left(f"sleep 3040{b.tok}"):
-        fail("killed run's judge survived")
 
 
 def flipped(b: Box, before: str) -> None:
     """A passed criterion becomes built and a failed one stays planned, in one status-only
     commit."""
-    b.run(1, "mixed", STATUS, "5", "acceptance-a", "acceptance-b")  # a passes, b fails
+    b.run(1, "mixed", STATUS, "5", "acceptance-a", "acceptance-b")  # a's demo passes, b's fails
     c = at(json.loads((b.repo / STATUS).read_text()), "criteria")
     a = dict(cast("dict[str, object]", at(c, "acceptance-a")))
-    # built by the agent fallback: its record, captured at the judged head, no declared tests
+    # built from its demo: its record, captured at the judged head, the demo's declared tests
     rec = a.pop("record", "")
     assert isinstance(rec, str), c
     assert re.fullmatch(r"\d{8}T\d{6}Z-[0-9a-f]{8}", rec), c
-    assert a == {"status": "built", "pr": 5, "commit": before, "tests": []}, c
+    assert a == {"status": "built", "pr": 5, "commit": before, "tests": ["tests/a.sh"]}, c
     assert at(c, "acceptance-b") == {"status": "planned", "pr": None}, c
     diff = b.git("diff", "--name-only", before, "HEAD")
     if diff != STATUS or b.git("rev-list", "--count", f"{before}..HEAD") != "1":
         fail("expected one commit touching only the status file")
-
-
-def from_role(b: Box) -> None:
-    """The judge launches from its own role file (agents/qc-judge.md), its model read from there:
-    never code-reviewer.md."""
-    b.run(0, "argv", STATUS, *A)
-    out = b.judge()
-    role = (ROOT / "agents" / "qc-judge.md").read_text()
-    m = re.match(r"---\n(.*?)\n---\n?(.*)", role, re.DOTALL)
-    assert m, "agents/qc-judge.md: no frontmatter"
-    fm = dict(ln.split(": ", 1) for ln in m.group(1).splitlines())
-    line = next((ln for ln in out.splitlines() if ln.startswith("ARGV ")), None)
-    if line is None:
-        fail(f"judge not launched from agents/qc-judge.md: {out[:600]}")
-    args = [str(x) for x in json.loads(line[5:])]
-
-    def val(f: str) -> list[str]:
-        return [args[i + 1] for i, x in enumerate(args[:-1]) if x == f]
-
-    why = f"judge not launched from agents/qc-judge.md: {out[:600]}"
-    assert val("--append-system-prompt") == [m.group(2).strip()], (
-        f"role prompt is not qc-judge.md's body: {why}"
-    )
-    assert set(val("--model")) == {fm["model"]}, f"model {val('--model')} != {fm['model']}"
-    skills = sorted(Path(x).name for x in val("--skill"))
-    assert skills == sorted(x.strip() for x in fm["skills"].split(",")), val("--skill")
 
 
 def wheel(links: Path) -> None:
@@ -244,7 +182,7 @@ def uv_cache(s: Scratch) -> None:
         if not m0:
             fail("empty host uv cache")
         b.run(0, "uvcache", STATUS, *A, env={"QC_UVP": str(pj)})
-        j = b.judge()
+        j = b.demo_out()
         if not all(x in j.splitlines() for x in ("UVSYNC exit 0", "UVIMPORT 1", "UVWRITE exit 0")):
             fail(f"in the sandbox: want an offline uv sync from the cache and a write into it: {j}")
         rx = (
@@ -273,7 +211,7 @@ def mise(s: Scratch) -> None:
         # mise in the sandbox (#437, docs/adr/0022): a bare just call through mise's shim with HOME
         # moved runs, the caller's first pi beating ~/.local/bin's.
         b.run(0, "misepath", STATUS, *A)
-        j = b.judge()
+        j = b.demo_out()
         if not (has("MISEPATH exit 0", j) and has("MISEPATH stub first", j)):
             fail(f"mise's just shim in the sandbox: {j}")
         # The tools judged, each dir's own config only: the test repo pins none, the kit its
@@ -288,7 +226,7 @@ def mise(s: Scratch) -> None:
             fail(f"no mise proof: {b.out}")
         # A tool not installed fails at its shim with no install.
         b.run(0, "misemissing", STATUS, *A)
-        j = b.judge()
+        j = b.demo_out()
         if has("ESCAPE|MISSING", j):
             fail(f"missing mise tool: {j}")
         if not has("NOTINSTALLED exit [1-9]", j):
@@ -358,12 +296,12 @@ def venv(b: Box) -> None:
     (r / ".venv" / "lib" / "x.dist-info").mkdir(parents=True)
     (r / ".venv" / "lib" / "x.dist-info" / "RECORD").write_text("real\n")
     b.run(0, "venv", STATUS, *A)
-    j = b.judge()
+    j = b.demo_out()
     if not (has("VENV rm exit 0", j) and has("VENV recreated", j)):
         fail(f"venv: removing an ignored lower dir failed in the sandbox: {j}")
     dw = b.jr("discarded_writes")
-    if b.jr("worktree_writes") != [] or not (isinstance(dw, int) and dw > 0):
-        fail(f"venv: want ignored writes discarded, none listed: {b.jr('worktree_writes')}")
+    if not (isinstance(dw, int) and dw > 0):
+        fail(f"venv: want the writes discarded: {b.jr()}")
     n = sum(1 for _ in (r / ".venv").rglob("*")) + 1
     kept = (r / ".venv/lib/x.dist-info/RECORD").read_text() == "real\n"
     if not (kept and n == 4 and not b.git("status", "--porcelain")):
@@ -384,7 +322,7 @@ def vendored(s: Scratch) -> None:
         s.run(["cp", "-a", str(b.vc0), str(vc)])
         v0 = tree(vc)
         b.run(0, "vendored", STATUS, *A)
-        j = b.judge()
+        j = b.demo_out()
         if has("ESCAPE|MISSING", j):
             fail(f"vendored cache: {j}")
         if "VENDORED green" not in j:
@@ -413,7 +351,7 @@ def trust(b: Box) -> None:
     (ms / "trusted-configs").mkdir(parents=True)
     (ms / "trusted-configs" / "src-sib-0123456789abcdef").symlink_to(b.home / "src" / "sib")
     b.run(0, "newrepo", STATUS, *A, env={"MISE_STATE_DIR": str(ms)})
-    j = b.judge()
+    j = b.demo_out()
     if not (has("NEWREPO exit 0", j) and has(r"mise\.toml trusted \(that file only\)", j)):
         fail(f"new-repo in the sandbox: {j}")
     rx = r"qc sandbox: ok   mise state dir per-run: /tmp/.* started empty: 0 entries"
@@ -450,7 +388,7 @@ def grep_a(out: str, first: str, n: int) -> list[str]:
 
 class Creds:
     """tests/qc-creds.sh's scratch target, its runs of `just qc` through the kit justfile with
-    the testkit's herdr and the qc judge stand-in as its Pi (FAKE_QC=creds); gh the real one, as
+    the testkit's herdr and its Pi stand-in (FAKE_QC=creds); gh the real one, as
     the old box had it. The owner's credentials: an OAuth entry (qc warns once its refresh would
     be discarded) and a provider key."""
 
@@ -565,32 +503,24 @@ class Creds:
         assert not any("SECRET-pi" in ln for ln in proof), (why, proof)
 
     def mixed(self) -> None:
-        """A demo, a fallback judge and the advisory: the judge and the advisory classify run
-        reach the model (both copies there); the demo still none; one OAuth warning for the run."""
-        out, err, rep = self.qc("acceptance-a", "acceptance-b")
+        """A demo beside a criterion with neither a tagged test nor a declared demo: the demo
+        passes, its sandbox none; the other insufficient evidence naming neither, nothing run for it
+        (ADR 0035); the advisory classify run reaches the model (both copies there); one OAuth
+        warning for the run."""
+        out, err, rep = self.qc("acceptance-a", "acceptance-b", want=2)
         self.demo("mixed", out, err, rep)
-        rx = rf"  evidence complete; decision agent fallback; record {RID}"
-        if not any(re.fullmatch(rx, x) for x in grep_a(out, r"PASS acceptance-b: \$ judge b$", 2)):
-            fail(
-                "mixed: want acceptance-b passed by the fallback judge (it found both copies): "
-                f"{out} {err[-2000:]}"
-            )
-        for i in ("acceptance-a", "acceptance-b"):
-            if ADVISORY not in grep_a(out, f"PASS {i}: ", 4):
-                fail(
-                    f"mixed: want {i}'s advisory answered (the classify run found both "
-                    f"copies): {out}"
-                )
-        fb = cast("dict[str, object]", at(json.loads(rep.read_text()), "fallback"))
-        proof = [
-            str(ln) for f in fb.values() for ln in cast("list[object]", at(f, "sandbox", "proof"))
+        want = [
+            "  missing: no tagged acceptance test and no declared demo",
+            "  evidence incomplete; decision none; record none",
         ]
-        copies_line = (
-            "qc sandbox: ok   Pi model credentials: auth.json models.json per-run copies on the "
-            "hidden run tmpfs, never written back"
-        )
-        if copies_line not in proof:
-            fail(f"mixed: judge proof: {rep.read_text()}")
+        if grep_a(out, "INSUFFICIENT EVIDENCE acceptance-b: ", 2)[1:] != want:
+            fail(
+                f"mixed: want acceptance-b insufficient evidence naming neither: {out} {err[-999:]}"
+            )
+        if ADVISORY not in grep_a(out, "PASS acceptance-a: ", 4):
+            fail(f"mixed: want acceptance-a's advisory answered (the classify run's copies): {out}")
+        if "fallback" in json.loads(rep.read_text()):
+            fail(f"mixed: a fallback report key: {rep.read_text()}")
         if err.splitlines().count(OAUTH) != 1:
             fail(f"mixed: want one OAuth warning: {err}")
         if "SECRET-pi" in out + err:
@@ -615,8 +545,8 @@ def creds(s: Scratch) -> None:
         if err.splitlines().count(OAUTH) != 1:
             fail(f"demo alone: want one OAuth warning (the advisory's copies): {err}")
         c.mixed()
-        # A demo that cannot run to its end (exit 77): insufficient evidence, no advisory, no
-        # judge: no sandbox got copies, so no OAuth warning.
+        # A demo that cannot run to its end (exit 77): insufficient evidence, no advisory: no
+        # sandbox got copies, so no OAuth warning.
         q = c.repo / "qc.toml"
         q.write_text(q.read_text().replace("; echo neither readable", "; exit 77"))
         c.git("commit", "-qam", "demo stops")
@@ -632,49 +562,26 @@ def creds(s: Scratch) -> None:
         subprocess.run(["chmod", "-R", "u+w", str(s.root)], capture_output=True, check=False)  # noqa: S607
     say(
         "qc-creds: ok (a declared demo's sandbox holds no auth.json or models.json: its proof "
-        "says so, its record shows both unreadable, no secret stored; the fallback judge and the "
-        "advisory classify run find both per-run copies and reach the model; box files "
+        "says so, its record shows both unreadable, no secret stored; the advisory classify run "
+        "finds both per-run copies and reaches the model; a criterion with neither insufficient "
+        "evidence, nothing run for it; box files "
         "unchanged; the OAuth warning once for a run with copies, none for a run whose only "
         "sandbox, a demo's, copied nothing)"
     )
 
 
 def refused(b: Box) -> None:
-    """tests/qc.sh's refusals: a same-family judge, a dirty tree, an unusable report and a judge
-    that writes; reports never overwrite; the pre-run proof printed."""
-    b.run(
-        64,
-        "mixed",
-        STATUS,
-        "5",
-        "acceptance-a",
-        "acceptance-b",
-        env={"OCTO_FEATHER_QC_MODEL": "anthropic/claude-opus-5-5"},
-    )  # implementer's family
+    """tests/qc.sh's refusals: a dirty tree; reports never overwrite; the pre-run proof printed."""
     (b.repo / "dirty").write_text("x\n")
     b.run(65, "mixed", STATUS, *A)  # dirty worktree
     (b.repo / "dirty").unlink()
     before = b.git("rev-parse", "HEAD")
-    b.run(3, "garbage", STATUS, "5", "acceptance-a", "acceptance-b")  # no json report
-    b.run(3, "writes", STATUS, *A)  # judge wrote a non-ignored file
-    if not ("new judge-was-here" in b.out and "scratch/fine" not in b.out):
-        fail(f"non-ignored write not listed alone: {b.out}")
-    b.run(3, "tracked", STATUS, *A)  # judge changed and deleted tracked files
-    if "changed .gitignore; deleted docs/specs/demo.spec.html" not in b.out:
-        fail(f"tracked writes not listed: {b.out}")
-    b.run(3, "opaque", STATUS, *A)  # judge replaced a tracked dir (opaque upper dir)
-    w = (
-        "deleted docs/specs/demo.spec.html; deleted docs/specs/demo.status.json; "
-        "new docs/specs/other.html"
-    )
-    if w not in b.out:
-        fail(f"opaque dir writes not listed: {b.out}")
-    if b.git("rev-parse", "HEAD") != before or b.git("status", "--porcelain", "--ignored"):
-        fail("refused run changed the real worktree")
-    if len(list((b.t / "reports").glob(f"{before}-*.json"))) != 4:
-        fail("four runs at one head must leave four reports")
+    for _ in range(2):
+        b.run(1, "mixed", STATUS, "5", "acceptance-a", "acceptance-b")
+    b.run(0, "mixed", STATUS, *A)
+    if len(list((b.t / "reports").glob(f"{before}-*.json"))) != 3:
+        fail("three runs at one head must leave three reports")
     proved(b)
-    unusable(b, before)
 
 
 def proved(b: Box) -> None:
@@ -689,28 +596,15 @@ def proved(b: Box) -> None:
         fail(f"absent cache: want no bind, no failure: {b.out}")
 
 
-def unusable(b: Box, before: str) -> None:
-    """An unusable report (a duplicate id, another head) leaves the status file as it was."""
-    # issue-lifecycle#acceptance-qc-interim, #acceptance-one-head (#121 D19 D20).
-    b.run(3, "dup", STATUS, "5", "acceptance-a", "acceptance-b")  # acceptance-a judged twice
-    if "judged more than once: acceptance-a" not in b.out:
-        fail(f"duplicate id not named: {b.out}")
-    b.run(3, "head", STATUS, *A)  # report for another head
-    if f"report head '{'0' * 40}' is not the judged head {before}" not in b.out:
-        fail(f"wrong head not named: {b.out}")
-    if b.git("rev-parse", "HEAD") != before or b.git("status", "--porcelain"):
-        fail("unusable report changed the status file")
-
-
 def nested(b: Box) -> None:
-    """A qc sandbox nested in the judge's (outer /proc submounts covered by its own /proc) passes
+    """A qc sandbox nested in a demo's (outer /proc submounts covered by its own /proc) passes
     its proof."""
     b.run(0, "nested", STATUS, *A)
-    j = b.judge()
+    j = b.demo_out()
     if has("ESCAPE|MISSING", j):
         fail(f"nested qc: {j}")
-    if "NESTED exit 3" not in j:
-        fail(f"nested qc: want the inner judge to run (exit 3, unusable report): {j}")
+    if "NESTED exit 0" not in j:
+        fail(f"nested qc: want the inner demo to run and pass (exit 0): {j}")
 
 
 def recipe_args(b: Box) -> None:
@@ -782,7 +676,7 @@ def every_escape(b: Box) -> None:
     """Every escape fails; leftovers killed, agents counted, credential copies gone, live
     records untouched."""
     b.run(0, "escape", STATUS, *A)
-    j = b.judge()
+    j = b.demo_out()
     if has("ESCAPE|MISSING|LINEAR KEY", j):
         fail(f"sandbox escape: {j}")
     o, h = b.out, str(b.home)
@@ -799,10 +693,10 @@ def every_escape(b: Box) -> None:
     )
     if not has(rx, o):
         fail(f"no other-repos proof naming the mask and what stays visible: {o}")
-    att = cast("list[dict[str, object]]", b.jr("sandbox", "attempts"))
+    att = cast("list[dict[str, object]]", b.jr("attempts"))
     want = {"kind": "repo", "attempt": True, "refused": True, "what": f"open {h}/src/sib"}
     if not any(want.items() <= a.items() for a in att):
-        fail(f"the listing of another repo not recorded and refused: {b.jr('sandbox')}")
+        fail(f"the listing of another repo not recorded and refused: {b.jr()}")
     cleaned(b)
 
 
@@ -812,12 +706,12 @@ def cleaned(b: Box) -> None:
     o = b.out
     if "cleanup: agents started 1 (headless pi 1, Herdr panes 0)" not in o:
         fail(f"no agent count: {o}")
-    if b.jr("sandbox", "left_after_kill") != 0 or b.jr("worktree_writes") != []:
-        fail(f"cleanup record: {b.jr('sandbox')}")
-    killed = repr(b.jr("sandbox", "killed"))
+    if b.jr("left_after_kill") != 0:
+        fail(f"cleanup record: {b.jr()}")
+    killed = repr(b.jr("killed"))
     for p in ("sleep 3012", "sleep 302921"):
         if p not in killed:
-            fail(f"leftover '{p}' not killed and counted: {b.jr('sandbox')}")
+            fail(f"leftover '{p}' not killed and counted: {b.jr()}")
     if b.left(rf"sleep (3012|302921){b.tok}") or b.servers_left():
         fail("sandbox processes survived the run")
     if (b.home / "qc-saved").exists():
@@ -865,7 +759,7 @@ def pane(b: Box) -> None:
         path = b.base
         live_session(b)
     b.run(0, "pane", STATUS, *A, env={"PATH": path} if path else None)
-    j, m = b.judge(), b.mode
+    j, m = b.demo_out(), b.mode
     if has("ESCAPE|MISSING", j):
         fail(f"sandbox pane escape ({m} herdr): {j}")
     if "PANE done" not in j:
@@ -876,8 +770,8 @@ def pane(b: Box) -> None:
 
     if not (ns("judge") == ns("pane") != str(Path("/proc/self/ns/pid").readlink())):
         fail(f"pane not in the judge's PID namespace ({m} herdr): {j}")
-    if b.jr("sandbox", "herdr_panes") != 1:
-        fail(f"pane not counted ({m} herdr): {b.jr('sandbox')}")
+    if b.jr("herdr_panes") != 1:
+        fail(f"pane not counted ({m} herdr): {b.jr()}")
     time.sleep(0.3)
     if b.left(f"sleep 303031{b.tok}"):
         fail(f"judge's pane survived the run ({m} herdr)")
@@ -903,8 +797,8 @@ def qc(s: Scratch) -> None:
         refused(b)
         recipe_args(b)
     say(
-        "qc: ok (same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique "
-        "reports, recipe args as data; offline, runs bounded)"
+        "qc: ok (dirty, unique reports, the pre-run proof, recipe args as data; offline, runs "
+        "bounded)"
     )
 
 
@@ -928,4 +822,4 @@ if __name__ == "__main__":
     ):  # creds runs no offline(): its own skip, as tests/qc-creds.sh had
         say("qc-creds: skipped, not on macOS (just qc needs Linux; CI runs it)")
         sys.exit(0)
-    main(qc, namespace, copies, judge, uv_cache, mise, oauth, vendored, escapes, creds)
+    main(qc, namespace, copies, status, uv_cache, mise, oauth, vendored, escapes, creds)
