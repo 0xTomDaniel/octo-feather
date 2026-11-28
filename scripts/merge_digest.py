@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """`octo-feather-lane digest`, the merge digest of a UTC day or of every due day (issue-lifecycle
 spec #gates-digest, #acceptance-merge-digest; issues 1339, 1340): what it reads and prints, HELP
-below, the chunk the hub shows in `octo-feather-lane --help`. The hub imports this module only
-when `digest` runs or its help prints, or when `merge` or `start` runs the due check (#1274
-comment 7232729794).
+below, the chunk the hub shows in `octo-feather-lane --help`; and `octo-feather-lane veto`
+(issue 1341), HELP's last entry. The hub imports this module only when `digest` or `veto` runs
+or its help prints, or when `merge` or `start` runs the due check (#1274 comment 7232729794).
 
 Interface:
 
@@ -20,6 +20,11 @@ Interface:
         The due check both edges call (`merge`, `start`): the due days of REPO (None: every
         record's), as HELP says, None when none; no gh call. Due.line the director's line,
         Due.key its tell key, Due.told whether a post-merge record's told holds that key.
+    veto(args, said, state, err) -> str
+        `veto PR [--repo O/R] --said WORDS` (issue 1341): the owner's veto of a merge a sent
+        digest listed filed as a repair lane's parent issue, one director-log `veto` line
+        appended, the lane start's brief written under STATE; what it printed (HELP). The
+        caller refuses first anywhere but the director's pane.
 
 Standard library only (AGENTS.md: the kit's scripts); how a command finds this module:
 scripts/correction_lanes.py's docstring.
@@ -31,6 +36,7 @@ import datetime as dt
 import hashlib
 import json
 import re
+import shlex
 from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, TypedDict, cast
 
@@ -40,7 +46,7 @@ from correction_lanes import DIRECTOR_LOG
 from handoff_log import encode, read_log
 from kit_env import kit_python
 from merge_ask import VALIDATE
-from tracker_calls import KIT, gh
+from tracker_calls import KIT, gh, tracker
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -98,6 +104,35 @@ naming both, nothing recorded; then appends one director-log line {"at", "kind":
 The director runs it after sending the owner the text `digest` printed. Check class:
 declaration (docs/adr/0008 rung 2): the line rests on the director's word that it sent that
 text; a stopgap until the owner's own record (#1262).
+
+  octo-feather-lane veto PR --said WORDS [--repo O/R]
+                                   the owner's veto of a merge a sent digest listed: files the
+                                   repair lane's parent issue and prints its lane start
+
+`veto` (issue 1341; issue-lifecycle #gates-digest, #gates-call-decision,
+#acceptance-merge-digest-veto) runs only in the director's pane, by `relay`'s check, else refuses,
+`only the director records a veto`. WORDS are the owner's words or a link to them. In order, each
+refusal exit 1, nothing filed or recorded: a PR a director-log `veto` line of the repo (or null)
+already names, naming the issue it filed, no gh call; then `gh pr view PR --json
+state,title,url,mergedAt,mergeCommit [-R O/R]`, validated against
+schemas/gh-pr-vetoed.schema.json: a PR not MERGED; a PR no sent `digest` line of the repo (or
+null) lists in its prs. Then it files one top-level issue with the target's tracker skill's
+issue-create (never --parent; --repo given, in that repo through GH_REPO), title `Veto: revert or
+repair PR #<n> <title>`, its body: the PR's url, merge commit and merged time, the owner's words
+(declared), the tier block and how the merge was allowed, as the post-merge record of that PR
+and merge commit holds its ask (`tier not recorded: <why>` without one), each spec call that ask
+holds quoted in full as its call log's line, marked DENIED by this veto, with the `denied` field
+{"at", "note"} the repair lane sets on it in the commit that acts on it (the call log's own way:
+#gates-call-decision, scripts/octo-feather-spec-status's docstring; veto writes no call log),
+and the work: revert or repair merge <commit>. It appends one director-log line {"at", "kind":
+"veto", "repo" (the --repo given, else null), "pr", "merge", "issue" (issue-create's key),
+"said"}, writes the lane brief $(octo-feather-state)/veto/<issue>.brief.md (the issue body after
+a header naming the issue), and prints `filed: issue <key> ...`, `recorded: veto of PR #<n> ...`,
+then, last, the ordinary lane start for that issue, `octo-feather-lane start <key> --goal ...
+--outcome ... --brief-file <the brief>`, which the director runs from its checkout of the repo:
+veto spawns no agent, and the start's own checks apply. Exit 0; 1 refused, naming the fix. Check
+class: declaration (docs/adr/0008 rung 2): the line rests on the director's word that the owner
+vetoed; a stopgap until the owner records his own word (#1262).
 """
 
 DAY = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -111,6 +146,8 @@ SHA12 = re.compile(r"[0-9a-f]{12,64}")
 # no other key; then trusted as the TypedDicts below.
 BRANCH = KIT / "schemas" / "gh-repo-default-branch.schema.json"
 MERGED = KIT / "schemas" / "gh-pr-merged.schema.json"
+VETOED = KIT / "schemas" / "gh-pr-vetoed.schema.json"
+PR = re.compile(r"[1-9][0-9]*")
 
 
 class _Commit(TypedDict):
@@ -128,6 +165,14 @@ class _GhMerged(TypedDict):
 
 class _Ref(TypedDict):
     name: str
+
+
+class _GhVetoed(TypedDict):
+    state: str
+    title: str
+    url: str
+    mergedAt: str | None  # gh's field
+    mergeCommit: _Commit | None  # gh's field
 
 
 class _GhRepo(TypedDict):
@@ -210,6 +255,159 @@ def due(state: Path, repo: str | None, err: type[Exception]) -> Due | None:
         return None
     d = Due(tuple(days), repo, told=False)
     return replace(d, told=any(d.key in r.told for r in recs))
+
+
+def veto(args: list[str], said: str, state: Path, err: type[Exception]) -> str:
+    """The owner's veto of PR filed and recorded (the module docstring)."""
+    pr, repo = _veto_args(args, said, err)
+    log = state / DIRECTOR_LOG
+    lines = _log_lines(log, err)
+    nothing = "nothing filed or recorded"
+    done = next((x for x in lines if _veto_of(x, pr, repo)), None)
+    if done is not None:
+        msg = f"PR #{pr} is already vetoed: issue {done.get('issue')} ({done.get('at')}); {nothing}"
+        raise err(msg)
+    fix = f"check PR #{pr} exists in {repo or 'this repository'} and gh auth status; {nothing}"
+    view = ["pr", "view", str(pr), "--json", "state,title,url,mergedAt,mergeCommit"]
+    got = gh([*view, *(["-R", repo] if repo else [])], fix, err=err)
+    p = cast("_GhVetoed", _valid(got, VETOED, "gh pr view", err, nothing))
+    merged, commit = p["mergedAt"], p["mergeCommit"]
+    if p["state"] != "MERGED" or merged is None or commit is None:
+        msg = f"PR #{pr} is not merged ({p['state']}): only a merge can be vetoed; {nothing}"
+        raise err(msg)
+    sent = [x for x in lines if x.get("kind") == "digest" and x.get("sent") is True]
+    if not any(_mine(x, repo) and pr in _prs(x) for x in sent):
+        msg = (
+            f"no sent merge digest of {repo or 'this repository'} lists PR #{pr}: the owner "
+            f"vetoes only a merge a digest he was sent listed; {nothing}"
+        )
+        raise err(msg)
+    m = commit["oid"]
+    rec = next((r for r in _records(state, err) if r.pr == pr and r.merge.lower() == m), None)
+    title = f"Veto: revert or repair PR #{pr} {p['title']}"
+    body = _veto_body(pr, p, m, rec, said)
+    env = {"GH_REPO": repo} if repo else None
+    made = ["issue-create", "--title", title, "--body-file", "-"]
+    out = tracker(*made, err=err, env=env, stdin=body)
+    key = out.strip()
+    if not key or len(key.split()) != 1:
+        msg = f"issue-create printed {out[:200]!r}, no issue key: check the tracker; no line logged"
+        raise err(msg)
+    at = f"{dt.datetime.now(dt.timezone.utc):%Y-%m-%dT%H:%M:%SZ}"
+    line = {"at": at, "kind": "veto", "repo": repo, "pr": pr, "merge": m, "issue": key}
+    with log.open("a", encoding="utf-8") as f:
+        f.write(encode({**line, "said": said}) + "\n")
+    brief = state / "veto" / f"{key}.brief.md"
+    brief.parent.mkdir(parents=True, exist_ok=True)
+    head = f"Repair lane for the owner's veto of PR #{pr}: its parent issue {key} holds the work."
+    brief.write_text(f"{head}\n\n{body}", encoding="utf-8")
+    goal = f"Veto repair: PR #{pr}"
+    outcome = (
+        f"merge {m[:12]} of PR #{pr}, vetoed by the owner, reverted or repaired, each vetoed spec "
+        "call marked denied"
+    )
+    start = ["octo-feather-lane", "start", key, "--goal", goal, "--outcome", outcome]
+    where = f" (from your checkout of {repo})" if repo else ""
+    return "\n".join(
+        [
+            f"filed: issue {key}, {title}",
+            f"recorded: veto of PR #{pr} (merge {m[:12]}) in {log}",
+            f"lane start{where}, brief {brief}:",
+            shlex.join([*start, "--brief-file", str(brief)]),
+        ]
+    )
+
+
+def _veto_args(args: list[str], said: str, err: type[Exception]) -> tuple[int, str | None]:
+    got = " ".join(args) or "nothing"
+    usage = f"usage: octo-feather-lane veto PR --said WORDS [--repo O/R] (got {got})"
+    repo: str | None = None
+    if "--repo" in args:
+        i = args.index("--repo")
+        if i + 1 >= len(args) or not REPO.fullmatch(args[i + 1]):
+            raise err(usage)
+        repo, args = args[i + 1], args[:i] + args[i + 2 :]
+    if len(args) != 1 or not PR.fullmatch(args[0]) or not said.strip():
+        msg = f"{usage}: WORDS the owner's words or a link to them, PR its number"
+        raise err(msg)
+    return int(args[0]), repo
+
+
+def _mine(line: dict[str, object], repo: str | None) -> bool:
+    """Whether director-log LINE is of REPO (None: of any), or of no repo named."""
+    return repo is None or line.get("repo") in (repo, None)
+
+
+def _prs(line: dict[str, object]) -> list[object]:
+    """The prs a sent digest LINE lists; none when it holds no list."""
+    v = line.get("prs")
+    return cast("list[object]", v) if isinstance(v, list) else []
+
+
+def _veto_of(line: dict[str, object], pr: int, repo: str | None) -> bool:
+    return line.get("kind") == "veto" and line.get("pr") == pr and _mine(line, repo)
+
+
+def _log_lines(log: Path, err: type[Exception]) -> list[dict[str, object]]:
+    try:
+        return read_log(log)[0] if log.exists() else []
+    except OSError as e:
+        msg = f"cannot read the director log {log} ({e}): fix it, then rerun; nothing filed"
+        raise err(msg) from e
+
+
+def _veto_body(pr: int, p: _GhVetoed, merge: str, rec: post_merge.Record | None, said: str) -> str:
+    """The repair issue's body (HELP, veto)."""
+    out = [
+        (
+            f"The owner vetoed PR #{pr} from the merge digest (issue-lifecycle #gates-digest). A "
+            "veto reverts nothing by itself: this issue is the parent of the lane that reverts "
+            "or repairs the merge."
+        ),
+        "",
+        f"- PR: {p['url']} ({p['title']})",
+        f"- Merge commit: {merge}",
+        f"- Merged: {p['mergedAt']}",
+        f"- Owner's words (declared by the director, `octo-feather-lane veto`): {said}",
+        "",
+        "## Tier, as recorded at merge",
+        "",
+    ]
+    a = rec.ask if rec else None
+    if a is None:
+        why = "no merge record" if rec is None else "its merge record holds no ask"
+        out.append(f"Tier not recorded: {why}.")
+    else:
+        how = {"tier": "by its tier", "relay": f"on the director's relay {a.relay}"}
+        how["relay carried"] = f"on the director's relay {a.relay}, carried: {a.proof}"
+        out += ["```", *a.tier, "```", "", f"Allowed: {how[a.allowed]}."]
+    out += ["", "## Spec calls denied by this veto", ""]
+    calls = a.calls if a else ()
+    if not calls:
+        out.append(f"None: PR #{pr}'s recorded ask holds no spec call.")
+    else:
+        note = f"vetoed by the owner from the merge digest (PR #{pr}): {said}"
+        denied = json.dumps({"at": "<UTC time of that commit>", "note": note}, ensure_ascii=False)
+        out.append(
+            f"Each call below, which PR #{pr} added, is DENIED by this veto (issue-lifecycle "
+            "#gates-call-decision). The repair lane records the denial in the call log's own "
+            "way: in the commit that acts on it, it sets that call's line's `denied` field to "
+            f"`{denied}`, the rest of the line unchanged (scripts/octo-feather-spec-status's "
+            "docstring)."
+        )
+        for c in calls:
+            out += ["", f"Spec {c.spec} ({c.spec}.calls.jsonl), DENIED by this veto:", ""]
+            out += ["```json", c.line, "```"]
+    out += [
+        "",
+        "## The work",
+        "",
+        (
+            f"Revert or repair merge {merge} of PR #{pr}, through an ordinary lane, and set the "
+            "`denied` field of each call above."
+        ),
+    ]
+    return "\n".join(out) + "\n"
 
 
 def _made(
@@ -353,16 +551,19 @@ def _merged(day: dt.date, repo: str | None, err: type[Exception]) -> list[Merged
     return sorted(out, key=lambda m: (m.at, m.number))
 
 
-def _valid(out: str, schema: Path, what: str, err: type[Exception]) -> object:
-    """OUT, WHAT's JSON answer, once SCHEMA holds for it; ERR naming the field it rejects."""
+def _valid(
+    out: str, schema: Path, what: str, err: type[Exception], none: str = "no digest printed"
+) -> object:
+    """OUT, WHAT's JSON answer, once SCHEMA holds for it; ERR naming the field it rejects and
+    NONE, what was not done."""
     try:
         p = kit_python("-c", VALIDATE, str(schema), stdin=out, capture=True)
     except OSError as e:
-        msg = f"cannot run uv for the kit's locked jsonschema ({e}); no digest printed"
+        msg = f"cannot run uv for the kit's locked jsonschema ({e}); {none}"
         raise err(msg) from e
     if p.returncode:
         said = "; ".join(p.stderr.strip().splitlines())[:300] or f"exit {p.returncode}"
-        msg = f"{what}'s answer fails schemas/{schema.name} ({said}): no digest printed"
+        msg = f"{what}'s answer fails schemas/{schema.name} ({said}): {none}"
         raise err(msg)
     return json.loads(out)
 

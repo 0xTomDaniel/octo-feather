@@ -3223,7 +3223,8 @@ def digest_cases(f: Feature, sc: Path, rec: Path, base: dict[str, str], store: P
         subprocess.run(argv, check=True, capture_output=True, env=case_env(base))
     tapes = [r for t in ("lane-merge-digest-51", "lane-merge-digest-52", *["lane-digest-1339"] * 3)
              for r in json.loads((rec / f"{t}.json").read_text())]
-    (store / "tape.json").write_text(json.dumps(tapes))
+    vetoes = json.loads((rec / "lane-veto-1341.json").read_text())   # the veto's own recording (#1341), after them
+    (store / "tape.json").write_text(json.dumps(tapes + vetoes))
     (store / "log").write_text("")
 
     def merged(pr: int) -> str:   # the merge commit step 1's recorded read names
@@ -3253,6 +3254,10 @@ def digest_cases(f: Feature, sc: Path, rec: Path, base: dict[str, str], store: P
                 f"pr merge {n} --merge --match-head-commit {h} -R {REALCASE}\n")
                 and f"merged: PR #{n} at head {h[:12]} (lane {ln})" in c.out.splitlines()
                 and c.o["told"] == ("" if n == 51 else due))   # today is never due; the next day's merge tells it
+    # The worked example (tests/fixtures/merge-digest/README.md): the text and its sha256, as sha256sum gave it.
+    full_sha = "9cd5a28ddf399b873229c6b21ac42aabc846aa2bfeaa8e08dcb1ce0690b4526a"
+    sha = full_sha[:12]
+    day = (rec.parents[3] / "fixtures" / "merge-digest" / "2026-11-28-day.txt").read_text() + f"\nsha256 {sha}\n"
     calls = len((store / "log").read_text().splitlines())
     lane_cmd("digest", repo, env, "zd1:p1", "digest", "2026-11-28", "--repo", REALCASE)
     f.obs("digest", "gh-calls", "".join(x + "\n" for x in (store / "log").read_text().splitlines()[calls:]))
@@ -3265,9 +3270,7 @@ def digest_cases(f: Feature, sc: Path, rec: Path, base: dict[str, str], store: P
         x.startswith("#52 ") and "(tier 2, merged 03:30Z) " in x for x in c.out.splitlines())
         and all(x in c.out.splitlines() for x in full) and any(
         x.startswith("#53 ") and "(tier not recorded: no merge record) " in x for x in c.out.splitlines())
-        and sha_line(c.out))
-    day = (f.d / "digest.stdout").read_text()
-    sha = day.rstrip("\n").rpartition("\nsha256 ")[2]
+        and c.out == day)
     log = st / "director.handoffs.jsonl"
 
     def digest_lines() -> str:
@@ -3292,17 +3295,52 @@ def digest_cases(f: Feature, sc: Path, rec: Path, base: dict[str, str], store: P
     f.check("digest-sent", lambda c: c.code == 0 and [
         {k: v for k, v in json.loads(x).items() if k != "at"} for x in c.o["digests"].splitlines()] == [
         {"kind": "digest", "repo": REALCASE, "days": ["2026-11-28"], "prs": [51, 52, 53],
-         "sha256": hashlib.sha256(day.rstrip("\n").rpartition("\n\nsha256 ")[0].encode()).hexdigest(), "sent": True}])
+         "sha256": full_sha, "sent": True}])
     calls = len((store / "log").read_text().splitlines())
     lane_cmd("digest-none", repo, env, "zd1:p1", "digest", "--repo", REALCASE)
     gh_since("digest-none", calls)
     f.check("digest-none", lambda c: c.code == 0 and c.out.startswith("No merge digest due (") and c.o["gh-calls"] == "")
+    veto_cases(f, repo, env, store, log, vetoes, lane_cmd)
 
 
-def sha_line(out: str) -> bool:
-    """Whether OUT ends with `sha256 <12 hex>`, the sha256 of the text above it after one blank line."""
-    text, _, sha = out.rstrip("\n").rpartition("\n\nsha256 ")
-    return bool(text) and sha == hashlib.sha256(text.encode()).hexdigest()[:12]
+def veto_cases(f: Feature, repo: Path, env: dict[str, str], store: Path, log: Path,  # noqa: PLR0913, PLR0917
+               vetoes: list[dict[str, object]], lane_cmd: Callable[..., None]) -> None:
+    """The owner's veto (issue 1341), after digest_cases sent the digest of 2026-11-28: `veto 52` from lane gh50's
+    supervisor's pane (refused), `veto 48` (closed unmerged: refused), `veto 52 --said ... --repo <realcase>` from the
+    director's pane (the repair issue filed: the recorded issue create replayed), and `veto 52` again (refused naming
+    the issue). The testkit's gh answers from lane-veto-1341.json, the real veto's recording."""
+    said = "gh1337 demo veto"
+    veto = ["veto", "52", "--said", said, "--repo", REALCASE]
+
+    def since(name: str, n: int) -> None:
+        f.obs(name, "gh-calls", "".join(x + "\n" for x in (store / "log").read_text().splitlines()[n:]))
+        f.obs(name, "vetoes", "".join(x + "\n" for x in (log.read_text().splitlines() if log.is_file() else [])
+                                      if '"veto"' in x))
+
+    view = f"pr view {{}} --json state,title,url,mergedAt,mergeCommit -R {REALCASE}\n"
+    filed = next(str(r["request"]) for r in vetoes if " issue create " in str(r["request"]))
+    merge = json.loads(next(str(r["out"]) for r in vetoes if r["request"] == view.format(52)[:-1]))["mergeCommit"]["oid"]
+    calls = len((store / "log").read_text().splitlines())
+    lane_cmd("veto-refused", repo, env | {"HERDR_WORKSPACE_ID": "zt2"}, "zt2:p1", *veto)
+    since("veto-refused", calls)
+    f.check("veto-refused", lambda c: c.code == 1 and "only the director records a veto" in c.err
+            and c.o["gh-calls"] == "" and c.o["vetoes"] == "")
+    lane_cmd("veto-not-merged", repo, env, "zd1:p1", "veto", "48", "--said", said, "--repo", REALCASE)
+    since("veto-not-merged", calls)
+    f.check("veto-not-merged", lambda c: c.code == 1 and "PR #48 is not merged (CLOSED)" in c.err
+            and c.o["gh-calls"] == view.format(48) and c.o["vetoes"] == "")
+    calls = len((store / "log").read_text().splitlines())
+    lane_cmd("veto", repo, env, "zd1:p1", *veto)
+    since("veto", calls)
+    f.check("veto", lambda c: c.code == 0 and c.o["gh-calls"] == view.format(52) + filed + "\n"
+            and [{k: v for k, v in json.loads(x).items() if k != "at"} for x in c.o["vetoes"].splitlines()]
+            == [{"kind": "veto", "repo": REALCASE, "pr": 52, "merge": merge, "issue": "54", "said": said}]
+            and c.out.splitlines()[-1].startswith("octo-feather-lane start 54 --goal "))
+    calls = len((store / "log").read_text().splitlines())
+    lane_cmd("veto-again", repo, env, "zd1:p1", *veto)
+    since("veto-again", calls)
+    f.check("veto-again", lambda c: c.code == 1 and "PR #52 is already vetoed: issue 54" in c.err
+            and c.o["gh-calls"] == "" and len(c.o["vetoes"].splitlines()) == 1)
 
 
 def drive_pilot_pr(f: Feature) -> None:
