@@ -49,7 +49,7 @@ Interface:
         scripts/octo-feather-lane, read by ast from its source, imports only lane_cli and the
         standard library (sys.stdlib_module_names, by first dotted part) at module level: every
         Import and ImportFrom that runs on import, under top-level if, try, with or class bodies
-        too, but none inside a function or lambda (loading a command's module when that command
+        too, but none inside a function (loading a command's module when that command
         runs is the laziness). A relative import fails. Each other import an out line
         `scripts/octo-feather-lane:n:line`, then the err line asking for the fix, code 1. A
         dispatcher that cannot be read or parsed: an err line naming it, code 1 (fail closed).
@@ -293,7 +293,7 @@ def module_level(node: ast.AST) -> Iterator[ast.Import | ast.ImportFrom]:
     for child in ast.iter_child_nodes(node):
         if isinstance(child, ast.Import | ast.ImportFrom):
             yield child
-        elif not isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda):
+        elif not isinstance(child, ast.FunctionDef | ast.AsyncFunctionDef):
             yield from module_level(child)  # a function body runs only when called
 
 
