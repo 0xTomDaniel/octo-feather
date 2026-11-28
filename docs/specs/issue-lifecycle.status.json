@@ -372,8 +372,8 @@
     "acceptance-tier-one": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074105Z-08663cc9",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024105Z-8e12eb13",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_tier.py"
       ]
@@ -381,8 +381,8 @@
     "acceptance-tier-clarify": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074105Z-49206be5",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024105Z-035b5fda",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_calls.py"
       ]
@@ -390,8 +390,8 @@
     "acceptance-tier-optout-cleared": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074105Z-f2106a45",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024106Z-e598e4f1",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_optout.py"
       ]
@@ -399,8 +399,8 @@
     "acceptance-tier-optout-uncleared": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074106Z-02caa32a",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024106Z-fa7a6750",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_optout.py"
       ]
@@ -408,8 +408,8 @@
     "acceptance-tier-adds": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074106Z-c75a1ac7",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024106Z-b90a28a7",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_calls.py"
       ]
@@ -417,8 +417,8 @@
     "acceptance-tier-weakens": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074106Z-4ce3ed37",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024106Z-f97fa8d1",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_calls.py"
       ]
@@ -426,8 +426,8 @@
     "acceptance-tier-ruled": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074107Z-96c27baa",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024107Z-800c88af",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_calls.py"
       ]
@@ -435,8 +435,8 @@
     "acceptance-tier-ruling-unconfirmed": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074107Z-e462a4d2",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024107Z-d2c81223",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_calls.py"
       ]
@@ -444,8 +444,8 @@
     "acceptance-tier-failed": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074107Z-35bb11d7",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024107Z-afe07223",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_tier.py"
       ]
@@ -453,8 +453,8 @@
     "acceptance-tier-owner-decision": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074107Z-cf2ae036",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024107Z-b5655f94",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_optout.py"
       ]
@@ -462,8 +462,8 @@
     "acceptance-tier-declaration": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074107Z-b48efbbb",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024107Z-13fe4140",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_declaration.py"
       ]
@@ -471,8 +471,8 @@
     "acceptance-tier-code-owner": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074108Z-fd58c8c5",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024108Z-65185c11",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_code_owner.py"
       ]
@@ -480,8 +480,8 @@
     "acceptance-tier-highest": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074108Z-842839fe",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024108Z-27a72be1",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_calls.py"
       ]
@@ -489,8 +489,8 @@
     "acceptance-tier-spec-pr": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074108Z-e575f3bb",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024108Z-b0b5b32b",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_tier.py"
       ]
@@ -498,8 +498,8 @@
     "acceptance-tier-self-merge": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074108Z-24e2a5de",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024108Z-581018ba",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_guard.py"
       ]
@@ -507,8 +507,8 @@
     "acceptance-tier-order-waits": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074108Z-04f2e4fa",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024108Z-fe418fbd",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_tier.py"
       ]
@@ -516,8 +516,8 @@
     "acceptance-tier-relayed": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074108Z-952b4bee",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024108Z-3a7289cf",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_guard.py"
       ]
@@ -532,8 +532,8 @@
     "acceptance-merge-guard-owner": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074108Z-0660c7d3",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024108Z-72d6f967",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_guard.py"
       ]
@@ -541,8 +541,8 @@
     "acceptance-merge-guard-order": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074109Z-ec507ed1",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024109Z-ffb20ba9",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_guard.py"
       ]
@@ -550,8 +550,8 @@
     "acceptance-merge-guard-head": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074109Z-d83fe575",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024109Z-fce38849",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_guard.py"
       ]
@@ -559,8 +559,8 @@
     "acceptance-merge-relay-director-only": {
       "status": "built",
       "pr": 1269,
-      "record": "20261126T074109Z-d8709bf1",
-      "commit": "8b41b28df5298ee3f27c4893f30c1e1e0059d128",
+      "record": "20261128T024109Z-25b98b94",
+      "commit": "9235b895bc497c97998bfd7d69a6a442c48a8646",
       "tests": [
         "tests/gate/kit/lane_merge_guard.py"
       ]
