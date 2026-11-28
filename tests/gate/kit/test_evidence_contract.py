@@ -1,5 +1,5 @@
-"""The pytest items of tests/gate/kit/evidence_contract.py's scenarios (what they prove: its docstring), run
-as that file's command through `case` (tests/gate/kit/conftest.py)."""
+"""The pytest items of tests/gate/kit/evidence_contract.py's scenarios (what they prove: its
+docstring), run as that file's command through `case` (tests/gate/kit/conftest.py)."""
 
 from collections.abc import Callable
 
