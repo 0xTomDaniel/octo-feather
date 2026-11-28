@@ -566,8 +566,13 @@
       ]
     },
     "acceptance-merge-digest": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1357,
+      "record": "20261128T070623Z-942ec584",
+      "commit": "15c3a5ebd6388a38cfb68f219cfb679f6961be04",
+      "tests": [
+        "tests/gate/kit/lane_digest.py"
+      ]
     },
     "acceptance-merge-digest-veto": {
       "status": "planned",
