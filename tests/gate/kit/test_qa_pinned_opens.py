@@ -4,7 +4,7 @@ docstring), each run as that file's command through `case` (tests/gate/kit/conft
 from collections.abc import Callable
 
 import pytest
-from qa_pinned_opens import mismatch, no_record, opened
+from qa_pinned_opens import mismatch, no_record, opened, ran_mismatch
 
 Case = Callable[..., None]
 
@@ -22,3 +22,8 @@ def test_opened(case: Case) -> None:
 @pytest.mark.criterion("quality#acceptance-qc-eval-verdict")
 def test_mismatch(case: Case) -> None:
     case(mismatch)
+
+
+@pytest.mark.criterion("quality#acceptance-qc-eval-verdict")
+def test_ran_mismatch(case: Case) -> None:
+    case(ran_mismatch)

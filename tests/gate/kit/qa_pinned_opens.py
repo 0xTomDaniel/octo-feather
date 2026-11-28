@@ -111,5 +111,31 @@ def mismatch(s: Scratch) -> None:
     assert "Pin: `" not in shown, shown
 
 
+def ran_mismatch(s: Scratch) -> None:
+    """RUN_B's run-2 with one more Run record, of octo-feather-integrate (a tracked kit executable,
+    no stand-in of the case), which its open record does not hold: the cross-check refuses the pin,
+    --verdict insufficient naming the program and the kit file it resolves to."""
+    qa, r = world(s, RUN_B)
+    sb = qa / RUN_B / CASE / "run-2" / "sandbox.json"
+    rec = json.loads(sb.read_text())
+    assert "scripts/octo-feather-integrate" not in rec["opens"]["files"], rec["opens"]
+    # the derived mismatch: one ran attempt added, the record's count kept whole with it
+    ran: dict[str, object] = {
+        "kind": "run",
+        "program": "octo-feather-integrate",
+        "argv": [],
+        "exit": 0,
+    }
+    rec["attempts"].append(ran)
+    rec["recorded"] += 1
+    sb.write_text(json.dumps(rec))
+    out = verdict(s, r, RUN_B, 77)
+    want = (
+        "run-2: open record refused by the cross-check, not in it: "
+        "octo-feather-integrate (ran: scripts/octo-feather-integrate): rerun"
+    )
+    assert want in out, out
+
+
 if __name__ == "__main__":
-    main(no_record, opened, mismatch)
+    main(no_record, opened, mismatch, ran_mismatch)
