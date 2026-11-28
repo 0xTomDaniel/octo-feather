@@ -6,7 +6,9 @@ evidence/gh1274-split/covers/collide.py ...`; covers.py beside it owns the hub p
   collide.py fetch PRS ALL     every PR (any state) whose open interval overlaps one of PRS's (prs.json, the last 60
                                merged): number, state, createdAt, mergedAt, closedAt, merge commit, head; each one's
                                changed files and base: a merged one's `git diff <merge>^1 <merge>`, any other's head
-                               fetched (refs/collide/<n>) and diffed from its merge base with origin/main. ALL: JSON.
+                               fetched (FETCH_HEAD, no ref written) and diffed from its merge base with origin/main.
+                               ALL: gzipped JSON, as its file lists hold real tracked paths that check-refs'
+                               retired-words scan would read as kit wording (a tests/parity/check-refs/ patch name).
   collide.py report PRS ALL --split REF [--exclude N]...
                                Markdown: of PRS, how many collided (a file in common with another PR whose interval
                                overlaps), before (files as recorded) and after (the hub's hunks placed on the split
@@ -20,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import gzip
 import json
 import subprocess
 import sys
@@ -60,13 +63,14 @@ def fetch(prs_file: Path, out: Path) -> None:
             p["base"] = covers.run(["git", "merge-base", head, "origin/main"], repo, check=False).strip() or f"{head}^1"
             p["head"] = head
         p["files"] = covers.git(repo, "diff", "--name-only", str(p["base"]), str(p["head"])).split()
-    out.write_text(json.dumps({"fetched": now, "first_merged": first, "prs": keep}, indent=1) + "\n")
+    text = json.dumps({"fetched": now, "first_merged": first, "prs": keep}, indent=1) + "\n"
+    out.write_bytes(gzip.compress(text.encode(), mtime=0))
     print(f"collide: {len(keep)} PRs into {out}")
 
 
 def report(prs_file: Path, all_file: Path, split_ref: str, exclude: list[int]) -> None:
     repo = Path.cwd()
-    data = cast("dict[str, Any]", json.loads(all_file.read_text()))
+    data = cast("dict[str, Any]", json.loads(gzip.decompress(all_file.read_bytes())))
     now = str(data["fetched"])
     every = {int(p["number"]): p for p in cast("list[dict[str, Any]]", data["prs"])
              if p.get("files") is not None and int(p["number"]) not in exclude}

@@ -46,5 +46,5 @@ check-before.txt: that check on 91d3c2a8's qc.toml, exit 1 (171 paths lost, 63 c
 
 ## Collisions (collide.md)
 
-    $L/collide.py fetch prs.json prs-overlap.json
-    $L/collide.py report prs.json prs-overlap.json --split <split head> --exclude 79
+    $L/collide.py fetch prs.json prs-overlap.json.gz
+    $L/collide.py report prs.json prs-overlap.json.gz --split <split head> --exclude 79
