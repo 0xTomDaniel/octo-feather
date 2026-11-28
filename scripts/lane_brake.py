@@ -36,6 +36,10 @@ import tomllib
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+# The interface: brake and its Verdict (the lane start's one call); `record` its command. All else
+# is the brake's own, free to change behind it (#1347 and #1348 add results, not calls).
+__all__ = ["Read", "Unread", "Verdict", "brake", "main"]
+
 KIT = Path(__file__).resolve().parent.parent
 BUDGET = KIT / "gate-budget.toml"  # the box's settings, read from the kit as octo-feather-slot does
 RESERVE = 0.1  # the spec's default share kept back (#lanes-start)
@@ -100,10 +104,9 @@ class NotRead:
 
 @dataclass(frozen=True)
 class Read:
-    """A reading had and projected; LINE says it, OVER whether a course passes the line."""
+    """A reading had and projected: LINE says it, the tightest course and its side of the line."""
 
     line: str
-    over: bool
 
 
 @dataclass(frozen=True)
@@ -388,8 +391,7 @@ def projection(r: Reading, past: Past, keep: float) -> Read:
             f" {pct(keep)}, gate-budget.toml usage_reserve)"
         )
         said.append((course, text))
-    course, text = max(said)
-    return Read(text, course > 1 - keep)
+    return Read(max(said)[1])
 
 
 def unread(why: str, past: Past) -> Unread:
@@ -420,7 +422,7 @@ def brake(env: Mapping[str, str]) -> Verdict:
         return unread(" ".join(why.split())[:300], past)  # one line, whatever the route said
     verdict = projection(got, past, reserve())
     if err := store(path, got):
-        return Read(f"{verdict.line}; not stored in {path} ({err})", verdict.over)
+        return Read(f"{verdict.line}; not stored in {path} ({err})")
     return verdict
 
 
