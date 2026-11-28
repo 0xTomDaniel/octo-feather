@@ -1049,7 +1049,7 @@ def reflect_lane(name: str, lanes: Path, source: tuple[str, Path] | None = None)
         r.append(log, r.log_lines(found, ids, inputs=brief.provenance))
     except r.FailedError as e:
         raise Refuse(f"lane reflection of {name} failed ({e}); nothing appended, every file left in {lanes}: fix the cause, then rerun") from e
-    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError, r.MalformedLineError) as e:
         raise Refuse(f"lane reflection of {name} failed: cannot read its inputs or write its log ({e}); every file left in {lanes}: fix the cause, then rerun") from e
     print(f"reflection: lane {name}, {len(found)} finding{'s' if len(found) != 1 else ''}, questions {', '.join(ids)}: appended to {log}")
     for f in found:
@@ -1106,7 +1106,7 @@ def reflect_director(lanes: Path, due: bool = False, source: tuple[str, Path] | 
             os.close(lock)   # releases the lock
     except r.FailedError as e:
         raise Refuse(f"director reflection failed ({e}); nothing appended to {dlog}: fix the cause, then rerun") from e
-    except (OSError, UnicodeDecodeError) as e:
+    except (OSError, UnicodeDecodeError, r.MalformedLineError) as e:
         raise Refuse(f"director reflection failed: cannot read its inputs or write {dlog} ({e}): fix the cause, then rerun") from e
     print(f"reflection: director, {len(found)} finding{'s' if len(found) != 1 else ''}, questions {', '.join(ids)}: appended to {dlog}")
     for f in found:
