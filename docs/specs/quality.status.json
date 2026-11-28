@@ -90,8 +90,8 @@
     "acceptance-slot-self-queue": {
       "status": "built",
       "pr": 1329,
-      "record": "20261126T111831Z-e5cc9ee4",
-      "commit": "15ce5b7a8c1c87d821f698312950819695f5a677",
+      "record": "20261128T064705Z-8aec8f89",
+      "commit": "51721bbd99b9e34eccd34ff0e3cc6a0665aaa823",
       "tests": [
         "tests/gate/kit/test_slot.py"
       ]
@@ -99,8 +99,8 @@
     "acceptance-slot-self-grant": {
       "status": "built",
       "pr": 1329,
-      "record": "20261126T111831Z-20b2fe5c",
-      "commit": "15ce5b7a8c1c87d821f698312950819695f5a677",
+      "record": "20261128T064705Z-0b0ab3f3",
+      "commit": "51721bbd99b9e34eccd34ff0e3cc6a0665aaa823",
       "tests": [
         "tests/gate/kit/test_slot.py"
       ]
@@ -108,8 +108,8 @@
     "acceptance-slot-self-grant-ends": {
       "status": "built",
       "pr": 1329,
-      "record": "20261126T111831Z-74295290",
-      "commit": "15ce5b7a8c1c87d821f698312950819695f5a677",
+      "record": "20261128T064705Z-a204d69a",
+      "commit": "51721bbd99b9e34eccd34ff0e3cc6a0665aaa823",
       "tests": [
         "tests/gate/kit/test_slot.py"
       ]
