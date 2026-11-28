@@ -1814,6 +1814,10 @@ def budget_parse(text: str | None) -> tuple[Budget | None, str]:
         "slot_bound_seconds",
         "fast_workers",  # the fast tier's cap: tests/gate/heavy_slot.py reads it
         "fast_runs",  # fast-tier runs at once on the box: tests/gate/heavy_slot.py reads it
+        # the post-merge parity pass's period and caps: scripts/post_merge.py reads and checks them
+        "parity_pass_period_days",
+        "parity_pass_wall_seconds",
+        "parity_pass_cpu_seconds",
     }
     bad += [f"unknown key {k}" for k in sorted(set(d) - set(least) - {"test_cpu_seconds"} - slots)]
     return (None, f"{BUDGET}: " + "; ".join(bad)) if bad else (ok, "")
