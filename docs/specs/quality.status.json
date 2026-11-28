@@ -364,8 +364,8 @@
     "acceptance-qc-fallback": {
       "status": "built",
       "pr": 1321,
-      "record": "20261126T065950Z-fe85e769",
-      "commit": "aa4f61f6cc0420a98bd7e2d4f755213c28fbf62a",
+      "record": "20261128T054339Z-07a6260a",
+      "commit": "9c230c81e5b8bcacf3b345625094693c35b6cd6f",
       "tests": [
         "tests/qc-fallback.sh"
       ]

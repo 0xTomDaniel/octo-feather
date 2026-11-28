@@ -274,6 +274,60 @@
       "tests": [
         "tests/gate/kit/lane_archive_teardown.py"
       ]
+    },
+    "acceptance-director-relaunch": {
+      "status": "built",
+      "pr": 1313,
+      "record": "20261128T034525Z-21b7e7a9",
+      "commit": "ddc0326a315b66652550e2369b41f09b2130ed75",
+      "tests": [
+        "tests/gate/kit/test_start_relaunch.py"
+      ]
+    },
+    "acceptance-director-replace": {
+      "status": "built",
+      "pr": 1313,
+      "record": "20261128T034525Z-b3cccd4b",
+      "commit": "ddc0326a315b66652550e2369b41f09b2130ed75",
+      "tests": [
+        "tests/gate/kit/test_start_relaunch.py"
+      ]
+    },
+    "acceptance-director-replace-outgoing": {
+      "status": "built",
+      "pr": 1313,
+      "record": "20261128T034526Z-f533306c",
+      "commit": "ddc0326a315b66652550e2369b41f09b2130ed75",
+      "tests": [
+        "tests/gate/kit/test_start_relaunch.py"
+      ]
+    },
+    "acceptance-director-relaunch-busy": {
+      "status": "built",
+      "pr": 1313,
+      "record": "20261128T034526Z-5fed09d8",
+      "commit": "ddc0326a315b66652550e2369b41f09b2130ed75",
+      "tests": [
+        "tests/gate/kit/test_start_relaunch.py"
+      ]
+    },
+    "acceptance-director-relaunch-own-scope": {
+      "status": "built",
+      "pr": 1313,
+      "record": "20261128T034526Z-322f1c5b",
+      "commit": "ddc0326a315b66652550e2369b41f09b2130ed75",
+      "tests": [
+        "tests/gate/kit/test_start_relaunch.py"
+      ]
+    },
+    "acceptance-director-relaunch-same-session": {
+      "status": "built",
+      "pr": 1313,
+      "record": "20261128T034526Z-395b88a8",
+      "commit": "ddc0326a315b66652550e2369b41f09b2130ed75",
+      "tests": [
+        "tests/gate/kit/test_start_relaunch.py"
+      ]
     }
   }
 }

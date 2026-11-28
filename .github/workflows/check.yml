@@ -133,6 +133,14 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # The runner's 4 CPUs are the gate's alone: one pytest worker each (local default: the justfile's check-tests).
       # Inside a probe scope, as a scoped agent runs it: a test that stops a scope not its own kills the gate (#1070).
-      - run: systemd-run --user --scope --quiet --unit "octo-feather-agent-probe-ci-$(openssl rand -hex 4)" just check
+      # Under the PATH and env a pane launch gives an agent, taken from pi-role itself (`--json`'s "path", the
+      # `--print-env` lines): the stash guard placed and OCTO_FEATHER_GIT set (pi-role --help, Stash guard; #1322).
+      # The code reviewer's launch: a role that never commits, so it needs no commit identity on the runner.
+      - run: |
+          role=agents/code-reviewer.md
+          path="$(scripts/pi-role --json "$role" | jq -r .path)"
+          launch_env="$(scripts/pi-role --print-env "$role")"
+          while IFS= read -r kv; do [[ -z "$kv" ]] || export "${kv?}"; done <<<"$launch_env"
+          PATH="$path" systemd-run --user --scope --quiet --unit "octo-feather-agent-probe-ci-$(openssl rand -hex 4)" just check
         env:
           GATE_WORKERS: 4

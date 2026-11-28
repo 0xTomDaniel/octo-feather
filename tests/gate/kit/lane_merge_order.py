@@ -62,6 +62,11 @@ def block(text: str) -> list[str]:
     return lines[i:j]
 
 
+def asked(out: str) -> list[str]:
+    """OUT's section but its `Waits for:` line, which the merge order moves (--help, merge-ask)."""
+    return [x for x in section(out) if not x.startswith("Waits for: ")]
+
+
 def lane(s: Scratch) -> tuple[Lane, str, str, str]:
     """The lane, main moved to M1 (the worker role, its launcher, skill and eval case) and merged
     in, then D changing the skill (its full pass recorded); PR #12 at S12 off M1 pinning a stored
@@ -119,8 +124,9 @@ def states(s: Scratch, state: str) -> None:
 def siblings(s: Scratch) -> None:
     """Passing, the ask prints #12 with its pinned run and the changed skill file, #13 with the
     conflicting file, #14 not read and #15 not read with the contract's problem; with #16's head
-    unanswered, the open PRs not read; with those PRs closed it prints the same section and
-    passes alike. Failing on a gap, the same items with and without them."""
+    unanswered, the open PRs not read; with those PRs closed it prints the same section (the line
+    the merge order moves aside: asked) and passes alike. Failing on a gap, the same items with and
+    without them."""
     ln, d, _, s15 = lane(s)
     edits, lines = ln.at(d, "feat: skill")
     ln.setpr(*edits, **lines)
@@ -147,14 +153,14 @@ def siblings(s: Scratch) -> None:
         "schemas/gh-pr-list.schema.json (4.headRefOid: None is not of type 'string')"
     )
     assert block(malformed.out) == [HEAD, unread], malformed.out
-    assert section(malformed.out) == section(with_them.out), malformed.out
+    assert asked(malformed.out) == asked(with_them.out), malformed.out
     s.gh.put(16, s.gh.pr(16) | {"state": "CLOSED"})
 
     states(s, "CLOSED")
     without = ln.ask()
     none = "none this merge would stale or conflict with"
     assert block(without.out) == [HEAD, f"- none: 0 other open pull requests on main, {none}"]
-    assert section(with_them.out) == section(without.out), f"{with_them.out}\n---\n{without.out}"
+    assert asked(with_them.out) == asked(without.out), f"{with_them.out}\n---\n{without.out}"
 
     ln.setpr(*edits, **lines, failed="Failed: oops")
     fail_alone = ln.ask(want=1).err
