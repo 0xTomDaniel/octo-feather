@@ -15,7 +15,7 @@ Drive criterion: `comms#acceptance-result-file`
 
 ## How to get to it (user POV)
 
-- A worker reports with `herdr-say --parent MESSAGE`; its parent's listing of result files (`octo-feather-handoff results`) is put in the parent's context after a start or a compaction by `extensions/results-on-wake.ts`; what the parent does with it: comms spec `#roles-goal`.
+- A worker reports with `herdr-say --parent MESSAGE` (or `< FILE`: herdr-comms SKILL.md, Send a message); its parent's listing of result files (`octo-feather-handoff results`) is put in the parent's context after a start or a compaction by `extensions/results-on-wake.ts`; what the parent does with it: comms spec `#roles-goal`.
 
 ## Driving it with verify-octo-feather
 
