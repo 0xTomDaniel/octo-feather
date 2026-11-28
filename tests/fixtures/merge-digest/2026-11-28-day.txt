@@ -1,0 +1,20 @@
+Merge digest 2026-11-28 (0xTomDaniel/octo-feather-realcase, merged in [2026-11-28 00:00Z, 2026-11-29 00:00Z)): 3 merged
+
+#51 [gh1337] digest recording: a tier 1 merge (#1339) (tier 1, merged 03:29Z) https://github.com/0xTomDaniel/octo-feather-realcase/pull/51
+
+#52 [gh1337] digest recording: a tier 2 merge, one clarifies call (#1339) (tier 2, merged 03:30Z) https://github.com/0xTomDaniel/octo-feather-realcase/pull/52
+  merged 2026-11-28T03:30:28Z, head f347b73fdd849cd4cc0da2ba0f5a2dbbc283d76d, merge 54fd326c27d4d5629a7a6edc5efb834f92df814d
+  Tier: 2
+  - spec call gh1337-demo 2026-11-28T03:28:06Z clarifies gh1337-demo-rule
+  Waits for: nobody
+  allowed: by its tier, waiting for nobody
+  spec call gh1337-demo clarifies at 2026-11-28T03:28:06Z (lane gh50)
+    anchors: gh1337-demo-rule
+    criteria: acceptance-gh1337-demo
+    what: The demo rule's 'a day' means a UTC calendar day, [D 00:00Z, D+1 00:00Z).
+    why: Two readers of the demo rule took 'a day' as the box's local day and as a UTC day; the criterion is unchanged, only its reading is pinned.
+    evidence: Throwaway realcase call for octo-feather #1339: the demo rule line 'merges of a day' names no time zone, while the demo criterion is checked against UTC timestamps.
+    role: supervisor
+    ruling: none
+
+#53 [gh1337] digest recording: merged outside the merge command (#1339) (tier not recorded: no merge record) https://github.com/0xTomDaniel/octo-feather-realcase/pull/53, merge 314973bac9fc7dae78d44d592b38617133701eea

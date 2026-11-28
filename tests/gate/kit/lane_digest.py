@@ -45,13 +45,12 @@ again replays the digest's recordings again, as GitHub answers the same reads th
 
 from __future__ import annotations
 
-import hashlib
 import json
 import shutil
 import sys
 from typing import TYPE_CHECKING
 
-from testkit import FIXTURES, Scratch, clock, kit, main
+from testkit import FIXTURES, Scratch, clock, fixture, kit, main
 from testkit.realcase import REALCASE, Case, RealCase, merged_view, recorded, recordings
 
 if TYPE_CHECKING:
@@ -77,6 +76,16 @@ def head(tape: str, pr: int) -> str:
     return json.loads(recorded(tape, f"pr view {pr} --json state,headRefOid -R {REALCASE}"))[
         "headRefOid"
     ]
+
+
+# The worked examples (tests/fixtures/merge-digest/README.md): the due digest's text, and its
+# sha256 as sha256sum gave it for that file.
+DUE_SHA = "f2c56883dddae63e4bdff4eb940073f26a101be748adc0c734405e4cacc7ffbf"
+
+
+def worked(name: str) -> str:
+    """The worked example digest text tests/fixtures/merge-digest/2026-11-28-NAME.txt."""
+    return fixture(f"merge-digest/2026-11-28-{name}.txt").removesuffix("\n")
 
 
 NEXT_DAY = "2026-11-29T08:00:00Z"
@@ -159,10 +168,8 @@ def due_until_sent(s: Scratch) -> None:
     assert len(s.gh.log()) == calls, s.gh.log()[calls:]
 
     r = w.lane("digest", "--repo", REALCASE)
-    text, _, sha = r.out.rpartition("\n\nsha256 ")
-    assert sha == hashlib.sha256(text.encode()).hexdigest()[:12], r.out
-    days = [x for x in text.split("\n") if x.startswith("Merge digest ")]
-    assert [x.split()[2] for x in days] == [DAY], days
+    sha = DUE_SHA[:12]
+    assert r.out == f"{worked('due')}\n\nsha256 {sha}", r.out
     assert s.gh.log()[calls:] == [str(x["request"]) for x in recordings(TAPE_DAY)], s.gh.log()
     before = log.read_text()
 
@@ -178,9 +185,8 @@ def due_until_sent(s: Scratch) -> None:
     assert ok.out.startswith(f"recorded sent: merge digest of {DAY}, sha256 {sha}"), ok.out
     line = json.loads(log.read_text().splitlines()[-1])
     assert line.pop("at").startswith("2026-11-29T"), line
-    full = hashlib.sha256(text.encode()).hexdigest()
     want = {"kind": "digest", "repo": REALCASE, "days": [DAY], "prs": [51, 52, 53]}
-    assert line == want | {"sha256": full, "sent": True}, line
+    assert line == want | {"sha256": DUE_SHA, "sent": True}, line
 
     calls = len(s.gh.log())
     r = shown(s.run([kit("octo-feather-lane"), "start"], want=1, env=start), ["start"])
@@ -247,7 +253,8 @@ def digest_lists_the_day(s: Scratch) -> None:
         ),
     ]
     text = "\n".join(want)
-    assert r.out == f"{text}\n\nsha256 {hashlib.sha256(text.encode()).hexdigest()[:12]}", r.out
+    assert text == worked("day"), r.out
+    assert r.out == f"{text}\n\nsha256 9cd5a28ddf39", r.out
 
 
 def shown(r: Ran, args: list[str]) -> Ran:
