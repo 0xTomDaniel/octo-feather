@@ -1,14 +1,16 @@
-"""gh1249's real case (#1256) as a scratch world, for the kit items that replay its recorded gh
-tapes (#1267): lane_merge.py merge_starts_routine, lane_archive_teardown.py archive_tears_down,
-herdr_messaging.py tell_supervisors. RealCase builds it; recordings and recorded read the tapes,
-testkit/recordings/*.json, unmodified."""
+"""A real lane merge and archive on the realcase repo as a scratch world, for the kit items that
+replay its recorded gh tapes (#1267): gh1249's case (GH1249, #1256), for herdr_messaging.py
+tell_supervisors; the gh1255 remerge's (REMERGE, #1266), whose merge asks the merge ask check
+first, for lane_merge.py merge_starts_routine and lane_archive_teardown.py archive_tears_down.
+RealCase builds it; recordings and recorded read the tapes, testkit/recordings/*.json,
+unmodified."""
 
 from __future__ import annotations
 
 import json
 import os
 import sys
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from testkit import HERE, ROOT, MissingFixtureError, Ran, Scratch, kit, reflector
 
@@ -33,10 +35,34 @@ REALCASE_SUPERVISOR = {
 }
 RECORDINGS = HERE / "recordings"
 # gh1249's real case (#1256, commit 59140bba's message; the run's report: #1256's last comment):
-# supervisor A of lane gh10 (parent issue 10, sub-issue 11) merging PR #14 of this repo, then
-# archiving gh10, with lane B (gh12) live; every gh call recorded, unmodified.
+# supervisor A of lane gh10 (parent issue 10, sub-issue 11) merging PR #14 of this repo, with
+# lane B (gh12) live, before the merge guard (#1266); its merge tape recorded, unmodified.
 REALCASE = "0xTomDaniel/octo-feather-realcase"
-REALCASE_TAPES = ("lane-merge-realcase", "lane-archive-realcase")  # in the run's call order
+
+
+class Case(NamedTuple):
+    """One recorded real case: its BUNDLE (recordings/<name>.bundle, its SHAs the tapes'), its
+    merge TAPE (step 1's read of the merged PR in it), the PR, lane A's key LANE (its parent
+    issue's lane key; its branch), lane B's key OTHER (open beside it, of the same repo)."""
+
+    bundle: str
+    tape: str
+    pr: int
+    lane: str
+    other: str
+
+
+GH1249 = Case("realcase-gh1249", "lane-merge-realcase", 14, "gh10", "gh12")
+# gh1255's remerge (#1266, #1268): supervisor A of lane gh45 (parent issue 45, sub-issue 46)
+# merging PR #47 (base gh1255-remerge-base) with the merge guard, then archiving gh45, lane B
+# (gh12) open; every gh call recorded, unmodified.
+REMERGE = Case("realcase-remerge", "lane-merge-remerge", 47, "gh45", "gh12")
+REMERGE_TAPES = ("lane-merge-remerge", "lane-archive-remerge")  # in the run's call order
+
+
+def merged_view(pr: int) -> str:
+    """Step 1's read of merged PR (the merge tape's): its merge commit and base."""
+    return f"pr view {pr} --json state,headRefOid,mergeCommit,baseRefName,headRefName -R {REALCASE}"
 
 
 def recordings(name: str) -> list[dict[str, object]]:
@@ -54,31 +80,30 @@ def recorded(name: str, request: str) -> str:
 
 
 class RealCase:
-    """S as gh1249's real case stood at lane A's merge: gh answers only from the recordings of
+    """S as CASE (default GH1249) stood at lane A's merge: gh answers only from the recordings of
     TAPES, one tape.json in the run's call order (testkit/gh.py's header, tape mode); origin.git
-    the realcase repo from its bundle (recordings/realcase-gh1249.bundle, unmodified, its SHAs
-    the tapes'); the director's checkout `director`, a clone of it on main at the merge commit's
-    first parent (the run's step 4 fast-forwarded it); the kit install `kit`, a repo whose
-    origin is the kit's GitHub URL (the one step 3 asked gh about), never fetched as the PR is
-    not the kit's; testkit.reflector's state dir and Herdr world (the director w9:p99), lane A's
-    record gh10 (`issue = "gh10"` and `pr = 14`, as lane start and supervisor A wrote it) and
-    lane B's gh12, both of the realcase repo; Herdr's agents the director, A's supervisor zt1:p1
-    and B's zt2:p1, each idle; every command run in A's supervisor's environment
+    the realcase repo from the case's bundle (recordings/<bundle>.bundle, unmodified, its SHAs
+    the tapes'); the director's checkout `director`, a clone of it on the PR's base at the merge
+    commit's first parent (the run's step 4 fast-forwarded it); the kit install `kit`, a repo
+    whose origin is the kit's GitHub URL (the one step 3 asked gh about), never fetched as the
+    PR is not the kit's; testkit.reflector's state dir and Herdr world (the director w9:p99),
+    lane A's record (`issue` its lane key, `pr` the case's PR, as lane start and supervisor A
+    wrote it) and lane B's, both of the realcase repo; Herdr's agents the director, A's
+    supervisor zt1:p1 and B's zt2:p1, each idle; every command run in A's supervisor's environment
     (REALCASE_SUPERVISOR), the kit's herdr-say first on PATH."""
 
-    # Step 1's read of the merged PR (lane-merge-realcase's): its merge commit and base.
-    MERGED = f"pr view 14 --json state,headRefOid,mergeCommit,baseRefName,headRefName -R {REALCASE}"
+    MERGED = merged_view(GH1249.pr)  # GH1249's step 1 read
 
-    def __init__(self, s: Scratch, *tapes: str) -> None:
+    def __init__(self, s: Scratch, *tapes: str, case: Case = GH1249) -> None:
         self.s = s
         s.gh.store("tape.json", [r for t in tapes for r in recordings(t)])
         self.origin, self.checkout, self.kit = (
             s.root / n for n in ("origin.git", "director", "kit")
         )
-        bundle = RECORDINGS / "realcase-gh1249.bundle"
+        bundle = RECORDINGS / f"{case.bundle}.bundle"
         s.run(["git", "clone", "-q", "--bare", str(bundle), str(self.origin)])
         s.run(["git", "clone", "-q", str(self.origin), str(self.checkout)])
-        merged = json.loads(recorded("lane-merge-realcase", self.MERGED))
+        merged = json.loads(recorded(case.tape, merged_view(case.pr)))
         self.merge, self.base = merged["mergeCommit"]["oid"], merged["baseRefName"]
         s.git(self.checkout, "checkout", "-q", "-B", self.base, f"{self.merge}^1")
         s.git(s.root, "init", "-q", str(self.kit))
@@ -86,16 +111,19 @@ class RealCase:
         self.top = reflector(s)
         self.lanes = self.top / "lanes"
         self.lanes.mkdir()
-        for name, pane in (("gh10", "zt1:p1"), ("gh12", "zt2:p1")):
+        for name, pane in ((case.lane, "zt1:p1"), (case.other, "zt2:p1")):
             (self.lanes / f"{name}.toml").write_text(
                 f'supervisor = "{pane}"\nrepository = "{REALCASE}"\nissue = "{name}"\n'
                 'goal = "g"\nstarted_at = "2026-11-24T21:37:22Z"\nwaiting_on = ""\n'
-                + ("pr = 14\n" if name == "gh10" else "")
+                + (f"pr = {case.pr}\n" if name == case.lane else "")
             )
         self.herdr = s.root / "herdr"
         world = json.loads((self.herdr / "agents.json").read_text())
         world["w9:p99"]["agent_status"] = "idle"
-        for name, pane in (("gh10", "zt1:p1"), ("gh12", "zt2:p1")):  # as herdr_messaging.agent
+        for name, pane in (
+            (case.lane, "zt1:p1"),
+            (case.other, "zt2:p1"),
+        ):  # as herdr_messaging.agent
             w = pane.split(":")[0]
             world[pane] = {"name": name, "pane_id": pane, "workspace_id": w}
             world[pane] |= {"tab_id": f"{w}:t1", "agent_status": "idle", "ready_at": 0}
