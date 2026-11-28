@@ -4,7 +4,7 @@ docstrings), run as that file's command through `case` (tests/gate/kit/conftest.
 from collections.abc import Callable
 
 import pytest
-from parity_lever import needs_as_git_holds, network_unreached
+from parity_lever import background_run, needs_as_git_holds, network_unreached
 
 Case = Callable[..., None]
 
@@ -16,3 +16,7 @@ def test_needs_as_git_holds(case: Case) -> None:
 @pytest.mark.criterion("quality#acceptance-parity-network-free")
 def test_network_unreached(case: Case) -> None:
     case(network_unreached)
+
+
+def test_background_run(case: Case) -> None:
+    case(background_run)
