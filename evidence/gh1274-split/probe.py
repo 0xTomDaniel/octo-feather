@@ -3,10 +3,14 @@
 
   python probe.py base ROOT   the hub (and post_merge.py for kit_install) as ROOT/scripts holds them before the split
   python probe.py new ROOT    each function in the module the split put it in
+  python probe.py helpers-base ROOT, helpers-new ROOT   ticket #1335: each statement the helpers step moved, in
+                              merge_ask.py as ROOT/scripts holds it before that step, or in its shared module; and each
+                              name the command groups read from merge_ask.py before it, there or in its new home
 
 Run with PYTHONHASHSEED=0 (a set constant's repr is then the same in both runs). Descriptors: a def the split moved is
 ("def", module the table puts it in, qualname), so the two runs agree only when a name reaches the moved def in its
-new home; another function or class ("obj", module, qualname); a binding ("partial", func, args, keywords); a module
+new home; another function or class ("obj", module, qualname; merge_ask.py's helpers the #1335 step moved under
+their shared module); a binding ("partial", func, args, keywords); a module
 ("module", name); a builtin; else ("const", repr) with ROOT written <ROOT>.
 """
 
@@ -32,6 +36,7 @@ from split import global_reads  # noqa: E402  (the same reader the split placed 
 mode, root = sys.argv[1], Path(sys.argv[2]).resolve()
 meta = json.loads((HERE / "rewrites.json").read_text(encoding="utf-8"))
 WHERE: dict[str, str] = meta["where"]
+HELPERS: dict[str, str] = meta.get("helpers", {}).get("where", {})
 sys.path.insert(0, str(root / "scripts"))
 HUBMOD = "octo_feather_lane"
 
@@ -61,6 +66,8 @@ def desc(obj: object, depth: int = 0) -> object:
         top = qual.split(".")[0]
         if mod == HUBMOD or (mod in T.EXISTING and top in T.FROM_EXISTING and mode == "base"):
             mod = WHERE.get(top, mod)
+        if mod == "merge_ask" and top in HELPERS:
+            mod = HELPERS[top]
         cells = []
         if isinstance(obj, types.FunctionType) and obj.__closure__ and "<locals>" in qual:
             cells = [desc(c.cell_contents, depth + 1) for c in obj.__closure__]
@@ -102,6 +109,36 @@ def resolve(mod: types.ModuleType, g: str) -> object:
 
 out: dict[str, dict[str, object]] = {}
 readers: list[str] = []
+if mode.startswith("helpers-"):
+    from split import tops, top_reads  # noqa: E402  (the reader the helpers step moved by)
+    src = (root / "scripts" / "merge_ask.py").read_text(encoding="utf-8")
+    ma = importlib.import_module("merge_ask")
+    for name, home in sorted(HELPERS.items()):
+        mod = ma if mode == "helpers-base" else importlib.import_module(home)
+        msrc = src if mode == "helpers-base" else (root / "scripts" / f"{home}.py").read_text(encoding="utf-8")
+        t = next(t for t in tops(msrc) if name in t.names)
+        out[f"{home}.{name}"] = {g: desc(resolve(mod, g)) for g in sorted(top_reads(msrc, t, types=False)) if g != name}
+        out[f"{home}.{name}"]["<itself>"] = desc(vars(mod)[name])
+    for g in T.HELPER_GROUPS:
+        gm = importlib.import_module(g)
+        gsrc = (root / "scripts" / f"{g}.py").read_text(encoding="utf-8")
+        got: dict[str, object] = {}
+        for x in ast.walk(ast.parse(gsrc)):
+            names = [a.asname or a.name for a in x.names] if isinstance(x, ast.ImportFrom) else []
+            if isinstance(x, ast.ImportFrom) and x.module in ("merge_ask", *T.SHARED):
+                for a in x.names:
+                    got[f"import {a.asname or a.name}"] = desc(getattr(importlib.import_module(x.module), a.name))
+            for n in names:
+                if n in vars(gm):
+                    got[f"binds {n}"] = desc(vars(gm)[n])
+            if isinstance(x, ast.Attribute) and isinstance(x.value, ast.Name) and x.value.id in ("merge_ask", *T.SHARED) \
+                    and x.attr in HELPERS:
+                got[f"attr {x.attr}"] = desc(getattr(importlib.import_module(x.value.id), x.attr))
+        if g == "lane_reporting":   # the constant the step moved to gate_time.py (tables.py TREND_EDITS)
+            got["ReportSources.TREND"] = desc(gm.ReportSources.TREND)
+        out[g] = got
+    print(json.dumps({"names": out, "readers": readers}, sort_keys=True))
+    sys.exit(0)
 if mode == "base":
     hub = load_hub()
     hub_src = (root / "scripts" / "octo-feather-lane").read_text(encoding="utf-8")
@@ -148,8 +185,9 @@ else:
         for line in meta["inserts"].get(fn, []):   # the imports the split inserted after the docstring
             stmt = ast.parse(line).body[0]
             if isinstance(stmt, ast.ImportFrom):
-                m = importlib.import_module(stmt.module or "")
-                for a in stmt.names:
+                for a in stmt.names:   # a helper #1335 moved on from merge_ask.py: read from its shared module
+                    m = importlib.import_module(HELPERS.get(a.name, stmt.module) if stmt.module == "merge_ask"
+                                                else stmt.module or "")
                     local[a.asname or a.name] = getattr(m, a.name)
             elif isinstance(stmt, ast.Import):
                 for a in stmt.names:

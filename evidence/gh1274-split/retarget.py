@@ -9,6 +9,10 @@ pyproject.toml and justfile; the files the two outputs differ in are the new pat
 as the split writes it), its first line kept. The clean output must equal this tree's split files, or nothing is
 written. Each case's `ran` then names the files its patches touch: a coverage fact stays coverage; an exec fact on
 the lane script becomes `open` of the module the command loads (imported, never run as a program).
+
+  uv run --locked --offline python evidence/gh1274-split/retarget.py --helpers
+
+Ticket #1335: the patches split.py's helpers step moved the code of (helpers_main).
 """
 
 from __future__ import annotations
@@ -42,7 +46,76 @@ def tree(at: Path, patch: Path | None) -> dict[str, str]:
             if f.is_file()}
 
 
+def helpers_main() -> int:
+    """--helpers (ticket #1335): each parity patch that no longer applies here, its code moved by split.py's helpers
+    step, whose moved text is merge_ask.py's unchanged: each hunk's pre-image (its context and removed lines) found in
+    exactly one file of merge_ask.py and the shared modules, exactly once, and replaced there by its post-image; the
+    files so changed are the new patch, its first line kept. Each case's `ran` then names the files its patches touch,
+    each with the fact the file its code came from had."""
+    from tables import SHARED   # noqa: PLC0415
+    homes = ["scripts/merge_ask.py", *[f"scripts/{m}.py" for m in SHARED]]
+
+    def applies(patch: Path) -> bool:
+        return subprocess.run(["git", "apply", "--check", str(patch)], cwd=ROOT, capture_output=True,
+                              check=False).returncode == 0
+    patches = sorted(p for p in (ROOT / "tests" / "parity").glob("*/*.patch") if not applies(p))
+    cases: set[Path] = set()
+    moved_from: dict[str, str] = {}
+    out: dict[Path, str] = {}
+    for patch in patches:
+        text = patch.read_text(encoding="utf-8")
+        first = text.split("\n", 1)[0]
+        now = {f: (ROOT / f).read_text(encoding="utf-8") for f in homes}
+        changed: set[str] = set()
+        for part in re.split(r"^diff --git ", text, flags=re.M)[1:]:
+            src = re.search(r"^\+\+\+ b/(\S+)$", part, re.M)
+            if not src or src[1] != "scripts/merge_ask.py":
+                raise SystemExit(f"retarget: {patch}: a file the helpers step did not move from: {src and src[1]}")
+            for hunk in re.split(r"^@@[^\n]*\n", part, flags=re.M)[1:]:
+                body = [" \n" if l == "\n" else l for l in hunk.splitlines(keepends=True)
+                        if l[:1] in (" ", "-", "+") or l == "\n"]
+                while body and body[-1] == " \n" and not any(now[f].count(
+                        "".join(l[1:] for l in body if l[0] in " -")) for f in homes):
+                    body.pop()   # a blank context line the statement's new file ends before
+                old = "".join(l[1:] for l in body if l[0] in " -")
+                new = "".join(l[1:] for l in body if l[0] in " +")
+                hits = [f for f in homes if now[f].count(old) == 1]
+                if len(hits) != 1 or sum(now[f].count(old) for f in homes) != 1:
+                    raise SystemExit(f"retarget: {patch}: a hunk's pre-image is not in one file once: {hits}")
+                now[hits[0]] = now[hits[0]].replace(old, new)
+                changed.add(hits[0])
+                moved_from[hits[0]] = src[1]
+        diff = [first + "\n"]
+        for f in sorted(changed):
+            diff.append(f"diff --git a/{f} b/{f}\n")
+            diff += difflib.unified_diff((ROOT / f).read_text(encoding="utf-8").splitlines(keepends=True),
+                                         now[f].splitlines(keepends=True), f"a/{f}", f"b/{f}")
+        out[patch] = "".join(diff)
+        cases.add(patch.parent)
+        print(f"{patch.relative_to(ROOT)}: {', '.join(sorted(changed))}")
+    for patch, text in out.items():
+        patch.write_text(text, encoding="utf-8")
+    for case in sorted(cases):
+        toml = case / "case.toml"
+        src = toml.read_text(encoding="utf-8")
+        m = re.search(r"^\[ran\]\n((?:\"[^\"]+\" = \"[^\"]*\"\n)+)", src, re.M)
+        if not m:
+            raise SystemExit(f"retarget: {toml} has no [ran] table of one line per file")
+        facts = dict(re.findall(r'^"([^"]+)" = "([^"]*)"$', m.group(1), re.M))
+        touched = sorted({f for p in case.glob("*.patch")
+                          for f in re.findall(r"^\+\+\+ b/(\S+)$", p.read_text(encoding="utf-8"), re.M)})
+        new = {f: facts.get(f) or facts[moved_from[f]] for f in touched}
+        if any(v != "coverage" for v in new.values()):
+            raise SystemExit(f"retarget: {toml}: a trace fact names a file; re-anchor it by hand")
+        src = src[:m.start(1)] + "".join(f'"{f}" = "{v}"\n' for f, v in new.items()) + src[m.end(1):]
+        toml.write_text(src, encoding="utf-8")
+        print(f"{toml.relative_to(ROOT)}: ran {', '.join(f'{f} ({v})' for f, v in new.items())}")
+    return 0
+
+
 def main() -> int:
+    if "--helpers" in sys.argv:
+        return helpers_main()
     patches = sorted(p for p in (ROOT / "tests" / "parity").glob("*/*.patch")
                      if re.search(rf"^\+\+\+ b/{re.escape(HUB)}$", p.read_text(encoding="utf-8"), re.M))
     with tempfile.TemporaryDirectory() as t:

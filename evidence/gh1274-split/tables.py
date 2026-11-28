@@ -97,3 +97,57 @@ PM_DOC_TO = """    kit_install() (lane_cli.py's, imported here), top(), git_here
         the install step 3 moves, the director's checkout, git in the current directory, the
         records' dir, a record's time.
 """
+
+# ---------------------------------------------------------------- ticket #1335: merge_ask.py's shared helpers
+# Design #1274 comment 7232729794, section 6, commit 4: the command groups below load merge_ask.py for small helpers
+# that merge-ask's own core uses too; those helpers go to small shared modules merge_ask.py imports. The codemod
+# computes what the groups reach (every name they read from merge_ask, and every merge_ask name those read, to the
+# end); this table only says which shared module each name the groups read directly goes to. A reached name goes
+# with the roots that reach it; a name reached from two modules' roots, or a root the table lacks, is refused.
+# Module names: none is a tests/gate/kit module imported by bare name (supervisor call, #1333).
+HELPER_GROUPS = ("lane_review", "lane_ticketing", "lane_reporting", "lane_reflection", "ci_start")
+SHARED = {
+    "pr_git": ("a PR's git facts over its base, each read raising the ERR its caller passes, and the full pass carried "
+               "along them", "git pr_base resolution_files full_pass pr_commits"),
+    "pr_report": ("the review comment's and the code review report's parsers and the review rounds",
+                  "MARKER COMMENT_URL HEAD_LINE CHECK_SHAPE OWNED check_lines outside verdicts decision_lines ROUNDS "
+                  "Kind Round posted_rounds check_set ruling_covers ruling_form markdown"),
+    "gate_time": ("the gate time's lines and readers, and the head's failed and pending checks",
+                  "BUDGET budget_lines budget_parse numbered_jsonl passed_full stamp bad_checks"),
+}
+SHARED_OF = {name: mod for mod, (_, names) in SHARED.items() for name in names.split()}
+
+# The shaper's finding (#1335): merge-ask loads lane_reporting.py for one constant, ReportSources.TREND (the state
+# dir's gate run ledger), which belongs with the gate time's readers: gate_time.py holds it, merge_ask.py and
+# ReportSources read it from there. Exact lines, each once.
+TREND_LINE = 'TREND = "check-runs.jsonl"  # the state dir\'s gate run ledger, the gate time\'s trend (#1335)'
+TREND_EDITS = {
+    "merge_ask": [("    from lane_reporting import ReportSources  # noqa: PLC0415\n\n", ""),
+                  ("        trend=state_dir() / ReportSources.TREND,\n", "        trend=state_dir() / TREND,\n")],
+    "lane_reporting": [('    LEDGER, TREND = "spend.jsonl", "check-runs.jsonl"\n',
+                        '    LEDGER, TREND = "spend.jsonl", gate_time.TREND\n')],
+}
+
+# merge_ask.py's docstring names what the other commands share from it: those lines say where the helpers now live.
+# Exact text, once each.
+MA_DOC_EDITS = [
+    ("""missing` item; `verdict` and `fields` share the review comment's and the report's parsers
+below, and `verdict` its review rounds: Round, posted_rounds, check_set); how a command finds
+""", """missing` item; `verdict` and `fields` share the review comment's and the report's parsers,
+and `verdict` its review rounds: Round, posted_rounds, check_set; since #1335 those live in
+scripts/pr_report.py, which this module imports); how a command finds
+"""),
+    ("""Shared with octo-feather-lane's other commands: bad_checks (lane status), check_runs, git,
+resolution_files (verdict, resolution), full_pass (ci-start: its reads, then its rule), and the
+gate time's lines (report: budget_parse, budget_lines, passed_full, numbered_jsonl, stamp), each
+read raising the ERR its caller passes. The plain gh reads (ci_workflows) and head_matches come
+from scripts/tracker_calls.py.
+""", """Shared with octo-feather-lane's other commands from small modules this one imports (#1335),
+which those commands import in its place: scripts/pr_git.py (git, pr_base, resolution_files:
+verdict, resolution; full_pass: ci-start, its reads, then its rule), scripts/pr_report.py (the
+parsers above) and scripts/gate_time.py (bad_checks: lane status; the gate time's lines: report,
+budget_parse, budget_lines, passed_full, numbered_jsonl, stamp), each read raising the ERR its
+caller passes; check_runs stays here. The plain gh reads (ci_workflows) and head_matches come
+from scripts/tracker_calls.py.
+"""),
+]

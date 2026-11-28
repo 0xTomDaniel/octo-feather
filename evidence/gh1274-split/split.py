@@ -3,6 +3,7 @@
 moves the kit's own command file, so it lives with the lane's evidence, not in scripts/.
 
   uv run --locked --offline python evidence/gh1274-split/split.py [--tree DIR] [--no-baselines] [--meta FILE]
+      [--no-helpers | --helpers]
 
 Run in the kit's root (or --tree DIR, a copy of the kit's files). It reads the hub, scripts/octo-feather-lane, and
 writes: the dispatcher in its place, one module per command group (tables.py, CUT; a def the table lacks is placed by
@@ -11,6 +12,10 @@ install-check line, and (unless --no-baselines) the lint baselines relocated wit
 on each new module, the format exclude, basedpyright's baseline. Code moved into an existing module is formatted
 (ruff format) and carries line noqa (ruff check --add-noqa) only. Prints every rewrite, one line each, and writes the
 same table as JSON beside it (rewrites.json) for check.py.
+
+Then (ticket #1335; --no-helpers: not) `helpers`: merge_ask.py's helpers that other command groups reach move to the
+small shared modules of tables.py SHARED, which merge_ask.py imports; it prints the reached list and every rewrite, and
+adds them to rewrites.json (key `helpers`). `--helpers` runs that step alone, on a tree already split.
 
 Deterministic: the same hub gives the same files. A hub already split (it imports lane_cli) is refused.
 """
@@ -800,7 +805,13 @@ def isort_top(root: Path, path: Path) -> None:
             k += 1
         return k
     orig = path.read_text(encoding="utf-8")
-    run(["ruff", "check", "--quiet", "--select", "I001", "--fix", str(path)], root, ok=(0, 1))
+    import tomlkit   # the baseline table aside (a file whose baseline ignores I001 is sorted too: #1335 rewrites them)
+    doc = tomlkit.parse((root / "pyproject.toml").read_text(encoding="utf-8"))
+    doc["tool"]["ruff"]["lint"].pop("extend-per-file-ignores", None)  # type: ignore[union-attr,index]
+    with tempfile.TemporaryDirectory() as t:
+        cfg = Path(t) / "pyproject.toml"
+        cfg.write_text(tomlkit.dumps(doc), encoding="utf-8")
+        run(["ruff", "check", "--quiet", "--config", str(cfg), "--select", "I001", "--fix", str(path)], root, ok=(0, 1))
     fixed = path.read_text(encoding="utf-8")
     path.write_text("".join(fixed.splitlines(keepends=True)[:end(fixed)] + orig.splitlines(keepends=True)[end(orig):]),
                     encoding="utf-8")
@@ -911,7 +922,7 @@ def keep_order(keep: list[str]) -> list[str]:
     return sorted(keep)
 
 
-def pyright_relocate(root: Path) -> list[str]:
+def pyright_relocate(root: Path, files_moved: list[str] | None = None) -> list[str]:
     import importlib.machinery
     import importlib.util
     loader = importlib.machinery.SourceFileLoader("octo_feather_lint", str(root / "scripts" / "octo-feather-lint"))
@@ -933,7 +944,7 @@ def pyright_relocate(root: Path) -> list[str]:
     finally:
         os.chdir(cwd)
     _ = report
-    keys = {f"./{f}" for f in SPLIT_FILES}
+    keys = {f"./{f}" for f in (files_moved or SPLIT_FILES)}
     files_new = {k: v for k, v in old["files"].items() if k not in keys}
     for k in sorted(keys):
         if fresh["files"].get(k):
@@ -947,6 +958,444 @@ def pyright_relocate(root: Path) -> list[str]:
     return [f"baseline: basedpyright entries moved to {', '.join(sorted(k for k in keys if fresh['files'].get(k)))}"]
 
 
+# ---------------------------------------------------------------- #1335: merge_ask.py's shared helpers
+
+
+class Top:
+    """One top-level statement of a module: its node, first line (the comment lines right above it, no blank line
+    between, included), last line, the names it binds and its kind."""
+
+    def __init__(self, node: ast.stmt, start: int) -> None:
+        self.node, self.start, self.end = node, start, node.end_lineno or node.lineno
+        self.header: tuple[int, int] | None = None   # a section comment above it, a blank line between (lines a..b)
+        if isinstance(node, (ast.FunctionDef, ast.ClassDef)):
+            self.kind, self.names = "def", [node.name]
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            self.kind, self.names = "import", [(a.asname or a.name).split(".")[0] for a in node.names]
+        elif isinstance(node, ast.Assign) and all(isinstance(t, ast.Name) for t in node.targets):
+            self.kind, self.names = "assign", [t.id for t in node.targets]  # type: ignore[attr-defined]
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            self.kind, self.names = "assign", [node.target.id]
+        else:
+            self.kind, self.names = "other", []
+
+
+def tops(src: str) -> list[Top]:
+    lines, out, prev = src.splitlines(), [], 0
+    for n in ast.parse(src).body:
+        first = min([n.lineno, *[d.lineno for d in getattr(n, "decorator_list", [])]])
+        start = first
+        while start - 1 > prev and lines[start - 2].strip().startswith("#"):
+            start -= 1
+        t = Top(n, start)
+        k = start - 1   # a comment block in the gap above, blank lines around it: the section header
+        while k > prev and not lines[k - 1].strip():
+            k -= 1
+        if k > prev and lines[k - 1].strip().startswith("#") and k < start - 1:
+            a = k
+            while a - 1 > prev and lines[a - 2].strip().startswith("#"):
+                a -= 1
+            t.header = (a, k)
+        out.append(t)
+        prev = t.end
+    return out
+
+
+def top_reads(src: str, t: Top, types: bool = True) -> set[str]:
+    """The module-level names T reads: its code's (global_reads for a def), and those its type strings name (a cast's
+    first argument, a quoted annotation), which the type checker resolves in the module."""
+    if t.kind == "import":
+        return set()
+    if t.kind == "def":
+        out = global_reads(src, t.node, False)  # type: ignore[arg-type]
+        own = local_names(t.node)
+    else:
+        out, own = {x.id for x in ast.walk(t.node) if isinstance(x, ast.Name) and isinstance(x.ctx, ast.Load)}, set()
+    return out | (type_string_names(t.node) - own if types else set())
+
+
+def type_string_names(node: ast.AST) -> set[str]:
+    strs: list[ast.expr] = []
+    for x in ast.walk(node):
+        if isinstance(x, ast.Call) and isinstance(x.func, ast.Name) and x.func.id == "cast" and x.args:
+            strs.append(x.args[0])
+        elif isinstance(x, (ast.arg, ast.AnnAssign)) and x.annotation is not None:
+            strs.append(x.annotation)
+        elif isinstance(x, (ast.FunctionDef, ast.AsyncFunctionDef)) and x.returns is not None:
+            strs.append(x.returns)
+    out: set[str] = set()
+    for s in strs:
+        for c in ast.walk(s):
+            if isinstance(c, ast.Constant) and isinstance(c.value, str):
+                try:
+                    out |= {n.id for n in ast.walk(ast.parse(c.value, mode="eval")) if isinstance(n, ast.Name)}
+                except SyntaxError:
+                    pass
+    return out
+
+
+def binding_stmt(t: Top, name: str) -> str:
+    """The import statement binding NAME as merge_ask.py's top import T binds it."""
+    n = t.node
+    if isinstance(n, ast.ImportFrom):
+        a = next(a for a in n.names if (a.asname or a.name) == name)
+        return f"from {n.module} import {a.name}" + (f" as {a.asname}" if a.asname else "")
+    a = next(a for a in n.names if (a.asname or a.name).split(".")[0] == name)  # type: ignore[attr-defined]
+    return f"import {a.name}" + (f" as {a.asname}" if a.asname else "")
+
+
+def merged_from(stmts: list[str]) -> list[str]:
+    """`from M import a` lines joined per module (each alias alone, isort's form); `import` lines as they are."""
+    plain: dict[str, set[str]] = {}
+    out: set[str] = set()
+    for s in stmts:
+        m = re.fullmatch(r"from (\S+) import (\w+)", s)
+        if m:
+            plain.setdefault(m[1], set()).add(m[2])
+        else:
+            out.add(s)
+    out |= {f"from {m} import {', '.join(sorted(ns, key=lambda x: (not x.isupper(), x)))}" for m, ns in plain.items()}
+    return sorted(out)
+
+
+def comment_span(line: str) -> int | None:
+    """Where LINE's comment starts (tokenize), else None."""
+    import io
+    import tokenize
+    try:
+        for tok in tokenize.generate_tokens(io.StringIO(line.lstrip() + "\n").readline):
+            if tok.type == tokenize.COMMENT:
+                return len(line) - len(line.lstrip()) + tok.start[1]
+    except (tokenize.TokenError, IndentationError, SyntaxError):
+        return None
+    return None
+
+
+def helpers(root: Path, baselines: bool, meta_path: Path) -> list[str]:  # noqa: C901, PLR0912, PLR0915
+    """Ticket #1335: merge_ask.py's helpers the command groups reach (tables.py HELPER_GROUPS) moved to the shared
+    modules of tables.py SHARED, which merge_ask.py imports; every importer of a moved name reads it from its new
+    module. Moved text is merge_ask.py's, unchanged. Prints the reached list and every rewrite."""
+    scripts = root / "scripts"
+    if any((scripts / f"{m}.py").exists() for m in T.SHARED):
+        refuse(f"{', '.join(f'scripts/{m}.py' for m in T.SHARED)}: one exists already: the helpers move once")
+    ma_path = scripts / "merge_ask.py"
+    ma_src = ma_path.read_text(encoding="utf-8")
+    ma_lines = ma_src.splitlines(keepends=True)
+    items = tops(ma_src)
+    bound: dict[str, Top] = {}
+    for t in items:
+        for n in t.names:
+            bound.setdefault(n, t)
+    reads = {id(t): top_reads(ma_src, t) for t in items}
+    table: list[str] = []
+
+    # what the groups read from merge_ask: `from merge_ask import X` anywhere in them, and `merge_ask.X`
+    def from_ma(src: str) -> tuple[set[str], set[str]]:
+        names, attrs = set(), set()
+        for x in ast.walk(ast.parse(src)):
+            if isinstance(x, ast.ImportFrom) and x.module == "merge_ask":
+                names |= {a.name for a in x.names}
+            elif isinstance(x, ast.Attribute) and isinstance(x.value, ast.Name) and x.value.id == "merge_ask":
+                attrs.add(x.attr)
+        return names, attrs
+    roots: dict[str, set[str]] = {}
+    for g in T.HELPER_GROUPS:
+        a, b = from_ma((scripts / f"{g}.py").read_text(encoding="utf-8"))
+        for n in a | b:
+            roots.setdefault(n, set()).add(g)
+    for n in sorted(roots):
+        if n not in bound or bound[n].kind not in ("def", "assign"):
+            refuse(f"{n}, which {', '.join(sorted(roots[n]))} read from merge_ask.py, is not a def or binding there")
+        if n not in T.SHARED_OF:
+            refuse(f"{n}, read from merge_ask.py by {', '.join(sorted(roots[n]))}: tables.py SHARED names no module "
+                   "for it")
+    # every merge_ask name the roots read, to the end; each with the modules of the roots reaching it
+    reach: dict[str, set[str]] = {}
+    for r in sorted(roots):
+        seen, todo = set(), [r]
+        while todo:
+            n = todo.pop()
+            if n in seen or n not in bound or bound[n].kind == "import":
+                continue
+            if bound[n].kind == "other":
+                refuse(f"{n} is reached from {r} but bound by a statement the codemod does not move")
+            seen.add(n)
+            todo += sorted(reads[id(bound[n])])
+        for n in seen:
+            reach.setdefault(n, set()).add(T.SHARED_OF[r])
+    where: dict[str, str] = {}
+    for n, ms in sorted(reach.items()):
+        if len(ms) > 1:
+            refuse(f"{n} is reached from the roots of {', '.join(sorted(ms))}: tables.py SHARED must put it in one")
+        where[n] = next(iter(ms))
+    moved = [t for t in items if t.kind in ("def", "assign") and t.names[0] in where]
+    for t in moved:
+        if len({where[n] for n in t.names if n in where}) != 1 or any(n not in where for n in t.names):
+            refuse(f"line {t.node.lineno}: binds {', '.join(t.names)}, not all reached")
+        r = reads[id(t)]
+        if r & {"__file__", "__doc__", "__name__", "__spec__"} or any(
+                isinstance(x, ast.Attribute) and x.attr == "argv" and isinstance(x.value, ast.Name)
+                and x.value.id == "sys" for x in ast.walk(t.node)):
+            refuse(f"{t.names[0]} reads the module's own identity (__file__, __doc__, __name__ or sys.argv): moved, "
+                   "it would read its new module's")
+    table.append(f"reached: {len(where)} names, from {len(roots)} the groups read "
+                 f"({', '.join(f'{g}: {len([n for n in roots if g in roots[n]])}' for g in T.HELPER_GROUPS)})")
+    for m in T.SHARED:
+        table.append(f"reached: {m}.py: " + " ".join(t.names[0] for t in moved if where[t.names[0]] == m))
+
+    # names each module's code reads, and from where
+    def needs_of(ts: list[Top], home: str) -> tuple[list[str], set[str]]:
+        stmts, from_shared = [], set()
+        for t in ts:
+            for g in sorted(reads[id(t)]):
+                if g in where:
+                    if where[g] != home:
+                        stmts.append(f"from {where[g]} import {g}")
+                        from_shared.add(g)
+                elif g in bound and bound[g].kind == "import":   # each statement binding it (import a.b, import a.c)
+                    stmts += [binding_stmt(u, g) for u in items if u.kind == "import" and g in u.names]
+                elif g in bound:
+                    refuse(f"{t.names[0]} ({home}) reads {g}, which stays in merge_ask.py")
+                elif not hasattr(__import__("builtins"), g):
+                    refuse(f"{t.names[0]} reads {g}, which merge_ask.py does not bind")
+        return stmts, from_shared
+    deps = {m: {where[g] for g in needs_of([t for t in moved if where[t.names[0]] == m], m)[1]} for m in T.SHARED}
+    for m, ds in deps.items():
+        for d in ds:
+            if m in deps[d]:
+                refuse(f"{m}.py and {d}.py would import each other")
+
+    # who imports moved names, besides the groups: every other module in scripts/ is rewritten; the tests are not,
+    # so what they import from merge_ask must stay importable there
+    kept_items = [t for t in items if t not in moved]
+    core_reads = set().union(*(reads[id(t)] for t in kept_items if t.kind != "import"))
+    all_names: set[str] = set()
+    for t in kept_items:
+        if t.kind == "assign" and t.names == ["__all__"]:
+            all_names = set(ast.literal_eval(t.node.value))  # type: ignore[attr-defined]
+    test_names: set[str] = set()
+    for f in sorted((root / "tests").rglob("*.py")):
+        a, b = from_ma(f.read_text(encoding="utf-8"))
+        test_names |= (a | b) & set(where)
+    if bad := sorted(test_names - core_reads - all_names - {"TREND"}):
+        refuse(f"tests import {', '.join(bad)} from merge_ask.py, which would not hold them")
+    ma_needs = sorted(set(where) & (core_reads | all_names | test_names))
+    imported_from: dict[str, set[str]] = {m: set() for m in T.SHARED}   # each module's names others import
+    for n in ma_needs:
+        imported_from[where[n]].add(n)
+    for m in T.SHARED:
+        for d in deps[m]:
+            imported_from[d] |= {g for g in needs_of([t for t in moved if where[t.names[0]] == m], m)[1]
+                                 if where[g] == d}
+
+    # ------------------------------------------------ the other modules' imports of moved names
+    edits: dict[str, str] = {}
+    pairs: dict[str, list[list[str]]] = {}   # file -> [old text, new text] of each rewrite (check.py)
+    for f in sorted([*scripts.glob("*.py"), scripts / "octo-feather-lane"]):
+        if f.name == "merge_ask.py" or f.stem in T.SHARED:
+            continue
+        src = f.read_text(encoding="utf-8")
+        if "merge_ask" not in src:
+            continue
+        tree = ast.parse(src)
+        lines = src.splitlines(keepends=True)
+        line_edits: dict[int, tuple[int, int, str]] = {}   # first line -> (first, last, new text): whole statements
+        spans_at: dict[int, list[tuple[int, int, str]]] = {}   # line -> (col a, col b, new) inside a line
+        top_import = any(isinstance(n, ast.Import) and any(a.name == "merge_ask" for a in n.names) for n in tree.body)
+        attrs = sorted({x.attr for x in ast.walk(tree) if isinstance(x, ast.Attribute) and isinstance(x.value, ast.Name)
+                        and x.value.id == "merge_ask"})
+        for x in ast.walk(tree):
+            if isinstance(x, ast.Attribute) and isinstance(x.value, ast.Name) and x.value.id == "merge_ask" \
+                    and x.attr in where:
+                if not top_import:
+                    refuse(f"{f.name}: merge_ask.{x.attr} through an import inside a function")
+                at, a, b = x.value.lineno, x.value.col_offset, x.value.end_col_offset or 0
+                if src.splitlines()[at - 1].encode()[:a].decode() != src.splitlines()[at - 1][:a]:
+                    refuse(f"{f.name}:{at}: a non-ASCII line")
+                spans_at.setdefault(at, []).append((a, b, where[x.attr]))
+            if isinstance(x, ast.ImportFrom) and x.module == "merge_ask" and any(a.name in where for a in x.names):
+                indent = " " * x.col_offset
+                last = x.end_lineno or x.lineno
+                cpos = comment_span(lines[last - 1].rstrip("\n"))
+                tail = "  " + lines[last - 1].rstrip("\n")[cpos:] if cpos is not None and x.lineno == last else ""
+                if cpos is not None and x.lineno != last:
+                    refuse(f"{f.name}:{x.lineno}: a comment on a multi-line import")
+                by: dict[str, list[str]] = {}
+                for a in x.names:
+                    by.setdefault(where.get(a.name, "merge_ask"), []).append(
+                        a.name + (f" as {a.asname}" if a.asname else ""))
+                new = merged_from([f"from {m} import {n}" for m, ns in by.items() for n in ns])
+                line_edits[x.lineno] = (x.lineno, last, "".join(f"{indent}{s}{tail}\n" for s in new))
+        if top_import:
+            node = next(n for n in tree.body if isinstance(n, ast.Import) and any(a.name == "merge_ask" for a in n.names))
+            if len(node.names) != 1:
+                refuse(f"{f.name}: `import merge_ask` beside another module on one line")
+            mods = sorted({where[a] for a in attrs if a in where})
+            keep = ["merge_ask"] if any(a not in where for a in attrs) else []
+            line_edits[node.lineno] = (node.lineno, node.lineno, "".join(f"import {m}\n" for m in [*keep, *mods]))
+        if not line_edits and not spans_at:
+            continue
+        for at, cs in sorted(spans_at.items()):
+            line = lines[at - 1].rstrip("\n")
+            old = line
+            cpos = comment_span(line)
+            mods = sorted({m for *_, m in cs})
+            if cpos is not None and len(mods) == 1:
+                line = line[:cpos] + re.sub(r"\bmerge_ask(, Interface)?\b", mods[0], line[cpos:])
+            for a, b, m in sorted(cs, reverse=True):
+                line = line[:a] + m + line[b:]
+            lines[at - 1] = line + "\n"
+            table.append(f"{f.name}:{at}: `{old.strip()}` -> `{line.strip()}`")
+            pairs.setdefault(f.name, []).append([old + "\n", line + "\n"])
+        for first, (a, b, new) in sorted(line_edits.items(), reverse=True):
+            old = "".join(lines[a - 1:b])
+            lines[a - 1:b] = [new]
+            table.append(f"{f.name}:{first}: `{' '.join(old.split())}` -> `{' | '.join(new.strip().splitlines())}`")
+            pairs.setdefault(f.name, []).append([old, new])
+        edits[f.name] = "".join(lines)
+
+    # ------------------------------------------------ the shared modules
+    out: dict[str, str] = {}
+    for m, (doc, _) in T.SHARED.items():
+        ts = [t for t in moved if where[t.names[0]] == m]
+        stmts, _ = needs_of(ts, m)
+        body: list[str] = []
+        prev: Top | None = None
+        for t in ts:
+            k = items.index(t)
+            sec = t.header
+            whole = False
+            if sec is not None:   # its section header goes along when the whole section does, to one module
+                nxt = next((u for u in items[k + 1:] if u.header is not None), None)
+                span = items[k:items.index(nxt)] if nxt else items[k:]
+                whole = all(u in ts for u in span)
+            if prev is not None and items.index(prev) == k - 1 and not (sec and whole):
+                body += ["\n"] * (t.start - prev.end - 1 - (sec[1] - sec[0] + 1 if sec else 0))
+            elif body:
+                body += ["\n", "\n"]
+            if sec is not None and whole:
+                body += [*ma_lines[sec[0] - 1:sec[1]], *(["\n"] * (t.start - sec[1] - 1))]
+                table.append(f"{m}.py: the section comment above {t.names[0]} goes along (its whole section does)")
+            body += ma_lines[t.start - 1:t.end]
+            prev = t
+        if m == "gate_time":
+            body = [T.TREND_LINE + "\n", "\n", "\n", *body]
+        exports = sorted(imported_from[m] | ({"TREND"} if m == "gate_time" else set()))
+        all_text = "__all__ = [  # what merge_ask.py and the lane's command groups import from here\n" + "".join(
+            f'    "{n}",\n' for n in exports) + "]\n"
+        import textwrap
+        say = (f"{m}: {doc}. Moved from scripts/merge_ask.py, which imports them, for the lane's commands that use "
+               "them (ticket #1335, evidence/gh1274-split/split.py helpers); standard library only (AGENTS.md Rules, "
+               "kit scripts).")
+        head = '#!/usr/bin/env python3\n"""' + "\n".join(textwrap.wrap(say, 97)) + '"""\n\n'
+        runtime = set().union(*(top_reads(ma_src, t, types=False) for t in ts))
+        typed = {s for s in stmts if ast.parse(s).body[0].names[0].asname not in runtime  # type: ignore[attr-defined]
+                 and (ast.parse(s).body[0].names[0].asname or ast.parse(s).body[0].names[0].name).split(".")[0]  # type: ignore[attr-defined]
+                 not in runtime}
+        imports = merged_from([s for s in stmts if s not in typed])
+        if typed:   # read in type strings only (ruff TC003): under TYPE_CHECKING, as the pilot's lane modules do
+            imports = merged_from([*imports, "from typing import TYPE_CHECKING"])
+            imports += ["", "if TYPE_CHECKING:", *(f"    {s}" for s in merged_from(sorted(typed)))]
+            table.append(f"{m}.py: read in type strings only, imported under TYPE_CHECKING: {'; '.join(sorted(typed))}")
+        out[m] = head + all_text + "\n" + "".join(f"{s}\n" for s in imports) + "\n\n" + "".join(body)
+        table.append(f"{m}.py: {len(ts)} statements from merge_ask.py, text unchanged; imports: "
+                     f"{'; '.join(merged_from(stmts))}; __all__: {', '.join(exports)}")
+
+    # ------------------------------------------------ merge_ask.py: the moved statements cut, the shared ones imported
+    cut: set[int] = set()
+    for t in moved:
+        a, b = t.start, t.end
+        k = items.index(t)
+        if t.header is not None:
+            nxt = next((u for u in items[k + 1:] if u.header is not None), None)
+            span = items[k:items.index(nxt)] if nxt else items[k:]
+            if all(u in moved and where[u.names[0]] == where[t.names[0]] for u in span):
+                a = t.header[0]
+        while b < len(ma_lines) and not ma_lines[b].strip():
+            b += 1
+        cut |= set(range(a, b + 1))
+    new_lines = [l for k, l in enumerate(ma_lines, 1) if k not in cut]
+    text = "".join(new_lines)
+    for old, new in [*T.MA_DOC_EDITS, *T.TREND_EDITS["merge_ask"]]:
+        if text.count(old) != 1:
+            refuse(f"merge_ask.py: {old.strip()[:60]!r} is not there exactly once")
+        text = text.replace(old, new)
+        table.append(f"merge_ask.py: `{' '.join(old.split())[:100]}` -> `{' '.join(new.split())[:100]}`")
+        pairs.setdefault("merge_ask.py", []).append([old, new])
+    # its top imports: each binding the code left no longer reads dropped; the shared names it needs added
+    left = ast.parse(text)
+    left_reads: set[str] = set()
+    left_src = text
+    for t in tops(left_src):
+        if t.kind != "import":
+            left_reads |= top_reads(left_src, t)
+    imp_lines = text.splitlines(keepends=True)
+    for n in reversed([n for n in left.body if isinstance(n, (ast.Import, ast.ImportFrom))]):
+        names = [a for a in n.names if (a.asname or a.name).split(".")[0] in left_reads | all_names
+                 or isinstance(n, ast.ImportFrom) and n.module == "__future__"]
+        if len(names) == len(n.names):
+            continue
+        old = "".join(imp_lines[n.lineno - 1:n.end_lineno])
+        if not names:
+            new = ""
+        elif isinstance(n, ast.ImportFrom):
+            new = f"from {n.module} import " + ", ".join(a.name + (f" as {a.asname}" if a.asname else "")
+                                                         for a in names) + "\n"
+        else:
+            new = "".join(f"import {a.name}" + (f" as {a.asname}" if a.asname else "") + "\n" for a in names)
+        imp_lines[n.lineno - 1:n.end_lineno] = [new]
+        pairs.setdefault("merge_ask.py", []).append([old, new])
+        table.append(f"merge_ask.py:{n.lineno}: `{' '.join(old.split())}` -> `{' '.join(new.split()) or '(removed)'}`: "
+                     "the code left no longer reads the rest")
+    text = "".join(imp_lines)
+    add = merged_from([f"from {where[n]} import {n}" for n in ma_needs] + ["from gate_time import TREND"])
+    text = insert_imports(text, add)
+    table.append(f"merge_ask.py: imports `{' | '.join(add)}`")
+    out["merge_ask"] = text
+    for old, new in T.TREND_EDITS["lane_reporting"]:
+        src = edits["lane_reporting.py"]
+        if src.count(old) != 1:
+            refuse(f"lane_reporting.py: {old.strip()!r} is not there exactly once")
+        edits["lane_reporting.py"] = src.replace(old, new)
+        table.append(f"lane_reporting.py: `{old.strip()}` -> `{new.strip()}`")
+        pairs.setdefault("lane_reporting.py", []).append([old, new])
+    if not re.search(r"^import gate_time$", edits["lane_reporting.py"], re.M):
+        refuse("lane_reporting.py does not import gate_time for ReportSources.TREND")
+
+    # ------------------------------------------------ write, format, sort
+    for m, text in out.items():
+        p = scripts / f"{m}.py"
+        p.write_text(text, encoding="utf-8")
+        p.chmod(0o755)
+    for name, text in edits.items():
+        (scripts / name).write_text(text, encoding="utf-8")
+    for m in out:   # merge_ask.py and the new modules keep ruff's format; the top import block sorted (I001)
+        run(["ruff", "format", "--quiet", str(scripts / f"{m}.py")], root)
+        if m in T.SHARED:   # __all__ in ruff's own order (RUF022, its safe fix)
+            run(["ruff", "check", "--quiet", "--select", "RUF022", "--fix", str(scripts / f"{m}.py")], root, ok=(0, 1))
+    for name in [*[f"{m}.py" for m in out], *edits]:
+        isort_top(root, scripts / name)
+    for m in T.SHARED:   # moved text unchanged by the format
+        got = (scripts / f"{m}.py").read_text(encoding="utf-8")
+        for t in moved:
+            if where[t.names[0]] == m and "".join(ma_lines[t.start - 1:t.end]) not in got:
+                refuse(f"{m}.py: ruff format changed {t.names[0]}'s text")
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    if "helpers" in meta:
+        refuse(f"{meta_path}: the helpers' rows are there already")
+    for n in list(meta["where"]):
+        if meta["where"][n] == "merge_ask" and n in where:
+            meta["where"][n] = where[n]
+    meta["helpers"] = {"where": where, "roots": {n: sorted(g) for n, g in sorted(roots.items())},
+                       "rewritten": sorted([*edits, "merge_ask.py"]), "lines": pairs, "table": table}
+    meta_path.write_text(json.dumps(meta, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    if baselines:
+        run(["git", "add", "--intent-to-add", *[f"scripts/{m}.py" for m in T.SHARED]], root)
+        keys = [f"scripts/{m}.py" for m in T.SHARED] + [f"scripts/{n}" for n in sorted([*edits, "merge_ask.py"])]
+        table += pyright_relocate(root, keys)
+    return table
+
+
 def main() -> int:
     args = sys.argv[1:]
     root = Path.cwd()
@@ -954,7 +1403,10 @@ def main() -> int:
         root = Path(args[args.index("--tree") + 1]).resolve()
     try:
         meta = Path(args[args.index("--meta") + 1]) if "--meta" in args else HERE / "rewrites.json"
-        table = split(root, "--no-baselines" not in args, meta)
+        baselines = "--no-baselines" not in args
+        table = [] if "--helpers" in args else split(root, baselines, meta)
+        if "--no-helpers" not in args:
+            table += helpers(root, baselines, meta)
     except Refused as e:
         print(f"split: refused: {e}", file=sys.stderr)
         return 1

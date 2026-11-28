@@ -13,12 +13,19 @@ with what failed; exit 0 only when every check holds.
             the tables
   help      octo-feather-lane --help, no arguments (stderr, exit 64) and start -h byte-identical to the pin taken on
             REV before the move (pin/)
-  lazy      the dispatcher imports only lane_cli and the standard library at its top; each command loads, of the
-            command modules, only its own (a run per command, its modules read from sys.modules)
+  lazy      the dispatcher's import rule: scripts/check-lane-dispatch (check_rules.py check_lane_dispatch), run; each
+            command loads, of the command modules, only its own (a run per command, its modules read from
+            sys.modules), merge_ask.py included once the helpers moved (#1335)
   launch    pm_unit_start, pm_unit_run and the --map-job branch launch scripts/octo-feather-lane (a run, the systemd
             and process calls recorded instead of made)
   baseline  per rule, as many ruff and basedpyright violations in the split files as in the hub at REV
-  tests     git diff REV -- tests/ touches only tests/parity/
+  tests     the split's own commits (#1333, #1335) touch, under tests/, only tests/parity/
+  helpers   ticket #1335, against the split of REV before the helpers step (split.py --no-helpers, a scratch copy):
+            each moved statement's text is merge_ask.py's, unchanged; every other changed line of the files the step
+            rewrote is a printed rewrite (rewrites.json, helpers.lines) or in a top import block; each name a moved
+            statement reads, and each name the command groups read from merge_ask.py, resolves to the same object
+            (probe.py helpers-base, helpers-new); no command group imports merge_ask.py, and merge_ask.py imports
+            no lane_reporting.py
 """
 
 from __future__ import annotations
@@ -31,6 +38,7 @@ import sys
 import tempfile
 from collections import Counter
 from pathlib import Path
+from typing import Any
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
@@ -43,6 +51,7 @@ BASE = (sys.argv[sys.argv.index("--base") + 1] if "--base" in sys.argv else
         subprocess.run(["git", "merge-base", "HEAD", "origin/main"], cwd=ROOT, capture_output=True, text=True,
                        check=True).stdout.strip())
 META = json.loads((HERE / "rewrites.json").read_text(encoding="utf-8"))
+HELPERS: dict[str, Any] = META.get("helpers", {})
 UV = ["uv", "run", "--locked", "--offline", "--quiet"]
 
 
@@ -101,6 +110,15 @@ def check_source() -> list[str]:
             after = int(r["after"])   # type: ignore[call-overload]
             indent = next((l[:len(l) - len(l.lstrip())] for l in want[after:] if l.strip()), "    ")
             want[after:after] = [indent + str(x) for x in r["new"]]   # type: ignore[union-attr]
+        pairs = HELPERS.get("lines", {}).get(f"{mod}.py", [])
+        one = {o.rstrip("\n"): n.rstrip("\n").split("\n") for o, n in pairs if o.count("\n") <= 1}
+        one |= {o: [] for o0, n in pairs if not n for o in o0.splitlines() if o.strip()}   # a line cut   # the helpers step's printed line rewrites (#1335); in formatted code, by
+        code = {o.split("#")[0].strip(): n for o, n in one.items()}   # their code alone (the hub's line, unformatted)
+        want = [x for l in want for x in one.get(l, code.get(l.split("#")[0].strip(), [l]) if formatted else [l])]
+        if formatted:   # the hub's lines join what the formatter split: a rewrite inside one, as a fragment
+            for o, n in one.items():
+                if len(n) == 1 and o.split("#")[0].strip():
+                    want = [l.replace(o.split("#")[0].strip(), n[0].split("#")[0].strip()) for l in want]
         if formatted:
             text = "\n".join(want)
             got = ast.parse(re_indent(text)).body[0]
@@ -139,10 +157,18 @@ def check_names(tmp: Path) -> list[str]:
         return [f"FAIL probe failed: {b.stderr[-800:]} {n.stderr[-800:]}"]
     old, new = json.loads(b.stdout), json.loads(n.stdout)
     bad = [f"{fn} reads __file__, __doc__ or sys.argv and is not in the tables" for fn in old["readers"]]
+    # #1335: a moved def's read of the module merge_ask became its read of the shared modules its uses moved to (each
+    # use's object: check helpers); the TREND edits (tables.py TREND_EDITS) add the names their new side reads
+    trend_new = {T.TREND_LINE.split()[0], "gate_time"}   # TREND, read bare, and its module
     for fn, o in old["names"].items():
         g = new["names"].get(fn, {})
+        if HELPERS and o.get("merge_ask") == ["module", "merge_ask"]:
+            shared = {k for k in g if k in T.SHARED and g[k] == ["module", k]}
+            if shared or "merge_ask" in g:
+                o, g = {k: v for k, v in o.items() if k != "merge_ask"}, {k: v for k, v in g.items()
+                                                                          if k not in (shared | {"merge_ask"})}
         for k in sorted(set(o) | set(g)):
-            if o.get(k) != g.get(k):
+            if o.get(k) != g.get(k) and not (HELPERS and k not in o and k in trend_new):
                 bad.append(f"{fn}: {k}: hub {o.get(k)} != new {g.get(k)}")
     total = sum(len(v) for v in old["names"].values())
     return [f"FAIL {b}" for b in bad] or [f"{total} global reads in {len(old['names'])} moved defs resolve to the same object as in the hub; "
@@ -161,7 +187,6 @@ def check_help() -> list[str]:
     return [f"FAIL {b}" for b in bad] or ["--help, no arguments (stderr, exit 64) and start -h byte-identical to the pin"]
 
 
-STD = set(sys.stdlib_module_names)
 GROUPS = {"lane_ticketing", "lane_reporting", "lane_review", "lane_reflection", "pi_sessions", "ci_start", "post_merge",
           "merge_ask", "start_lane"}
 
@@ -169,12 +194,9 @@ GROUPS = {"lane_ticketing", "lane_reporting", "lane_review", "lane_reflection", 
 def check_lazy() -> list[str]:
     bad = []
     disp = ast.parse((ROOT / "scripts" / "octo-feather-lane").read_text(encoding="utf-8"))
-    for n in disp.body:
-        if isinstance(n, (ast.Import, ast.ImportFrom)):
-            mods = [a.name for a in n.names] if isinstance(n, ast.Import) else [n.module or ""]
-            for m in mods:
-                if m.split(".")[0] not in STD and m != "lane_cli":
-                    bad.append(f"dispatcher imports {m} at its top")
+    rule = subprocess.run([str(ROOT / "scripts" / "check-lane-dispatch")], capture_output=True, text=True, check=False)
+    if rule.returncode:
+        bad.append(f"check-lane-dispatch: exit {rule.returncode}: {(rule.stdout + rule.stderr).strip()}")
     code = r"""
 import importlib.machinery as im, importlib.util as iu, json, sys
 GROUPS = set(sys.argv[2].split(","))
@@ -197,7 +219,7 @@ print(json.dumps([at_load, sorted(GROUPS & set(sys.modules)), mod]))
         at_load, after, mod = json.loads(p.stdout)
         if at_load:
             bad.append(f"loading the dispatcher loads {at_load}")
-        if set(after) - {mod, "merge_ask"}:
+        if set(after) - {mod, *([] if HELPERS else ["merge_ask"])}:
             bad.append(f"{c}: loads {after}, not only {mod}")
         elif mod != "merge_ask" and "merge_ask" in after:
             lib.append(c)
@@ -209,9 +231,10 @@ print(json.dumps([at_load, sorted(GROUPS & set(sys.modules)), mod]))
     ran = next((ast.literal_eval(l[7:]) for l in p.stderr.splitlines() if l.startswith("LOADED ")), None)
     if ran != ["post_merge"]:
         bad.append(f"`octo-feather-lane stale x` loaded {ran}")
-    return [f"FAIL {b}" for b in bad] or [f"dispatcher imports lane_cli and the stdlib only; each of {len(cmds)} commands loads only its "
-                   "module, plus merge_ask.py as a library where its module imports it (design section 6, commit 4: "
-                   f"{', '.join(lib)}); `stale x` run loads post_merge alone"]
+    lib_says = (f"plus merge_ask.py as a library where its module imports it (design section 6, commit 4: {', '.join(lib)})"
+                if lib else "merge_ask.py by merge-ask alone (#1335)")
+    return [f"FAIL {b}" for b in bad] or [f"{rule.stdout.strip()}; each of {len(cmds)} commands loads only its module, "
+                                          f"{lib_says}; `stale x` run loads post_merge alone"]
 
 
 def check_launch() -> list[str]:
@@ -274,7 +297,7 @@ def pyright_counts(baseline: dict[str, object], files: list[str]) -> Counter[str
 
 def check_baseline(tmp: Path) -> list[str]:
     old_files = ["scripts/octo-feather-lane", *[f"scripts/{m}.py" for m in T.EXISTING]]
-    new_files = [*old_files, *[f"scripts/{m}.py" for m in T.NEW]]
+    new_files = [*old_files, *[f"scripts/{m}.py" for m in (*T.NEW, *(T.SHARED if HELPERS else ()))]]
     tree = tmp / "rbase"
     tree.mkdir()
     arch = subprocess.run(["git", "archive", BASE, "scripts", "pyproject.toml"], cwd=ROOT, capture_output=True,
@@ -291,7 +314,7 @@ def check_baseline(tmp: Path) -> list[str]:
         out.append(f"{tool}: hub {sum(o.values())} -> split {sum(n.values())}"
                    + (f"; per rule: {', '.join(f'{k} {a}->{b}' for k, (a, b) in diff.items())}" if diff else ", per rule equal"))
         for k, (a, b) in diff.items():
-            if b > a and not (tool == "ruff" and k == "PLC0415" and b - a == calls):
+            if b > a and not (tool == "ruff" and k == "PLC0415" and b - a <= calls):
                 bad.append(f"{tool} {k} rises {a} -> {b}" + (f" (call-site imports: {calls})" if k == "PLC0415" else ""))
     out.append(f"PLC0415 may rise by the {calls} call-site imports only; no other rule may rise")
     others_old = {k: v for k, v in b_old["files"].items() if k.removeprefix("./") not in new_files}
@@ -302,9 +325,105 @@ def check_baseline(tmp: Path) -> list[str]:
 
 
 def check_tests() -> list[str]:
-    files = [l for l in git("diff", BASE, "--name-only", "--", "tests/").splitlines() if l]
+    files = sorted({l for l in git("log", "--no-merges", "--format=", "--name-only", "-E", "--grep", r"\(#13(33|35)[,)]",
+                                   f"{BASE}..HEAD", "--", "tests/").splitlines() if l})   # the split's own commits
     off = [f for f in files if not f.startswith("tests/parity/")]
-    return [f"FAIL tests outside tests/parity changed: {off}"] if off else [f"{len(files)} files under tests/, all tests/parity/"]
+    return [f"FAIL tests outside tests/parity changed: {off}"] if off else [
+        f"{len(files)} files under tests/ in the split's commits (#1333, #1335), all tests/parity/"]
+
+
+def check_helpers(tmp: Path) -> list[str]:  # noqa: C901
+    """Ticket #1335's step against the split of BASE before it (see the module docstring, helpers)."""
+    from split import tops   # the step's own statement reader: a statement and the comment lines right above it
+    if not HELPERS:
+        return ["FAIL rewrites.json has no helpers rows: the step has not run"]
+    pre = tmp / "pre"
+    pre.mkdir()
+    arch = subprocess.run(["git", "archive", BASE, "scripts", "pyproject.toml", "justfile"], cwd=ROOT,
+                          capture_output=True, check=True).stdout
+    subprocess.run(["tar", "-x", "-C", str(pre)], input=arch, check=True)
+    p = subprocess.run([*UV, "python", str(HERE / "split.py"), "--tree", str(pre), "--no-baselines", "--no-helpers",
+                        "--meta", str(tmp / "pre.json")], cwd=ROOT, capture_output=True, text=True, check=False)
+    if p.returncode:
+        return [f"FAIL split.py --no-helpers on {BASE}: {p.stderr[-500:]}"]
+    bad: list[str] = []
+    where: dict[str, str] = HELPERS["where"]
+    ma_pre = (pre / "scripts" / "merge_ask.py").read_text(encoding="utf-8")
+    pre_tops = tops(ma_pre)
+    moved_lines: set[str] = set()
+    pre_lines = ma_pre.splitlines()
+    for name, home in sorted(where.items()):
+        t = next(t for t in pre_tops if name in t.names)
+        text = pre_lines[t.start - 1:t.end]
+        moved_lines |= set(text)
+        if t.header:
+            moved_lines |= set(pre_lines[t.header[0] - 1:t.header[1]])
+        new_src = (ROOT / "scripts" / f"{home}.py").read_text(encoding="utf-8")
+        u = next((u for u in tops(new_src) if name in u.names), None)
+        if u is None or new_src.splitlines()[u.start - 1:u.end] != text:
+            bad.append(f"{name}: not merge_ask.py's text in {home}.py")
+    # every other changed line: a printed rewrite, or a top import block's
+    lines: dict[str, list[list[str]]] = HELPERS["lines"]
+
+    def import_block(src: str) -> set[str]:
+        body = ast.parse(src).body
+        imps = [n for n in body if isinstance(n, (ast.Import, ast.ImportFrom))]
+        if not imps:
+            return set()
+        ls = src.splitlines()
+        return set(ls[imps[0].lineno - 1:max(n.end_lineno or n.lineno for n in imps if n.lineno < 400)])
+    import difflib
+    for f in HELPERS["rewritten"]:
+        old, new = (pre / "scripts" / f).read_text(encoding="utf-8"), (ROOT / "scripts" / f).read_text(encoding="utf-8")
+        olds = {l for o, _ in lines.get(f, []) for l in o.splitlines()} | import_block(old)
+        news = {l for _, n in lines.get(f, []) for l in n.splitlines()} | import_block(new)
+        if f == "merge_ask.py":
+            olds |= moved_lines
+        for d in difflib.ndiff(old.splitlines(), new.splitlines()):
+            if d[:2] == "- " and d[2:].strip() and d[2:] not in olds:
+                bad.append(f"{f}: line dropped, not printed: {d[2:].strip()[:80]}")
+            elif d[:2] == "+ " and d[2:].strip() and d[2:] not in news:
+                bad.append(f"{f}: line added, not printed: {d[2:].strip()[:80]}")
+    for m in T.SHARED:
+        src = (ROOT / "scripts" / f"{m}.py").read_text(encoding="utf-8")
+        tree = ast.parse(src)
+        own = {*import_block(src), T.TREND_LINE, "#!/usr/bin/env python3"}
+        for n in tree.body[:2]:   # the docstring and __all__
+            own |= set(src.splitlines()[n.lineno - 1:n.end_lineno])
+        own |= {l for n in tree.body if isinstance(n, ast.If) for l in src.splitlines()[n.lineno - 1:n.end_lineno]}
+        if extra := [l for l in src.splitlines() if l.strip() and l not in own and l not in moved_lines]:
+            bad.append(f"{m}.py: lines neither moved nor its header: {extra[:3]}")
+    # names
+    env = {**os.environ, "PYTHONHASHSEED": "0"}
+    probe = str(HERE / "probe.py")
+    b = subprocess.run([*UV, "python", probe, "helpers-base", str(pre)], cwd=ROOT, capture_output=True, text=True,
+                       env=env, check=False)
+    n = subprocess.run([*UV, "python", probe, "helpers-new", str(ROOT)], cwd=ROOT, capture_output=True, text=True,
+                       env=env, check=False)
+    if b.returncode or n.returncode:
+        return [f"FAIL probe failed: {b.stderr[-800:]} {n.stderr[-800:]}"]
+    old_n, new_n = json.loads(b.stdout)["names"], json.loads(n.stdout)["names"]
+    total = 0
+    for k in sorted(set(old_n) | set(new_n)):
+        o, g = old_n.get(k, {}), new_n.get(k, {})
+        for x in sorted(set(o) | set(g)):
+            total += 1
+            if o.get(x) != g.get(x):
+                bad.append(f"{k}: {x}: before {o.get(x)} != after {g.get(x)}")
+    # who imports merge_ask
+    for g in T.HELPER_GROUPS:
+        tree = ast.parse((ROOT / "scripts" / f"{g}.py").read_text(encoding="utf-8"))
+        if any((isinstance(x, ast.ImportFrom) and x.module == "merge_ask")
+               or (isinstance(x, ast.Import) and any(a.name == "merge_ask" for a in x.names)) for x in ast.walk(tree)):
+            bad.append(f"{g}.py imports merge_ask")
+    tree = ast.parse((ROOT / "scripts" / "merge_ask.py").read_text(encoding="utf-8"))
+    if any((isinstance(x, ast.ImportFrom) and x.module == "lane_reporting")
+           or (isinstance(x, ast.Import) and any(a.name == "lane_reporting" for a in x.names)) for x in ast.walk(tree)):
+        bad.append("merge_ask.py imports lane_reporting")
+    return [f"FAIL {x}" for x in bad] or [
+        f"{len(where)} moved statements, merge_ask.py's text unchanged; every other changed line of "
+        f"{', '.join(HELPERS['rewritten'])} printed or in a top import block; {total} names resolve to the same object "
+        f"before and after; {', '.join(T.HELPER_GROUPS)} import no merge_ask; merge_ask.py imports no lane_reporting"]
 
 
 def main() -> int:
@@ -313,7 +432,7 @@ def main() -> int:
         tmp = Path(t)
         for name, fn in (("source", check_source), ("names", lambda: check_names(tmp)), ("help", check_help),
                          ("lazy", check_lazy), ("launch", check_launch), ("baseline", lambda: check_baseline(tmp)),
-                         ("tests", check_tests)):
+                         ("tests", check_tests), ("helpers", lambda: check_helpers(tmp))):
             lines = fn()
             ok = not any(l.startswith("FAIL") for l in lines)
             failed += not ok
