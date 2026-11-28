@@ -124,6 +124,7 @@ from typing import Literal, NamedTuple, ParamSpec, Protocol, TypedDict, TypeVar,
 
 import tomllib
 from correction_lanes import MARK, Refused, lane_logs, lane_record, quoted
+from kit_env import kit_python
 from tracker_calls import KIT, ci_workflows, gh, head_matches, tracker, utc
 
 # GitHub's closing keywords: a PR body line with one closes that GitHub issue at merge, named
@@ -3157,9 +3158,8 @@ class _UnreadError(Exception):
 QA = KIT / "scripts" / "octo-feather-qa"
 CONTRACT = KIT / "scripts" / "octo-feather-contract"
 GH_PRS = KIT / "schemas" / "gh-pr-list.schema.json"
-# The kit's locked jsonschema, by octo-feather-contract's route (its docstring): this module stays
-# standard library only, so the validation runs in the kit's project environment, never the network.
-KIT_PYTHON = ["uv", "run", "--project", str(KIT), "--locked", "--offline", "--no-dev", "--quiet"]
+# The kit's locked jsonschema, by kit_env.kit_python (its docstring): this module stays standard
+# library only, so the validation runs in the kit's project environment, never the network.
 VALIDATE = """import json, sys, jsonschema
 a = sys.argv[1]  # a schema file, or a schema's JSON text
 schema = json.loads(a if a.startswith("{") else open(a, encoding="utf-8").read())
@@ -3316,16 +3316,8 @@ def _open_prs(pr: int, base_branch: str, repo: str | None) -> list[_Open]:
         "check gh auth status, then rerun",
         err=_UnreadError,
     )
-    env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
     try:
-        p = subprocess.run(
-            [*KIT_PYTHON, "python", "-c", VALIDATE, str(GH_PRS)],
-            input=out,
-            capture_output=True,
-            text=True,
-            env=env,
-            check=False,
-        )
+        p = kit_python("-c", VALIDATE, str(GH_PRS), stdin=out, capture=True)
     except OSError as e:
         msg = f"cannot run uv for the kit's locked jsonschema ({e})"
         raise _UnreadError(msg) from e
@@ -3583,18 +3575,10 @@ class _NamedRepo(TypedDict):
 
 
 def _kit(script: str, *args: str, stdin: str, what: str) -> str:
-    """SCRIPT's stdout, run by the kit's locked Python (KIT_PYTHON, offline) with ARGS and STDIN;
+    """SCRIPT's stdout, run by the kit's locked Python (kit_python, offline) with ARGS and STDIN;
     _Unread naming WHAT and its stderr when it fails or cannot run."""
-    env = {k: v for k, v in os.environ.items() if k != "VIRTUAL_ENV"}
     try:
-        p = subprocess.run(
-            [*KIT_PYTHON, "python", "-c", script, *args],
-            input=stdin,
-            capture_output=True,
-            text=True,
-            env=env,
-            check=False,
-        )
+        p = kit_python("-c", script, *args, stdin=stdin, capture=True)
     except OSError as e:
         msg = f"cannot run uv for the kit's locked environment ({e})"
         raise _Unread(msg) from e
