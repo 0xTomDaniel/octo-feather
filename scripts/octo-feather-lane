@@ -618,7 +618,9 @@ tier or the director's relay allows (allowed, below). In order, each refusal bef
            the tier block (its form: merge-ask) and `PR #<n> stays open`; a relay naming another head refuses
            naming the head it allows, the head given and why it does not carry
   merge    `gh pr merge PR --merge --match-head-commit <the PR's full head>`, printing `merged: PR #<n> at head
-           <sha12> (lane <name>)`; a gh failure refuses, naming it
+           <sha12> (lane <name>)`; a gh failure refuses, naming it. Once merged, the ask it went on (its tier
+           block, how allowed, the spec calls and opt-outs allowed read) is the `ask` of the lane's post-merge
+           record (its form: scripts/post_merge.py docstring), no gh call added: `digest` (below) reads it
   done     `done <key>` (below), its lines, <key> the tracker key of the record's `issue`, a lane key (comms
            #lane-record), as tracker_calls.py parent_key maps it (#1249); a failure is named on stderr and the
            routine still runs
@@ -3581,9 +3583,10 @@ def merge_lane(pr: int, nothing: str = "nothing merged") -> tuple[str, dict[str,
     return name, rec
 
 
-def merge_allowed(pr: int, head: str, repo: str | None, lane: str) -> str:
+def merge_allowed(pr: int, head: str, repo: str | None, lane: str) -> "tuple[str, post_merge.Ask]":
     """Whether lane LANE's merge of PR at HEAD may go, the one place the merge asks it (the rule: --help, merge,
-    allowed). The PR's full head, the one the merge pins; refuses naming why."""
+    allowed). The PR's full head, the one the merge pins, and the ask it goes on (merge records it); refuses naming
+    why."""
     d = cast("dict[str, object]", pr_view(pr, "state,headRefOid", repo))
     oid = str(d["headRefOid"])
     if d["state"] != "OPEN":
@@ -3603,19 +3606,26 @@ def merge_allowed(pr: int, head: str, repo: str | None, lane: str) -> str:
         raise Refuse(f"PR #{pr}'s merge ask at {oid[:12]} cannot be sorted into a tier ({'; '.join([a.refusal, *unread]).strip('; ')}): "
                      f"{stays}; fix the merge ask (octo-feather-lane merge-ask {pr} names each fix), then rerun")
     block = "; ".join(t.lines)
+    calls = s.calls.added if isinstance(s.calls, merge_ask.Calls) else []
+    optouts = s.optouts if isinstance(s.optouts, list) else []
+
+    def ask(allowed: "post_merge.Allowed", relay: str = "", proof: str = "") -> "post_merge.Ask":
+        return post_merge.Ask(tuple(t.lines), allowed, relay, proof,
+                              tuple(post_merge.CallLine(c.slug, c.line) for c in calls),
+                              tuple(post_merge.OptOut(c, why) for c, why in optouts))
     if t.n <= 2 and t.waits == "nobody":
         print(f"allowed: PR #{pr} at {oid[:12]}, its merge ask ({block})", file=sys.stderr, flush=True)
-        return oid
+        return oid, ask("tier")
     relays = relays_of(lane, pr)
     if not relays:
         raise Refuse(f"PR #{pr} at {oid[:12]}: its merge waits for {t.waits}, and no relay of its merge is on record "
                      f"({block}): {stays}; send up the section `octo-feather-lane merge-ask {pr}` prints, as printed (herdr-say "
                      "--parent), then rerun this merge once the director says it relayed it")
     rh = str(relays[-1]["head"])
-    if any(head_matches(str(x["head"]), oid) for x in relays):
+    if on := [x for x in relays if head_matches(str(x["head"]), oid)]:
         print(f"allowed: PR #{pr} at {oid[:12]} on the director's relay of that head, its merge ask ({block})",
               file=sys.stderr, flush=True)
-        return oid
+        return oid, ask("relay", str(on[-1].get("at", "")))
     try:
         full = git("rev-parse", "--verify", "--quiet", f"{rh}^{{commit}}")[1].strip()
         why: list[str] = []
@@ -3627,7 +3637,7 @@ def merge_allowed(pr: int, head: str, repo: str | None, lane: str) -> str:
             print(f"relay carried: the director's relay of PR #{pr} at {rh[:12]} carries to {oid[:12]}: {proof}", flush=True)
             print(f"allowed: PR #{pr} at {oid[:12]} on the director's relay carried, its merge ask ({block})",
                   file=sys.stderr, flush=True)
-            return oid
+            return oid, ask("relay carried", str(relays[-1].get("at", "")), proof)
     raise Refuse(f"PR #{pr}: the director's relay on record allows head {rh[:12]}, the merge was given head {oid[:12]} "
                  f"({'; '.join(why)}): {stays}; its merge waits for {t.waits} ({block})")
 
@@ -3683,10 +3693,11 @@ def cmd_merge(args: list[str]) -> int:
         raise Refuse(f"HEAD must be the approved head, 7 to 40 hex, got {args[1]!r}")
     pr, head, secs = pr_number(args[0]), args[1].lower(), pm_wait(wait)
     lane, rec = merge_lane(pr)
-    oid = merge_allowed(pr, head, repo, lane)
+    oid, ask = merge_allowed(pr, head, repo, lane)
     gh(["pr", "merge", str(pr), "--merge", "--match-head-commit", oid, *(["-R", repo] if repo else [])],
        f"nothing merged unless gh pr view {pr} reads MERGED; check it, then rerun")
     print(f"merged: PR #{pr} at head {oid[:12]} (lane {lane})", flush=True)
+    post_merge.asked(post_merge.records(lanes_dir()), lane, pr, head, ask)   # the ask it merged on (digest reads it)
     parent, rc = str(rec["issue"]), 0
     try:
         cmd_done([tracker_calls.parent_key(parent, err=Refuse)])   # the record's lane key, as a tracker key
@@ -3810,6 +3821,20 @@ def cmd_start(args: list[str]) -> int:
     return 0
 
 
+def cmd_digest(args: list[str]) -> int:
+    """`digest` (--help): the logic and its help chunk in scripts/merge_digest.py, imported only here."""
+    import merge_digest
+    print(merge_digest.digest(args, state_dir(), Refuse), flush=True)
+    return 0
+
+
+def help_text() -> str:
+    """--help: this docstring, merge_digest.py's chunk joined in before its last line (imported only to print it)."""
+    import merge_digest
+    doc, foot = (__doc__ or "").strip().rsplit("\n\n", 1)
+    return f"{doc}\n\n{merge_digest.HELP}\n{foot}"
+
+
 COMMANDS = {
     "archive": cmd_archive_lane,
     "reflect": cmd_reflect,
@@ -3832,12 +3857,13 @@ COMMANDS = {
     "post-merge": cmd_post_merge,
     "stale": cmd_stale,
     "start": cmd_start,
+    "digest": cmd_digest,
 }
 
 
 def main(argv: list[str]) -> int:
     if not argv or argv[0] not in COMMANDS:
-        print(__doc__.strip(), file=sys.stderr); return 64
+        print(help_text(), file=sys.stderr); return 64
     try:
         return COMMANDS[argv[0]](argv[1:])
     except (Refuse, post_merge.Refused) as e:

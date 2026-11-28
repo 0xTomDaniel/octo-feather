@@ -2983,7 +2983,8 @@ RULING_COVERS = re.compile(r"^Ruling covers:[ \t]*(.*?)\s*$")
 class Call:
     """A spec call: its spec's SLUG (its log `<slug>.calls.jsonl`) and the fields the call log
     holds (scripts/octo-feather-spec-status docstring): AT, KIND, ANCHORS, RULING ('' for none)
-    and DENIED, the owner's denial's `at` ('' for none)."""
+    and DENIED, the owner's denial's `at` ('' for none); LINE the whole call as its log holds
+    it, one JSON object (what the merge records, octo-feather-lane --help, merge)."""
 
     slug: str
     at: str
@@ -2991,6 +2992,7 @@ class Call:
     anchors: tuple[str, ...]
     ruling: str = ""
     denied: str = ""
+    line: str = ""
 
     @property
     def name(self) -> str:
@@ -3110,6 +3112,7 @@ def _calls(head: str, fork: str) -> Calls:
                     str(cast("dict[str, object]", denied).get("at") or "denied")
                     if isinstance(denied, dict) and denied
                     else "",
+                    json.dumps(c, ensure_ascii=False),
                 )
             )
     rulings: dict[str, str | Unread] = {}
