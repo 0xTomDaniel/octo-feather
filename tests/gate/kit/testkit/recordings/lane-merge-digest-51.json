@@ -1,0 +1,210 @@
+[
+ {
+  "request": "pr view 51 --json state,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+  "out": "{\"headRefOid\":\"20122274399cbf7289e131868e2cfd1637bdf701\",\"state\":\"OPEN\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr view 51 --json state,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 digest recording (#1339), scratch world, 2026-11-28T03:29:44.636226+00:00"
+  }
+ },
+ {
+  "request": "pr view 51 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments -R 0xTomDaniel/octo-feather-realcase",
+  "out": "{\"baseRefName\":\"main\",\"body\":\"Closes #49\\n\\nRecorded for 0xTomDaniel/octo-feather#1339: lane gh49 merged by `octo-feather-lane merge`, then listed by `octo-feather-lane digest`. Throwaway content.\\n\\n## Merge ask\\n\\nHead: 20122274399c\\nBuilt: none\\nFailed: none\\n\",\"comments\":[],\"headRefName\":\"gh1337-tier1\",\"headRefOid\":\"20122274399cbf7289e131868e2cfd1637bdf701\",\"statusCheckRollup\":[{\"__typename\":\"CheckRun\",\"completedAt\":\"2026-11-28T03:28:24Z\",\"conclusion\":\"SUCCESS\",\"detailsUrl\":\"https://github.com/0xTomDaniel/octo-feather-realcase/actions/runs/46103003105/job/140849457978\",\"name\":\"check\",\"startedAt\":\"2026-11-28T03:28:21Z\",\"status\":\"COMPLETED\",\"workflowName\":\"check\"}]}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr view 51 --json body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 digest recording (#1339), scratch world, 2026-11-28T03:29:46.028745+00:00"
+  }
+ },
+ {
+  "request": "pr list --state open --base main --limit 200 --json number,headRefName,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+  "out": "[{\"headRefName\":\"gh1337-tier2\",\"headRefOid\":\"f347b73fdd849cd4cc0da2ba0f5a2dbbc283d76d\",\"number\":52},{\"headRefName\":\"gh1337-tier1\",\"headRefOid\":\"20122274399cbf7289e131868e2cfd1637bdf701\",\"number\":51},{\"headRefName\":\"gh275-other\",\"headRefOid\":\"ba6a478bdf45a1fd0e86ae13514eac8a557ceb54\",\"number\":44}]\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr list --state open --base main --limit 200 --json number,headRefName,headRefOid -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 digest recording (#1339), scratch world, 2026-11-28T03:29:46.885513+00:00"
+  }
+ },
+ {
+  "request": "pr merge 51 --merge --match-head-commit 20122274399cbf7289e131868e2cfd1637bdf701 -R 0xTomDaniel/octo-feather-realcase",
+  "out": "",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr merge 51 --merge --match-head-commit 20122274399cbf7289e131868e2cfd1637bdf701 -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 digest recording (#1339), scratch world, 2026-11-28T03:29:52.266384+00:00"
+  }
+ },
+ {
+  "request": "issue view 49 --json number,title,body,state,url,parent,subIssues,blockedBy",
+  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Recorded for 0xTomDaniel/octo-feather#1339: a lane merged by `octo-feather-lane merge`, then listed by `octo-feather-lane digest`. Throwaway content.\",\"number\":49,\"parent\":null,\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"[gh1337] digest recording: a tier 1 lane (#1339)\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/49\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh issue view 49 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 digest recording (#1339), scratch world, 2026-11-28T03:29:53.352260+00:00"
+  }
+ },
+ {
+  "request": "issue close 49",
+  "out": "",
+  "err": "! Issue 0xTomDaniel/octo-feather-realcase#49 ([gh1337] digest recording: a tier 1 lane (#1339)) is already closed\n",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh issue close 49",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 digest recording (#1339), scratch world, 2026-11-28T03:29:54.434114+00:00"
+  }
+ },
+ {
+  "request": "issue view 49 --json number,title,body,state,url,parent,subIssues,blockedBy",
+  "out": "{\"blockedBy\":{\"nodes\":[],\"totalCount\":0},\"body\":\"Recorded for 0xTomDaniel/octo-feather#1339: a lane merged by `octo-feather-lane merge`, then listed by `octo-feather-lane digest`. Throwaway content.\",\"number\":49,\"parent\":null,\"state\":\"CLOSED\",\"subIssues\":{\"nodes\":[],\"totalCount\":0},\"title\":\"[gh1337] digest recording: a tier 1 lane (#1339)\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/issues/49\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh issue view 49 --json number,title,body,state,url,parent,subIssues,blockedBy",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 digest recording (#1339), scratch world, 2026-11-28T03:29:55.330336+00:00"
+  }
+ },
+ {
+  "request": "pr view 51 --json state,headRefOid,mergeCommit,baseRefName,headRefName -R 0xTomDaniel/octo-feather-realcase",
+  "out": "{\"baseRefName\":\"main\",\"headRefName\":\"gh1337-tier1\",\"headRefOid\":\"20122274399cbf7289e131868e2cfd1637bdf701\",\"mergeCommit\":{\"oid\":\"8afc34adbdcad4bd4c5627a597a432d7a4599587\"},\"state\":\"MERGED\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr view 51 --json state,headRefOid,mergeCommit,baseRefName,headRefName -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 digest recording (#1339), scratch world, 2026-11-28T03:29:56.167218+00:00"
+  }
+ },
+ {
+  "request": "run list --commit 8afc34adbdcad4bd4c5627a597a432d7a4599587 --event push --json databaseId,status,conclusion,workflowName,url -R 0xTomDaniel/octo-feather-realcase",
+  "out": "[]\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh run list --commit 8afc34adbdcad4bd4c5627a597a432d7a4599587 --event push --json databaseId,status,conclusion,workflowName,url -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 digest recording (#1339), scratch world, 2026-11-28T03:29:56.975423+00:00"
+  }
+ },
+ {
+  "request": "api repos/0xTomDaniel/octo-feather-realcase/git/trees/8afc34adbdcad4bd4c5627a597a432d7a4599587",
+  "out": "{\"sha\":\"8afc34adbdcad4bd4c5627a597a432d7a4599587\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/8afc34adbdcad4bd4c5627a597a432d7a4599587\",\"tree\":[{\"path\":\".github\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"c08f0a9b68b4e8d4bb4d16f445920c7ae4d00e3d\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/c08f0a9b68b4e8d4bb4d16f445920c7ae4d00e3d\"},{\"path\":\"README.md\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"4add7fd444188a5a06900b067d169bab988761d6\",\"size\":1241,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/4add7fd444188a5a06900b067d169bab988761d6\"},{\"path\":\"realcase\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"1160376de0d2e5a64f19d33f9af6fcc4c687e92b\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/1160376de0d2e5a64f19d33f9af6fcc4c687e92b\"}],\"truncated\":false}",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh api repos/0xTomDaniel/octo-feather-realcase/git/trees/8afc34adbdcad4bd4c5627a597a432d7a4599587",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 digest recording (#1339), scratch world, 2026-11-28T03:29:57.771292+00:00"
+  }
+ },
+ {
+  "request": "api repos/0xTomDaniel/octo-feather-realcase/git/trees/c08f0a9b68b4e8d4bb4d16f445920c7ae4d00e3d",
+  "out": "{\"sha\":\"c08f0a9b68b4e8d4bb4d16f445920c7ae4d00e3d\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/c08f0a9b68b4e8d4bb4d16f445920c7ae4d00e3d\",\"tree\":[{\"path\":\"workflows\",\"mode\":\"040000\",\"type\":\"tree\",\"sha\":\"f11f28530179b12c66fc17c9d0b3cc8678f50ff6\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/f11f28530179b12c66fc17c9d0b3cc8678f50ff6\"}],\"truncated\":false}",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh api repos/0xTomDaniel/octo-feather-realcase/git/trees/c08f0a9b68b4e8d4bb4d16f445920c7ae4d00e3d",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 digest recording (#1339), scratch world, 2026-11-28T03:29:58.796701+00:00"
+  }
+ },
+ {
+  "request": "api repos/0xTomDaniel/octo-feather-realcase/git/trees/f11f28530179b12c66fc17c9d0b3cc8678f50ff6",
+  "out": "{\"sha\":\"f11f28530179b12c66fc17c9d0b3cc8678f50ff6\",\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/trees/f11f28530179b12c66fc17c9d0b3cc8678f50ff6\",\"tree\":[{\"path\":\"check.yml\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"cd84e78fdb542305d392039f0826a7934b3c0eeb\",\"size\":394,\"url\":\"https://api.github.com/repos/0xTomDaniel/octo-feather-realcase/git/blobs/cd84e78fdb542305d392039f0826a7934b3c0eeb\"}],\"truncated\":false}",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh api repos/0xTomDaniel/octo-feather-realcase/git/trees/f11f28530179b12c66fc17c9d0b3cc8678f50ff6",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 digest recording (#1339), scratch world, 2026-11-28T03:29:59.881258+00:00"
+  }
+ },
+ {
+  "request": "run list --commit 8afc34adbdcad4bd4c5627a597a432d7a4599587 --event push --json databaseId,status,conclusion,workflowName,url -R 0xTomDaniel/octo-feather-realcase",
+  "out": "[{\"conclusion\":\"success\",\"databaseId\":46103122589,\"status\":\"completed\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/actions/runs/46103122589\",\"workflowName\":\"check\"}]\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh run list --commit 8afc34adbdcad4bd4c5627a597a432d7a4599587 --event push --json databaseId,status,conclusion,workflowName,url -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 digest recording (#1339), scratch world, 2026-11-28T03:30:11.277629+00:00"
+  }
+ },
+ {
+  "request": "repo view 0xTomDaniel/octo-feather-realcase --json nameWithOwner",
+  "out": "{\"nameWithOwner\":\"0xTomDaniel/octo-feather-realcase\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh repo view 0xTomDaniel/octo-feather-realcase --json nameWithOwner",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 digest recording (#1339), scratch world, 2026-11-28T03:30:12.652521+00:00"
+  }
+ },
+ {
+  "request": "repo view https://github.com/0xTomDaniel/octo-feather --json nameWithOwner",
+  "out": "{\"nameWithOwner\":\"0xTomDaniel/octo-feather\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh repo view https://github.com/0xTomDaniel/octo-feather --json nameWithOwner",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 digest recording (#1339), scratch world, 2026-11-28T03:30:13.984808+00:00"
+  }
+ },
+ {
+  "request": "pr view 51 --json title,url -R 0xTomDaniel/octo-feather-realcase",
+  "out": "{\"title\":\"[gh1337] digest recording: a tier 1 merge (#1339)\",\"url\":\"https://github.com/0xTomDaniel/octo-feather-realcase/pull/51\"}\n",
+  "err": "",
+  "exit": 0,
+  "source": {
+   "gh": "2.102.0",
+   "repo": "0xTomDaniel/octo-feather-realcase",
+   "command": "gh pr view 51 --json title,url -R 0xTomDaniel/octo-feather-realcase",
+   "date": "2026-11-28",
+   "caller": "lane gh1337 digest recording (#1339), scratch world, 2026-11-28T03:30:16.432185+00:00"
+  }
+ }
+]

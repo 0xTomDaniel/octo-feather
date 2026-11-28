@@ -618,7 +618,10 @@ tier or the director's relay allows (allowed, below). In order, each refusal bef
            the tier block (its form: merge-ask) and `PR #<n> stays open`; a relay naming another head refuses
            naming the head it allows, the head given and why it does not carry
   merge    `gh pr merge PR --merge --match-head-commit <the PR's full head>`, printing `merged: PR #<n> at head
-           <sha12> (lane <name>)`; a gh failure refuses, naming it
+           <sha12> (lane <name>)`; a gh failure refuses, naming it. Once merged, the ask allowed went on is
+           recorded, no gh call added: the post-merge record's `ask` (scripts/post_merge.py docstring), which
+           `digest` (below) reads.
+           Then the digest due check, no gh call: any day due, the director told once (`digest`, below)
   done     `done <key>` (below), its lines, <key> the tracker key of the record's `issue`, a lane key (comms
            #lane-record), as tracker_calls.py parent_key maps it (#1249); a failure is named on stderr and the
            routine still runs
@@ -836,7 +839,8 @@ agents: not read: <why>`. post-merge step 6 prints the same report.
 `start` (spec issue-lifecycle #acceptance-lane-start) first fetches the kit install's origin (the kit dir this command
 runs from, or OCTO_FEATHER_KIT_INSTALL: the install post-merge's step 3 refreshes) and refuses, exit 1 with nothing
 made, when main there has a commit the install lacks, naming the install, its commit, main's and the fix (post-merge's
-kit refresh, or a fast-forward of the install; #acceptance-lane-start-current-kit). Then it reads the lane key (the target's tracker skill's lane-key, as
+kit refresh, or a fast-forward of the install; #acceptance-lane-start-current-kit). Then, when a merge digest is due, it
+prints `merge digest due for ...` (`digest`, below; issue 1340), whatever it does after. Then it reads the lane key (the target's tracker skill's lane-key, as
 octo-feather-start resolves it), the ticket (issue-view), the repository (gh repo view) and the caller's
 $HERDR_PANE_ID (the director pane), each answer validated and refused naming its field before anything is made
 (arguments by argparse). The lane's parent ticket: TICKET, or with --new TITLE --body-file FILE instead (spec
@@ -3581,9 +3585,10 @@ def merge_lane(pr: int, nothing: str = "nothing merged") -> tuple[str, dict[str,
     return name, rec
 
 
-def merge_allowed(pr: int, head: str, repo: str | None, lane: str) -> str:
+def merge_allowed(pr: int, head: str, repo: str | None, lane: str) -> "tuple[str, post_merge.Ask]":
     """Whether lane LANE's merge of PR at HEAD may go, the one place the merge asks it (the rule: --help, merge,
-    allowed). The PR's full head, the one the merge pins; refuses naming why."""
+    allowed). The PR's full head, the one the merge pins, and the ask it goes on (merge records it); refuses naming
+    why."""
     d = cast("dict[str, object]", pr_view(pr, "state,headRefOid", repo))
     oid = str(d["headRefOid"])
     if d["state"] != "OPEN":
@@ -3603,19 +3608,26 @@ def merge_allowed(pr: int, head: str, repo: str | None, lane: str) -> str:
         raise Refuse(f"PR #{pr}'s merge ask at {oid[:12]} cannot be sorted into a tier ({'; '.join([a.refusal, *unread]).strip('; ')}): "
                      f"{stays}; fix the merge ask (octo-feather-lane merge-ask {pr} names each fix), then rerun")
     block = "; ".join(t.lines)
+    calls = s.calls.added if isinstance(s.calls, merge_ask.Calls) else []
+    optouts = s.optouts if isinstance(s.optouts, list) else []
+
+    def ask(allowed: "post_merge.Allowed", relay: str = "", proof: str = "") -> "post_merge.Ask":
+        return post_merge.Ask(tuple(t.lines), allowed, relay, proof,
+                              tuple(post_merge.CallLine(c.slug, c.line) for c in calls),
+                              tuple(post_merge.OptOut(c, why) for c, why in optouts))
     if t.n <= 2 and t.waits == "nobody":
         print(f"allowed: PR #{pr} at {oid[:12]}, its merge ask ({block})", file=sys.stderr, flush=True)
-        return oid
+        return oid, ask("tier")
     relays = relays_of(lane, pr)
     if not relays:
         raise Refuse(f"PR #{pr} at {oid[:12]}: its merge waits for {t.waits}, and no relay of its merge is on record "
                      f"({block}): {stays}; send up the section `octo-feather-lane merge-ask {pr}` prints, as printed (herdr-say "
                      "--parent), then rerun this merge once the director says it relayed it")
     rh = str(relays[-1]["head"])
-    if any(head_matches(str(x["head"]), oid) for x in relays):
+    if on := [x for x in relays if head_matches(str(x["head"]), oid)]:
         print(f"allowed: PR #{pr} at {oid[:12]} on the director's relay of that head, its merge ask ({block})",
               file=sys.stderr, flush=True)
-        return oid
+        return oid, ask("relay", str(on[-1].get("at", "")))
     try:
         full = git("rev-parse", "--verify", "--quiet", f"{rh}^{{commit}}")[1].strip()
         why: list[str] = []
@@ -3627,7 +3639,7 @@ def merge_allowed(pr: int, head: str, repo: str | None, lane: str) -> str:
             print(f"relay carried: the director's relay of PR #{pr} at {rh[:12]} carries to {oid[:12]}: {proof}", flush=True)
             print(f"allowed: PR #{pr} at {oid[:12]} on the director's relay carried, its merge ask ({block})",
                   file=sys.stderr, flush=True)
-            return oid
+            return oid, ask("relay carried", str(relays[-1].get("at", "")), proof)
     raise Refuse(f"PR #{pr}: the director's relay on record allows head {rh[:12]}, the merge was given head {oid[:12]} "
                  f"({'; '.join(why)}): {stays}; its merge waits for {t.waits} ({block})")
 
@@ -3645,13 +3657,10 @@ def relays_of(lane: str, pr: int) -> list[dict[str, object]]:
             and isinstance(x.get("head"), str) and SHA.fullmatch(str(x["head"]))]
 
 
-def cmd_relay(args: list[str]) -> int:
-    """`relay` (--help): the director's record of a merge it relays."""
+def director_only(does: str, after: str) -> None:
+    """Refuse, `only the director DOES`, nothing recorded and AFTER, unless HERDR_PANE_ID is the `pane` of
+    $(octo-feather-state)/director.toml (`relay`, `digest --sent`, `veto`: --help)."""
     import tomllib
-    args, link = take_opt(args, "--link")
-    if len(args) != 2 or not SHA.fullmatch(args[1]):
-        raise Refuse("usage: octo-feather-lane relay PR HEAD [--link <where the word is written>] (the lane's PR and the "
-                     f"head its merge ask named, 7 to 40 hex; got {' '.join(args) or 'nothing'})")
     toml = lanes_dir().parent / "director.toml"
     try:
         director = tomllib.loads(toml.read_text(encoding="utf-8")).get("pane")
@@ -3659,9 +3668,17 @@ def cmd_relay(args: list[str]) -> int:
         director = f"unread ({type(e).__name__})"
     me = os.environ.get("HERDR_PANE_ID", "")
     if not me or not isinstance(director, str) or me != director:
-        raise Refuse(f"only the director relays a merge: this pane is {me or 'unset (no HERDR_PANE_ID)'}, the director's "
-                     f"pane in {toml} is {director if isinstance(director, str) else 'unset'}; nothing recorded, no relay "
-                     "is on record: send the merge ask up (herdr-say --parent)")
+        raise Refuse(f"only the director {does}: this pane is {me or 'unset (no HERDR_PANE_ID)'}, the director's "
+                     f"pane in {toml} is {director if isinstance(director, str) else 'unset'}; nothing recorded, {after}")
+
+
+def cmd_relay(args: list[str]) -> int:
+    """`relay` (--help): the director's record of a merge it relays."""
+    args, link = take_opt(args, "--link")
+    if len(args) != 2 or not SHA.fullmatch(args[1]):
+        raise Refuse("usage: octo-feather-lane relay PR HEAD [--link <where the word is written>] (the lane's PR and the "
+                     f"head its merge ask named, 7 to 40 hex; got {' '.join(args) or 'nothing'})")
+    director_only("relays a merge", "no relay is on record: send the merge ask up (herdr-say --parent)")
     pr, head = pr_number(args[0]), args[1].lower()
     lane, _ = merge_lane(pr, "nothing recorded")
     line: dict[str, object] = {"at": f"{dtm.datetime.now(dtm.timezone.utc):%Y-%m-%dT%H:%M:%SZ}", "kind": "relay",
@@ -3683,11 +3700,13 @@ def cmd_merge(args: list[str]) -> int:
         raise Refuse(f"HEAD must be the approved head, 7 to 40 hex, got {args[1]!r}")
     pr, head, secs = pr_number(args[0]), args[1].lower(), pm_wait(wait)
     lane, rec = merge_lane(pr)
-    oid = merge_allowed(pr, head, repo, lane)
+    oid, ask = merge_allowed(pr, head, repo, lane)
     gh(["pr", "merge", str(pr), "--merge", "--match-head-commit", oid, *(["-R", repo] if repo else [])],
        f"nothing merged unless gh pr view {pr} reads MERGED; check it, then rerun")
     print(f"merged: PR #{pr} at head {oid[:12]} (lane {lane})", flush=True)
-    parent, rc = str(rec["issue"]), 0
+    post_merge.asked(post_merge.records(lanes_dir()), lane, pr, head, ask)   # the ask it merged on (digest reads it)
+    rc = merge_digest_due(repo or (str(rec["repository"]) if rec.get("repository") else None), lane)
+    parent = str(rec["issue"])
     try:
         cmd_done([tracker_calls.parent_key(parent, err=Refuse)])   # the record's lane key, as a tracker key
     except Refuse as e:
@@ -3810,6 +3829,48 @@ def cmd_start(args: list[str]) -> int:
     return 0
 
 
+def cmd_digest(args: list[str]) -> int:
+    """`digest` (--help): the logic and its help chunk in scripts/merge_digest.py, imported only here."""
+    import merge_digest
+    args, sha = take_opt(args, "--sent")
+    if sha is None:
+        print(merge_digest.digest(args, state_dir(), Refuse), flush=True)
+        return 0
+    director_only("records a digest sent", "no gh call: run it in the director's pane after sending the digest")
+    print(merge_digest.sent(args, sha, state_dir(), Refuse), flush=True)
+    return 0
+
+
+def cmd_veto(args: list[str]) -> int:
+    """`veto` (--help): the logic in scripts/merge_digest.py, imported only here."""
+    import merge_digest
+    args, said = take_opt(args, "--said")
+    director_only("records a veto", "nothing filed: run it in the director's pane on the owner's veto")
+    print(merge_digest.veto(args, said or "", state_dir(), Refuse), flush=True)
+    return 0
+
+
+def merge_digest_due(repo: str | None, lane: str) -> int:
+    """merge's due check, once merged (--help, digest): any day due, the director told once through post-merge's tell
+    (key `digest <day>`), unless a record's told holds it; 1 when the check fails or the director is not told."""
+    import merge_digest
+    try:
+        due = merge_digest.due(state_dir(), repo, Refuse)
+    except (Refuse, post_merge.Refused) as e:
+        print(f"octo-feather-lane merge: digest due check: {e}", file=sys.stderr, flush=True)
+        return 1
+    if due is None or due.told:
+        return 0
+    return post_merge.tell_director(lanes_dir(), lane, due.key, due.line, show_line)
+
+
+def help_text() -> str:
+    """--help: this docstring, merge_digest.py's chunk joined in before its last line (imported only to print it)."""
+    import merge_digest
+    doc, foot = (__doc__ or "").strip().rsplit("\n\n", 1)
+    return f"{doc}\n\n{merge_digest.HELP}\n{foot}"
+
+
 COMMANDS = {
     "archive": cmd_archive_lane,
     "reflect": cmd_reflect,
@@ -3832,12 +3893,14 @@ COMMANDS = {
     "post-merge": cmd_post_merge,
     "stale": cmd_stale,
     "start": cmd_start,
+    "digest": cmd_digest,
+    "veto": cmd_veto,
 }
 
 
 def main(argv: list[str]) -> int:
     if not argv or argv[0] not in COMMANDS:
-        print(__doc__.strip(), file=sys.stderr); return 64
+        print(help_text(), file=sys.stderr); return 64
     try:
         return COMMANDS[argv[0]](argv[1:])
     except (Refuse, post_merge.Refused) as e:

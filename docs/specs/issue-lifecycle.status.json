@@ -566,12 +566,22 @@
       ]
     },
     "acceptance-merge-digest": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1357,
+      "record": "20261128T110108Z-f5a01cd7",
+      "commit": "9c5f4e4d99e5b3d0214e50b80f05e8aa2cdcb8b2",
+      "tests": [
+        "tests/gate/kit/lane_digest.py"
+      ]
     },
     "acceptance-merge-digest-veto": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1357,
+      "record": "20261128T110108Z-dad76e78",
+      "commit": "9c5f4e4d99e5b3d0214e50b80f05e8aa2cdcb8b2",
+      "tests": [
+        "tests/gate/kit/lane_veto.py"
+      ]
     },
     "acceptance-merge-starts-routine": {
       "status": "built",

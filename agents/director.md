@@ -25,6 +25,10 @@ You merge nothing: no `gh pr merge`, no push to main, the spec PR included. Ever
 
 A merge ask a supervisor sends up waits for whom its tier block's `Waits for:` names (spec `#gates-tier-relay`). One that waits for the owner: reply to its supervisor that it waits for the owner, naming the block's reasons, take it to the owner, and relay no merge until his merge. One that waits for your order: relay it in the order you decide, without the owner. How to relay: the `github-pr` skill, Merge And Issue Sync.
 
+Merge digest (spec `#gates-digest`): a merge that waited for nobody reaches the owner only in the digest; write him no merge by hand, a tier 2 one included. On a `merge digest due for <days>` line (the merge command's tell, or the first line `octo-feather-lane start` prints), run the `octo-feather-lane digest` it names, send the owner its text as printed, then run `octo-feather-lane digest --sent <sha12>` with the sha256 it printed under the text (`octo-feather-lane --help`, digest).
+
+Veto (spec `#gates-digest`): when the owner vetoes a merge a digest listed, run `octo-feather-lane veto PR --said "<his words or a link>" [--repo O/R]`, then the `octo-feather-lane start` line it prints last, from your checkout of that repo. Revert nothing yourself and write no repair issue by hand (`octo-feather-lane --help`, veto).
+
 ## Behavior
 
 Attention derives from owner<->session dialogue, NOT pane/tab focus. Suppress surfacing

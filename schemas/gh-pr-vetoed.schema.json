@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "gh-pr-vetoed.schema.json",
+  "title": "gh pr view N --json state,title,url,mergedAt,mergeCommit: the pull request octo-feather-lane veto reads (issue-lifecycle spec #gates-digest)",
+  "description": "Validated by scripts/merge_digest.py (veto) before it trusts the answer; gh prints exactly the fields asked, so no other key is allowed. A PR not merged has mergedAt and mergeCommit null.",
+  "type": "object",
+  "required": ["state", "title", "url", "mergedAt", "mergeCommit"],
+  "properties": {
+    "state": {"description": "GitHub's state of the pull request", "enum": ["OPEN", "CLOSED", "MERGED"]},
+    "title": {"description": "Its title", "type": "string"},
+    "url": {"description": "Its web URL", "type": "string", "pattern": "^https://"},
+    "mergedAt": {
+      "description": "When it merged, UTC, as GitHub gives it; null when not merged",
+      "anyOf": [{"type": "null"}, {"type": "string", "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$"}]
+    },
+    "mergeCommit": {
+      "description": "Its merge commit; null when not merged",
+      "anyOf": [
+        {"type": "null"},
+        {
+          "type": "object",
+          "required": ["oid"],
+          "properties": {"oid": {"type": "string", "pattern": "^[0-9a-f]{40,64}$"}},
+          "additionalProperties": false
+        }
+      ]
+    }
+  },
+  "additionalProperties": false
+}
