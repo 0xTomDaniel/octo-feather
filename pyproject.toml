@@ -350,8 +350,6 @@ extraPaths = ["tests/gate", "scripts"]
   "PTH120",
   "PTH123",
   "PTH207",
-  "S606",
-  "S607",
   "T201",
 ]
 "scripts/octo-feather-evidence" = [
