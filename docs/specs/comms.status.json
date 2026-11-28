@@ -284,8 +284,8 @@
     "acceptance-director-relaunch": {
       "status": "built",
       "pr": 1313,
-      "record": "20261126T084011Z-b2454196",
-      "commit": "5be56dc77d6d7a8f0add6e8914b0e978d5988626",
+      "record": "20261128T034525Z-21b7e7a9",
+      "commit": "ddc0326a315b66652550e2369b41f09b2130ed75",
       "tests": [
         "tests/gate/kit/test_start_relaunch.py"
       ]
@@ -293,8 +293,8 @@
     "acceptance-director-replace": {
       "status": "built",
       "pr": 1313,
-      "record": "20261126T084012Z-ca54d80b",
-      "commit": "5be56dc77d6d7a8f0add6e8914b0e978d5988626",
+      "record": "20261128T034525Z-b3cccd4b",
+      "commit": "ddc0326a315b66652550e2369b41f09b2130ed75",
       "tests": [
         "tests/gate/kit/test_start_relaunch.py"
       ]
@@ -302,8 +302,8 @@
     "acceptance-director-replace-outgoing": {
       "status": "built",
       "pr": 1313,
-      "record": "20261126T084012Z-54a4ff14",
-      "commit": "5be56dc77d6d7a8f0add6e8914b0e978d5988626",
+      "record": "20261128T034526Z-f533306c",
+      "commit": "ddc0326a315b66652550e2369b41f09b2130ed75",
       "tests": [
         "tests/gate/kit/test_start_relaunch.py"
       ]
@@ -311,8 +311,8 @@
     "acceptance-director-relaunch-busy": {
       "status": "built",
       "pr": 1313,
-      "record": "20261126T084012Z-2bc16d64",
-      "commit": "5be56dc77d6d7a8f0add6e8914b0e978d5988626",
+      "record": "20261128T034526Z-5fed09d8",
+      "commit": "ddc0326a315b66652550e2369b41f09b2130ed75",
       "tests": [
         "tests/gate/kit/test_start_relaunch.py"
       ]
@@ -320,8 +320,8 @@
     "acceptance-director-relaunch-own-scope": {
       "status": "built",
       "pr": 1313,
-      "record": "20261126T084012Z-34b83956",
-      "commit": "5be56dc77d6d7a8f0add6e8914b0e978d5988626",
+      "record": "20261128T034526Z-322f1c5b",
+      "commit": "ddc0326a315b66652550e2369b41f09b2130ed75",
       "tests": [
         "tests/gate/kit/test_start_relaunch.py"
       ]
@@ -329,8 +329,8 @@
     "acceptance-director-relaunch-same-session": {
       "status": "built",
       "pr": 1313,
-      "record": "20261126T084012Z-3ed25b1b",
-      "commit": "5be56dc77d6d7a8f0add6e8914b0e978d5988626",
+      "record": "20261128T034526Z-395b88a8",
+      "commit": "ddc0326a315b66652550e2369b41f09b2130ed75",
       "tests": [
         "tests/gate/kit/test_start_relaunch.py"
       ]
