@@ -447,6 +447,22 @@
     "acceptance-decision-log-schema": {
       "status": "built",
       "pr": 50
+    },
+    "acceptance-parity-pass-due": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-parity-pass-capped": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-parity-pass-told": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-parity-network-free": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
