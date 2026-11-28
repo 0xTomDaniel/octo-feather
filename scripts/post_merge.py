@@ -1250,6 +1250,8 @@ PARITY_STOP = 30  # s a lever run stopped at the wall cap has after SIGINT, then
 PARITY_RECORD = "pass.json"
 PARITY_FIELDS = ("began", "running", "last", "cases")
 LEVER = "tests/parity/lever.py"  # the repo's parity lever, run as `tests/parity/lever.py CASE`
+# The lever's switches for the pass's runs: its no-fast-run-turn switch joins here once #1368 lands.
+LEVER_FLAGS: tuple[str, ...] = ()
 DEAD = {1: "fails", 2: "refused"}  # a lever exit as its case's result (another non-zero: fails)
 
 
@@ -1393,17 +1395,16 @@ def _capped(t0: float, c0: float, wall: float, cpu: float) -> str:
 
 def _lever(tree: Path, case: str, log: Path, left: float) -> tuple[int, str] | None:
     """CASE's lever run in TREE, its lines to LOG, with no agent identity (so no run of it asks a
-    slot: octo-feather-slot --help) and no fast-run turn taken, its group stopped past LEFT seconds
-    (SIGINT, PARITY_STOP s, SIGKILL): its exit and output, None when stopped."""
-    # GATE_WORKERS unset too: its runs at the gate's default workers, over the fast tier's cap, so
-    # none is a fast-tier run holding a fast-run turn a fast run would wait for (heavy_slot.py)
-    gone = {*AGENT_VARS, "HERDR_PANE_ID", "GATE_WORKERS"}
+    slot: octo-feather-slot --help), GATE_WORKERS 0, LEVER_FLAGS given, its group stopped past
+    LEFT seconds (SIGINT, PARITY_STOP s, SIGKILL): its exit and output, None when stopped."""
+    gone = {*AGENT_VARS, "HERDR_PANE_ID"}
     env = {k: v for k, v in os.environ.items() if k not in gone}
+    env["GATE_WORKERS"] = "0"  # one case, one process: the director's terms (#1343)
     env["PYTHONUNBUFFERED"] = "1"  # its lines in the order it wrote them, the refusal last
     with log.open("w") as f:
         try:
             p = subprocess.Popen(
-                [str(tree / LEVER), case],
+                [str(tree / LEVER), *LEVER_FLAGS, case],
                 cwd=tree,
                 env=env,
                 stdin=subprocess.DEVNULL,
