@@ -744,6 +744,7 @@ def test_merge_ask_gate_time() -> None:
     path = Path("/s/octo-feather/check-runs.jsonl")
     now = dt.datetime(2026, 10, 5, 12, 0, tzinfo=dt.UTC)
     budget = "budget_seconds = 150\ngrowth_share = 0.25\ntrend_runs = 3\n"
+    budget += "usage_reserve = 0.1\nlane_limit = 7\n"  # the lane start's keys (#1346)
     j, h, b = J[:12], H[:12], B[:12]
     head = (
         f"Gate time (the full gate on the final head against gate-budget.toml at {h}; the code "

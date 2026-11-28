@@ -867,6 +867,49 @@ sent), or --absent STEP when it does not and the pane is not compacting (sent on
 with no unknown send is refused. Once the start finishes the file is gone, and a rerun
 is refused as any existing lane.
 
+The brake (spec issue-lifecycle #lanes-start, #boundary-lane-start-brake) runs once the kit, the director pane and
+the repository are read, before the ticket is read or filed, on every start but the rerun of a stopped one (its
+lanes/<key>.start.json there). First the room, before any read: the open lanes, each lane record not archived
+(lanes/*.toml in ${XDG_STATE_HOME:-~/.local/state}/octo-feather and in each of its sessions/*/lanes/), against
+lane_limit in the kit install's gate-budget.toml (7 when unset); at or over it the start is refused, exit 1, in one
+line, `refused (room): <n> of <limit> lanes open (lane_limit <limit>, <install>/gate-budget.toml): <each open lane's
+key, a session's named>; nothing made: archive a lane (octo-feather-lane archive NAME) or raise lane_limit in
+<install>/gate-budget.toml, then rerun`. Else
+it prints `room: <n> of <limit> lanes open`, then reads the Claude account's weekly use from the box's model route:
+Pi's config ($PI_CODING_AGENT_DIR, else ~/.pi/agent), models.json providers.anthropic baseUrl and apiKey, the key resolved as Pi
+resolves it (a leading `!` runs the rest in the shell, its stdout trimmed; else a literal with $NAME and ${NAME} from
+the environment), never printed, logged or stored; then GET <baseUrl>/v1/models and one POST <baseUrl>/v1/messages,
+max_tokens 1, on the newest listed model whose id holds haiku (else the newest listed), 20 s each. The reading is that
+answer's anthropic-ratelimit-unified-7d*-utilization and -reset headers, one weekly window each (7d; 7d_opus or
+7d_sonnet when sent), and its Date header is now. Each reading is appended to
+${XDG_STATE_HOME:-~/.local/state}/octo-feather/usage-readings.jsonl, one line holding that time and each window's
+utilization and reset. Each window is projected to its reset: the burn the higher of the week's average (the share
+over the time since the week began, the reset less 7 days, taken over no less than its first 6 hours) and the last
+hours' (from the oldest stored reading of the same window and reset at least 1 and at most 6 hours old; none, not
+counted), the course the share plus the burn to the reset. The tightest window's course is set against the line, 1 less
+usage_reserve in the kit install's gate-budget.toml (0.1 when unset). Under it, printed before `key=...`: `usage:
+<window> <share> used at <Date> (<route host>), burn <rate>/h (week average <rate>/h, last 6h <rate>/h or none), reset
+<time>, course <share> at reset, under <line> ...`. Over it, in any window, the start is refused, exit 1 before the
+ticket is read or filed, nothing made, no supervisor (the reading still stored), in one line: `refused (usage): <the
+same figures>, over <line> (reserve <share>, usage_reserve in <install>/gate-budget.toml); no lane started, nothing
+made: wait for the reset at <time>, or change usage_reserve in <install>/gate-budget.toml`, the time the latest reset
+of the windows over the line. When the usage cannot be read (no providers.anthropic route or key, a key that is no
+printable ASCII, a baseUrl no request can be built on, a refused connection or a timeout, a non-2xx answer, an answer
+cut short, no model listed, no Date, a utilization that is no finite share from 0 to 2 or a reset not a whole epoch
+second after the Date and within a week and an hour of it (the header named), no unified weekly limit headers: an
+API-key route, or a route to another provider; any other failure of the read or the brake alike, named by its type
+alone) nothing is stored, and each window of this week stored (its reset still ahead of now) is
+carried forward from its last reading: the course that reading's share plus the burn measured then (from the readings
+stored before it) to the reset. A carried course over the line refuses the start the same way: `refused (usage,
+carried): usage not read now (<why>); last reading <window> <share> at <time>, carried at its burn then: burn ...,
+course <share> at reset, over <line> ...`; under it, it prints `usage: not read (<why>); last reading ..., under <line>
+...: the brake did not stop this start`; with no reading this week, `usage: not read (<why>); no reading this week: the
+brake did not stop this start`. Now, with no answer had, is the box's clock, or OCTO_FEATHER_NOW (an ISO time, UTC
+unless it says so) when set, and said: the line begins with `clock overridden: OCTO_FEATHER_NOW=<value>`. With an
+answer had, its Date is now: the override is ignored, the line begins with `clock overridden: OCTO_FEATHER_NOW=<value>
+ignored, the answer's Date is now` and the stored line also records that, as its clock. Whatever the brake cannot read,
+the start is refused only on the room or a course over the line, and otherwise the start goes on.
+
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
 import functools, hashlib, importlib.machinery, importlib.util, json, os, re, shlex, subprocess, sys, tempfile, time

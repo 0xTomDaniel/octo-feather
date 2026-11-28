@@ -23,3 +23,7 @@ eval_slots = 1
 slot_grace_seconds = 60
 # slot_bound_seconds: the slot queue's bound for a holder's first run (#977), what it means: octo-feather-slot --help.
 slot_bound_seconds = 1200
+# usage_reserve: the share of the Claude account's weekly limit the lane start keeps back; lane_limit: the box's open
+# lanes at most. What reads them and what each means: octo-feather-lane --help (start); issue-lifecycle #lanes-start.
+usage_reserve = 0.1
+lane_limit = 7

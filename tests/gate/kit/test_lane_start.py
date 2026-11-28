@@ -22,33 +22,51 @@ Case = Callable[..., None]
 
 
 @pytest.mark.criterion(
-    "issue-lifecycle#acceptance-lane-start", source="tests/gate/kit/lane_start.py"
+    "issue-lifecycle#acceptance-lane-start",
+    "issue-lifecycle#acceptance-lane-start-clear",
+    source="tests/gate/kit/lane_start.py",
 )
 def test_lane_start_started(case: Case) -> None:
     case(started)
 
 
+@pytest.mark.criterion(
+    "issue-lifecycle#acceptance-lane-start-unread", source="tests/gate/kit/lane_start.py"
+)
 def test_lane_start_unicode_title(case: Case) -> None:
     case(unicode_title)
 
 
+@pytest.mark.criterion(
+    "issue-lifecycle#acceptance-lane-start-usage",
+    "issue-lifecycle#acceptance-lane-start-carried",
+    "issue-lifecycle#acceptance-lane-start-room",
+    source="tests/gate/kit/lane_start.py",
+)
 def test_lane_start_refused(case: Case) -> None:
     case(refused)
 
 
 @pytest.mark.criterion(
-    "issue-lifecycle#acceptance-lane-start-files", source="tests/gate/kit/lane_start.py"
+    "issue-lifecycle#acceptance-lane-start-files",
+    "issue-lifecycle#acceptance-lane-start-unread",
+    source="tests/gate/kit/lane_start.py",
 )
 def test_lane_start_files(case: Case) -> None:
     case(files)
 
 
+@pytest.mark.criterion(
+    "issue-lifecycle#acceptance-lane-start-unread", source="tests/gate/kit/lane_start.py"
+)
 def test_lane_start_filed_stopped(case: Case) -> None:
     case(filed_stopped)
 
 
 @pytest.mark.criterion(
-    "issue-lifecycle#acceptance-lane-start-sub-issue", source="tests/gate/kit/lane_start.py"
+    "issue-lifecycle#acceptance-lane-start-sub-issue",
+    "issue-lifecycle#acceptance-lane-start-unread",
+    source="tests/gate/kit/lane_start.py",
 )
 def test_lane_start_sub_issue(case: Case) -> None:
     case(sub_issue)
@@ -62,14 +80,18 @@ def test_lane_start_exists(case: Case) -> None:
 
 
 @pytest.mark.criterion(
-    "issue-lifecycle#acceptance-lane-start-rerun", source="tests/gate/kit/lane_start.py"
+    "issue-lifecycle#acceptance-lane-start-rerun",
+    "issue-lifecycle#acceptance-lane-start-unread",
+    source="tests/gate/kit/lane_start.py",
 )
 def test_lane_start_rerun(case: Case) -> None:
     case(rerun)
 
 
 @pytest.mark.criterion(
-    "issue-lifecycle#acceptance-lane-start-rerun", source="tests/gate/kit/lane_start.py"
+    "issue-lifecycle#acceptance-lane-start-rerun",
+    "issue-lifecycle#acceptance-lane-start-unread",
+    source="tests/gate/kit/lane_start.py",
 )
 def test_lane_start_unknown_send(case: Case) -> None:
     case(unknown_send)

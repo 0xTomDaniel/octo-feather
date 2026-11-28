@@ -70,27 +70,121 @@ Seam (ticket #1159, recorded before any test): `octo-feather-lane start`, as abo
   help_    `start --help` and `start -h`, the kit install behind its origin's main: exit 0, stdout
            the start entry of `octo-feather-lane --help` alone (every step agents/director.md points
            to it for: the parent filed or taken, the worktree and branch, the supervisor, the lane
-           record, the goal, the brief, the director log line, the refusals and the rerun); no gh
-           or herdr call and nothing made.
+           record, the goal, the brief, the director log line, the refusals, the rerun, and the
+           brake: issues 1346, 1348); no gh or herdr call and nothing made.
+
+Seams (ticket #1346, recorded before any test): issue-lifecycle#acceptance-lane-start-clear and
+#acceptance-lane-start-unread, `octo-feather-lane start`, the same stand-ins; every scenario's Pi
+config (PI_CODING_AGENT_DIR) and state (XDG_STATE_HOME) in its scratch, so none reaches the box's
+route or readings, the route there none unless a scenario names one (route) and the start saying
+so. The brake's cases ride the scenarios above, adding no gh store entry:
+
+  started  the route testkit/provider.py replaying the real route's recorded answers
+           (fixtures/lane-brake/, scripts/lane_brake.py record): before `key=...` the usage line
+           (window, share, the answer's Date, the route's host, burn, reset, course, under the
+           line, worked by hand in CLEAR); usage-readings.jsonl holds that one reading, its time
+           and window's share and reset only.
+  unicode_title  the route at a closed port: `usage: not read (... Connection refused)` and no
+           reading this week, then the lane starts; nothing stored.
+  files    the route replaying the real recorded 401: `usage: not read (... answered 401)`, then
+           filed=906 and the lane; nothing stored.
+  rerun    its first run with baseUrl `not-a-url` (no request can be built): `usage: not read
+           (... unknown url type ...)`, the supervisor started (code review on c973ad51).
+  filed_stopped  its first run with the route replaying the recorded 401 cut short (provider.py
+           --truncated: the error body's read fails): `usage: not read (... IncompleteRead ...)`,
+           the supervisor started, nothing stored.
+  unknown_send  its first run with apiKey a `!command` printing byte 0xff (no UTF-8, so no key
+           an HTTP header carries): `usage: not read (... no printable ASCII key)`, the supervisor
+           started, nothing stored (final review on 7a5fad8d).
+  sub_issue  the route replaying the recording with its 7d utilization NaN (provider.py --header):
+           `usage: not read (... 'NaN': no share of the limit ...)`, nothing stored, then refused
+           as a sub-issue as before.
+  Each of these: the dummy key in no output and no state or Herdr file.
+
+Seams (ticket #1348, recorded before any test): issue-lifecycle#acceptance-lane-start-usage and
+#acceptance-lane-start-carried, `octo-feather-lane start`, the same stand-ins and scratch Pi config
+and state. They ride `refused` (usage_carried), adding no gh store entry: the brake refuses before
+the ticket is read.
+
+  refused  then the box's usage_reserve 0.5 (the scratch kit install's gate-budget.toml, a setting,
+           not an edited answer), the route replaying the same real recording, whose course (62%,
+           CLEAR) passes the 50% line: exit 1, stderr naming the share, the burn, the reading's
+           time, the reset, the course, the line, the reset to wait for and usage_reserve's file to
+           change (worked by hand in USAGE); nothing on stdout, no ticket read, nothing made, no
+           supervisor; the reading stored as the clear start stores it. Then the route at a closed
+           port and OCTO_FEATHER_NOW an hour after the recorded Date: exit 1, stderr the clock
+           override, then the last reading, its time and the course carried from it at its burn
+           then (62%, over 50%), why it was not read now and the reset to wait for (CARRIED);
+           nothing made, no supervisor, nothing more stored; the key nowhere.
+
+Seam (ticket #1347, recorded before any test): issue-lifecycle#acceptance-lane-start-room,
+`octo-feather-lane start`, the same stand-ins; the limit lane_limit in the scratch kit install's
+gate-budget.toml, none there (usage_carried's usage_reserve alone), so 7.
+
+  started  six open lane records there before (lanes(): four in the top state dir, two in a
+           session's, beside an archived one and a stopped start's file, neither open): `room: 6
+           of 7 lanes open` printed first, then the usage line, and the lane starts.
+  refused  last, seven open lane records (lanes(): five in the top dir, two in session s2's),
+           the route the replaying provider logging each request (full): exit 1 naming the
+           count, the limit, gate-budget.toml, each open lane's key and the fix, though the usage
+           would refuse too (room first); nothing printed on stdout, no request to the provider,
+           nothing more stored, no gh call but the repository's (no ticket read, the stored
+           issue still the malformed one), no Herdr call, nothing made.
 """
 
 from __future__ import annotations
 
+import contextlib
 import json
 import re
+import socket
+import subprocess
 import sys
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import tomllib
-from testkit import ROOT, Scratch, kit, main
+from testkit import HERE, ROOT, Ran, Scratch, kit, main
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from collections.abc import Generator
 
 TITLE = "Lane start as one command"
 OUTCOME = "a scratch proof"
 BRIEF = "Build the lane start.\nSpec: docs/specs/issue-lifecycle.spec.html\n"
 DIRECTOR = {"OCTO_FEATHER_ROLE": "director", "HERDR_PANE_ID": "w0:p1", "HERDR_WORKSPACE_ID": "w0"}
+# The brake's route (issue 1346): a dummy key that must show nowhere, and the real route's answers
+# recorded by scripts/lane_brake.py record (each file's note), replayed by testkit/provider.py.
+KEY = "testkit-dummy-anthropic-key-1346"
+RECORDED = Path(__file__).resolve().parent / "fixtures" / "lane-brake"
+# The recording's reading as a person reads it: Date Sat, 28 Nov 2026 06:19:36 GMT; 7d utilization
+# 0.19, reset 1796266800. Worked by hand: the week from 2026-11-26T03:00Z, 51.33 h in, so 0.37%/h;
+# 116.67 h to the reset, so 19% + 43% = 62%.
+CLEAR = (
+    "usage: 7d 19% used at 2026-11-28T06:19:36Z ({host}), burn 0.37%/h (week average 0.37%/h,"
+    " last 6h none), reset 2026-12-03T03:00:00Z, course 62% at reset, under 90% (reserve 10%,"
+    " gate-budget.toml usage_reserve)"
+)
+NOT_READ = "usage: not read ({why}); no reading this week: the brake did not stop this start"
+# The same reading against the line 1 - 0.5: its 62% course (CLEAR, worked above) is over 50%; the
+# wait is that window's reset, the change usage_reserve in the install's gate-budget.toml.
+RESERVE_HALF = "usage_reserve = 0.5\n"
+OVER = (
+    "over 50% (reserve 50%, usage_reserve in {budget}); no lane started, nothing made: wait for the"
+    " reset at 2026-12-03T03:00:00Z, or change usage_reserve in {budget}"
+)
+USAGE = (
+    "refused (usage): 7d 19% used at 2026-11-28T06:19:36Z ({host}), burn 0.37%/h (week average"
+    " 0.37%/h, last 6h none), reset 2026-12-03T03:00:00Z, course 62% at reset, " + OVER
+)
+# Carried from that stored reading at its own time: 19% + 0.37%/h x 116.67 h = 62%, as at the read.
+NOW = "2026-11-28T07:19:36Z"
+CARRIED = (
+    f"clock overridden: OCTO_FEATHER_NOW={NOW}; refused (usage, carried): usage not read now"
+    " ({why}); last reading 7d 19% at 2026-11-28T06:19:36Z, carried at its burn then: burn"
+    " 0.37%/h (week average 0.37%/h, last 6h none), reset 2026-12-03T03:00:00Z, course 62% at"
+    " reset, " + OVER
+)
 
 
 def show(line: str) -> None:
@@ -109,6 +203,8 @@ def world(s: Scratch) -> tuple[Path, Path, str]:
     for k in [k for k in s.env if k.startswith(("HERDR_", "OCTO_FEATHER_"))]:
         del s.env[k]
     s.env["FAKE_HERDR"] = str(d)
+    s.env["PI_CODING_AGENT_DIR"] = str(s.root / "pi-agent")  # never the box's route
+    s.env["XDG_STATE_HOME"] = str(s.home / ".local" / "state")  # never the box's readings
     state = s.home / ".local" / "state" / "octo-feather"
     state.mkdir(parents=True)
     (state / "director.toml").write_text('pane = "w0:p1"\n')
@@ -137,12 +233,108 @@ def world(s: Scratch) -> tuple[Path, Path, str]:
     return d, checkout, s.git(seed, "rev-parse", "HEAD")
 
 
+def route(s: Scratch, base: str, key: str = KEY) -> None:
+    """S's Pi config: providers.anthropic at BASE with KEY (the dummy one by default)."""
+    agent = Path(s.env["PI_CODING_AGENT_DIR"])
+    agent.mkdir(parents=True, exist_ok=True)
+    anthropic = {"baseUrl": base, "apiKey": key}
+    (agent / "models.json").write_text(json.dumps({"providers": {"anthropic": anthropic}}))
+
+
+@contextlib.contextmanager
+def replaying(s: Scratch, recorded: Path, *flags: str) -> Generator[str]:
+    """The route at testkit/provider.py replaying RECORDED with FLAGS (its header; route); its host
+    while it serves."""
+    p = subprocess.Popen(
+        [sys.executable, str(HERE / "provider.py"), "--replay", str(recorded), *flags],
+        stdout=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        assert p.stdout is not None
+        host = f"127.0.0.1:{p.stdout.readline().strip()}"
+        route(s, f"http://{host}")
+        yield host
+    finally:
+        p.kill()
+        p.wait()
+
+
+def closed(s: Scratch) -> str:
+    """The route at a port no one listens on (bound, then closed); its host."""
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        host = f"127.0.0.1:{sock.getsockname()[1]}"
+    route(s, f"http://{host}")
+    return host
+
+
+def supervised(d: Path, key: str) -> str:
+    """The pane of the supervisor KEY the start started (testkit Herdr's agents), else fail."""
+    agents = json.loads((d / "agents.json").read_text())
+    panes = [p for p, g in agents.items() if g["name"] == key]
+    assert len(panes) == 1, agents
+    return panes[0]
+
+
+def readings(s: Scratch) -> Path:
+    return s.home / ".local" / "state" / "octo-feather" / "usage-readings.jsonl"
+
+
+def keyless(s: Scratch, *outs: str) -> None:
+    """The dummy KEY in none of OUTS, the readings, the state dir's files or the Herdr world's."""
+    files = [p for d in (s.home / ".local" / "state", s.root / "herdr") for p in d.rglob("*")]
+    for text in [*outs, *(p.read_text() for p in files if p.is_file())]:
+        assert KEY not in text, text
+    show(f"the key in no output and none of {len(files)} state and Herdr files")
+
+
+ROOM = "room: {n} of 7 lanes open"
+
+
+def lanes(s: Scratch, n: int) -> list[str]:
+    """N open lane records in S's state (all but two in the top dir's lanes/, two in session s2's),
+    beside an archived record and a stopped start's file, neither open; each open lane as the
+    refusal names it."""
+    state = s.home / ".local" / "state" / "octo-feather"
+    top, session = state / "lanes", state / "sessions" / "s2" / "lanes"
+    for d in (top / "archive", session):
+        d.mkdir(parents=True, exist_ok=True)
+    (top / "archive" / "gh1.toml").write_text('supervisor = "w9:p1"\n')
+    (top / "gh2.start.json").write_text("{}")
+    keys = [f"gh{10 + i}" for i in range(n - 2)]
+    for k in keys:
+        (top / f"{k}.toml").write_text('supervisor = "w9:p2"\n')
+    for k in ("gh50", "gh51"):
+        (session / f"{k}.toml").write_text('supervisor = "w9:p3"\n')
+    return [*keys, "gh50 (session s2)", "gh51 (session s2)"]
+
+
+def clear(s: Scratch, r: Ran, host: str) -> str:
+    """R, a start on the replayed recording at HOST, six lanes open, printed the room line, then
+    the usage line (CLEAR), and stored that one reading, the key nowhere; its other line."""
+    room, usage, out = r.out.split("\n")
+    assert room == ROOM.format(n=6), room
+    show(f"printed first: {room}")
+    assert usage == CLEAR.format(host=host), usage
+    show(f"then: {usage}")
+    stored = [json.loads(x) for x in readings(s).read_text().splitlines()]
+    window = {"used": 0.19, "reset": "2026-12-03T03:00:00Z"}
+    assert stored == [{"at": "2026-11-28T06:19:36Z", "windows": {"7d": window}}], stored
+    show(f"usage-readings.jsonl: {stored}")
+    keyless(s, r.out, r.err)
+    return out
+
+
 def started(s: Scratch) -> None:
     d, checkout, main_ = world(s)
+    lanes(s, 6)
     brief = s.root / "brief.md"
     brief.write_text(BRIEF)
     cmd = [kit("octo-feather-lane"), "start", "905", "--goal", TITLE, "--outcome", OUTCOME]
-    out = s.run([*cmd, "--brief-file", str(brief)], cwd=checkout, env=DIRECTOR).out
+    with replaying(s, RECORDED) as host:
+        r = s.run([*cmd, "--brief-file", str(brief)], cwd=checkout, env=DIRECTOR)
+    out = clear(s, r, host)
     m = re.fullmatch(r"key=gh905 pane=(\S+) issue=905", out)
     assert m, out
     pane = m.group(1)
@@ -208,7 +400,14 @@ def unicode_title(s: Scratch) -> None:
     brief.write_text(BRIEF)
     title = 'Ship \U0001f680 "quoted" back\\slash'
     cmd = [kit("octo-feather-lane"), "start", f"--goal={title}", f"--brief-file={brief}"]
-    s.run([*cmd, "--outcome", OUTCOME, "905"], cwd=checkout, env=DIRECTOR)
+    host = closed(s)
+    r = s.run([*cmd, "--outcome", OUTCOME, "905"], cwd=checkout, env=DIRECTOR)
+    why = f"GET {host}/v1/models: [Errno 111] Connection refused"
+    assert r.out.split("\n")[:2] == [ROOM.format(n=0), NOT_READ.format(why=why)], r.out
+    assert re.fullmatch(r"key=gh905 pane=\S+ issue=905", r.out.split("\n")[2]), r.out
+    assert not readings(s).exists()
+    show(f"route at a closed port: printed {r.out!r}, nothing stored")
+    keyless(s, r.out, r.err)
     state = s.home / ".local" / "state" / "octo-feather"
     rec = tomllib.loads((state / "lanes" / "gh905.toml").read_text(encoding="utf-8"))
     assert rec["goal"] == title, rec
@@ -250,6 +449,8 @@ def refused(s: Scratch) -> None:
     assert "issue-view 905 printed title is no string" in err, err
     nothing_made(s, d, checkout)
     show(f"issue-view malformed: exit 1, {err}")
+    usage_carried(s, d, checkout)
+    full(s, d, checkout, cmd)
 
 
 NEW = "Scratch lane"
@@ -273,11 +474,16 @@ def creates(s: Scratch) -> list[str]:
 def files(s: Scratch) -> None:
     _, checkout, _ = world(s)
     cmd, body = new_start(s)
-    out = s.run(cmd, cwd=checkout, env=DIRECTOR).out.splitlines()
-    assert out[0] == "filed=906", out
-    assert re.fullmatch(r"key=gh906 pane=\S+ issue=906", out[1]), out
-    assert len(out) == 2, out
+    with replaying(s, RECORDED / "unauthorized") as host:
+        r = s.run(cmd, cwd=checkout, env=DIRECTOR)
+    out = r.out.splitlines()
+    assert out[:2] == [ROOM.format(n=0), NOT_READ.format(why=f"GET {host}/v1/models answered 401")]
+    assert out[2] == "filed=906", out
+    assert re.fullmatch(r"key=gh906 pane=\S+ issue=906", out[3]), out
+    assert len(out) == 4, out
+    assert not readings(s).exists()
     show(f"printed: {out}")
+    keyless(s, r.out, r.err)
     assert creates(s) == [f"issue create --title {NEW} --body-file {body}"], s.gh.log()
     show(f"gh log: {creates(s)}")
     view = json.loads(
@@ -299,9 +505,14 @@ def filed_stopped(s: Scratch) -> None:
     d, checkout, _ = world(s)
     cmd, _ = new_start(s)
     (d / "prompt-down").write_text("")
-    r = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1)
-    assert r.out == "filed=906", r.out
+    with replaying(s, RECORDED / "unauthorized", "--truncated") as host:
+        r = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1)
+    why = f"GET {host}/v1/models: IncompleteRead(27 bytes read, 100 more expected)"
+    assert r.out.split("\n") == [ROOM.format(n=0), NOT_READ.format(why=why), "filed=906"], r.out
     assert "step goal (made so far: " in r.err, r.err
+    show(f"the 401's body cut short: printed {r.out!r}, supervisor {supervised(d, 'gh906')}")
+    assert not readings(s).exists()
+    keyless(s, r.out, r.err)
     show(f"stopped after filing: exit 1, printed {r.out!r}, {r.err}")
     rerun = [kit("octo-feather-lane"), "start", "906", *cmd[cmd.index("--goal") :]]
     out = s.run(rerun, cwd=checkout, env=DIRECTOR).out
@@ -320,12 +531,45 @@ def sub_issue(s: Scratch) -> None:
     issue |= {"blockedBy": {"nodes": none}, "subIssues": {"totalCount": 0, "nodes": none}}
     s.gh.store("issue/907.json", issue)
     cmd = [kit("octo-feather-lane"), "start", "907", "--goal", "A child", "--outcome", OUTCOME]
-    r = s.run([*cmd, "--brief-file", str(brief)], cwd=checkout, env=DIRECTOR, want=1)
+    nan = "anthropic-ratelimit-unified-7d-utilization"
+    with replaying(s, RECORDED, "--header", f"{nan}=NaN") as host:
+        r = s.run([*cmd, "--brief-file", str(brief)], cwd=checkout, env=DIRECTOR, want=1)
     assert "ticket 907 is a sub-issue of 905" in r.err, r.err
-    assert r.out == "", r.out
+    room, usage = r.out.split("\n")
+    assert room == ROOM.format(n=0), r.out
+    why = f"{host} sent {nan} 'NaN': no share of the limit (0 to 2.0)"
+    assert usage == NOT_READ.format(why=why), r.out
+    assert not readings(s).exists()
+    show(f"utilization NaN: printed {usage!r}, nothing stored")
+    keyless(s, r.out, r.err)
     nothing_made(s, d, checkout, "gh907")
     assert not creates(s), s.gh.log()
     show(f"sub-issue 907: exit 1, {r.err}")
+
+
+def full(s: Scratch, d: Path, checkout: Path, cmd: list[str]) -> None:
+    """CMD, a start of 905 in CHECKOUT (Herdr world D), refused at seven open lanes (the module's
+    docstring, refused)."""
+    keys, budget = lanes(s, 7), s.root / "kit-install" / "gate-budget.toml"
+    asked, calls, before = s.root / "provider.log", len(s.gh.log()), readings(s).read_text()
+    with replaying(s, RECORDED, "--log", str(asked)):
+        r = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1)
+    want = (
+        f"refused (room): 7 of 7 lanes open (lane_limit 7, {budget}): {', '.join(keys)}; nothing"
+        " made: archive a lane (octo-feather-lane archive NAME) or raise lane_limit in"
+        f" {budget}, then rerun"
+    )
+    assert want in r.err, r.err
+    assert "\n" not in r.err.strip(), r.err
+    assert r.out == "", r.out
+    show(f"seven lanes open: exit 1, {r.err.strip()}")
+    assert not asked.exists(), asked.read_text()
+    assert readings(s).read_text() == before
+    show("the provider received no request; nothing more stored")
+    assert s.gh.log()[calls:] == ["repo view --json nameWithOwner"], s.gh.log()  # no ticket read
+    nothing_made(s, d, checkout)
+    assert not (d / "log").exists(), (d / "log").read_text()
+    show("no ticket read or filed, no herdr call; no worktree, branch, workspace, record or prompt")
 
 
 def no_supervisor(d: Path) -> None:
@@ -401,7 +645,13 @@ def rerun(s: Scratch) -> None:
     wt = checkout.with_name("target-gh905")
 
     (d / "prompt-down").write_text("")
-    err = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1).err
+    route(s, "not-a-url")
+    r = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1)
+    why = "GET not-a-url/v1/models: unknown url type: 'not-a-url/v1/models'"
+    assert r.out == f"{ROOM.format(n=0)}\n{NOT_READ.format(why=why)}", r.out
+    show(f"baseUrl not-a-url: printed {r.out!r}, supervisor {supervised(d, 'gh905')}")
+    keyless(s, r.out, r.err)
+    err = r.err
     assert "step goal (made so far: " in err, err
     assert " exit 75 (" in err, err
     assert "not delivered; rerun once the cause is fixed" in err, err
@@ -469,9 +719,15 @@ def unknown_send(s: Scratch) -> None:
     )
 
     (d / "prompt-timeout").write_text("")
-    err = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1).err
-    agents = json.loads((d / "agents.json").read_text())
-    pane = next(p for p, g in agents.items() if g["name"] == "gh905")
+    route(s, "http://127.0.0.1:9", "!printf '\\377'")  # the key command prints no UTF-8
+    r = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1)
+    models = Path(s.env["PI_CODING_AGENT_DIR"]) / "models.json"
+    why = f"providers.anthropic apiKey in {models} resolved to no printable ASCII key"
+    assert r.out.split("\n") == [ROOM.format(n=0), NOT_READ.format(why=why)], r.out
+    pane = supervised(d, "gh905")
+    show(f"a key command printing byte 0xff: printed {r.out!r}, supervisor {pane}")
+    assert not readings(s).exists()
+    err = r.err
     assert f"step goal (made so far: worktree {wt}" in err, err
     assert f"herdr-say {pane} exit 124 (" in err, err
     assert "delivery unknown, not sent again blind" in err, err
@@ -525,6 +781,45 @@ def behind_kit(s: Scratch) -> None:
     show(f"kit install one commit behind: exit 1, {err}")
 
 
+def usage_carried(s: Scratch, d: Path, checkout: Path) -> None:
+    """In S's world (Herdr world D, CHECKOUT), the install's usage_reserve 0.5: a start on the
+    replayed recording refused (USAGE), its reading stored; then the route at a closed port and
+    OCTO_FEATHER_NOW at NOW, refused carried (CARRIED). Each: nothing made, no supervisor, no ticket
+    read, the key nowhere."""
+    budget = s.root / "kit-install" / "gate-budget.toml"
+    budget.write_text(RESERVE_HALF)
+    gh = len(s.gh.log())
+    cmd = [kit("octo-feather-lane"), "start", "905", "--goal", TITLE, "--outcome", OUTCOME]
+    cmd += ["--brief-file", str(s.root / "brief.md")]
+    with replaying(s, RECORDED) as host:
+        r = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1)
+    assert USAGE.format(host=host, budget=budget) in r.err, r.err
+    assert r.out == "", r.out
+    assert not [c for c in s.gh.log()[gh:] if c.startswith("issue")], s.gh.log()
+    nothing_made(s, d, checkout)
+    no_supervisor(d)
+    stored = [json.loads(x) for x in readings(s).read_text().splitlines()]
+    window = {"used": 0.19, "reset": "2026-12-03T03:00:00Z"}
+    assert stored == [{"at": "2026-11-28T06:19:36Z", "windows": {"7d": window}}], stored
+    keyless(s, r.out, r.err)
+    show(f"usage_reserve 0.5: exit 1, {r.err}")
+    show(f"nothing made, no supervisor, no ticket read; usage-readings.jsonl: {stored}")
+
+    before = readings(s).read_text()
+    host = closed(s)
+    r = s.run(cmd, cwd=checkout, env=DIRECTOR | {"OCTO_FEATHER_NOW": NOW}, want=1)
+    why = f"GET {host}/v1/models: [Errno 111] Connection refused"
+    assert CARRIED.format(why=why, budget=budget) in r.err, r.err
+    assert r.out == "", r.out
+    assert not [c for c in s.gh.log()[gh:] if c.startswith("issue")], s.gh.log()
+    nothing_made(s, d, checkout)
+    no_supervisor(d)
+    assert readings(s).read_text() == before
+    keyless(s, r.out, r.err)
+    show(f"route at a closed port, OCTO_FEATHER_NOW={NOW}: exit 1, {r.err}")
+    show("nothing made, no supervisor, nothing more stored")
+
+
 def help_(s: Scratch) -> None:
     d, checkout, _ = world(s)
     seed = s.root / "kit-seed"
@@ -542,11 +837,29 @@ def help_(s: Scratch) -> None:
         "appends one director log line",
         "It refuses a lane that exists",
         "the same start run again",
+        "The brake (spec issue-lifecycle #lanes-start",
+        "models.json providers.anthropic baseUrl and apiKey",
+        "max_tokens 1",
+        "anthropic-ratelimit-unified-7d*-utilization and -reset headers",
+        "its Date header is now",
+        "${XDG_STATE_HOME:-~/.local/state}/octo-feather/usage-readings.jsonl",
+        "no less than its first 6 hours",
+        "usage_reserve in the kit install's gate-budget.toml",
+        "route to another provider",
+        "`refused (usage): ",
+        "wait for the reset at <time>, or change usage_reserve in <install>/gate-budget.toml",
+        "carried forward from its last reading",
+        "`refused (usage,",
+        "OCTO_FEATHER_NOW (an ISO time",
+        "the override is ignored",
+        "lane_limit in the kit install's gate-budget.toml (7 when unset)",
+        "`room: <n> of <limit> lanes open`",
+        "`refused (room): ",
     )
     for flag in ("--help", "-h"):
         out = s.run([kit("octo-feather-lane"), "start", flag], cwd=checkout, env=DIRECTOR).out
         assert out.startswith("  octo-feather-lane start TICKET|--new TITLE"), out
-        assert out.rstrip().endswith("is refused as any existing lane."), out
+        assert out.rstrip().endswith("otherwise the start goes on."), out
         for step in steps:
             assert step in out, (step, out)
     assert s.gh.log() == [], s.gh.log()

@@ -1814,6 +1814,8 @@ def budget_parse(text: str | None) -> tuple[Budget | None, str]:
         "slot_bound_seconds",
         "fast_workers",  # the fast tier's cap: tests/gate/heavy_slot.py reads it
         "fast_runs",  # fast-tier runs at once on the box: tests/gate/heavy_slot.py reads it
+        "usage_reserve",  # the lane start's usage reserve: scripts/lane_brake.py reads it
+        "lane_limit",  # the box's open lanes at most: scripts/lane_brake.py reads it
     }
     bad += [f"unknown key {k}" for k in sorted(set(d) - set(least) - {"test_cpu_seconds"} - slots)]
     return (None, f"{BUDGET}: " + "; ".join(bad)) if bad else (ok, "")

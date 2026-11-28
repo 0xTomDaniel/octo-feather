@@ -664,24 +664,49 @@
       ]
     },
     "acceptance-lane-start-usage": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1359,
+      "record": "20261128T122704Z-3de860bc",
+      "commit": "5b6e8c914b96ca129307ffbd460652ca716b038f",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
     },
     "acceptance-lane-start-room": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1359,
+      "record": "20261128T122704Z-2e2cf588",
+      "commit": "5b6e8c914b96ca129307ffbd460652ca716b038f",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
     },
     "acceptance-lane-start-clear": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1359,
+      "record": "20261128T122705Z-31493f7c",
+      "commit": "5b6e8c914b96ca129307ffbd460652ca716b038f",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
     },
     "acceptance-lane-start-unread": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1359,
+      "record": "20261128T122705Z-bc6c3584",
+      "commit": "5b6e8c914b96ca129307ffbd460652ca716b038f",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
     },
     "acceptance-lane-start-carried": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1359,
+      "record": "20261128T122705Z-d92df71b",
+      "commit": "5b6e8c914b96ca129307ffbd460652ca716b038f",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
     }
   }
 }
