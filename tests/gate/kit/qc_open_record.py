@@ -5,7 +5,10 @@ recorder's line lists, kit-relative, each tracked kit file the judge read (cat),
 exec) or imported (Python, its __pycache__ already holding the module), and each tracked dir it
 listed, marked whole; an untracked kit file it read is absent, and so is a tracked file only the
 host read during the run (the kit's own read-only view). A kit dir whose watch the kernel refuses
-(the watch limit reached) leaves the record not whole, naming why, with no list.
+(the watch limit reached) leaves the record not whole, naming why, with no list. A judge that
+starts the record itself (QC_OPENS=judge: octo-feather-qa's watcher, the kit under test this
+kit) leaves its own startup opens out (scripts/octo-feather-qa) and records what the command it
+starts opens, a kit module the watcher imported first included (scripts/eval_grading.py).
 
 Mid-run is fixed by event order, no timing: the judge holds on a FIFO handshake while the host
 reads the kit; the host then lets it run on. The watch limit is the kernel's own, per user
@@ -22,7 +25,7 @@ import select
 import subprocess
 from typing import TYPE_CHECKING, Any
 
-from testkit import Scratch, kit, main, tool_homes
+from testkit import ROOT, Scratch, kit, main, tool_homes
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -136,5 +139,41 @@ def not_whole(s: Scratch) -> None:
     assert "qc sandbox: open record: NOT whole (" in ran.err, ran.err
 
 
+def watcher(s: Scratch) -> None:
+    """QC_OPENS=judge, the judge octo-feather-qa's watcher on this kit: its own opens absent, the
+    opens of the command it starts recorded."""
+    r = repo(s)
+    setup: dict[str, object] = {"fake_gh": False, "origin": False, "fake_qa": False}
+    setup["stand_ins"] = {}
+    cmd = (
+        f"cat {ROOT}/GLOSSARY.md >/dev/null; "
+        f"python3 -c 'import sys; sys.path.insert(0, \"{ROOT}/scripts\"); import eval_grading'"
+    )
+    ran = s.run(
+        [
+            kit("octo-feather-qc-sandbox"),
+            "--",
+            kit("octo-feather-qa"),
+            "--watch",
+            "[]",
+            "5",
+            "60",
+            json.dumps(setup),
+            "--",
+            "sh",
+            "-c",
+            cmd,
+        ],
+        cwd=r,
+        env={**tool_homes(), "QC_KIT": str(ROOT), "QC_OPENS": "judge"},
+    )
+    assert ran.rc == 0, (ran.out, ran.err)
+    got = opens(ran.err)
+    assert got["whole"] is True, got
+    # the scratch env's herdr is the kit's stand-in (testkit/herdr.py), the sandbox's own run
+    files = [f for f in got["files"] if f != "tests/gate/kit/testkit/herdr.py"]
+    assert files == ["GLOSSARY.md", "scripts/eval_grading.py"], got
+
+
 if __name__ == "__main__":
-    main(whole, not_whole)
+    main(whole, not_whole, watcher)

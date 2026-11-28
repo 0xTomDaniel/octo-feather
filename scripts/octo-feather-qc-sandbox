@@ -90,7 +90,9 @@ Inner (`inner` mode, srt's command, the caller's uid, no capabilities; the judge
      kit's own mise config as scripts/octo-feather-mise-install --list names them; a repo masked at setup and gone
      since, no such path, counts hidden, named gone in its line); then go to the recorder
   8. judge runs (stdout passes through, stderr to the QC_FD_ERR pipe; PYTHONPYCACHEPREFIX an empty per-run dir, so
-     an existing __pycache__ hides no import from the open record), the recorder told first (the open record starts)
+     an existing __pycache__ hides no import from the open record), the recorder told first (the open record starts);
+     with QC_OPENS=judge the judge tells it instead, after its own startup (octo-feather-qa's watcher, as it starts
+     Pi: its own opens are the grader's, not the run's), by the recorder's socket, named to it as QC_OPENS_SOCK
   9. post-run: wait up to 10 s for the spend ledger's detached writers, count agents, stop and delete the
      sandbox session, kill and count every other process in the PID namespace (srt's own bridges aside); one
      cleanup line on stderr and the record on QC_FD_POST; then the run's spend lines (the scratch ledger's
@@ -104,7 +106,7 @@ Then setup:
 Inputs (env, data only): QC_SESSION, QC_STATE caller's state dir, QC_WORKTREE, QC_KIT, QC_UID/QC_GID, QC_HERDR /
 QC_GH real binaries (empty: not installed), QC_KEEP and QC_RO_BINDS newline-separated paths, QC_PATH_PREPEND,
 QC_RECORD, QC_GHSNAP / QC_GHSNAP_LINE or QC_GHSNAP_OFF, QC_HISTORY=none, QC_QA, QC_PI=none, QC_BROWSER, QC_SHOTS,
-QC_FD_PROOF / QC_FD_POST / QC_FD_ERR pipe fds.
+QC_OPENS=judge (8), QC_FD_PROOF / QC_FD_POST / QC_FD_ERR pipe fds.
 Exit: the judge's exit, or 66 when the sandbox or a proof check failed (judge never started).
 """
 
@@ -184,6 +186,7 @@ INPUTS = (
     "QC_BROWSER",
     "QC_SHOTS",
     "QC_RECORD",
+    "QC_OPENS",
     "QC_KIT",
     "QC_HISTORY",
     "QC_QA",
@@ -1397,6 +1400,7 @@ def setup(judge: list[str]) -> NoReturn:
         "repos": [[r, "/".join(nm)] for r, _, nm in rmask],
         "kview": kview,
         "pyc": f"{SCR}/pyc",
+        "opens_sock": RSOCK if E.get("QC_OPENS") == "judge" else "",
         "kept": [KUT, wtp, *sorted({b for _, bs, _ in rmask for b in bs}, key=back.index)],
         "robinds": ro_binds,
         "ghline": E.get("QC_GHSNAP_LINE", ""),
@@ -2157,16 +2161,18 @@ def inner(cfgp: str, judge: list[str]) -> NoReturn:
         reap(base, HERDR, S)
         sys.exit(66)
 
-    # 8. the judge, the recorder told first: the open record starts once it answers.
+    # 8. the judge, the recorder told first: the open record starts once it answers (QC_OPENS=judge: the judge tells it).
+    jenv = {**os.environ, "PYTHONPYCACHEPREFIX": c["pyc"]}
+    if c["opens_sock"]:
+        jenv["QC_OPENS_SOCK"] = c["opens_sock"]
+    else:
+        try:
+            sk.send(b'{"t": "judge"}')
+            sk.recv(16)
+        except OSError:
+            pass  # no answer: the open record reads not whole (the judge never started, for the recorder)
     try:
-        sk.send(b'{"t": "judge"}')
-        sk.recv(16)
-    except OSError:
-        pass  # no answer: the open record reads not whole (the judge never started, for the recorder)
-    try:
-        rc = subprocess.run(
-            judge, stderr=OUT["err"], env={**os.environ, "PYTHONPYCACHEPREFIX": c["pyc"]}
-        ).returncode
+        rc = subprocess.run(judge, stderr=OUT["err"], env=jenv).returncode
     except OSError:
         rc = 127
     rc = 128 - rc if rc < 0 else rc

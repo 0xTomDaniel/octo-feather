@@ -43,6 +43,7 @@ import queue
 import re
 import shutil
 import signal
+import socket
 import statistics
 import subprocess
 import tempfile
@@ -914,6 +915,27 @@ def executable(path: Path, text: str) -> None:
     path.chmod(0o755)
 
 
+def pi_starts(env: dict[str, str]) -> dict[str, str]:
+    """ENV for Pi, the qc sandbox told first that Pi starts (QC_OPENS_SOCK: octo-feather-qc-sandbox
+    --help, 8): its open record counts from here, so the watcher's own startup opens (this script,
+    this module) are never the run's, while what pi-role, Pi and the agent open is. Pi's Python
+    gets an empty pycache prefix of its own: a kit module the watcher compiled hides no import of
+    it from the record. No QC_OPENS_SOCK (outside the sandbox): ENV as is."""
+    sock = env.pop("QC_OPENS_SOCK", None)
+    if not sock:
+        return env
+    if env.get("PYTHONPYCACHEPREFIX"):
+        env["PYTHONPYCACHEPREFIX"] = tempfile.mkdtemp(prefix="pi-", dir=env["PYTHONPYCACHEPREFIX"])
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET) as c:
+            c.connect(sock)
+            c.send(b'{"t": "judge"}')
+            c.recv(16)
+    except OSError:
+        pass  # no answer: the open record reads not whole (the judge never started)
+    return env
+
+
 def prep(setup: Fact, where: Where, fake_qa: str) -> tuple[dict[str, str], str | None, str | None]:
     """In the sandbox, after its proof: the case's fake gh (first on PATH, logging argv) and bare
     origin, under its private dir; a fake_qa case's octo-feather-qa, FAKE_QA its text. Returns (env
@@ -1204,7 +1226,7 @@ class Watcher:
                 )
                 return 1
         p = subprocess.Popen(
-            cmd, stdout=subprocess.PIPE, start_new_session=True, env=role_env, cwd=repo
+            cmd, stdout=subprocess.PIPE, start_new_session=True, env=pi_starts(role_env), cwd=repo
         )
         timer = threading.Timer(self.plan.timeout_s, self.stop, args=(p, "timeout"))
         timer.daemon = True

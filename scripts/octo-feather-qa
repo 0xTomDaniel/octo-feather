@@ -478,12 +478,13 @@ def run_case(qc: "ModuleType", evals: Path, suite: Result, case: Result, facts: 
             os.environ["OCTO_FEATHER_QC_RO_BINDS"] = ":".join(p for p in (ro, str(kit), grading.__file__) if p)
         # the sandbox's run shims: only the programs this case's ran facts name (schema, Run record)
         os.environ["QC_RECORD"] = planned.shims
+        os.environ["QC_OPENS"] = "judge"   # the open record starts as the watcher starts Pi (pi_starts)
         try:
             run, rec = qc.sandboxed(cmd, f"qa-{runid}-{n}", {"off": GH_OFF}, history=False, kit=kit)
         except SystemExit as e:   # unshare missing or unusable: never run unsandboxed
             run, rec = None, {"error": f"sandbox unavailable (exit {e.code})"}
         finally:
-            os.chdir(here); os.environ.pop("QC_RECORD", None)
+            os.chdir(here); os.environ.pop("QC_RECORD", None); os.environ.pop("QC_OPENS", None)
             if ro is None:
                 os.environ.pop("OCTO_FEATHER_QC_RO_BINDS", None)
             else:
