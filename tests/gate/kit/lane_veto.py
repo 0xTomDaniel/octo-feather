@@ -33,7 +33,6 @@ from __future__ import annotations
 
 import json
 import re
-import shlex
 from typing import TYPE_CHECKING
 
 from lane_digest import (
@@ -118,10 +117,10 @@ def veto_files_repair(s: Scratch) -> None:
     asked = s.gh.log()[calls:]
     assert len(asked) == 2, asked
     assert asked[0] == VIEW.format(PR_B), asked
-    filed = asked[1]
-    assert filed in tape, filed  # replayed: the very request the real veto made
+    recorded = next(k for k in tape if " issue create " in k)  # the real veto's request
+    assert asked[1] == recorded, asked[1]
     title = f"Veto: revert or repair PR #{PR_B} {view['title']}"
-    head, _, raw = filed.partition(" --body-file ")
+    head, _, raw = recorded.partition(" --body-file ")
     assert head == f"GH_REPO={REALCASE} issue create --title {title}", head
     body = json.loads(raw)
     call = s.git(w.checkout, "show", f"{m2}:{CALLS}").strip()
@@ -136,8 +135,8 @@ def veto_files_repair(s: Scratch) -> None:
         f"Revert or repair merge {m2} of PR #{PR_B}",
     ):
         assert want in body, f"{want!r} not in the body:\n{body}"
-    found = re.search(r"/issues/(\d+)$", tape[filed].strip())
-    assert found, tape[filed]
+    found = re.search(r"/issues/(\d+)$", tape[recorded].strip())
+    assert found, tape[recorded]
     key = found.group(1)
 
     line = json.loads(log_text(w).splitlines()[-1])
@@ -145,14 +144,15 @@ def veto_files_repair(s: Scratch) -> None:
     want = {"kind": "veto", "repo": REALCASE, "pr": PR_B, "merge": m2, "issue": key}
     assert line == want | {"said": SAID}, line
     brief = w.top / "veto" / f"{key}.brief.md"
-    assert body in brief.read_text(), brief.read_text()
-    outcome = (
-        f"merge {m2[:12]} of PR #{PR_B}, vetoed by the owner, reverted or repaired, each vetoed "
-        "spec call marked denied"
+    header = f"Repair lane for the owner's veto of PR #{PR_B}: its parent issue {key} holds"
+    header += " the work."
+    assert brief.read_text() == f"{header}\n\n{body}", brief.read_text()
+    start = (
+        f"octo-feather-lane start {key} --goal 'Veto repair: PR #{PR_B}' --outcome 'merge "
+        f"{m2[:12]} of PR #{PR_B}, vetoed by the owner, reverted or repaired, each vetoed spec "
+        f"call marked denied' --brief-file {brief}"
     )
-    start = ["octo-feather-lane", "start", key, "--goal", f"Veto repair: PR #{PR_B}"]
-    start += ["--outcome", outcome, "--brief-file", str(brief)]
-    assert ok.out.splitlines()[-1] == shlex.join(start), ok.out
+    assert ok.out.splitlines()[-1] == start, ok.out
     assert ok.out.startswith(f"filed: issue {key}, {title}"), ok.out
 
     before, calls = log_text(w), len(s.gh.log())
