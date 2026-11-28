@@ -3,7 +3,7 @@
 # criterion: issue-lifecycle#acceptance-pilot-pr
 # End-to-end test of a lane's pilot recorded on its draft PR (the rule: issue-lifecycle #lanes, its pilot paragraph;
 # #lanes-one-head), through the kit's commands only, offline: GitHub is the kit's fake gh (tests/fixtures/tracker-gh)
-# over a local bare origin, the qc judge's classifier the stub tests/fixtures/classify-stub/pi. A scratch target
+# over a local bare origin, the qc classifier the stub tests/fixtures/classify-stub/pi. A scratch target
 # whose qc.toml declares a passing demo for acceptance-a and a failing one for acceptance-b: octo-feather-integrate
 # lands the pilot's worker branch on lane gh12 (head J), the lane is pushed and its draft PR opened, `just qc` names
 # both criteria, its head pushed, and `octo-feather-lane verdict` posts the review verdict for J. Then the PR head is

@@ -7,6 +7,7 @@
   octo-feather-spec-status built STATUS PR ID...   flip the named criteria to built in PR
   octo-feather-spec-status built STATUS PR ID --record RECORD --commit SHA [--test TEST]...
                                                    flip ID to built in PR with its evidence link
+  octo-feather-spec-status planned STATUS ID...    put the named built criteria back to planned (docs/adr/0035)
   octo-feather-spec-status show [DIR|STATUS...]    each criterion's status, each built one current or stale
   octo-feather-spec-status calls [--since REF] [DIR...]
                                                    list the calls added since REF (default: the merge
@@ -17,7 +18,7 @@ A status file `<slug>.status.json` sits beside `<slug>.spec.html`:
    "criteria": {"<id>": {"status": "planned" | "built", "pr": <N or null>}}}
 A built criterion `just qc` passed also names its evidence link (quality #qc-results):
   "record": "<evidence record id>", "commit": "<sha it was captured at>",
-  "tests": ["<each test its demo declares>"...]   (empty for an agent fallback result)
+  "tests": ["<each test its demo declares>"...]   (empty with no declared demo)
 A criterion id is the `data-anchor` of each `data-acceptance-criterion` element
 (Spec Chat's shaped-sections-v1 contract). `check` fails on a missing spec, a
 missing, extra or duplicate id, a status other than planned/built, a planned
@@ -31,6 +32,12 @@ SPEC's order. It refuses, naming the problem and writing nothing, when the exist
 row fails the rules `check` applies to a row (status, pr, evidence link), when SPEC cannot be read or a
 criterion has no or a duplicate id, or when COMMIT is no commit sha.
 
+`planned` puts each named built criterion back to planned, its PR and evidence link dropped (docs/adr/0035: a
+criterion with neither a tagged test nor a declared demo reads planned). It touches only the ids it is given, every
+other row kept byte for byte as this script writes rows, and has no all or wildcard mode. It refuses, naming the
+problem and writing nothing, an id not in STATUS, an id already planned, or a STATUS that is not JSON or has a row
+failing the rules `check` applies to a row.
+
 `show` is read-only and git-only, never part of `check` (a stale criterion stays
 built until a lane's just qc judges it again, quality #qc-stale). Per status file
 (default docs/specs/*.status.json) it prints each criterion: planned; built with no
@@ -39,8 +46,8 @@ captured at. Stale: the criterion's element differs from the spec at that commit
 a path its demo covers (qc.toml at the repo root, at that commit) differs at HEAD,
 named with the commits that changed it; or the file of a test it names (a test
 id `path::name` by its path) differs at HEAD, edited or gone, named likewise, or is
-not at HEAD. A criterion with no demo at that commit was
-judged by the agent fallback: no covers or tests, so only its text makes it stale.
+not at HEAD. A criterion with no declared demo at that commit (a row built before ADR
+0035, or in another target) has no covers or tests, so only its text makes it stale.
 
 A call log `<slug>.calls.jsonl` sits beside them (issue-lifecycle #gates-spec-calls),
 append-only, one judgement call per line:
@@ -573,7 +580,7 @@ def _changes(top: Path, commit: str, paths: list[str]) -> tuple[list[str], list[
 
 
 def _demo(top: Path, commit: str, cid: str) -> Entry | None:
-    """The demo qc.toml at the repo root declared for criterion id CID at COMMIT, or None (the agent fallback's)."""
+    """The demo qc.toml at the repo root declared for criterion id CID at COMMIT, or None (no declared demo)."""
     rc, shown = _run(top, "show", f"{commit}:qc.toml")
     try:
         demos: dict[str, Any] = tomllib.loads(shown).get("demo", {}) if not rc else {}
@@ -583,7 +590,7 @@ def _demo(top: Path, commit: str, cid: str) -> Entry | None:
 
 
 def covered(top: Path, commit: str, cid: str) -> list[str]:
-    """The paths CID's demo at COMMIT covers (_demo): none for the agent fallback's."""
+    """The paths CID's demo at COMMIT covers (_demo): none with no declared demo."""
     demo = _demo(top, commit, cid)
     return [str(x) for x in cast("list[object]", demo.get("covers", []))] if demo else []
 
@@ -616,7 +623,7 @@ def stale(spec: Path, k: str, v: Entry, top: Path, now: dict[str, str]) -> tuple
     if why:
         return "stale", f"STALE: {head}; {'; '.join(why)}"
     if demo is None:
-        return "current", (f"current: {head} by the agent fallback (no declared demo: no covers or tests, so only "
+        return "current", (f"current: {head}, no declared demo (no covers or tests, so only "
                            f"a change to its text makes it stale)")
     return "current", f"current: {head}, tests {', '.join(tests) or 'none'}, covers {', '.join(covers)}"
 
@@ -681,6 +688,24 @@ def built_link(args: list[str]) -> tuple[list[str], Entry | None, str | None]:
     return rest, link, f"built: {bad}" if bad else None
 
 
+def planned(status: Path, ids: list[str]) -> int:
+    """Put each of IDS in STATUS back to planned, or refuse, writing nothing (docs/adr/0035)."""
+    rows, errs = existing_rows(status)
+    if not errs and not status.exists():
+        errs = [f"{status}: no status file"]
+    for i in dict.fromkeys(() if errs else ids):
+        if i not in rows:
+            errs.append(f"no criterion {i} in {status}")
+        elif cast("Entry", rows[i])["status"] == "planned":
+            errs.append(f"{status}: {i} is already planned")
+    if errs:
+        print("\n".join(errs + [f"planned: nothing written to {status}"]), file=sys.stderr); return 1
+    data: Entry = json.loads(status.read_text(encoding="utf-8"))
+    for i in ids:
+        data["criteria"][i] = {"status": "planned", "pr": None}
+    write(status, data); return 0
+
+
 def write(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
@@ -729,6 +754,8 @@ def main(argv: list[str]) -> int:
                 print(f"no criterion {i} in {status}", file=sys.stderr); return 1
             data["criteria"][i] = {"status": "built", "pr": int(args[1])} | (link or {})
         write(status, data); return 0
+    if cmd == "planned" and len(args) >= 2:
+        return planned(Path(args[0]), args[1:])
     print(__doc__.strip(), file=sys.stderr); return 64
 
 

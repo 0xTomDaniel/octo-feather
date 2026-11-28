@@ -10,7 +10,7 @@
 #   roles      roles#acceptance-web-roles, roles#acceptance-web-no-other-mcp,
 #              roles#acceptance-director-tools: each role's declared and codemode tools are exactly
 #              its role file's tools plus codemode, plus the web list's tools for a role listing
-#              web; no role has a tool of the other servers; supervisor and qc judge none of MCP
+#              web; no role has a tool of the other servers; supervisor none of MCP
 #   list-once  roles#acceptance-web-list-once: a server added to the web list, no role file
 #              changed, reaches the implementer and not the supervisor; an unreachable server in
 #              the list leaves the role starting with the other servers' tools
@@ -97,13 +97,13 @@ run() {
 
 ro="bash find grep ls read"; rw="bash edit find grep ls read write"; web="mcp__webstub__fetch mcp__webstub__search"
 sorted() { tr ' ' '\n' <<<"$*" | sort | tr '\n' ' ' | sed 's/ $//'; }
-for rt in "director:$ro:$web" "code-reviewer:$ro:$web" "implementer:$rw:$web" "general-worker:$rw:$web" "corrector:$rw:$web" "shaper:$rw:$web" "supervisor:$rw:" "qc-judge:$ro:"; do
+for rt in "director:$ro:$web" "code-reviewer:$ro:$web" "implementer:$rw:$web" "general-worker:$rw:$web" "corrector:$rw:$web" "shaper:$rw:$web" "supervisor:$rw:"; do
   IFS=: read -r role tools mcp <<<"$rt"
   want="$(sorted codemode $tools $mcp)|$(sorted $tools $mcp)"
   got="$(run "$role")"
   [[ "$got" == "$want" ]] || fail "roles: $role has declared|codemode tools $got, want $want"
 done
-echo "case roles: ok (web roles: their tools plus the web list's, declared and in codemode; supervisor, qc judge: no MCP; user and project servers reach none)"
+echo "case roles: ok (web roles: their tools plus the web list's, declared and in codemode; supervisor: no MCP; user and project servers reach none)"
 
 # tab: roles#acceptance-codemode-every-role's tab launches (ADR 0016). The real herdr-spawn, copied so its kit root
 # (four dirs up) is the fixture kit, opens the role's tab through the fake herdr of tests/fixtures/herdr-spawn,

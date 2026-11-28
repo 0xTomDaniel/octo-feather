@@ -123,8 +123,6 @@ tests/gate/kit/test_lane_verdict_rounds.py::test_verdict_legacy_comment
 tests/gate/kit/test_lane_verdict_rounds.py::test_verdict_range_refusals
 tests/gate/kit/test_post_merge_routine.py::test_checkout_follows_main
 tests/gate/kit/test_post_merge_routine.py::test_merge_starts_routine
-tests/gate/kit/test_qc_gh.py::test_fetch_fails
-tests/gate/kit/test_qc_gh.py::test_no_github
 tests/gate/kit/test_qc_gh.py::test_notes_query
 tests/gate/kit/test_qc_ghsnap_named.py::test_named_issue
 tests/gate/kit/test_template_languages_typescript.py::test_claims_gate

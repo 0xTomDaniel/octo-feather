@@ -57,11 +57,8 @@
       "pr": null
     },
     "acceptance-web-roles": {
-      "status": "built",
-      "pr": 833,
-      "record": "20261114T040048Z-2a3e2b8c",
-      "commit": "cb4a3f3fc53acb8e46fba0d5c5b0149b38924202",
-      "tests": []
+      "status": "planned",
+      "pr": null
     },
     "acceptance-web-no-other-mcp": {
       "status": "built",
@@ -72,11 +69,8 @@
       "pr": 271
     },
     "acceptance-delegated-pr": {
-      "status": "built",
-      "pr": 882,
-      "record": "20261118T201807Z-b06030d5",
-      "commit": "f28674d5a21b6594263fbfc0d65a9d9fc646eac9",
-      "tests": []
+      "status": "planned",
+      "pr": null
     },
     "acceptance-fresh-independent-worker": {
       "status": "built",
@@ -132,11 +126,8 @@
       "tests": []
     },
     "acceptance-supervisor-delegates-execution": {
-      "status": "built",
-      "pr": 882,
-      "record": "20261118T202247Z-cf1595da",
-      "commit": "f28674d5a21b6594263fbfc0d65a9d9fc646eac9",
-      "tests": []
+      "status": "planned",
+      "pr": null
     },
     "acceptance-director-owned-remedy": {
       "status": "planned",

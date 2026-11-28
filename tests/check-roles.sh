@@ -18,7 +18,7 @@ grep -q 'agents/director.md: .*`codemode`.*pi-role adds it' "$t/cr" || { echo "c
 # #829: check-roles counts general-worker among its roles, and still refuses a role file not in ROLES.
 cp "$kit/agents/director.md" "$t/kit/agents/director.md"
 out="$("$t/kit/scripts/check-roles" 2>"$t/cr")" || { echo "check-roles test: check-roles refused the kit's roles: $(cat "$t/cr")" >&2; exit 1; }
-[[ "$out" == "roles: ok (9 role files"* ]] || { echo "check-roles test: check-roles did not count 9 roles: $out" >&2; exit 1; }
+[[ "$out" == "roles: ok (8 role files"* ]] || { echo "check-roles test: check-roles did not count 8 roles: $out" >&2; exit 1; }
 sed 's/^name: .*/name: stray/' "$kit/agents/general-worker.md" > "$t/kit/agents/stray.md"
 if "$t/kit/scripts/check-roles" >/dev/null 2>"$t/cr"; then echo "check-roles test: check-roles passed a role file not in ROLES" >&2; exit 1; fi
 grep -qF "agents/: role files ['stray'] are not in ROLES" "$t/cr" || { echo "check-roles test: check-roles did not name the stray role file: $(cat "$t/cr")" >&2; exit 1; }

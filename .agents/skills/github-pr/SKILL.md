@@ -104,6 +104,6 @@ durable workflow artifacts.
 
 ## Offline gh
 
-`scripts/gh` is the offline, read-only `gh` the `just qc` judge runs
-(docs/adr/0022) and the kit's tests use: it answers reads from a snapshot and
+`scripts/gh` is the offline, read-only `gh` the kit's tests use and the qc
+sandbox also runs (docs/adr/0022): it answers reads from a snapshot and
 refuses every write. Never put it on an agent's `PATH` outside those.
