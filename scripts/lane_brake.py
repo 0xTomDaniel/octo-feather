@@ -21,6 +21,7 @@ import datetime as dt
 import email.utils
 import http.client
 import json
+import math
 import os
 import re
 import subprocess
@@ -56,6 +57,9 @@ WINDOW = re.compile(r"anthropic-ratelimit-unified-(7d[a-z0-9_]*)-utilization")
 # What a recording replaces by `recorded`: the account's and the request's ids.
 PRIVATE = re.compile(r"(organization|workspace|request)-id$")
 STAMP = "%Y-%m-%dT%H:%M:%SZ"
+SHARE_MAX = (
+    2.0  # a window's utilization: a share of the limit, past 1 only once the account ran over it
+)
 
 
 @dataclass(frozen=True)
@@ -145,6 +149,7 @@ def resolve(value: str, env: Mapping[str, str]) -> str | None:
                 ["/bin/sh", "-c", value[1:]],
                 capture_output=True,
                 text=True,
+                errors="replace",  # as Pi's execSync decodes: a byte not UTF-8 becomes U+FFFD
                 timeout=KEY_TIMEOUT,
                 stdin=subprocess.DEVNULL,
                 env=dict(env),
@@ -205,6 +210,8 @@ def route(env: Mapping[str, str]) -> Route | NotRead:
     key = resolve(raw, env)
     if not key:
         return NotRead(f"providers.anthropic apiKey in {path} resolved to nothing")
+    if not (key.isascii() and key.isprintable()):  # an HTTP header carries it; never shown
+        return NotRead(f"providers.anthropic apiKey in {path} resolved to no printable ASCII key")
     return Route(base.rstrip("/"), key)
 
 
@@ -261,30 +268,44 @@ def model(a: Answer) -> str | None:
 
 
 def reading(a: Answer, host: str) -> Reading | NotRead:
-    """The weekly windows and the Date of messages answer A from HOST."""
+    """Messages answer A from HOST validated once into a Reading (quality #edge-validation-kit,
+    hand-written: kit scripts stay stdlib-only), else NotRead naming the header it rejects; what
+    it accepts: `octo-feather-lane --help`, start."""
     date = a.headers.get("date")
     try:
         at = email.utils.parsedate_to_datetime(date) if date else None
     except (TypeError, ValueError):
         at = None
+    if at is None or at.tzinfo is None:
+        return NotRead(f"no Date header from {host}")
     windows: list[Window] = []
     for k, v in sorted(a.headers.items()):
         m = WINDOW.fullmatch(k)
-        reset = a.headers.get(f"anthropic-ratelimit-unified-{m.group(1)}-reset") if m else None
-        if not m or reset is None:
+        if not m:
             continue
+        rk = f"anthropic-ratelimit-unified-{m.group(1)}-reset"
+        reset = a.headers.get(rk)
+        if reset is None:
+            return NotRead(f"{host} sent {k} with no {rk}")
         try:
-            windows.append(
-                Window(m.group(1), float(v), dt.datetime.fromtimestamp(int(reset), dt.timezone.utc))
-            )
-        except (ValueError, OverflowError, OSError):
+            used = float(v)
+        except ValueError:
+            used = math.nan
+        if not (math.isfinite(used) and 0 <= used <= SHARE_MAX):
+            return NotRead(f"{host} sent {k} {v[:20]!r}: no share of the limit (0 to {SHARE_MAX})")
+        when = (
+            dt.datetime.fromtimestamp(int(reset), dt.timezone.utc)
+            if re.fullmatch(r"[0-9]{1,11}", reset.strip())
+            else None
+        )
+        if when is None or not at < when <= at + WEEK + dt.timedelta(hours=1):
             return NotRead(
-                f"{host} sent {k} {v[:20]!r} with reset {reset[:20]!r}: no share and time"
+                f"{host} sent {rk} {reset[:20]!r}: no reset within a week and an hour"
+                " after its Date"
             )
+        windows.append(Window(m.group(1), used, when))
     if not windows:
         return NotRead(f"no unified weekly limit headers from {host}")
-    if at is None or at.tzinfo is None:
-        return NotRead(f"no Date header from {host}")
     return Reading(at, host, tuple(windows))
 
 
@@ -322,7 +343,7 @@ def stored(path: Path) -> Past:
     """The readings in PATH: each time and its windows, (name, reset) to share; a line not of
     that form is skipped (the file is the brake's own)."""
     try:
-        lines = path.read_text(encoding="utf-8").splitlines()
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
     except OSError:
         return []
     out: Past = []
@@ -340,6 +361,8 @@ def stored(path: Path) -> Past:
             }
         except (ValueError, KeyError, TypeError, AttributeError):
             continue
+        if not all(math.isfinite(u) and 0 <= u <= SHARE_MAX for u in got.values()):
+            continue
         out.append((at, got))
     return out
 
@@ -352,9 +375,13 @@ def store(path: Path, r: Reading, clock: str) -> str | None:
     if clock:
         line["clock"] = clock
     try:
+        text = json.dumps(line, allow_nan=False) + "\n"  # never a NaN or an infinity
+    except ValueError as e:
+        return f"{type(e).__name__}: {e}"
+    try:
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open("a", encoding="utf-8") as f:
-            f.write(json.dumps(line) + "\n")
+            f.write(text)
     except OSError as e:
         return f"{type(e).__name__}: {e.strerror or e}"
     return None
@@ -513,19 +540,43 @@ def brake(env: Mapping[str, str]) -> Verdict:
     return replace(verdict, line=f"room: {len(keys)} of {limit} lanes open\n{verdict.line}")
 
 
+def fetched(env: Mapping[str, str]) -> tuple[Reading | NotRead, str]:
+    """The whole usage read on ENV, route and key resolution included, failing open by
+    construction: a Reading, or NotRead, whatever is raised inside (#lanes-start: a failed reading
+    never stops a start); and the key, once resolved, for the caller to keep out of any why. A
+    failure no step names says only where and its type, never its text, so no key reaches it."""
+    key, step = "", "route"
+    try:
+        r = route(env)
+        if isinstance(r, NotRead):
+            return r, key
+        key, step = r.key, "read"
+        return read(r)[0], key
+    except Exception as e:  # noqa: BLE001 (fail open by construction, the docstring)
+        return NotRead(f"the {step} failed: {type(e).__name__}"), key
+
+
 def usage(env: Mapping[str, str], budget: Path) -> Verdict:
-    """The usage on ENV's route: a reading stored and projected (Read, or Refused over the line),
-    else why not (Unread, or Refused on the carried reading); BUDGET the box's settings."""
+    """The usage verdict on ENV (judged), BUDGET the box's settings; what each says:
+    `octo-feather-lane --help`, start. Fails open by construction: anything raised past fetched's
+    own handling (the stored readings, the projection) is Unread naming only its type, so no key
+    reaches it."""
+    try:
+        return judged(env, budget)
+    except Exception as e:  # noqa: BLE001 (a failed reading never stops a start: #lanes-start)
+        return Unread(
+            f"usage: not read (the brake failed: {type(e).__name__}); the brake did not stop this"
+            " start"
+        )
+
+
+def judged(env: Mapping[str, str], budget: Path) -> Verdict:
+    """usage's verdict, its failures left to usage."""
     path = store_path(env)
     past = stored(path)
     now, override = clock(env)
-    r = route(env)
-    try:
-        got = r if isinstance(r, NotRead) else read(r)[0]
-    except Exception as e:  # noqa: BLE001 (a failed reading never stops a start: #lanes-start)
-        got = NotRead(f"the read failed: {type(e).__name__}: {e}")
+    got, key = fetched(env)
     if isinstance(got, NotRead):
-        key = "" if isinstance(r, NotRead) else r.key
         why = got.why.replace(key, "[key]") if len(key) >= 8 else got.why  # noqa: PLR2004 (no real key is shorter)
         why = " ".join(why.split())[:300]  # one line, whatever the route said
         v = unread(why, past, now, reserve(budget), budget)

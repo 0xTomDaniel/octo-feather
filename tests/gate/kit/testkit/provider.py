@@ -5,14 +5,15 @@ OpenAI-compatible chat completions server on 127.0.0.1, for a models.json provid
 "models": [{"id": "fake"}]} (a "cost" there prices its calls in Pi).
 
   provider.py [--log FILE] [--answer TEXT] [--code CODE]
-  provider.py --replay DIR [--truncated] [--log FILE]
+  provider.py --replay DIR [--truncated] [--header NAME=VALUE]... [--log FILE]
 
 With --replay, a recorded Anthropic route instead (scripts/lane_brake.py record DIR): each GET or
 POST answered with the DIR/*.json whose request is its method and path, its status, headers (its
 recorded Date, no other) and body as recorded; one recorded for no request: 404, empty. With
 --truncated, an induced failure: each answer's content-length claims 100 bytes more than it sends,
-then the connection closes (the body cut short). Each request is appended to FILE as one JSON
-line, {"request": "<METHOD> <path>"}.
+then the connection closes (the body cut short). With --header NAME=VALUE, an induced failure
+too: each answer that carries header NAME carries VALUE in its place. Each request is appended to
+FILE as one JSON line, {"request": "<METHOD> <path>"}.
 
 Prints its port and a newline on stdout once it listens (the caller's readiness: wait for that
 line), then serves until killed. Each request body is appended to FILE as one JSON line. Every
@@ -34,7 +35,7 @@ import json
 import re
 import sys
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 
 def reply(
@@ -87,9 +88,11 @@ def main() -> None:
     ap.add_argument("--code")
     ap.add_argument("--replay")
     ap.add_argument("--truncated", action="store_true")
+    ap.add_argument("--header", action="append", default=[], metavar="NAME=VALUE")
     a = ap.parse_args()
     log: str | None = a.log
     replay = recordings(a.replay)
+    induced = dict(cast("str", h).split("=", 1) for h in a.header)
 
     class H(http.server.BaseHTTPRequestHandler):
         def log_message(self, format: str, *args: Any) -> None:  # noqa: A002, ANN401
@@ -101,7 +104,7 @@ def main() -> None:
             status, headers, body = replay.get(f"{self.command} {self.path}", (404, {}, b""))
             self.send_response_only(status)  # no Date of its own: the recorded one
             for k, v in headers.items():
-                self.send_header(k, v)
+                self.send_header(k, induced.get(k, v))
             self.send_header("content-length", str(len(body) + 100 * a.truncated))
             self.end_headers()
             self.wfile.write(body)

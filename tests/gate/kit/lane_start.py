@@ -93,6 +93,12 @@ so. The brake's cases ride the scenarios above, adding no gh store entry:
   filed_stopped  its first run with the route replaying the recorded 401 cut short (provider.py
            --truncated: the error body's read fails): `usage: not read (... IncompleteRead ...)`,
            the supervisor started, nothing stored.
+  unknown_send  its first run with apiKey a `!command` printing byte 0xff (no UTF-8, so no key
+           an HTTP header carries): `usage: not read (... no printable ASCII key)`, the supervisor
+           started, nothing stored (final review on 7a5fad8d).
+  sub_issue  the route replaying the recording with its 7d utilization NaN (provider.py --header):
+           `usage: not read (... 'NaN': no share of the limit ...)`, nothing stored, then refused
+           as a sub-issue as before.
   Each of these: the dummy key in no output and no state or Herdr file.
 
 Seams (ticket #1348, recorded before any test): issue-lifecycle#acceptance-lane-start-usage and
@@ -227,11 +233,11 @@ def world(s: Scratch) -> tuple[Path, Path, str]:
     return d, checkout, s.git(seed, "rev-parse", "HEAD")
 
 
-def route(s: Scratch, base: str) -> None:
-    """S's Pi config: providers.anthropic at BASE with the dummy KEY."""
+def route(s: Scratch, base: str, key: str = KEY) -> None:
+    """S's Pi config: providers.anthropic at BASE with KEY (the dummy one by default)."""
     agent = Path(s.env["PI_CODING_AGENT_DIR"])
     agent.mkdir(parents=True, exist_ok=True)
-    anthropic = {"baseUrl": base, "apiKey": KEY}
+    anthropic = {"baseUrl": base, "apiKey": key}
     (agent / "models.json").write_text(json.dumps({"providers": {"anthropic": anthropic}}))
 
 
@@ -525,11 +531,17 @@ def sub_issue(s: Scratch) -> None:
     issue |= {"blockedBy": {"nodes": none}, "subIssues": {"totalCount": 0, "nodes": none}}
     s.gh.store("issue/907.json", issue)
     cmd = [kit("octo-feather-lane"), "start", "907", "--goal", "A child", "--outcome", OUTCOME]
-    r = s.run([*cmd, "--brief-file", str(brief)], cwd=checkout, env=DIRECTOR, want=1)
+    nan = "anthropic-ratelimit-unified-7d-utilization"
+    with replaying(s, RECORDED, "--header", f"{nan}=NaN") as host:
+        r = s.run([*cmd, "--brief-file", str(brief)], cwd=checkout, env=DIRECTOR, want=1)
     assert "ticket 907 is a sub-issue of 905" in r.err, r.err
     room, usage = r.out.split("\n")
     assert room == ROOM.format(n=0), r.out
-    assert usage.startswith("usage: not read ("), r.out
+    why = f"{host} sent {nan} 'NaN': no share of the limit (0 to 2.0)"
+    assert usage == NOT_READ.format(why=why), r.out
+    assert not readings(s).exists()
+    show(f"utilization NaN: printed {usage!r}, nothing stored")
+    keyless(s, r.out, r.err)
     nothing_made(s, d, checkout, "gh907")
     assert not creates(s), s.gh.log()
     show(f"sub-issue 907: exit 1, {r.err}")
@@ -707,9 +719,15 @@ def unknown_send(s: Scratch) -> None:
     )
 
     (d / "prompt-timeout").write_text("")
-    err = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1).err
-    agents = json.loads((d / "agents.json").read_text())
-    pane = next(p for p, g in agents.items() if g["name"] == "gh905")
+    route(s, "http://127.0.0.1:9", "!printf '\\377'")  # the key command prints no UTF-8
+    r = s.run(cmd, cwd=checkout, env=DIRECTOR, want=1)
+    models = Path(s.env["PI_CODING_AGENT_DIR"]) / "models.json"
+    why = f"providers.anthropic apiKey in {models} resolved to no printable ASCII key"
+    assert r.out.split("\n") == [ROOM.format(n=0), NOT_READ.format(why=why)], r.out
+    pane = supervised(d, "gh905")
+    show(f"a key command printing byte 0xff: printed {r.out!r}, supervisor {pane}")
+    assert not readings(s).exists()
+    err = r.err
     assert f"step goal (made so far: worktree {wt}" in err, err
     assert f"herdr-say {pane} exit 124 (" in err, err
     assert "delivery unknown, not sent again blind" in err, err
