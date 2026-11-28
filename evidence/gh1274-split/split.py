@@ -2,7 +2,7 @@
 """The split of scripts/octo-feather-lane (ticket #1333; design: #1274 comment 7232729794). One-shot, kit-only: it
 moves the kit's own command file, so it lives with the lane's evidence, not in scripts/.
 
-  uv run --locked --offline python evidence/gh1274-split/split.py [--tree DIR] [--no-baselines]
+  uv run --locked --offline python evidence/gh1274-split/split.py [--tree DIR] [--no-baselines] [--meta FILE]
 
 Run in the kit's root (or --tree DIR, a copy of the kit's files). It reads the hub, scripts/octo-feather-lane, and
 writes: the dispatcher in its place, one module per command group (tables.py, CUT; a def the table lacks is placed by
@@ -215,7 +215,7 @@ def apply_spans(fn: Fn, changes: list[tuple[int, int, int, str, str]]) -> None:
 # ---------------------------------------------------------------- the split
 
 
-def split(root: Path, baselines: bool) -> list[str]:
+def split(root: Path, baselines: bool, meta_path: Path = HERE / "rewrites.json") -> list[str]:
     scripts = root / "scripts"
     hub_src = (scripts / "octo-feather-lane").read_text(encoding="utf-8")
     if re.search(r"^from lane_cli import|^import lane_cli", hub_src, re.M):
@@ -311,11 +311,17 @@ def split(root: Path, baselines: bool) -> list[str]:
     need: dict[str, dict[str, set[str]]] = {m: {} for m in T.CUT}   # module -> provider -> names (top-level)
     aliases: dict[str, dict[str, str]] = {m: {} for m in T.CUT}      # module -> alias -> its definition line
     need["post_merge"].setdefault("lane_cli", set()).add("kit_install")   # post_merge.py's own callers of it
-    for i in imports:   # the hub's `import X as Y` lines live in lane_cli (read from there: no second ICN001)
+    need["lane_cli"].setdefault("import ast", set()).add("ast")   # help_doc's
+    need["lane_cli"].setdefault("from typing", set()).add("cast")
+    alias_lines: list[str] = []
+    for i in imports:   # the hub's `import X as Y`: lane_cli binds Y = X, read from there (no ICN001, no F401)
         if isinstance(i.node, ast.Import):
             for a in i.node.names:
                 if a.asname:
-                    need["lane_cli"].setdefault(f"import {a.name}", set()).add(f"{a.name} as {a.asname}")
+                    need["lane_cli"].setdefault(f"import {a.name}", set()).add(a.name)
+                    alias_lines.append(f"{a.asname} = {a.name}   # the hub's `import {a.name} as {a.asname}`")
+                    table.append(f"note: {a.asname}: lane_cli binds `{a.asname} = {a.name}` (the hub's import alias); "
+                                 "each module reads it from there")
     # a binding over merge_ask's code is not made at the top of post_merge.py or start_lane.py (they never load
     # merge_ask at the top): merge_ask.py holds it, read where the call is
     lazy_mods = ("post_merge", "start_lane")
@@ -367,6 +373,7 @@ def split(root: Path, baselines: bool) -> list[str]:
         fn_locals = local_names(node)
         changes: list[tuple[int, int, int, str, str]] = []
         local_imports: dict[str, list[str]] = {}
+        typed_local: list[str] = []
 
         def rename(g: str, new: str, cls: str) -> None:
             fn.renames[new] = g
@@ -435,14 +442,31 @@ def split(root: Path, baselines: bool) -> list[str]:
                 continue
             if prov == m:
                 continue
+            if key in T.TYPED and (prov in GROUP_MODULES or prov == "lane_cli"):   # read typed (tables.py, TYPED)
+                typed_line = f'{key} = cast("{T.TYPED[key]}", {prov}.{key})'
+                need[m].setdefault("from typing", set()).update({"Any", "cast"})
+                need[m].setdefault("from collections.abc", set()).add("Callable")
+                if prov in GROUP_MODULES:
+                    local_imports.setdefault(f"import {prov}", []).append(prov)
+                    typed_local.append(typed_line)
+                else:
+                    need[m].setdefault(f"import {prov}", set()).add(prov)
+                    aliases[m][key] = typed_line
+                continue
             if prov in GROUP_MODULES or (prov == "import merge_ask" and m in lazy_mods):
                 local_imports.setdefault(prov, []).append(key)
             else:
                 need[m].setdefault(prov, set()).add(key)
         apply_spans(fn, changes)
-        for prov, names in sorted(local_imports.items()):
-            fn.inserts.append(f"import {prov.split()[-1]}" if prov.startswith("import ")
-                              else f"from {prov} import {', '.join(sorted(set(names)))}")
+        for prov, names in sorted(local_imports.items()):   # isort's form: plain names together, each alias alone
+            if prov.startswith("import "):
+                fn.inserts.append(f"import {prov.split()[-1]}")
+                continue
+            plain = sorted({x for x in names if " as " not in x})
+            if plain:
+                fn.inserts.append(f"from {prov} import {', '.join(plain)}")
+            fn.inserts += [f"from {prov} import {x}" for x in sorted({x for x in names if " as " in x})]
+        fn.inserts = sorted(fn.inserts, key=lambda l: (not l.startswith("import "), l)) + sorted(typed_local)
         if fn.inserts:
             insert_at(fn, node)
         if "__file__" in r and n not in T.LAUNCH:
@@ -463,7 +487,7 @@ def split(root: Path, baselines: bool) -> list[str]:
         mine = [it for it in items if (it.kind == "def" and it.names[0] in fns and fns[it.names[0]].module == m)
                 or (it.kind == "assign" and it.names[0] in cwhere and m in cwhere[it.names[0]])]
         if m == "lane_cli":
-            body += [*fn_text(fns["kit_install"]), "", ""]
+            body += [*alias_lines, "", "", *fn_text(fns["kit_install"]), "", ""]
         for it in mine:
             if it.kind == "def":
                 body += [*fn_text(fns[it.names[0]]), "", ""]
@@ -499,13 +523,17 @@ def split(root: Path, baselines: bool) -> list[str]:
             for name, (src_mod, it) in moved_existing.items():
                 if src_mod == m:
                     src = cut_def(src, it)
+            if m == "post_merge":
+                if src.count(T.PM_DOC_FROM) != 1:
+                    refuse("post_merge.py's docstring line naming kit_install() is not there exactly once")
+                src = src.replace(T.PM_DOC_FROM, T.PM_DOC_TO)
             text = insert_imports(src, IMPORTS[m]).rstrip("\n") + "\n\n\n" + text
-        elif m != "octo-feather-lane":
-            text = sort_header(root, m, text)
         files[p] = text
     for p, text in files.items():
         p.write_text(text, encoding="utf-8")
         p.chmod(0o755)
+        if p.name != "octo-feather-lane":
+            isort_top(root, p)
     jf = root / "justfile"
     jt = jf.read_text(encoding="utf-8")
     if jt.count(T.JUSTFILE_FROM) != 1:
@@ -514,11 +542,11 @@ def split(root: Path, baselines: bool) -> list[str]:
     table.append("justfile install-check: kit_install read from scripts/lane_cli.py, not the lane script (one line)")
     for name, (src_mod, dst) in T.FROM_EXISTING.items():
         table.append(f"{dst}.py {name}: moved from {src_mod}.py unchanged (design section 1: lane_cli holds it)")
+    table.append("post_merge.py docstring: its interface line says kit_install() is lane_cli.py's, imported there")
 
     # ------------------------------------------------ format and noqa the existing modules' moved code
     for m in T.EXISTING:
         p = str(scripts / f"{m}.py")
-        run(["ruff", "check", "--quiet", "--select", "I001", "--fix", p], root, ok=(0, 1))
         run(["ruff", "format", "--quiet", p], root)
         run(["ruff", "check", "--quiet", "--add-noqa", p], root, ok=(0, 1))
         run(["ruff", "format", "--quiet", p], root)
@@ -546,7 +574,7 @@ def split(root: Path, baselines: bool) -> list[str]:
             "origin": {n: fn.origin for n, fn in fns.items()},
             "renames": {n: fn.renames for n, fn in fns.items() if fn.renames},
             "inserts": {n: fn.inserts for n, fn in fns.items() if fn.inserts}, "table": table}
-    (HERE / "rewrites.json").write_text(json.dumps(meta, indent=1, sort_keys=True) + "\n", encoding="utf-8")
+    meta_path.write_text(json.dumps(meta, indent=1, sort_keys=True) + "\n", encoding="utf-8")
     if baselines:   # the lint's file set is git's: the new modules known to git first (intent to add)
         run(["git", "add", "--intent-to-add", *[f"scripts/{m}.py" for m in T.NEW]], root)
         table += relocate_baselines(root)
@@ -697,13 +725,12 @@ def help_order_text() -> list[str]:
         "def help_doc() -> str:",
         '    """octo-feather-lane --help: each module\'s HELP chunks in HELP_ORDER, read from its source, never imported',
         '    (the dispatcher loads only the module of the command it runs)."""',
-        "    import ast",
-        "    here, chunks = Path(__file__).resolve().parent, {}",
+        "    here, chunks = Path(__file__).resolve().parent, dict[str, dict[str, str]]()",
         "    for mod in dict.fromkeys(m for m, _ in HELP_ORDER):",
         '        tree = ast.parse((here / f"{mod}.py").read_text(encoding="utf-8"))',
         "        node = next(n for n in tree.body if isinstance(n, ast.Assign)",
         '                    and any(isinstance(t, ast.Name) and t.id == "HELP" for t in n.targets))',
-        "        chunks[mod] = ast.literal_eval(node.value)",
+        "        chunks[mod] = cast(\"dict[str, str]\", ast.literal_eval(node.value))",
         '    return "".join(chunks[m][c] for m, c in HELP_ORDER)',
         "",
         "",
@@ -729,11 +756,16 @@ def assemble(m: str, body: list[str], need: dict[str, set[str]], imported: dict[
     if m == "lane_cli":
         imp = [x for x in imp if not x.startswith("from lane_cli ")]
     imp = sorted(set(imp))
+    typing_only = []
+    if m not in T.EXISTING and "from collections.abc import Callable" in imp:   # read in cast types only (TC003)
+        imp.remove("from collections.abc import Callable")
+        imp.append("from typing import TYPE_CHECKING")
+        typing_only = ["", "if TYPE_CHECKING:", "    from collections.abc import Callable"]
     if m in T.EXISTING:
         IMPORTS[m] = imp
         return "\n".join([BANNER.format(what=DOCLINE.get(m, f"{m}'s commands")), "", "", *body]).rstrip() + "\n"
     head = ["#!/usr/bin/env python3", f'"""{m}: {DOCLINE[m]} Moved from scripts/octo-feather-lane, the dispatcher (ticket #1333)."""', ""]
-    return "\n".join([*head, *imp, "", "", *body]).rstrip() + "\n"
+    return "\n".join([*head, *imp, *typing_only, "", "", *body]).rstrip() + "\n"
 
 
 IMPORTS: dict[str, list[str]] = {}
@@ -748,19 +780,21 @@ def insert_imports(src: str, imp: list[str]) -> str:
     return "".join(lines[:last] + [l + "\n" for l in imp] + lines[last:])
 
 
-def sort_header(root: Path, m: str, text: str) -> str:
-    """Module M's import block sorted by ruff's own isort (I001), the rest of TEXT untouched."""
-    lines = text.splitlines(keepends=True)
-    a = next(k for k, l in enumerate(lines) if l.startswith(("import ", "from ")))
-    b = next(k for k in range(a, len(lines)) if not lines[k].startswith(("import ", "from ")))
-    tmp = root / "scripts" / f"_split_header_{m}.py"
-    tmp.write_text("".join(lines[a:b]), encoding="utf-8")
-    try:
-        run(["ruff", "check", "--quiet", "--select", "I001", "--fix", str(tmp)], root, ok=(0, 1))
-        got = tmp.read_text(encoding="utf-8")
-    finally:
-        tmp.unlink()
-    return "".join(lines[:a]) + got + "".join(lines[b:])
+def isort_top(root: Path, path: Path) -> None:
+    """PATH's top import block (and the blank lines after it) as ruff's own isort (I001) writes it; the rest of PATH,
+    function-local imports included, as it was."""
+    def end(text: str) -> int:
+        tree, lines = ast.parse(text), text.splitlines(keepends=True)
+        k = max(n.end_lineno or n.lineno for n in tree.body if isinstance(n, (ast.Import, ast.ImportFrom))
+                and n.lineno < 400)
+        while k < len(lines) and not lines[k].strip():
+            k += 1
+        return k
+    orig = path.read_text(encoding="utf-8")
+    run(["ruff", "check", "--quiet", "--select", "I001", "--fix", str(path)], root, ok=(0, 1))
+    fixed = path.read_text(encoding="utf-8")
+    path.write_text("".join(fixed.splitlines(keepends=True)[:end(fixed)] + orig.splitlines(keepends=True)[end(orig):]),
+                    encoding="utf-8")
 
 
 DOCLINE.update({"post_merge": "merge, relay, post-merge, archive and stale", "merge_ask": "merge-ask",
@@ -791,7 +825,10 @@ def main(argv: list[str]) -> int:
     module, function = COMMANDS[argv[0]]
     try:
         return getattr(importlib.import_module(module), function)(argv[1:])
-    except (Refuse, getattr(sys.modules.get("post_merge"), "Refused", Refuse)) as e:   # post_merge's, once loaded
+    except Exception as e:
+        pm = sys.modules.get("post_merge")   # post_merge's refusal, read only from a module already loaded
+        if not isinstance(e, Refuse) and not (pm and isinstance(e, pm.Refused)):
+            raise
         print(f"octo-feather-lane {{argv[0]}}: {{e}}", file=sys.stderr); return 2 if isinstance(e, Unchecked) else 1
 
 
@@ -822,15 +859,13 @@ def relocate_baselines(root: Path) -> list[str]:
     fmt = doc["tool"]["ruff"]["format"]["exclude"]  # type: ignore[index]
     new_files = ["scripts/octo-feather-lane", *[f"scripts/{m}.py" for m in T.NEW]]
     # ruff: the codes that fire on each, with no baseline for them
-    tmp = tempfile.NamedTemporaryFile("w", suffix=".toml", delete=False, dir=root)
-    d2 = tomlkit.parse(pp.read_text(encoding="utf-8"))["tool"]["ruff"]  # type: ignore[index]
-    del d2["lint"]["extend-per-file-ignores"]  # type: ignore[union-attr,index]
-    tmp.write(tomlkit.dumps(d2)); tmp.close()   # a --config file not named pyproject.toml is ruff.toml
-    try:
-        found = json.loads(run(["ruff", "check", "--config", tmp.name, "--output-format", "json", *new_files], root,
+    with tempfile.TemporaryDirectory() as t:   # a copy of pyproject.toml minus the table, as octo-feather-lint reads
+        d2 = tomlkit.parse(pp.read_text(encoding="utf-8"))
+        del d2["tool"]["ruff"]["lint"]["extend-per-file-ignores"]  # type: ignore[union-attr,index]
+        cfg = Path(t) / "pyproject.toml"
+        cfg.write_text(tomlkit.dumps(d2), encoding="utf-8")
+        found = json.loads(run(["ruff", "check", "--config", str(cfg), "--output-format", "json", *new_files], root,
                                ok=(0, 1)) or "[]")
-    finally:
-        os.unlink(tmp.name)
     codes: dict[str, set[str]] = {f: set() for f in new_files}
     for v in found:
         codes[os.path.relpath(v["filename"], root)].add(v["code"])
@@ -909,7 +944,8 @@ def main() -> int:
     if "--tree" in args:
         root = Path(args[args.index("--tree") + 1]).resolve()
     try:
-        table = split(root, "--no-baselines" not in args)
+        meta = Path(args[args.index("--meta") + 1]) if "--meta" in args else HERE / "rewrites.json"
+        table = split(root, "--no-baselines" not in args, meta)
     except Refused as e:
         print(f"split: refused: {e}", file=sys.stderr)
         return 1

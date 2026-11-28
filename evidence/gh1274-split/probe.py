@@ -152,7 +152,13 @@ else:
             elif isinstance(stmt, ast.Import):
                 for a in stmt.names:
                     local[a.asname or a.name] = importlib.import_module(a.name)
-        names = r | set(local)
+            elif isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.Call):   # NAME = cast(TYPE, M.NAME)
+                at = stmt.value.args[1]
+                assert isinstance(at, ast.Attribute) and isinstance(at.value, ast.Name)
+                local[stmt.targets[0].id] = getattr(importlib.import_module(at.value.id), at.attr)  # type: ignore[attr-defined]
+        vehicles = {ast.parse(l).body[0].value.args[1].value.id for l in meta["inserts"].get(fn, [])  # type: ignore[attr-defined]
+                    if " = cast(" in l}
+        names = r | (set(local) - vehicles)
         for g in sorted(names):
             if isinstance(node, ast.FunctionDef) and g not in local and g not in r:
                 continue

@@ -247,17 +247,16 @@ print("\n".join(c[0] for c in calls))
 
 
 def ruff_counts(tree: Path, files: list[str]) -> Counter[str]:
-    import tomllib
-    cfg = tomllib.loads((tree / "pyproject.toml").read_text(encoding="utf-8"))
-    cfg["tool"]["ruff"]["lint"].pop("extend-per-file-ignores", None)
+    """Every ruff violation in FILES, noqa and the baseline table ignored: pyproject.toml minus that table, copied
+    as pyproject.toml (requires-python sets the target version), as octo-feather-lint reads it."""
     import tomlkit
-    with tempfile.NamedTemporaryFile("w", suffix=".toml", delete=False, dir=tree) as f:
-        f.write(tomlkit.dumps(cfg["tool"]["ruff"]))   # a --config file not named pyproject.toml is ruff.toml
-    try:
-        p = subprocess.run([*UV, "--project", str(ROOT), "ruff", "check", "--config", f.name, "--ignore-noqa",
+    doc = tomlkit.parse((tree / "pyproject.toml").read_text(encoding="utf-8"))
+    del doc["tool"]["ruff"]["lint"]["extend-per-file-ignores"]  # type: ignore[union-attr,index]
+    with tempfile.TemporaryDirectory() as t:
+        cfg = Path(t) / "pyproject.toml"
+        cfg.write_text(tomlkit.dumps(doc), encoding="utf-8")
+        p = subprocess.run([*UV, "--project", str(ROOT), "ruff", "check", "--config", str(cfg), "--ignore-noqa",
                             "--output-format", "json", *files], cwd=tree, capture_output=True, text=True, check=False)
-    finally:
-        os.unlink(f.name)
     if p.returncode not in (0, 1):
         raise SystemExit(f"ruff failed in {tree}: {p.stderr[-500:]}")
     return Counter(v["code"] for v in json.loads(p.stdout or "[]"))
@@ -284,7 +283,7 @@ def check_baseline(tmp: Path) -> list[str]:
     b_new = json.loads((ROOT / ".basedpyright" / "baseline.json").read_text(encoding="utf-8"))
     p_old, p_new = pyright_counts(b_old, old_files), pyright_counts(b_new, new_files)
     out, bad = [], []
-    calls = sum(len(v) for v in META["inserts"].values())   # the call-site imports the design puts where the call is
+    calls = sum(1 for v in META["inserts"].values() for l in v if l.startswith(("import ", "from ")))   # the call-site imports the design puts where the call is
     for tool, o, n in (("ruff", r_old, r_new), ("basedpyright", p_old, p_new)):
         diff = {k: (o[k], n[k]) for k in sorted(set(o) | set(n)) if o[k] != n[k]}
         out.append(f"{tool}: hub {sum(o.values())} -> split {sum(n.values())}"

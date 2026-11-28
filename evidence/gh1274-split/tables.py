@@ -73,3 +73,23 @@ JUSTFILE_FROM = ('iu.spec_from_loader("octo_feather_lane", im.SourceFileLoader("
                  'os.path.join(root, "scripts", "octo-feather-lane")))')
 JUSTFILE_TO = ('iu.spec_from_loader("lane_cli", im.SourceFileLoader("lane_cli", '
                'os.path.join(root, "scripts", "lane_cli.py")))')
+
+# Defs another module imports whose hub annotations leave part of their type unknown (bare generics, an unannotated
+# parameter): read as `NAME = cast(TYPE, MODULE.NAME)`, TYPE the hub's own annotations with Unknown written Any, so the
+# importer types them as the hub did (no reportUnknownVariableType on an import the hub did not need).
+TYPED = {
+    "no_traceback": "Callable[[Any], Callable[[list[str]], int]]",
+    "herdr_agents": "Callable[[], list[dict[Any, Any]]]",
+    "report_lane": "Callable[[Path, list[dict[Any, Any]] | None, str | None, Any, list[str], list[Any], ReportSources], "
+                   "list[str]]",
+}
+
+# post_merge.py's docstring interface list names kit_install(), which moves to lane_cli.py: that line says where it
+# now lives (a stale interface list is reader load). Exact text, once.
+PM_DOC_FROM = """    kit_install(), top(), git_here(*args), records(lanes), now(): the install step 3 moves, the
+        director's checkout, git in the current directory, the records' dir, a record's time.
+"""
+PM_DOC_TO = """    kit_install() (lane_cli.py's, imported here), top(), git_here(*args), records(lanes), now():
+        the install step 3 moves, the director's checkout, git in the current directory, the
+        records' dir, a record's time.
+"""
