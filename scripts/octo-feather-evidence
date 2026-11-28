@@ -15,7 +15,8 @@ box, unlike its path or origin URL. A record is never rewritten: append writes a
 append (the verify skill runs it once per drive) records the repo at --repo (default: the current
 directory's) and copies every file under --outputs DIR into the record; prints the record id. Each key,
 and where its value comes from (--criterion-text: see criterion.text_from there):
-schemas/evidence.v1.schema.json.
+schemas/evidence.v1.schema.json. The repo's qc.toml, when it has one, is validated by octo-feather-contract
+first: one it refuses is refused with its problems, and no record is written.
 
 read lists the records of the target, filtered by criterion id and by commit (a revision --repo resolves,
 else a hex prefix of the recorded revision), oldest first: each with its keys and its outputs' content.
@@ -29,6 +30,7 @@ import argparse, datetime, hashlib, html.parser, json, os, re, secrets, shutil, 
 ME = "octo-feather-evidence"
 FORMAT = 1
 SCHEMAS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "schemas")
+CONTRACT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "octo-feather-contract")  # the one qc.toml validator
 CRITERION = re.compile(r"^([a-z0-9][a-z0-9._-]*)#([A-Za-z0-9][A-Za-z0-9._-]*)$")
 SHOW_LINES = 40
 
@@ -121,13 +123,17 @@ def tree_hash(path):
     return h.hexdigest()
 
 
-def contract_and_fixture(repo):
+def contract_and_fixture(repo) -> tuple[object, object]:
     path = os.path.join(repo, "qc.toml")
     try:
         with open(path, "rb") as fh:
             raw = fh.read()
     except FileNotFoundError:
         return None, None
+    p = subprocess.run([CONTRACT, path], capture_output=True, text=True)
+    if p.returncode:
+        raise Refused(f"{path} is not a valid contract (octo-feather-contract); no record appended:\n"
+                      f"{(p.stderr or p.stdout).strip()}")
     try:
         doc = tomllib.loads(raw.decode("utf-8"))
     except (UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
@@ -175,8 +181,8 @@ def append(a):
     repo = repo_root(a.repo)
     target, revision = target_of(repo), git(repo, "rev-parse", "HEAD").strip()
     dirty = bool(git(repo, "status", "--porcelain=v1").strip())
-    text, text_from = criterion_text(repo, a.criterion, a.criterion_text)
     contract, fixture = contract_and_fixture(repo)
+    text, text_from = criterion_text(repo, a.criterion, a.criterion_text)
     files = output_files(a.outputs)
     now = datetime.datetime.now(datetime.timezone.utc)
     rid = f"{now:%Y%m%dT%H%M%SZ}-{secrets.token_hex(4)}"

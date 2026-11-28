@@ -3,17 +3,17 @@ diff --git a/scripts/octo-feather-evidence b/scripts/octo-feather-evidence
 index 20344c5a..d2f53b45 100755
 --- a/scripts/octo-feather-evidence
 +++ b/scripts/octo-feather-evidence
-@@ -176,6 +176,9 @@ def append(a):
+@@ -183,6 +183,9 @@ def append(a):
      target, revision = target_of(repo), git(repo, "rev-parse", "HEAD").strip()
      dirty = bool(git(repo, "status", "--porcelain=v1").strip())
+     contract, fixture = contract_and_fixture(repo)
      text, text_from = criterion_text(repo, a.criterion, a.criterion_text)
 +    rec = os.path.join(store_of(target), "records")
 +    known = [json.load(open(os.path.join(rec, r, "record.json"))) for r in sorted(os.listdir(rec))] if os.path.isdir(rec) else []
 +    known = [r["criterion"]["text_sha256"] for r in known if r["criterion"]["id"] == a.criterion]
-     contract, fixture = contract_and_fixture(repo)
      files = output_files(a.outputs)
      now = datetime.datetime.now(datetime.timezone.utc)
-@@ -187,7 +190,7 @@ def append(a):
+@@ -193,7 +196,7 @@ def append(a):
      try:
          outputs = write_stage(stage, files)
          record = {"format": FORMAT, "id": rid, "target": target, "revision": revision, "dirty": dirty,

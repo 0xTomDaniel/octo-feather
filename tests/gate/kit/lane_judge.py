@@ -18,6 +18,7 @@ import datetime as dt
 import json
 import re
 import shutil
+import subprocess
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
@@ -235,6 +236,17 @@ def spend_row(s: Scratch, spent: str, *row: str) -> None:
     s.run([str(ROOT / "tests" / "spend-out"), "row", *row], stdin=spent)
 
 
+def has_row(spent: str, *row: str) -> bool:
+    """Whether spend's output SPENT holds ROW (tests/spend-out row)."""
+    cmd = [str(ROOT / "tests" / "spend-out"), "row", *row]
+    p = subprocess.run(cmd, input=spent, capture_output=True, text=True, check=False)
+    return p.returncode == 0
+
+
+def utc_day() -> str:
+    return dt.datetime.now(dt.UTC).strftime("%Y-%m-%d")
+
+
 def build_base(p: Scratch) -> None:
     """The lane, the review's verdict posted, and its merge ask with no judgment, in without.txt."""
     lane = Lane(p, new=True)
@@ -245,7 +257,8 @@ def build_base(p: Scratch) -> None:
 def build_judged(p: Scratch) -> None:
     """The base lane, then the kit's model's answer to test-quality on the state file's text,
     posted; the run's exit, stdout, stderr and the fake gh's write count before it, in
-    judged.json. Lane gh5, its supervisor in Herdr workspace w5: the judge runs in its space
+    judged.json, with the UTC day at the run's start and at its end (its spend is on one of them,
+    #1314). Lane gh5, its supervisor in Herdr workspace w5: the judge runs in its space
     (spec spend#rule-lane)."""
     p.prepare("base", build_base)
     lane = Lane(p)
@@ -253,6 +266,7 @@ def build_judged(p: Scratch) -> None:
     lanes.mkdir(parents=True)
     (lanes / "gh5.toml").write_text('supervisor = "w5:p2"\n')
     n = p.gh.writes()
+    start = utc_day()
     r = lane.lane(
         "judge",
         "7",
@@ -264,7 +278,10 @@ def build_judged(p: Scratch) -> None:
         STUB_WANT_EXACT="1",
         HERDR_WORKSPACE_ID="w5",
     )
-    lane.file("judged.json", json.dumps({"out": r.out, "err": r.err, "writes_before": n}))
+    days = sorted({start, utc_day()})
+    lane.file(
+        "judged.json", json.dumps({"out": r.out, "err": r.err, "writes_before": n, "days": days})
+    )
 
 
 def refusals(s: Scratch) -> None:
@@ -327,9 +344,11 @@ def judge_posts(s: Scratch) -> None:
     # spec spend#acceptance-spend-judge: the stub reports 100 tokens in, 2 out, $0.0001.
     spent = lane.lane("spend").out
     assert f"Spend ledger: {s.home}/.local/state/octo-feather/spend.jsonl (1 calls)" in spent, spent
-    day = dt.datetime.now(dt.UTC).strftime("%Y-%m-%d")
-    for title, key in (("lane", "gh5"), ("purpose", "judge"), ("model", MODEL), ("day (UTC)", day)):
+    for title, key in (("lane", "gh5"), ("purpose", "judge"), ("model", MODEL)):
         spend_row(s, spent, title, key, "0.000100", "1", "0", "100", "2")
+    # The day the judge ran, whatever the clock reads now (a run crossing 00:00Z: #1314).
+    on = [d for d in r["days"] if has_row(spent, "day (UTC)", d, "0.000100", "1", "0", "100", "2")]
+    assert len(on) == 1, (r["days"], spent)
     b = lane.comment("test-quality")
     for want in (
         MARK.format("test-quality") + "\n",

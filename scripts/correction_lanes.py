@@ -51,7 +51,7 @@ from pathlib import Path
 from typing import Any, Literal, cast
 
 import tomllib  # stdlib since 3.11; ruff, at the 3.10 floor, sorts it as third-party
-from handoff_log import read_log
+from handoff_log import MalformedLineError, read_log
 from tracker_calls import gh, tracker, tracker_skill, utc
 
 LogLine = dict[str, object]  # one parsed hand-off log line
@@ -349,7 +349,7 @@ def _file(lanes: Path, out: list[Outcome]) -> None:
         for lane, _, lines in lane_logs(lanes):
             logs[lane] = logs.get(lane, []) + lines
         due = corrections(logs, read_log(dlog)[0] if dlog.exists() else [])
-    except (OSError, UnicodeDecodeError) as e:
+    except (OSError, UnicodeDecodeError, MalformedLineError) as e:
         msg = f"correction lanes: cannot read the hand-off logs ({e}): fix the cause, then rerun"
         raise Refused(msg) from e
     records = {lane: lane_record(lanes, lane) for lane in logs}

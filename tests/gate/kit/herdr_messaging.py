@@ -937,6 +937,30 @@ def result_resumed(s: Scratch) -> None:
     show(f"supervisor resumed as {new}: received {to(d, new)}")
 
 
+def say_stdin(s: Scratch) -> None:
+    """herdr-say with no MESSAGE reads it from stdin (#1351, #884; owner ruling 2026-11-28 #1349):
+    lane gh7's implementer's `herdr-say --parent < REPORT` exits 0, its result file holding REPORT
+    whole and its supervisor receiving the one notice naming it; an owner shell's
+    `herdr-say PANE < REPORT` delivers REPORT, multi-line, as one prompt, exit 0; with nothing on
+    stdin, either form exits 64 and nothing is prompted. Each observation printed, for the demo."""
+    d, sup, worker = supervised(s)
+    pane = sup["pane"]
+    s.run([SAY, "--parent"], env=worker, stdin=REPORT + "\n")
+    f = reported(s, worker)
+    assert to(d, pane) == [notice(f)], lines(d / "prompts")
+    show(f"--parent < report: exit 0, received: {to(d, pane)}")
+    s.run([SAY, pane], stdin=REPORT + "\n")
+    got = (d / "prompts").read_text()
+    assert got == f"{pane}\t{notice(f)}\n{pane}\t{REPORT}\n", got
+    sent = [x for x in lines(d / "log") if x.startswith("agent prompt ")]
+    assert len(sent) == 2, sent
+    show(f"{pane} < report: exit 0, one prompt: {REPORT!r}")
+    for argv, env in (([SAY, pane], {}), ([SAY, "--parent"], worker)):
+        ran = s.run(argv, want=64, env=env, stdin="")
+        show(f"{' '.join(argv[1:])} < empty: exit 64: {ran.err}")
+    assert (d / "prompts").read_text() == got, lines(d / "prompts")
+
+
 def spawned(s: Scratch, d: Path, sup: dict[str, str], name: str, role: str) -> dict[str, str]:
     """Worker NAME (ROLE) spawned by lane gh7's supervisor through herdr-spawn: its tab env."""
     spawn = [str(ASSETS / "herdr-spawn"), "--workspace", sup["workspace"], "--name", name]
@@ -1691,6 +1715,7 @@ if __name__ == "__main__":
         supervisor_parked_moved,
         result_compacting,
         result_resumed,
+        say_stdin,
         results_listing,
         director_prune,
         repoint_record,
