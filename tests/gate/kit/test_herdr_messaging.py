@@ -27,6 +27,7 @@ from herdr_messaging import (
     say_lookup_fails,
     say_resumes_parked,
     say_stalled,
+    say_stdin,
     spawn_fails_closed,
     spawn_one_bound,
     spawn_ready_late,
@@ -178,6 +179,10 @@ def test_result_compacting(case: Case) -> None:
 
 def test_result_resumed(case: Case) -> None:
     case(result_resumed)
+
+
+def test_say_stdin(case: Case) -> None:
+    case(say_stdin)
 
 
 def test_results_listing(case: Case) -> None:

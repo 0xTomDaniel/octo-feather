@@ -11,6 +11,9 @@
 # an observed state change, so delivery is confirmed by Herdr rather than by an
 # acknowledgement the agent sends about itself.
 #
+# With no MESSAGE, stdin whole is the one message (#884), as if given as MESSAGE;
+# nothing on stdin (or a terminal) exits 64.
+#
 # Exit codes are the contract callers rely on, including
 # `herdr-wake`, Spec Chat's wake provider:
 #   0   delivered, and Herdr observed the agent change state
@@ -53,7 +56,7 @@
 # wake) are not limited.
 set -euo pipefail
 
-usage() { echo "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET" >&2; }
+usage() { echo "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) [MESSAGE] | --parked TARGET" >&2; }
 here="$(dirname "$(readlink -f "$0")")"
 
 # TARGET's parked line: octo-feather-handoff parked (its docstring).
@@ -84,6 +87,10 @@ fi
 if [[ -n "${to_parent:-}" ]]; then
   [[ -n "$parent" ]] || { echo "herdr-say: no parent recorded for this pane" >&2; exit 64; }
   set -- "$parent" "$@"
+fi
+# No MESSAGE: stdin, whole, is the one message (#884); an empty stdin or a terminal is none.
+if (($# == 1)) && [[ ! -t 0 ]] && message="$(cat)" && [[ -n "$message" ]]; then
+  set -- "$1" "$message"
 fi
 (($# == 2)) || { usage; exit 64; }
 target="$1"; message="$2"; bound="${bound:-900}"
