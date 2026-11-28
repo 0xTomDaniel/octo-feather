@@ -55,6 +55,9 @@ def test_lane_start_files(case: Case) -> None:
     case(files)
 
 
+@pytest.mark.criterion(
+    "issue-lifecycle#acceptance-lane-start-unread", source="tests/gate/kit/lane_start.py"
+)
 def test_lane_start_filed_stopped(case: Case) -> None:
     case(filed_stopped)
 
@@ -74,7 +77,9 @@ def test_lane_start_exists(case: Case) -> None:
 
 
 @pytest.mark.criterion(
-    "issue-lifecycle#acceptance-lane-start-rerun", source="tests/gate/kit/lane_start.py"
+    "issue-lifecycle#acceptance-lane-start-rerun",
+    "issue-lifecycle#acceptance-lane-start-unread",
+    source="tests/gate/kit/lane_start.py",
 )
 def test_lane_start_rerun(case: Case) -> None:
     case(rerun)

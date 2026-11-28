@@ -887,9 +887,10 @@ usage_reserve in the kit install's gate-budget.toml (0.1 when unset). Under it, 
 ticket is read or filed, nothing made, no supervisor (the reading still stored), in one line: `refused (usage): <the
 same figures>, over <line> (reserve <share>, usage_reserve in <install>/gate-budget.toml); no lane started, nothing
 made: wait for the reset at <time>, or change usage_reserve in <install>/gate-budget.toml`, the time the latest reset
-of the windows over the line. When the usage cannot be read (no providers.anthropic route or key, a refused connection
-or a timeout, a non-2xx answer, no model listed, no Date, or no unified weekly limit headers: an API-key route, or a
-route to another provider) nothing is stored, and each window of this week stored (its reset still ahead of now) is
+of the windows over the line. When the usage cannot be read (no providers.anthropic route or key, a baseUrl no request
+can be built on, a refused connection or a timeout, a non-2xx answer, an answer cut short, no model listed, no Date, no
+unified weekly limit headers: an API-key route, or a route to another provider; any other failure of the read alike)
+nothing is stored, and each window of this week stored (its reset still ahead of now) is
 carried forward from its last reading: the course that reading's share plus the burn measured then (from the readings
 stored before it) to the reset. A carried course over the line refuses the start the same way: `refused (usage,
 carried): usage not read now (<why>); last reading <window> <share> at <time>, carried at its burn then: burn ...,

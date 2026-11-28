@@ -5,11 +5,13 @@ OpenAI-compatible chat completions server on 127.0.0.1, for a models.json provid
 "models": [{"id": "fake"}]} (a "cost" there prices its calls in Pi).
 
   provider.py [--log FILE] [--answer TEXT] [--code CODE]
-  provider.py --replay DIR
+  provider.py --replay DIR [--truncated]
 
 With --replay, a recorded Anthropic route instead (scripts/lane_brake.py record DIR): each GET or
 POST answered with the DIR/*.json whose request is its method and path, its status, headers (its
-recorded Date, no other) and body as recorded; one recorded for no request: 404, empty.
+recorded Date, no other) and body as recorded; one recorded for no request: 404, empty. With
+--truncated, an induced failure: each answer's content-length claims 100 bytes more than it sends,
+then the connection closes (the body cut short).
 
 Prints its port and a newline on stdout once it listens (the caller's readiness: wait for that
 line), then serves until killed. Each request body is appended to FILE as one JSON line. Every
@@ -76,6 +78,7 @@ def main() -> None:
     ap.add_argument("--answer", default="fake-done")
     ap.add_argument("--code")
     ap.add_argument("--replay")
+    ap.add_argument("--truncated", action="store_true")
     a = ap.parse_args()
     log: str | None = a.log
     replay = recordings(a.replay)
@@ -90,7 +93,7 @@ def main() -> None:
             self.send_response_only(status)  # no Date of its own: the recorded one
             for k, v in headers.items():
                 self.send_header(k, v)
-            self.send_header("content-length", str(len(body)))
+            self.send_header("content-length", str(len(body) + 100 * a.truncated))
             self.end_headers()
             self.wfile.write(body)
 
