@@ -8,11 +8,13 @@ note: constant pr_view read by ci_start, lane_reporting, lane_review, merge_ask,
 note: constant check_runs has no reader: dropped
 note: binding git read by ci_start, lane_review, merge_ask, post_merge reads merge_ask: one per module
 note: binding pr_base read by ci_start, lane_review, merge_ask reads merge_ask: one per module
+note: dtm: lane_cli binds `dtm = datetime` (the hub's import alias); each module reads it from there
 note: binding git: post_merge.py and start_lane.py read it from merge_ask.py where the call is
 note: lanes_dir reads __file__ for its directory only (Path(__file__).resolve().with_name): lane_cli.py sits beside the hub, unchanged
 justfile install-check: kit_install read from scripts/lane_cli.py, not the lane script (one line)
 lane_cli.py kit_install: moved from post_merge.py unchanged (design section 1: lane_cli holds it)
-lane_reflection.py reflect_lane: calls between groups: inserted `from lane_reporting import ReportSources, herdr_agents, report_lane`
+post_merge.py docstring: its interface line says kit_install() is lane_cli.py's, imported there
+lane_reflection.py reflect_lane: calls between groups: inserted `import lane_reporting; from lane_reporting import ReportSources; herdr_agents = cast("Callable[[], list[dict[Any, Any]]]", lane_reporting.herdr_agents); report_lane = cast("Callable[[Path, list[dict[Any, Any]] | None, str | None, Any, list[str], list[Any], ReportSources], list[str]]", lane_reporting.report_lane)`
 lane_reflection.py reflect_director: calls between groups: inserted `from lane_reporting import cmd_report`
 merge_ask.py pr_commits line 5: same name, another object: `if git("cat-file", "-e", f"{head}^{{commit}}", ok=(0, 1, 128))[0]:` -> `if lane_git("cat-file", "-e", f"{head}^{{commit}}", ok=(0, 1, 128))[0]:`
 merge_ask.py pr_commits line 8: same name, another object: `if git("rev-parse", "--verify", "-q", f"{base}^{{commit}}", ok=(0, 1))[0]:` -> `if lane_git("rev-parse", "--verify", "-q", f"{base}^{{commit}}", ok=(0, 1))[0]:`
@@ -49,7 +51,7 @@ post_merge.py cmd_post_merge line 19: self-qualified: `return post_merge.unit_en
 post_merge.py cmd_post_merge: formatted (ruff format, line noqa; check 1 compares its ast)
 post_merge.py merge_lane: formatted (ruff format, line noqa; check 1 compares its ast)
 post_merge.py merge_allowed line 4: same name, another object: `d = cast("dict[str, object]", pr_view(pr, "state,headRefOid", repo))` -> `d = cast("dict[str, object]", lane_pr_view(pr, "state,headRefOid", repo))`
-post_merge.py merge_allowed: calls between groups: inserted `import merge_ask; from merge_ask import ask_of, lane_git as git`
+post_merge.py merge_allowed: calls between groups: inserted `import merge_ask; from merge_ask import ask_of; from merge_ask import lane_git as git`
 post_merge.py merge_allowed: formatted (ruff format, line noqa; check 1 compares its ast)
 post_merge.py relays_of: formatted (ruff format, line noqa; check 1 compares its ast)
 post_merge.py cmd_relay: formatted (ruff format, line noqa; check 1 compares its ast)
@@ -80,12 +82,12 @@ post_merge.py pm_unit_run: formatted (ruff format, line noqa; check 1 compares i
 start_lane.py cmd_start line 5: the hub's own docstring: `doc = __doc__ or ""` -> `doc = help_doc() or ""`
 start_lane.py cmd_start: formatted (ruff format, line noqa; check 1 compares its ast)
 baseline: ruff codes for scripts/octo-feather-lane: E501 E702 T201
-baseline: ruff codes for scripts/lane_cli.py: ANN001 ANN201 E501 EM101 EM102 F401 ICN001 N818 PLC0415 TRY003
-baseline: ruff codes for scripts/lane_ticketing.py: ANN001 ANN201 ANN202 ANN204 B007 B018 B905 C901 E501 E702 E731 E741 EM101 EM102 FURB167 FURB188 I001 PLC0415 PLR0911 PLR0912 PLR0915 PLR2004 PLW1510 PTH117 RUF005 S607 T201 TRY003 TRY301 UP034
-baseline: ruff codes for scripts/lane_reporting.py: ANN001 ANN201 ANN204 B904 BLE001 C901 E501 E702 EM101 EM102 I001 ICN001 PLC0415 PLR0124 PLR0912 PLR0913 PLR0915 PLR0917 PLR2004 PLW1510 RUF021 S602 S607 T201 TRY003 TRY004 TRY301 UP017
-baseline: ruff codes for scripts/lane_review.py: ANN201 B904 C901 E501 E702 E741 EM101 EM102 I001 PLC0415 PLR0912 PLR0913 PLR0915 PLR0917 PLR2004 PLW1510 T201 TRY003
-baseline: ruff codes for scripts/lane_reflection.py: B904 C901 E401 E501 E702 EM101 EM102 FBT001 FBT002 I001 ICN001 PLC0415 PLR0912 PLR0915 RUF005 SIM105 T201 TRY003 TRY301 UP017
-baseline: ruff codes for scripts/pi_sessions.py: C901 E501 EM101 FURB167 I001 PLR0912 PLR0915 PLR2004 RUF021 TRY003
-baseline: ruff codes for scripts/ci_start.py: B904 C901 E501 E702 EM101 EM102 I001 PLR0912 S607 T201 TRY003
+baseline: ruff codes for scripts/lane_cli.py: ANN001 ANN201 E501 EM101 EM102 ICN001 N818 TRY003
+baseline: ruff codes for scripts/lane_ticketing.py: ANN001 ANN201 ANN202 ANN204 B007 B018 B905 C901 E501 E702 E731 E741 EM101 EM102 FURB167 FURB188 PERF203 PLC0415 PLR0911 PLR0912 PLR0915 PLR2004 PLW1510 PTH117 RUF005 S607 T201 TRY003 TRY301 UP034
+baseline: ruff codes for scripts/lane_reporting.py: ANN001 ANN201 ANN204 B904 BLE001 C901 E501 E702 EM101 EM102 ICN001 PERF203 PLC0415 PLR0124 PLR0912 PLR0913 PLR0915 PLR0917 PLR2004 PLW1510 RUF021 S602 S607 T201 TRY003 TRY004 TRY301
+baseline: ruff codes for scripts/lane_review.py: ANN201 B904 C901 E501 E702 E741 EM101 EM102 PLC0415 PLR0912 PLR0913 PLR0915 PLR0917 PLR2004 PLW1510 T201 TRY003
+baseline: ruff codes for scripts/lane_reflection.py: B904 C901 E401 E501 E702 EM101 EM102 FBT001 FBT002 I001 ICN001 PLC0415 PLR0912 PLR0915 RUF005 SIM105 T201 TRY003 TRY301
+baseline: ruff codes for scripts/pi_sessions.py: C901 E501 EM101 FURB167 PLR0912 PLR0915 PLR2004 RUF021 TRY003
+baseline: ruff codes for scripts/ci_start.py: B904 C901 E501 E702 EM101 EM102 PLR0912 S607 T201 TRY003
 baseline: format exclude: scripts/ci_start.py, scripts/lane_cli.py, scripts/lane_reflection.py, scripts/lane_reporting.py, scripts/lane_review.py, scripts/lane_ticketing.py, scripts/octo-feather-lane, scripts/pi_sessions.py
-baseline: basedpyright entries moved to ./scripts/ci_start.py, ./scripts/lane_cli.py, ./scripts/lane_reflection.py, ./scripts/lane_reporting.py, ./scripts/lane_review.py, ./scripts/lane_ticketing.py, ./scripts/merge_ask.py, ./scripts/octo-feather-lane
+baseline: basedpyright entries moved to ./scripts/lane_cli.py, ./scripts/lane_reflection.py, ./scripts/lane_reporting.py, ./scripts/lane_review.py, ./scripts/lane_ticketing.py, ./scripts/merge_ask.py

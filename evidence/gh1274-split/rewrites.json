@@ -14,13 +14,17 @@
   ],
   "merge_allowed": [
    "import merge_ask",
-   "from merge_ask import ask_of, lane_git as git"
+   "from merge_ask import ask_of",
+   "from merge_ask import lane_git as git"
   ],
   "reflect_director": [
    "from lane_reporting import cmd_report"
   ],
   "reflect_lane": [
-   "from lane_reporting import ReportSources, herdr_agents, report_lane"
+   "import lane_reporting",
+   "from lane_reporting import ReportSources",
+   "herdr_agents = cast(\"Callable[[], list[dict[Any, Any]]]\", lane_reporting.herdr_agents)",
+   "report_lane = cast(\"Callable[[Path, list[dict[Any, Any]] | None, str | None, Any, list[str], list[Any], ReportSources], list[str]]\", lane_reporting.report_lane)"
   ],
   "skill_reach": [
    "from pi_sessions import session_reach, sessions_dir"
@@ -207,7 +211,10 @@
    "function": "reflect_lane",
    "module": "lane_reflection",
    "new": [
-    "from lane_reporting import ReportSources, herdr_agents, report_lane"
+    "import lane_reporting",
+    "from lane_reporting import ReportSources",
+    "herdr_agents = cast(\"Callable[[], list[dict[Any, Any]]]\", lane_reporting.herdr_agents)",
+    "report_lane = cast(\"Callable[[Path, list[dict[Any, Any]] | None, str | None, Any, list[str], list[Any], ReportSources], list[str]]\", lane_reporting.report_lane)"
    ],
    "old": ""
   },
@@ -562,7 +569,8 @@
    "module": "post_merge",
    "new": [
     "import merge_ask",
-    "from merge_ask import ask_of, lane_git as git"
+    "from merge_ask import ask_of",
+    "from merge_ask import lane_git as git"
    ],
    "old": ""
   },
@@ -852,11 +860,13 @@
   "note: constant check_runs has no reader: dropped",
   "note: binding git read by ci_start, lane_review, merge_ask, post_merge reads merge_ask: one per module",
   "note: binding pr_base read by ci_start, lane_review, merge_ask reads merge_ask: one per module",
+  "note: dtm: lane_cli binds `dtm = datetime` (the hub's import alias); each module reads it from there",
   "note: binding git: post_merge.py and start_lane.py read it from merge_ask.py where the call is",
   "note: lanes_dir reads __file__ for its directory only (Path(__file__).resolve().with_name): lane_cli.py sits beside the hub, unchanged",
   "justfile install-check: kit_install read from scripts/lane_cli.py, not the lane script (one line)",
   "lane_cli.py kit_install: moved from post_merge.py unchanged (design section 1: lane_cli holds it)",
-  "lane_reflection.py reflect_lane: calls between groups: inserted `from lane_reporting import ReportSources, herdr_agents, report_lane`",
+  "post_merge.py docstring: its interface line says kit_install() is lane_cli.py's, imported there",
+  "lane_reflection.py reflect_lane: calls between groups: inserted `import lane_reporting; from lane_reporting import ReportSources; herdr_agents = cast(\"Callable[[], list[dict[Any, Any]]]\", lane_reporting.herdr_agents); report_lane = cast(\"Callable[[Path, list[dict[Any, Any]] | None, str | None, Any, list[str], list[Any], ReportSources], list[str]]\", lane_reporting.report_lane)`",
   "lane_reflection.py reflect_director: calls between groups: inserted `from lane_reporting import cmd_report`",
   "merge_ask.py pr_commits line 5: same name, another object: `if git(\"cat-file\", \"-e\", f\"{head}^{{commit}}\", ok=(0, 1, 128))[0]:` -> `if lane_git(\"cat-file\", \"-e\", f\"{head}^{{commit}}\", ok=(0, 1, 128))[0]:`",
   "merge_ask.py pr_commits line 8: same name, another object: `if git(\"rev-parse\", \"--verify\", \"-q\", f\"{base}^{{commit}}\", ok=(0, 1))[0]:` -> `if lane_git(\"rev-parse\", \"--verify\", \"-q\", f\"{base}^{{commit}}\", ok=(0, 1))[0]:`",
@@ -893,7 +903,7 @@
   "post_merge.py cmd_post_merge: formatted (ruff format, line noqa; check 1 compares its ast)",
   "post_merge.py merge_lane: formatted (ruff format, line noqa; check 1 compares its ast)",
   "post_merge.py merge_allowed line 4: same name, another object: `d = cast(\"dict[str, object]\", pr_view(pr, \"state,headRefOid\", repo))` -> `d = cast(\"dict[str, object]\", lane_pr_view(pr, \"state,headRefOid\", repo))`",
-  "post_merge.py merge_allowed: calls between groups: inserted `import merge_ask; from merge_ask import ask_of, lane_git as git`",
+  "post_merge.py merge_allowed: calls between groups: inserted `import merge_ask; from merge_ask import ask_of; from merge_ask import lane_git as git`",
   "post_merge.py merge_allowed: formatted (ruff format, line noqa; check 1 compares its ast)",
   "post_merge.py relays_of: formatted (ruff format, line noqa; check 1 compares its ast)",
   "post_merge.py cmd_relay: formatted (ruff format, line noqa; check 1 compares its ast)",

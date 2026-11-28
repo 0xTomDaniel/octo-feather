@@ -1,9 +1,8 @@
 Seeded defect: a Creates path under a test or hook directory is accepted as the app's surface.
-diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
-index b9edc28..e864513 100755
---- a/scripts/octo-feather-lane
-+++ b/scripts/octo-feather-lane
-@@ -1910,7 +1910,7 @@ def creates_why_not(v: str) -> tuple[str, str | None]:
+diff --git a/scripts/lane_ticketing.py b/scripts/lane_ticketing.py
+--- a/scripts/lane_ticketing.py
++++ b/scripts/lane_ticketing.py
+@@ -291,7 +291,7 @@
      rel = d[2:] if d.startswith("./") else d
      if os.path.normpath(rel) != rel:
          return "", f"`{d}` is not a normalized path (no //, /./ or trailing /)"

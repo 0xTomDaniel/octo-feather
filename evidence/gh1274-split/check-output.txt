@@ -1,16 +1,9 @@
-source: FAIL: cmd_archive_lane (post_merge.py): its ast is not the hub's with the printed rewrites
-source: FAIL: merge_allowed (post_merge.py): its ast is not the hub's with the printed rewrites
+source: ok: 108 moved defs: text (new modules) or ast (formatted) is the hub's with the printed rewrites
 names: ok: 1185 global reads in 108 moved defs resolve to the same object as in the hub; __file__ readers outside the tables: lanes_dir only (its directory, same dir)
 help: ok: --help, no arguments (stderr, exit 64) and start -h byte-identical to the pin
 lazy: ok: dispatcher imports lane_cli and the stdlib only; each of 21 commands loads only its module, plus merge_ask.py as a library where its module imports it (design section 6, commit 4: reflect, verdict, fields, ci-start, resolution, judge, tickets, done, ticket, seam, skills, spend, report, intake); `stale x` run loads post_merge alone
 launch: ok: pm_unit_run, the --map-job branch and pm_unit_start (unit, stop hook, fallback) launch /home/exedev/src/octo-feather-gh1274-1333/scripts/octo-feather-lane
-baseline: FAIL: ruff: hub 1781 -> split 1756; per rule: E401 4->2, E501 1065->1034, E702 35->31, F401 0->1, I001 6->10, PLC0415 17->31, UP017 21->14
-baseline: FAIL: basedpyright: hub 447 -> split 454; per rule: reportOptionalMemberAccess 4->3, reportUnknownArgumentType 80->81, reportUnknownVariableType 112->118, reportUnusedImport 0->1
-baseline: FAIL: PLC0415 may rise by the 10 call-site imports only; no other rule may rise
-baseline: FAIL: ruff F401 rises 0 -> 1
-baseline: FAIL: ruff I001 rises 6 -> 10
-baseline: FAIL: ruff PLC0415 rises 17 -> 31 (call-site imports: 10)
-baseline: FAIL: basedpyright reportUnknownArgumentType rises 80 -> 81
-baseline: FAIL: basedpyright reportUnknownVariableType rises 112 -> 118
-baseline: FAIL: basedpyright reportUnusedImport rises 0 -> 1
-tests: ok: 0 files under tests/, all tests/parity/
+baseline: ok: ruff: hub 1761 -> split 1737; per rule: E401 4->3, E501 1065->1035, E702 35->31, I001 4->3, PLC0415 17->29
+baseline: ok: basedpyright: hub 447 -> split 446; per rule: reportOptionalMemberAccess 4->3
+baseline: ok: PLC0415 may rise by the 12 call-site imports only; no other rule may rise
+tests: ok: 33 files under tests/, all tests/parity/

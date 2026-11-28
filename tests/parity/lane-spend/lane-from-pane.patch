@@ -1,9 +1,8 @@
 Seeded defect: the lane is found by the whole supervisor pane id, not its workspace, so a call in a lane's space gets no lane (spec spend#rule-lane).
-diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
-index 29b0852d..dea501c4 100755
---- a/scripts/octo-feather-lane
-+++ b/scripts/octo-feather-lane
-@@ -2716,7 +2716,7 @@ def spend_lane(lanes: Path) -> str | None:
+diff --git a/scripts/lane_reporting.py b/scripts/lane_reporting.py
+--- a/scripts/lane_reporting.py
++++ b/scripts/lane_reporting.py
+@@ -33,7 +33,7 @@
              sup = tomllib.loads(rec.read_text(encoding="utf-8")).get("supervisor")
          except (OSError, ValueError):
              continue
