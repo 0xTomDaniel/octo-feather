@@ -54,3 +54,8 @@ with the pinned jsonschema, unknown fields rejected, into typed records.
     $L/collide.py fetch prs.json prs-overlap.json.gz
     $L/collide.py report prs.json prs-overlap.json.gz --split <split head> --exclude 79
     $L/conflicts.py --since 2026-11-12 --split <split head>    # after git fetch origin
+
+## Launch cost (launch.md)
+
+    python3 evidence/gh1274-split/covers/launch.py launches <main tree> . --n 20
+    python3 evidence/gh1274-split/covers/launch.py tests <main tree> . --runs 3 <the five item ids, launch.md>
