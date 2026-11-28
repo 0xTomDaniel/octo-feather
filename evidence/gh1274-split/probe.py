@@ -130,8 +130,10 @@ if mode == "base":
                 d[g] = ["dir", str(Path(str(val)).resolve().parent).replace(str(root), "<ROOT>")]
             else:
                 d[g] = desc(val)
-        uses_argv = any(isinstance(x, ast.Attribute) and x.attr == "argv" for x in ast.walk(node))
-        if ("__file__" in r and fn not in T.LAUNCH) or ("__doc__" in r and fn not in T.DOC_READERS) or uses_argv:
+        uses_argv = any(isinstance(x, ast.Attribute) and x.attr == "argv" and isinstance(x.value, ast.Name)
+                        and x.value.id == "sys" for x in ast.walk(node))
+        if (("__file__" in r and fn not in T.LAUNCH and fn not in T.DIR_READERS)
+                or ("__doc__" in r and fn not in T.DOC_READERS) or uses_argv):
             readers.append(fn)
         out[fn] = d
 else:
