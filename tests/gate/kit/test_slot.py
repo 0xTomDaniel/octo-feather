@@ -17,6 +17,8 @@ from slot import (
     refused,
     revoked,
     sandboxed,
+    self_asked,
+    self_grant_ends,
     two_sessions,
     unused_alone,
     user_mise_gate,
@@ -93,3 +95,14 @@ def test_two_sessions(case: Case) -> None:
 @pytest.mark.criterion("quality#acceptance-gate-recipes-first")
 def test_back_to_back(case: Case) -> None:
     case(back_to_back)
+
+
+@pytest.mark.criterion("quality#acceptance-slot-self-grant")
+@pytest.mark.criterion("quality#acceptance-slot-self-queue")
+def test_self_asked(case: Case) -> None:
+    case(self_asked)
+
+
+@pytest.mark.criterion("quality#acceptance-slot-self-grant-ends")
+def test_self_grant_ends(case: Case) -> None:
+    case(self_grant_ends)

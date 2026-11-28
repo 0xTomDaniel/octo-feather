@@ -18,16 +18,26 @@ Interface:
         the command hands them; Refused(64) on a bad value
     SlotQueue(kind, home, rule, clock)    home: the slots dir (the box's, or a test's scratch dir)
       settle(*, quiet) -> Outcome         the queue check, one transaction: hand-over after the
-                                          grace, pass-over after the bound, a free slot to the head
+                                          grace, pass-over after the bound, a free slot to the head,
+                                          a self-grant ended with its run, a queued lane whose lane
+                                          record is gone dropped; the director told of a pass-over
+                                          only
       grant(lane, by, hours) -> Outcome   Refused(75) when the kind is full
       revoke(lane) -> Outcome
       queue(lane, by, lanes, session) -> Outcome   queued (its `settle` set: the command settles
                                           next), already queued or holding, or granted at once
-      take(items, pid, ancestors, lane, *, if_granted=False) -> Taken | Outcome   hold's
-                                          question and the real flock: free, nested, held (Taken)
-                                          or the refusal (code 75); with IF_GRANTED, `later:`
-                                          (code 0, nothing held) where it would refuse; LANE a
-                                          callable, asked only when a grant decides
+      take(items, pid, ancestors, caller, *, if_granted=False) -> Taken | Outcome   hold's
+                                          question and the real flock: free, nested, held (Taken;
+                                          a lane with no grant granted at once onto a free slot
+                                          with an empty queue) or the refusal (code 75; a resolved
+                                          lane with no grant queued, by `self PANE`, its
+                                          supervisor told its place when PANE is not it; its
+                                          `settle` set); with IF_GRANTED, `later:` (code 0,
+                                          nothing held or queued) where it would grant at once,
+                                          queue or refuse
+    Caller(lane, pane, lanes, session)    who runs: LANE and LANES (its session's lanes dir)
+                                          callables, asked only when needed; PANE its Herdr pane;
+                                          SESSION its Herdr session's key
       release(taken) -> Outcome           the run's end recorded against the grant it started
                                           under, the lock freed
       status() -> list[str]
@@ -50,8 +60,10 @@ Invariants: time comes only from the clock, read once per call (after the files 
 call takes it); nothing here reads env or cwd, prints, sleeps, starts a process or calls
 herdr-say. Each mutating call on KIND.json, KIND.queue.json, KIND.runs.json is one
 read-modify-write under KIND.files.lock; the files keep their shapes (the command's --help,
-Files) and are written only when something changed. Precise stamps (a run's end, `freed`) are
-written from milliseconds, their last three digits 000, a shape every reader parses.
+Files) and are written only when something changed. KIND.log gets one line per grant at once
+or queue a run makes for its own lane, and per pass, self-grant ended or queued lane dropped a
+check makes; status shows its last. Precise stamps (a run's end,
+`freed`) are written from milliseconds, their last three digits 000, a shape every reader parses.
 home and box read only the env the command hands them.
 """
 
@@ -61,6 +73,7 @@ __all__ = [
     "GRANT_HOURS",
     "REFUSED",
     "USAGE",
+    "Caller",
     "Clock",
     "Line",
     "Ms",
@@ -251,6 +264,16 @@ class Run:
 
 
 @dataclass(frozen=True)
+class Caller:
+    """Who runs `hold` (this module's docstring)."""
+
+    lane: Callable[[], str | None]
+    pane: str
+    lanes: Callable[[], Path]
+    session: str
+
+
+@dataclass(frozen=True)
 class Taken:
     """A run holding one of the kind's locks (F, flocked) under grant UNDER, recorded in REC;
     HELD the line the command prints."""
@@ -285,6 +308,11 @@ def _record_pane(path: Path, key: str) -> str | None:
     except (OSError, ValueError):
         return None
     return v if isinstance(v, str) and v else None
+
+
+def _record(q: Queued) -> Path:
+    """Q's lane record, in the lanes dir it was queued from: gone, its lane archived."""
+    return Path(q.lanes) / f"{q.lane}.toml"
 
 
 def _ask(lane: str | None, kind: str, verb: str = "grant") -> str:
@@ -387,6 +415,45 @@ class SlotQueue:
         tmp.write_text(json.dumps({"ended": rows}, indent=2) + "\n", "utf-8")
         tmp.replace(p)
 
+    def _log(self, line: str) -> None:
+        with self._file(".log").open("a", encoding="utf-8") as f:
+            f.write(line + "\n")
+
+    def _last_log(self) -> str | None:
+        try:
+            lines = self._file(".log").read_text(encoding="utf-8").splitlines()
+        except FileNotFoundError:
+            return None
+        return lines[-1] if lines else None
+
+    def _enqueue(self, new: Queued, gs: list[Grant]) -> tuple[int, tuple[Wake, ...]]:
+        """NEW appended to KIND's queue (under the files lock), behind holders GS: its place read
+        back from the queue file, and the bound's check it starts."""
+        qs, freed = self._queue_file()
+        self._write_queue([*qs, new], freed)
+        at = next(i for i, q in enumerate(self._queue_file()[0], 1) if q.lane == new.lane)
+        ends, running = self._run_ends(), {r.lane for r in self.runs()}
+        unused = [
+            _parse_stamp(g.since)
+            for g in gs
+            if (g.lane, g.since) not in ends and g.lane not in running
+        ]
+        # behind a holder not yet run: the bound's check, at its since + bound
+        return at, ((Wake(min(unused) + self.rule.bound_ms),) if unused else ())
+
+    def _lock(self, r: Run) -> tuple[IO[str], Path] | None:
+        """A free lock of KIND's, flocked for run R and R recorded; None: all held."""
+        for lk, rec in self._lock_paths():
+            f = lk.open("a")
+            try:
+                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except BlockingIOError:
+                f.close()
+                continue
+            rec.write_text(json.dumps(asdict(r)) + "\n", encoding="utf-8")
+            return f, rec
+        return None
+
     def _lock_paths(self) -> Iterator[tuple[Path, Path]]:
         for i in range(self.rule.count):
             yield self._file(f"-{i}.lock"), self._file(f"-{i}.run.json")
@@ -462,17 +529,8 @@ class SlotQueue:
                 msg = f"{lane} is already queued for the {k} slot, position {at}; nothing changed"
                 return Outcome((Line(msg),))
             if len(gs) >= self.rule.count or qs:  # full, or a free slot waits for the head
-                q = Queued(lane, _stamp(t), by, str(lanes), session)
-                self._write_queue([*qs, q], self._queue_file()[1])
-                line = Line(f"queued: lane {lane} for the {k} slot, position {len(qs) + 1}")
-                ends, running = self._run_ends(), {r.lane for r in self.runs()}
-                unused = [
-                    _parse_stamp(g.since)
-                    for g in gs
-                    if (g.lane, g.since) not in ends and g.lane not in running
-                ]
-                # behind a holder not yet run: the bound's check, at its since + bound
-                wakes = (Wake(min(unused) + self.rule.bound_ms),) if unused else ()
+                at, wakes = self._enqueue(Queued(lane, _stamp(t), by, str(lanes), session), gs)
+                line = Line(f"queued: lane {lane} for the {k} slot, position {at}")
                 return Outcome((line,), wakes, settle=True)
             got = self._grant(lane, by, GRANT_HOURS, t)
             g = next(g for g in self._grants(t) if g.lane == lane)
@@ -485,18 +543,38 @@ class SlotQueue:
     def settle(self, *, quiet: bool) -> Outcome:
         """The queue check (the command's --help, the queue), one transaction under KIND's files
         lock; what it hands over said and told; with QUIET, nothing said when nothing passes."""
-        passes, rest, wakes, t = self._check()
+        passes, ended, dropped, rest, wakes, t = self._check()
         left = " ".join(q.lane for q in rest) or "none"
         steps: list[Line | Notice] = []
-        if not passes and not quiet:
+        if not (passes or ended or dropped) and not quiet:
             steps.append(Line(f"{_stamp(t)} settle {self.kind}: nothing passes (queue: {left})"))
+        steps += [
+            self._event(t, f"lane {q.lane} dropped from the queue: {_record(q)} gone")
+            for q in dropped
+        ]
+        for g, why in ended:
+            wait = self.rule.grace_ms // 1000
+            how = (
+                f"its run ended, no run within the {wait} s grace"
+                if why == "ended"
+                else "no run holds it and none recorded its end"
+            )
+            steps.append(self._event(t, f"lane {g.lane}'s self-grant ended ({how})"))
         for p in passes:
             steps += self._notices(p, left, t)
         return Outcome(tuple(steps), tuple(wakes))
 
-    def _check(self) -> tuple[list[_Pass], list[Queued], list[Wake], Ms]:
-        """The check under KIND's files lock: its hand-overs, the queue left, the wakes it
-        starts, and its time. Writes nothing unless something changed."""
+    def _event(self, t: Ms, what: str, logged: str = "") -> Line:
+        """WHAT a check did at T: its settle line, and KIND.log's line (WHAT, then LOGGED)."""
+        self._log(f"{_stamp(t)} {self.kind}: {what}{logged}")
+        return Line(f"{_stamp(t)} settle {self.kind}: {what}")
+
+    def _check(
+        self,
+    ) -> tuple[list[_Pass], list[tuple[Grant, str]], list[Queued], list[Queued], list[Wake], Ms]:
+        """The check under KIND's files lock: its hand-overs, the self-grants it ended with nobody
+        to hand to (and why: ended, or gone), the queued lanes it dropped (lane record gone), the
+        queue left, the wakes it starts, and its time. Writes nothing unless something changed."""
         wait, bnd = self.rule.grace_ms, self.rule.bound_ms
         with self._locked():
             t = self.clock()
@@ -504,6 +582,8 @@ class SlotQueue:
             queued, was = self._queue_file()
             freed = was
             qs = [q for q in queued if q.lane not in {g.lane for g in gs}]  # granted meanwhile: off
+            dropped = [q for q in qs if not _record(q).exists()]  # its lane archived: never granted
+            qs = [q for q in qs if q not in dropped]
             running = {r.lane for r in self.runs()}
             due = [
                 (g, "ended")
@@ -512,10 +592,19 @@ class SlotQueue:
                 and g.lane not in running
                 and t - _parse_precise(ends[g.lane, g.since]) >= wait
             ]
+            # a self-grant no run holds and none recorded the end of: its hold killed, due now
+            due += [
+                (g, "gone")
+                for g in gs
+                if g.by.startswith("self ")
+                and (g.lane, g.since) not in ends
+                and g.lane not in running
+            ]
             due += [
                 (g, "unused")
                 for g in gs
-                if (g.lane, g.since) not in ends
+                if not g.by.startswith("self ")
+                and (g.lane, g.since) not in ends
                 and g.lane not in running
                 and t - _parse_stamp(g.since) >= bnd
             ]
@@ -524,6 +613,9 @@ class SlotQueue:
                 new = self._queue_grant(q.lane, t)
                 gs = [*[x for x in gs if x.lane not in (g.lane, q.lane)], new]
                 passes.append(_Pass(g, why, q, new))
+            # nobody to hand to: a self-grant ends with its run, a director's keeps its hours
+            ended = [(g, why) for g, why in due[len(passes) :] if g.by.startswith("self ")]
+            gs = [g for g in gs if g not in {e for e, _ in ended}]
             rest = qs[len(passes) :]
             free = self.rule.count - len(gs)
             wakes: list[Wake] = []
@@ -538,13 +630,13 @@ class SlotQueue:
                     gs = [*gs, new]
                     passes.append(_Pass(None, "free", q, new))
                 rest, freed = rest[free:], None
-            if passes:
+            if passes or ended:
                 self._write_grants(gs)
                 if rest:  # the new holders' bound
                     wakes.append(Wake(t + bnd))
             if rest != queued or freed != was:
                 self._write_queue(rest, freed)
-        return passes, rest, wakes, t
+        return passes, ended, dropped, rest, wakes, t
 
     @staticmethod
     def _queue_grant(lane: str, t: Ms) -> Grant:
@@ -552,24 +644,24 @@ class SlotQueue:
         return Grant(lane, _stamp(s), _stamp(s + int(GRANT_HOURS * 3_600_000)), "queue")
 
     def _notices(self, p: _Pass, left: str, t: Ms) -> list[Line | Notice]:
-        """P said, and told (--help, the queue) in the session P's head was queued from."""
+        """P said, logged and told (--help, the queue) in the session P's head was queued from:
+        the head always, the director and the passed-over lane only on a pass-over."""
         kind, q, g, lanes = self.kind, p.q, p.old, Path(p.q.lanes)
         wait, bnd = self.rule.grace_ms // 1000, self.rule.bound_ms // 1000
         out: list[Line | Notice] = []
+        left_, moved = f"; queue left: {left}", ""
         if g is None:
-            out.append(Line(f"{_stamp(t)} settle {kind}: free slot to lane {q.lane}"))
+            out.append(self._event(t, f"free slot to lane {q.lane}", left_))
             why = f"the slot free for the {wait} s grace"
-            moved = f"{kind} slot free for the {wait} s grace, granted to lane {q.lane}"
-        elif p.why == "ended":
-            out.append(
-                Line(f"{_stamp(t)} settle {kind}: passed from lane {g.lane} to lane {q.lane}")
+        elif p.why in ("ended", "gone"):
+            out.append(self._event(t, f"passed from lane {g.lane} to lane {q.lane}", left_))
+            why = (
+                f"lane {g.lane}'s run ended, no run within the {wait} s grace"
+                if p.why == "ended"
+                else f"lane {g.lane}'s run gone, its end unrecorded"
             )
-            why = f"lane {g.lane}'s run ended, no run within the {wait} s grace"
-            moved = f"{kind} slot passed from lane {g.lane} to lane {q.lane}"
         else:
-            out.append(
-                Line(f"{_stamp(t)} settle {kind}: passed over lane {g.lane} to lane {q.lane}")
-            )
+            out.append(self._event(t, f"passed over lane {g.lane} to lane {q.lane}", left_))
             why = f"lane {g.lane} started no {kind} run within the {bnd} s bound"
             moved = (
                 f"{kind} slot passed over lane {g.lane} (no run within the {bnd} s bound) to lane "
@@ -588,11 +680,11 @@ class SlotQueue:
                     holder,
                     q.session,
                     f"octo-feather-slot: lane {g.lane}'s {kind} grant passed to lane {q.lane}: no "
-                    f"{kind} run started under it within the {bnd} s bound; to run, ask the "
-                    f"director: octo-feather-slot queue {g.lane} --kind {kind}.",
+                    f"{kind} run started under it within the {bnd} s bound; your lane's next "
+                    f"{kind} run queues it again.",
                 )
             )
-        director = _record_pane(lanes.parent / "director.toml", "pane")
+        director = _record_pane(lanes.parent / "director.toml", "pane") if over else None
         if director:
             out.append(
                 Notice(director, q.session, f"octo-feather-slot: {moved}; queue left: {left}.")
@@ -604,16 +696,18 @@ class SlotQueue:
         items: int | None,
         pid: int,
         ancestors: Iterable[int],
-        lane: Callable[[], str | None],
+        caller: Caller,
         *,
         if_granted: bool = False,
     ) -> Taken | Outcome:
         """`hold`'s question for a run of ITEMS items by process PID, under ANCESTORS (read only
-        once the item count needs a slot), of the lane LANE answers (asked only when a grant
-        decides): free, nested, held (Taken, its lock flocked here) or the refusal (code 75);
-        with IF_GRANTED (a gate before its static checks: the command's --help, hold), `later:`
-        (code 0, nothing held) in the refusal's place, so only a lane holding its grant takes the
-        slot then."""
+        once the item count needs a slot), of CALLER, its lane asked only when a grant decides:
+        free, nested, held (Taken, its lock flocked here) or the refusal (code 75). A resolved
+        lane (not the director) with no grant asks for itself: onto a free slot with an empty
+        queue it is granted at once (by `self PANE`, PANE CALLER's) and held; else queued once,
+        its place said. With IF_GRANTED (a gate before its static checks: the command's --help,
+        hold), `later:` (code 0, nothing held or queued) in place of any of those, so only a lane
+        holding its grant takes the slot then."""
         kind, b = self.kind, self.rule
         if kind == "heavy":
             if items is None:
@@ -627,40 +721,77 @@ class SlotQueue:
                 return Outcome(
                     (Line(f"nested: under the {kind} run {r.show()}, which holds the slot"),)
                 )
-        ln = lane()
+        ln = caller.lane()
         what = (
             f"this heavy run selects {items} items, over heavy_items {b.heavy_items} "
             f"({BUDGET_NAME})"
             if kind == "heavy"
             else "this eval run (octo-feather-qa) runs model evals"
         )
-        t = self.clock()
-        gs = self._grants(t)
-        under = next((g for g in gs if g.lane == ln), None)  # the grant it runs under
-        if under is None:
-            verb = "queue" if len(gs) >= b.count else "grant"
-            msg = (
-                f"octo-feather-slot: refused, nothing ran: {what}, and lane {ln or 'none'} holds "
-                f"no {kind} grant; current holder: {self._holders(t)}; {_ask(ln, kind, verb)}"
-            )
-            return _no(msg, f"lane {ln or 'none'} holds no {kind} grant", if_granted=if_granted)
-        for lk, rec in self._lock_paths():
-            f = lk.open("a")
-            try:
-                fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
-            except BlockingIOError:
-                f.close()
-                continue
+        with self._locked():
+            t = self.clock()
+            gs = self._grants(t)
+            under = next((g for g in gs if g.lane == ln), None)  # the grant it runs under
+            if under is None:
+                no = f"lane {ln or 'none'} holds no {kind} grant"
+                head = (
+                    f"octo-feather-slot: refused, nothing ran: {what}, and {no}; current holder: "
+                    f"{self._holders(t)}"
+                )
+                if not ln or ln == "director" or if_granted:
+                    verb = "queue" if len(gs) >= b.count else "grant"
+                    return _no(f"{head}; {_ask(ln, kind, verb)}", no, if_granted=if_granted)
+                return self._self_ask(caller, Run(pid, ln, _stamp(t), items), head, t)
             r = Run(pid, under.lane, _stamp(t), items)
-            rec.write_text(json.dumps(asdict(r)) + "\n", encoding="utf-8")
+            got = self._lock(r)
+        if got:
+            f, rec = got
             return Taken(f, rec, under, f"held: the {kind} slot for lane {r.lane}, run {r.show()}")
         busy = "; ".join(r.show() for r in self.runs()) or "a run now ending"
         msg = (
             f"octo-feather-slot: refused, nothing ran: {what}; lane {ln} holds the {kind} grant, "
-            f"but every {kind} slot is held now by a run: {busy}; wait for it to end, or "
-            f"{_ask(ln, kind)} for another slot ({kind}_slots in {BUDGET_NAME})"
+            f"but every {kind} slot is held now by a run: {busy}; wait for it to end "
+            f"({kind}_slots in {BUDGET_NAME} sets how many run at once)"
         )
         return _no(msg, f"every {kind} slot is held now by a run: {busy}", if_granted=if_granted)
+
+    def _self_ask(self, caller: Caller, r: Run, head: str, t: Ms) -> Taken | Outcome:
+        """Under the files lock, at T: CALLER's run R, of a lane holding no grant, asks for its
+        lane (take's docstring), its refusal starting HEAD."""
+        kind, ln, pane, by = self.kind, r.lane, caller.pane, f"self {caller.pane}"
+        gs, qs, lanes = self._grants(t), self._queue_file()[0], caller.lanes()
+        if len(gs) < self.rule.count and not qs:  # free, nobody waiting: granted at once
+            got = self._lock(r)
+            if got:
+                f, rec = got
+                self._grant(ln, by, GRANT_HOURS, t)
+                under = next(g for g in self._grants(t) if g.lane == ln)
+                self._log(f"{_stamp(t)} {kind}: lane {ln} granted at once, by {by}")
+                held = (
+                    f"held: the {kind} slot for lane {ln}, run {r.show()} (granted at once: the "
+                    f"{kind} slot free, queue empty)"
+                )
+                return Taken(f, rec, under, held)
+        at = next((i for i, q in enumerate(qs, 1) if q.lane == ln), 0)
+        wakes: tuple[Wake, ...] = ()
+        if at:
+            place = f"already queued for the {kind} slot, position {at}, nothing changed"
+        else:
+            at, wakes = self._enqueue(Queued(ln, _stamp(t), by, str(lanes), caller.session), gs)
+            place = f"queued for the {kind} slot, position {at}, by {by}"
+            self._log(f"{_stamp(t)} {kind}: lane {ln} queued, position {at}, by {by}")
+        rule = "the slot passes to it as the queue rule says (octo-feather-slot --help)"
+        steps: list[Line | Notice] = [
+            Line(f"{head}; lane {ln} {place}; {rule} and its supervisor is told then")
+        ]
+        sup = _record_pane(lanes / f"{ln}.toml", "supervisor")
+        if sup and sup != pane:  # a worker's run: its supervisor told the place
+            told = (
+                f"octo-feather-slot: lane {ln} queued for the {kind} slot, position {at}, by its "
+                f"run in {pane}; {rule} and you are told then."
+            )
+            steps.append(Notice(sup, "", told))
+        return Outcome(tuple(steps), wakes, code=REFUSED, settle=True)
 
     def release(self, taken: Taken) -> Outcome:
         """TAKEN's run ended: its end recorded against the grant it started under, never a later
@@ -694,6 +825,9 @@ class SlotQueue:
             out.append(
                 f"  free since {freed}: to the queue's head after the {b.grace_ms // 1000} s grace"
             )
+        last = self._last_log()
+        if last is not None:
+            out.append(f"  last: {last}")
         return out
 
 

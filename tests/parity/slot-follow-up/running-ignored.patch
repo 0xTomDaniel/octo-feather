@@ -1,13 +1,13 @@
 Seeded defect: a run holding the slot's lock after its grant's last run end does not keep the slot: the hand-over after the grace ignores it (--help, the queue: a follow-up run inside the grace keeps the slot).
 diff --git a/scripts/slot_queue.py b/scripts/slot_queue.py
-index d81143a1..19cfce5d 100755
+index 83e35031..840ebd26 100755
 --- a/scripts/slot_queue.py
 +++ b/scripts/slot_queue.py
-@@ -492,7 +492,6 @@ class SlotQueue:
+@@ -589,7 +589,6 @@ class SlotQueue:
                  (g, "ended")
                  for g in gs
                  if (g.lane, g.since) in ends
 -                and g.lane not in running
                  and t - _parse_precise(ends[g.lane, g.since]) >= wait
              ]
-             due += [
+             # a self-grant no run holds and none recorded the end of: its hold killed, due now
