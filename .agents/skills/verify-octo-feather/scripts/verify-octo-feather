@@ -21,6 +21,7 @@ import re
 import resource
 import shlex
 import shutil
+import socket
 import statistics
 import subprocess
 import sys
@@ -4109,7 +4110,8 @@ def drive_lane_start(f: Feature) -> None:
     brief.write_text(LANE_BRIEF)
     say(f"target {checkout}: origin's main {main[:12]}, the clone's main one commit behind")
     director = base | {"OCTO_FEATHER_ROLE": "director", "HERDR_PANE_ID": "w0:p1", "HERDR_WORKSPACE_ID": "w0",
-                        "OCTO_FEATHER_KIT_INSTALL": str(kit)}
+                        "OCTO_FEATHER_KIT_INSTALL": str(kit), "PI_CODING_AGENT_DIR": str(w.sc / "pi-agent"),
+                        "XDG_STATE_HOME": str(w.sc / "home" / ".local" / "state")}  # never the box's route or readings
     comms_env(f, director)
     f.run("current-kit", "sh", "-c", 'cd "$1" && exec octo-feather-lane start 905 --goal "$2" --outcome "$3" --brief-file "$4"',
           "sh", str(checkout), LANE_TITLE, "a scratch proof", str(brief))
@@ -4123,11 +4125,23 @@ def drive_lane_start(f: Feature) -> None:
             and f"git -C {kit} merge --ff-only origin/main" in c.err and c.o["made"] == "")
     subprocess.run(["git", "-C", str(kit), "merge", "-q", "--ff-only", "origin/main"], env=clean, check=True, capture_output=True)
     say(f"kit install fast-forwarded as the refusal says: {kit} at {kit_main[:12]}")
-    f.run("start", "sh", "-c", 'cd "$1" && exec octo-feather-lane start 905 --goal "$2" --outcome "$3" --brief-file "$4"',
-          "sh", str(checkout), LANE_TITLE, "a scratch proof", str(brief))
+    replay = subprocess.Popen([sys.executable, str(Path(f.s.repo) / "tests" / "gate" / "kit" / "testkit" / "provider.py"),
+                               "--replay", str(Path(f.s.repo) / LANE_RECORDED)], stdout=subprocess.PIPE, text=True)
+    try:
+        host = f"127.0.0.1:{replay.stdout.readline().strip() if replay.stdout else ''}"
+        lane_route(w.sc, host)
+        say(f"brake route {host}: the testkit provider replaying the real route's recording ({LANE_RECORDED})")
+        f.run("start", "sh", "-c", 'cd "$1" && exec octo-feather-lane start 905 --goal "$2" --outcome "$3" --brief-file "$4"',
+              "sh", str(checkout), LANE_TITLE, "a scratch proof", str(brief))
+    finally:
+        replay.kill()
+        replay.wait()
     out = (f.d / "start.stdout").read_text()
     pane = next((x.removeprefix("pane=") for x in out.split() if x.startswith("pane=")), "")
-    f.check("start", lambda c: c.code == 0 and c.out == f"key=gh905 pane={pane} issue=905\n" and pane.startswith("w"))
+    readings = w.sc / "home" / ".local" / "state" / "octo-feather" / "usage-readings.jsonl"
+    f.obs("start", "readings", readings.read_text() if readings.exists() else "")
+    f.check("start", lambda c: c.code == 0 and c.out == f"{LANE_CLEAR.format(host=host)}\nkey=gh905 pane={pane} issue=905\n"
+            and pane.startswith("w") and c.o["readings"] == LANE_STORED and LANE_KEY not in c.out + c.err)
     f.run("supervisor", "herdr", "agent", "get", "gh905")
     calls = (w.world / "log").read_text().splitlines()
     f.obs("supervisor", "workspace-create", "\n".join(x for x in calls if x.startswith("workspace create ")))
@@ -4167,6 +4181,21 @@ def drive_lane_start(f: Feature) -> None:
 
 
 LANE_START = 'cd "$1" && exec octo-feather-lane start "$2" --goal "$3" --outcome "$4" --brief-file "$5"'
+# The brake's route (issue-lifecycle #acceptance-lane-start-clear, -unread): a dummy key shown nowhere, and the real
+# route's answers recorded by scripts/lane_brake.py record; the reading they give, worked by hand as
+# tests/gate/kit/lane_start.py's CLEAR is, and the one line the start stores of it.
+LANE_KEY = "verify-dummy-anthropic-key"
+LANE_RECORDED = "tests/gate/kit/fixtures/lane-brake"
+LANE_CLEAR = ("usage: 7d 19% used at 2026-11-28T06:19:36Z ({host}), burn 0.37%/h (week average 0.37%/h, last 6h none), "
+              "reset 2026-12-03T03:00:00Z, course 62% at reset, under 90% (reserve 10%, gate-budget.toml usage_reserve)")
+LANE_STORED = '{"at": "2026-11-28T06:19:36Z", "windows": {"7d": {"used": 0.19, "reset": "2026-12-03T03:00:00Z"}}}\n'
+
+
+def lane_route(sc: Path, host: str) -> None:
+    """The scratch Pi config under SC: providers.anthropic at http://HOST with the dummy LANE_KEY."""
+    (sc / "pi-agent").mkdir(exist_ok=True)
+    route = {"providers": {"anthropic": {"baseUrl": f"http://{host}", "apiKey": LANE_KEY}}}
+    (sc / "pi-agent" / "models.json").write_text(json.dumps(route))
 
 
 def lane_start_exists(f: Feature, w: CommsWorld, checkout: str, brief: str) -> None:
@@ -4182,7 +4211,7 @@ def lane_start_exists(f: Feature, w: CommsWorld, checkout: str, brief: str) -> N
     f.obs("exists", "unchanged", " ".join(k for k in was if was[k] == now[k]))
     made = [x for x in (world / "log").read_text().splitlines()[calls:] if x.startswith(("workspace create", "tab create", "agent start"))]
     f.obs("exists", "made", "\n".join(made))
-    f.check("exists", lambda c: c.code == 1 and c.out == "" and (
+    f.check("exists", lambda c: c.code == 1 and c.out.startswith("usage: ") and c.out.count("\n") == 1 and (
         f"lane gh905 exists: lane record {record}, worktree {wt}, branch gh905, Herdr workspace gh905 (") in c.err
         and c.o["unchanged"] == "record prompts head agents" and c.o["made"] == "")
 
@@ -4267,6 +4296,13 @@ def lane_start_files(f: Feature, sc: Path, store: Path, checkout: Path, clean: d
     ticket; the gh stand-in files issue 907 (one `issue create`, no --parent), the start prints it, then starts gh907."""
     body, brief = sc / "body.md", sc / "brief.md"
     body.write_text(LANE_BODY)
+    readings = sc / "home" / ".local" / "state" / "octo-feather" / "usage-readings.jsonl"
+    readings.unlink()
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        host = f"127.0.0.1:{sock.getsockname()[1]}"
+    lane_route(sc, host)
+    say(f"brake route {host}, a closed port; the box's readings removed, so no reading this week")
     f.run("files", "sh", "-c", 'cd "$1" && exec octo-feather-lane start --new "$2" --body-file "$3" --goal "$2" --outcome "$4"'
           ' --brief-file "$5"', "sh", str(checkout), LANE_NEW, str(body), "a scratch proof", str(brief))
     f.obs("files", "gh-creates", "\n".join(x for x in (store / "log").read_text().splitlines() if x.startswith("issue create")))
@@ -4277,8 +4313,11 @@ def lane_start_files(f: Feature, sc: Path, store: Path, checkout: Path, clean: d
     def ok(c: Case) -> bool:
         lines = c.out.splitlines()
         v = json.loads(c.o["issue-view-907"] or "{}")
-        return (c.code == 0 and len(lines) == 2 and lines[0] == "filed=907"
-                and re.fullmatch(r"key=gh907 pane=w\S+ issue=907", lines[1]) is not None
+        why = f"GET {host}/v1/models: [Errno 111] Connection refused"
+        return (c.code == 0 and len(lines) == 3 and lines[1] == "filed=907"
+                and lines[0] == f"usage: not read ({why}); no reading this week: the brake did not stop this start"
+                and not readings.exists() and LANE_KEY not in c.out + c.err
+                and re.fullmatch(r"key=gh907 pane=w\S+ issue=907", lines[2]) is not None
                 and c.o["gh-creates"] == f"issue create --title {LANE_NEW} --body-file {body}"
                 and (v.get("title"), v.get("body"), v.get("parent")) == (LANE_NEW, LANE_BODY, None)
                 and c.o["worktree"].strip() == "gh907")
@@ -4303,7 +4342,7 @@ def lane_start_sub_issue(f: Feature, w: CommsWorld, store: Path, checkout: Path)
     made += [x for x in new_calls if x.startswith(("workspace create", "tab create"))]
     made += ["prompt"] if (w.world / "prompts").read_text() != prompts else []
     f.obs("sub-issue", "made", "\n".join(made))
-    f.check("sub-issue", lambda c: c.code == 1 and c.out == "" and "ticket 908 is a sub-issue of 905" in c.err
+    f.check("sub-issue", lambda c: c.code == 1 and c.out.startswith("usage: ") and c.out.count("\n") == 1 and "ticket 908 is a sub-issue of 905" in c.err
             and c.o["made"] == "")
 
 

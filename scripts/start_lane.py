@@ -23,6 +23,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import NoReturn, cast
 
+import lane_brake
 from correction_lanes import DIRECTOR_LOG
 from handoff_log import encode
 from tracker_calls import gh, tracker
@@ -306,14 +307,22 @@ def current_kit(kit: Path, err: type[Exception]) -> None:
         raise err(msg)
 
 
-def read(ask: Ask, err: type[Exception]) -> Lane:
-    """Step 1: the lane's facts, each validated, nothing made."""
+def read(ask: Ask, lanes: Path, err: type[Exception]) -> Lane:
+    """Step 1: the lane's facts, each validated, nothing made; first the brake (lane_brake), its
+    line printed, unless a stopped start of the ticket is kept in LANES (a rerun, no new lane)."""
     director = os.environ.get("HERDR_PANE_ID", "")
     if not director:
         msg = "step read: no HERDR_PANE_ID: run the lane start from the director's pane"
         raise err(msg)
     checkout = Path(run(err, "read", ["git", "rev-parse", "--show-toplevel"]))
     repo = repository(err)
+    rerun = (
+        isinstance(ask.ticket, str)
+        and (lanes / f"{tracker('lane-key', ask.ticket, err=err).strip()}.start.json").exists()
+    )
+    if not rerun:
+        sys.stdout.write(lane_brake.brake(os.environ).line + "\n")
+        sys.stdout.flush()
     ticket = ask.ticket if isinstance(ask.ticket, str) else file_parent(ask.ticket, err)
     key = tracker("lane-key", ticket, err=err).strip()
     if not KEY.fullmatch(key):
@@ -491,7 +500,7 @@ def start(args: list[str], lanes: Path, err: type[Exception]) -> str:
     Every failure raises ERR naming its step and what the start made so far; a rerun continues
     from that step, each done one skipped (stopped, Kept)."""
     ask = parse(args, err)
-    lane = read(ask, err)
+    lane = read(ask, lanes, err)
     wt, top = lane.worktree, lane.checkout
     kept = stopped(lane, ask, lanes, err)
     facts = kept.facts

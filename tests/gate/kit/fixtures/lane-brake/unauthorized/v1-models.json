@@ -1,0 +1,10 @@
+{
+  "note": "Recorded by `python3 scripts/lane_brake.py record` (its own read) from the box's route at 2026-11-28T06:19:36Z: status, body and the date, content-type and anthropic-ratelimit-* headers verbatim; organization, workspace and request ids, and the messages body's id, replaced by `recorded`. Never hand-written.",
+  "request": "GET /v1/models",
+  "status": 401,
+  "headers": {
+    "content-type": "application/json; charset=utf-8",
+    "date": "Sat, 28 Nov 2026 06:19:36 GMT"
+  },
+  "body": "{\"error\":\"Invalid API key\"}"
+}

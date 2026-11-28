@@ -867,6 +867,28 @@ sent), or --absent STEP when it does not and the pane is not compacting (sent on
 with no unknown send is refused. Once the start finishes the file is gone, and a rerun
 is refused as any existing lane.
 
+The brake (spec issue-lifecycle #lanes-start, #boundary-lane-start-brake) runs once the kit, the director pane and
+the repository are read, before the ticket is read or filed, on every start but the rerun of a stopped one (its
+lanes/<key>.start.json there). It reads the Claude account's weekly use from the box's model route: Pi's config
+($PI_CODING_AGENT_DIR, else ~/.pi/agent), models.json providers.anthropic baseUrl and apiKey, the key resolved as Pi
+resolves it (a leading `!` runs the rest in the shell, its stdout trimmed; else a literal with $NAME and ${NAME} from
+the environment), never printed, logged or stored; then GET <baseUrl>/v1/models and one POST <baseUrl>/v1/messages,
+max_tokens 1, on the newest listed model whose id holds haiku (else the newest listed), 20 s each. The reading is that
+answer's anthropic-ratelimit-unified-7d*-utilization and -reset headers, one weekly window each (7d; 7d_opus or
+7d_sonnet when sent), and its Date header is now. Each reading is appended to
+${XDG_STATE_HOME:-~/.local/state}/octo-feather/usage-readings.jsonl, one line holding only that time and each window's
+utilization and reset. Each window is projected to its reset: the burn the higher of the week's average (the share
+over the time since the week began, the reset less 7 days, taken over no less than its first 6 hours) and the last
+hours' (from the oldest stored reading of the same window and reset at least 1 and at most 6 hours old; none, not
+counted), the course the share plus the burn to the reset. The tightest window's course is set against the line, 1
+less usage_reserve in the kit's gate-budget.toml (0.1 when unset), and printed before `key=...`: `usage: <window>
+<share> used at <Date> (<route host>), burn <rate>/h (week average <rate>/h, last 6h <rate>/h or none), reset <time>,
+course <share> at reset, under|over <line> ...` (a course over the line refuses nothing yet). When the usage cannot be
+read (no providers.anthropic route or key, a refused connection or a timeout, a non-2xx answer, no model listed, no
+Date, or no unified weekly limit headers: an API-key route, or a route to another provider) nothing is stored, it
+prints `usage: not read (<why>); no reading this week: the brake did not stop this start` (a reading of this week
+stored, by the box's clock, named in its place, not carried), and the start goes on.
+
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
 import functools, hashlib, importlib.machinery, importlib.util, json, os, re, shlex, subprocess, sys, tempfile, time
