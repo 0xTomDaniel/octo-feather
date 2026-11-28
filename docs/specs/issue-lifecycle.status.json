@@ -672,12 +672,22 @@
       "pr": null
     },
     "acceptance-lane-start-clear": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1359,
+      "record": "20261128T083135Z-def856e5",
+      "commit": "c973ad51152e3625622f5de44dd7d1f9c39ece1d",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
     },
     "acceptance-lane-start-unread": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 1359,
+      "record": "20261128T083135Z-d3a94da9",
+      "commit": "c973ad51152e3625622f5de44dd7d1f9c39ece1d",
+      "tests": [
+        "tests/gate/kit/lane_start.py"
+      ]
     },
     "acceptance-lane-start-carried": {
       "status": "planned",
