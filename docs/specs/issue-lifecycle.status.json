@@ -203,6 +203,18 @@
         "tests/lane-review-resolution.sh"
       ]
     },
+    "acceptance-review-wrapper-clean": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-review-wrapper-resolved": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-review-wrapper-refused": {
+      "status": "planned",
+      "pr": null
+    },
     "acceptance-merge-ask-evidence": {
       "status": "built",
       "pr": 49
