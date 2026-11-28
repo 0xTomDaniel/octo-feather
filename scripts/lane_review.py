@@ -15,10 +15,11 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
 import lane_cli
-import merge_ask
+import pr_git
+import pr_report
 from eval_grading import DEFAULT_TIMEOUT
 from lane_cli import KIT, Refuse, gh, pr_number, pr_view, take_repo
-from merge_ask import (
+from pr_report import (
     CHECK_SHAPE,
     COMMENT_URL,
     HEAD_LINE,
@@ -37,8 +38,8 @@ if TYPE_CHECKING:
 no_traceback = cast("Callable[[Any], Callable[[list[str]], int]]", lane_cli.no_traceback)
 
 
-git = functools.partial(merge_ask.git, err=Refuse)   # the lane's git calls raise its own Refuse (merge_ask.git)
-resolution_files = functools.partial(merge_ask.resolution_files, err=Refuse)   # verdict, resolution (merge_ask)
+git = functools.partial(pr_git.git, err=Refuse)   # the lane's git calls raise its own Refuse (pr_git.git)
+resolution_files = functools.partial(pr_git.resolution_files, err=Refuse)   # verdict, resolution (pr_git)
 # --- verdict and merge-ask (issue #48, spec issue-lifecycle #acceptance-merge-ask-evidence) ---
 
 # One comment per reviewed resolution of a main merge, naming the merge (the rule: issue-lifecycle #lanes-one-head).
@@ -87,7 +88,7 @@ def cmd_fields(args: list[str]) -> int:
         o = OWNED.fullmatch(rule)
         checks.append({"path": path, "rule": o.group(1), "owner": o.group(2).strip(), "reads": reads, "class": kind})
     owners, onone, owhy = owner_lines(report)
-    decided, cleared, dwhy = merge_ask.decision_lines(report)
+    decided, cleared, dwhy = pr_report.decision_lines(report)
     other = {}
     for l in outside(report):
         m = FIELD_LINE.match(l)
@@ -99,12 +100,12 @@ def cmd_fields(args: list[str]) -> int:
     return 0
 
 
-pr_base = merge_ask.pr_base   # the base a PR's commits are read against (its docstring)
+pr_base = pr_git.pr_base   # the base a PR's commits are read against (its docstring)
 
 
 @no_traceback
 def cmd_verdict(args: list[str]) -> int:
-    from merge_ask import pr_commits
+    from pr_git import pr_commits
     args, repo = take_repo(args)
     res = "--resolution" in args
     args = [a for a in args if a != "--resolution"]
@@ -126,7 +127,7 @@ def cmd_verdict(args: list[str]) -> int:
         raise Refuse(f"report gives verdicts that disagree ({', '.join(vs)}): keep one `Verdict:` line in the verdict reader's scope (scope: .agents/skills/code-review/SKILL.md (Verdict step)), the reviewer's final verdict, then rerun")
     verdict = vs[-1]
     cls, why = check_lines(report)
-    decided, cleared, dwhy = merge_ask.decision_lines(report)
+    decided, cleared, dwhy = pr_report.decision_lines(report)
     why += dwhy
     if why:
         raise Refuse("; ".join(why) + "; fix the report, then rerun")
@@ -134,8 +135,8 @@ def cmd_verdict(args: list[str]) -> int:
     if proxy and verdict == "clear":
         raise Refuse(f"report says `Verdict: clear` with a proxy check ({proxy[0]}): a proxy check blocks "
                      "(docs/adr/0008); make it a blocking finding and `Verdict: blocking`, then rerun")
-    covers = merge_ask.ruling_covers(report)
-    if bad := [u for u in covers if not merge_ask.ruling_form(u)]:
+    covers = pr_report.ruling_covers(report)
+    if bad := [u for u in covers if not pr_report.ruling_form(u)]:
         raise Refuse(f"`Ruling covers: {bad[0]}` is not `Ruling covers: <the URL of the GitHub issue or issue comment "
                      "where the owner's ruling is written>`, as the call links it; fix the report, then rerun")
     d = pr_view(pr, "headRefOid,baseRefName,comments", repo)
@@ -159,11 +160,11 @@ def cmd_verdict(args: list[str]) -> int:
     posted = mine[0]["body"] if len(mine) == 1 else ""
     rounds = review_rounds(report, judged, base, posted, verdict, tuple(cls))
     lines = [ln for n, r in enumerate(rounds, 1) for ln in r.line(n)]
-    was = merge_ask.decision_lines(posted.split(f"\n{merge_ask.ROUNDS}", 1)[0])   # kept: only the check lowers a tier
+    was = pr_report.decision_lines(posted.split(f"\n{pr_report.ROUNDS}", 1)[0])   # kept: only the check lowers a tier
     carried = [*dict.fromkeys([*was[0], *decided])] + [f"Opt-out cleared: {c}" for c in dict.fromkeys([*was[1], *cleared])]
     body = (f"{MARKER}\n## Code review verdict\n\nHead: {judged}\nPR head: {head}\nVerdict: {verdict}\n"
-            + "".join(f"{c}\n" for c in [*merge_ask.check_set(rounds), *carried]) + "".join(f"Ruling covers: {u}\n" for u in covers)
-            + f"\n{merge_ask.ROUNDS}\n\n" + "".join(f"{x}\n" for x in lines)
+            + "".join(f"{c}\n" for c in [*pr_report.check_set(rounds), *carried]) + "".join(f"Ruling covers: {u}\n" for u in covers)
+            + f"\n{pr_report.ROUNDS}\n\n" + "".join(f"{x}\n" for x in lines)
             + f"\n### Findings\n\n{report.strip()}\n")
     out, said = post_comment(pr, repo, d["comments"], MARKER, body, "verdict")
     print(f"verdict: {said} ({verdict}, head {judged[:12]})", file=sys.stderr)
@@ -175,7 +176,7 @@ RANGE_LINE = re.compile(r"^Range:[ \t]*(.*?)\s*$")
 RANGE = re.compile(r"`?([0-9a-fA-F]{7,40})\.\.([0-9a-fA-F]{7,40})`?")
 
 
-def review_rounds(report: str, judged: str, base: str, posted: str, verdict: str, checks: tuple[str, ...]) -> list[merge_ask.Round]:
+def review_rounds(report: str, judged: str, base: str, posted: str, verdict: str, checks: tuple[str, ...]) -> list[pr_report.Round]:
     """The rounds of POSTED (the PR's verdict comment, '' for none) with the review REPORT of JUDGED (its VERDICT and
     CHECKS) added, its Range checked against git and BASE, the PR's base branch (#1220; the rules: --help, verdict,
     Review rounds)."""
@@ -201,13 +202,13 @@ def review_rounds(report: str, judged: str, base: str, posted: str, verdict: str
     if git("merge-base", "--is-ancestor", start, end, ok=(0, 1))[0]:
         raise Refuse(f"Range {said[0]}: {start[:12]} is not an ancestor of {end[:12]}: a review diffs from a commit "
                      "before the head it reviews; fix the report's Range, then rerun")
-    rounds = merge_ask.posted_rounds(posted)[0]
+    rounds = pr_report.posted_rounds(posted)[0]
     for k, r in enumerate(rounds):   # a legacy Head as a commit here, so a delta may start on it
         if r.kind == "legacy":
             rc, sha = git("rev-parse", "--verify", "-q", f"{r.end}^{{commit}}", ok=(0, 1, 128))
             rounds[k] = dataclasses.replace(r, end=sha.strip() if not rc else r.end)
     last = rounds[-1] if rounds else None
-    kind: merge_ask.Kind
+    kind: pr_report.Kind
     if last and (last.start, last.end) == (start, end):   # a rerun of the last round's review
         kind, rounds = last.kind, rounds[:-1]
     elif last and start == last.end:
@@ -220,7 +221,7 @@ def review_rounds(report: str, judged: str, base: str, posted: str, verdict: str
         raise Refuse(f"Range {said[0]} starts neither on {base} (a full round: the lane from main) nor {at} (a delta "
                      f"round): post the round that reviewed up to {start[:12]} first, or review the lane from "
                      f"{fork} ({base}) and post that report")
-    return [*rounds, merge_ask.Round(start, end, kind, verdict, checks)]
+    return [*rounds, pr_report.Round(start, end, kind, verdict, checks)]
 
 
 def merge_resolution(merge: str) -> tuple[str, list[str]]:

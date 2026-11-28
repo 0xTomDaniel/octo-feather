@@ -1,9 +1,8 @@
 Seeded defect: a full gate run within its budget reads over it, and one over reads within (comms #acceptance-report-gate-budget).
-diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
-index a5b4b9e4..58db84ff 100755
---- a/scripts/merge_ask.py
-+++ b/scripts/merge_ask.py
-@@ -1727,7 +1727,7 @@ def budget_lines(  # noqa: PLR0913, PLR0917  the run, its trend, the budget and
+diff --git a/scripts/gate_time.py b/scripts/gate_time.py
+--- a/scripts/gate_time.py
++++ b/scripts/gate_time.py
+@@ -149,7 +149,7 @@
              f"{run}: "
              + (
                  f"OVER BUDGET by {secs(t - b)}"

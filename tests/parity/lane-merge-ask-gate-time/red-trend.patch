@@ -1,9 +1,8 @@
 Seeded defect: a red full run joins the gate time's trend (spec #lanes-checkpoints).
-diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
-index a5b4b9e4..967bb99c 100755
---- a/scripts/merge_ask.py
-+++ b/scripts/merge_ask.py
-@@ -1695,7 +1695,7 @@ def passed_full(rows: list[tuple[int, Run]], heads: set[str]) -> list[Run]:
+diff --git a/scripts/gate_time.py b/scripts/gate_time.py
+--- a/scripts/gate_time.py
++++ b/scripts/gate_time.py
+@@ -117,7 +117,7 @@
          d
          for _, d in rows
          if d.get("tier") == "full"

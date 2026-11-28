@@ -10,4 +10,4 @@ new = "tests/gate/kit/test_merge_ask.py::test_merge_ask_no_criterion_lane"
 # How the clean old run shows it ran each file a defect patches (lever.py --help): octo-feather-lane, run by the kit
 # venv's python, imports it: coverage.py measures it.
 [ran]
-"scripts/merge_ask.py" = "coverage"
+"scripts/pr_git.py" = "coverage"

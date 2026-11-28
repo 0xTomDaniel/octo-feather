@@ -9,5 +9,5 @@ new = "tests/gate/kit/test_lane_merge_ask.py"
 
 # How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit script run by the kit venv's python: coverage.py measures it.
 [ran]
-"scripts/octo-feather-lane" = "coverage"
 "scripts/merge_ask.py" = "coverage"
+"scripts/pr_git.py" = "coverage"

@@ -17,7 +17,7 @@ from typing import cast
 import tracker_calls
 from handoff_log import encode, read_log
 from lane_cli import KIT, Refuse, Unchecked, dtm, q
-from merge_ask import OWNED, markdown
+from pr_report import OWNED, markdown
 from tracker_calls import issue_view, key_order, tracker
 
 GATE = re.compile(r"just\s+check(-[a-z-]+)?")

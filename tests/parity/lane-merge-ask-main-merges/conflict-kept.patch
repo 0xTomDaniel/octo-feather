@@ -1,9 +1,8 @@
 Seeded defect: a main merge that resolved a conflict keeps the qc verdict (spec #lanes-one-head).
-diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
-index a5b4b9e4..40f851a5 100755
---- a/scripts/merge_ask.py
-+++ b/scripts/merge_ask.py
-@@ -1360,7 +1360,7 @@ def head_proof(  # noqa: C901, PLR0912, PLR0913, PLR0915  one branch per commit
+diff --git a/scripts/pr_git.py b/scripts/pr_git.py
+--- a/scripts/pr_git.py
++++ b/scripts/pr_git.py
+@@ -384,7 +384,7 @@
              )
              if (m.conflict or m.beyond is not None) and resolved is not None and c in resolved:
                  reviewed[c] = list(m.resolution)

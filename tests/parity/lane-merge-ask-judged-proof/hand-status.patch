@@ -1,9 +1,8 @@
 Seeded defect: a hand edit of the status file keeps the qc verdict (spec #lanes-one-head).
-diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
-index a5b4b9e4..5e77a131 100755
---- a/scripts/merge_ask.py
-+++ b/scripts/merge_ask.py
-@@ -1335,7 +1335,7 @@ def head_proof(  # noqa: C901, PLR0912, PLR0913, PLR0915  one branch per commit
+diff --git a/scripts/pr_git.py b/scripts/pr_git.py
+--- a/scripts/pr_git.py
++++ b/scripts/pr_git.py
+@@ -359,7 +359,7 @@
                      f"not only the status file{'s' * (len(status) > 1)} qc writes "
                      f"({', '.join(sorted(status))}): {rerun}"
                  )

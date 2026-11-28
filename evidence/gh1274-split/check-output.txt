@@ -1,9 +1,10 @@
 source: ok: 108 moved defs: text (new modules) or ast (formatted) is the hub's with the printed rewrites
 names: ok: 1185 global reads in 108 moved defs resolve to the same object as in the hub; __file__ readers outside the tables: lanes_dir only (its directory, same dir)
 help: ok: --help, no arguments (stderr, exit 64) and start -h byte-identical to the pin
-lazy: ok: dispatcher imports lane_cli and the stdlib only; each of 21 commands loads only its module, plus merge_ask.py as a library where its module imports it (design section 6, commit 4: reflect, verdict, fields, ci-start, resolution, judge, tickets, done, ticket, seam, skills, spend, report, intake); `stale x` run loads post_merge alone
-launch: ok: pm_unit_run, the --map-job branch and pm_unit_start (unit, stop hook, fallback) launch /home/exedev/src/octo-feather-gh1274-1333/scripts/octo-feather-lane
-baseline: ok: ruff: hub 1761 -> split 1737; per rule: E401 4->3, E501 1065->1035, E702 35->31, I001 4->3, PLC0415 17->29
+lazy: ok: lane-dispatch: ok (3 imports); each of 21 commands loads only its module, merge_ask.py by merge-ask alone (#1335); `stale x` run loads post_merge alone
+launch: ok: pm_unit_run, the --map-job branch and pm_unit_start (unit, stop hook, fallback) launch /home/exedev/src/octo-feather-gh1274-1335/scripts/octo-feather-lane
+baseline: ok: ruff: hub 1761 -> split 1735; per rule: E401 4->3, E501 1065->1034, E702 35->31, I001 4->3, PLC0415 17->28
 baseline: ok: basedpyright: hub 447 -> split 446; per rule: reportOptionalMemberAccess 4->3
 baseline: ok: PLC0415 may rise by the 12 call-site imports only; no other rule may rise
-tests: ok: 33 files under tests/, all tests/parity/
+tests: ok: 33 files under tests/ in the split's commits (#1333, #1335), all tests/parity/
+helpers: ok: 71 moved statements, merge_ask.py's text unchanged; every other changed line of ci_start.py, lane_reflection.py, lane_reporting.py, lane_review.py, lane_ticketing.py, merge_ask.py, post_merge.py printed or in a top import block; 532 names resolve to the same object before and after; lane_review, lane_ticketing, lane_reporting, lane_reflection, ci_start import no merge_ask; merge_ask.py imports no lane_reporting

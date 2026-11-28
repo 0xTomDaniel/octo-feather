@@ -20,9 +20,9 @@ from correction_lanes import (
     lane_logs,
 )
 from correction_lanes import file_corrections as correction_filer
+from gate_time import stamp
 from handoff_log import read_log
 from lane_cli import Refuse, lane_name, lanes_dir, reflect_module
-from merge_ask import stamp
 
 if TYPE_CHECKING:
     from collections.abc import Callable

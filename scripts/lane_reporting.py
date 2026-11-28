@@ -10,11 +10,11 @@ import sys
 from pathlib import Path
 from typing import cast
 
-import merge_ask
+import gate_time
 from correction_lanes import DIRECTOR_LOG
+from gate_time import BUDGET, budget_lines, budget_parse, numbered_jsonl, passed_full, stamp
 from handoff_log import read_log
 from lane_cli import NAME, Refuse, dtm, gh, lanes_dir, pr_view, reflect_module, state_dir
-from merge_ask import BUDGET, budget_lines, budget_parse, numbered_jsonl, passed_full, stamp
 from tracker_calls import utc
 
 # --- spend (spec spend, issue #185) ---
@@ -390,7 +390,7 @@ def skill_reach(now: dtm.datetime, unread: list[str]) -> list[str]:
 
 class ReportSources:
     """The state dir's spend ledger and gate run trend, read once, and each repository's default-branch commits, read once."""
-    LEDGER, TREND = "spend.jsonl", "check-runs.jsonl"
+    LEDGER, TREND = "spend.jsonl", gate_time.TREND
 
     def __init__(self, state: Path, unread: list[str]):
         self.unread, self.main = unread, {}
@@ -540,7 +540,7 @@ def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None
             rollup = [c for c in d["statusCheckRollup"] or [] if isinstance(c, dict)]
             head = str(d["headRefOid"])[:12]
             out.append(f"  pr: #{pr} {d['state']} {'draft' if d['isDraft'] else 'ready'} head {head} checks: {check_results(rollup)}")
-            check_waits = [f"  waits: check {c} on head {head}" for c in merge_ask.bad_checks(cast("list[dict[str, object]]", rollup))[1]]
+            check_waits = [f"  waits: check {c} on head {head}" for c in gate_time.bad_checks(cast("list[dict[str, object]]", rollup))[1]]
             pr_heads = {c["oid"] for c in d["commits"] or [] if isinstance(c, dict) and "oid" in c}
             src.repo_heads[repo] |= pr_heads
         except (Refuse, KeyError, TypeError, AttributeError) as e:

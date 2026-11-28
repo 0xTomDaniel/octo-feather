@@ -2636,7 +2636,7 @@ def merge_allowed(pr: int, head: str, repo: str | None, lane: str) -> str:
     allowed). The PR's full head, the one the merge pins; refuses naming why."""  # noqa: E501
     import merge_ask  # noqa: PLC0415
     from merge_ask import ask_of  # noqa: PLC0415
-    from merge_ask import lane_git as git  # noqa: PLC0415
+    from pr_git import lane_git as git  # noqa: PLC0415
 
     d = cast("dict[str, object]", lane_pr_view(pr, "state,headRefOid", repo))
     oid = str(d["headRefOid"])

@@ -1,9 +1,8 @@
 Seeded defect: a recorded full pass carries over any code commit after it (spec #lanes-checkpoints).
-diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
-index a5b4b9e4..859b177e 100755
---- a/scripts/merge_ask.py
-+++ b/scripts/merge_ask.py
-@@ -1514,7 +1514,7 @@ def _carries(
+diff --git a/scripts/pr_git.py b/scripts/pr_git.py
+--- a/scripts/pr_git.py
++++ b/scripts/pr_git.py
+@@ -462,7 +462,7 @@
          ]
      else:
          try:

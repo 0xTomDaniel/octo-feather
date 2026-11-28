@@ -1,9 +1,8 @@
 Seeded defect: a main merge that changed the lane's own diff keeps the qc verdict (spec #lanes-one-head).
-diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
-index a5b4b9e4..ad25ed77 100755
---- a/scripts/merge_ask.py
-+++ b/scripts/merge_ask.py
-@@ -1382,7 +1382,7 @@ def head_proof(  # noqa: C901, PLR0912, PLR0913, PLR0915  one branch per commit
+diff --git a/scripts/pr_git.py b/scripts/pr_git.py
+--- a/scripts/pr_git.py
++++ b/scripts/pr_git.py
+@@ -406,7 +406,7 @@
          moved = sorted(
              p
              for p in before.keys() | after.keys()

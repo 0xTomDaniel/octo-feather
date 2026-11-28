@@ -1,9 +1,8 @@
 Seeded defect: a status context in ERROR passes (spec #lanes-one-head: every check on the head passes).
-diff --git a/scripts/merge_ask.py b/scripts/merge_ask.py
-index 575dba8d..e0f00f92 100755
---- a/scripts/merge_ask.py
-+++ b/scripts/merge_ask.py
-@@ -412,7 +412,7 @@ def bad_checks(rollup: list[dict[str, object]]) -> tuple[list[str], list[str]]:
+diff --git a/scripts/gate_time.py b/scripts/gate_time.py
+--- a/scripts/gate_time.py
++++ b/scripts/gate_time.py
+@@ -214,7 +214,7 @@
          if c.get("__typename") == "StatusContext" or ("state" in c and "conclusion" not in c):
              s = (c.get("state") or "").upper()
              (

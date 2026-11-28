@@ -1,0 +1,47 @@
+reached: 71 names, from 29 the groups read (lane_review: 20, lane_ticketing: 2, lane_reporting: 7, lane_reflection: 1, ci_start: 3)
+reached: pr_git.py: Unread MERGE_PARENTS Merge Commit Git Gate _Unread pr_base git resolution_files gate _git_facts _patch _lane_diff _merge _status _gate_facts _RefusedError head_proof _AbortError _fix _carries full_pass_of full_pass QC_COMMIT lane_git pr_commits
+reached: pr_report.py: MARKER COMMENT_URL VERDICT_LINE HEAD_LINE CHECK_LINE CHECK_SHAPE OWNED CHECKS_LINE CHECK_FORM FENCE markdown cut_comments outside verdicts check_lines CLEARED_LINE decision_lines ROUNDS ROUND_LINE ROUND_CHECK Kind Round posted_rounds check_set SHA_NAMED OWNER_DECISION RULING_COVERS ruling_covers ruling_form _spec_status _SpecStatus
+reached: gate_time.py: BUDGET BUDGET_TREND SLOWEST Budget Run numbered_jsonl budget_parse total passed_full secs budget_lines stamp bad_checks
+ci_start.py:22: `git = functools.partial(merge_ask.git, err=Refuse)   # the lane's git calls raise its own Refuse (merge_ask.git)` -> `git = functools.partial(pr_git.git, err=Refuse)   # the lane's git calls raise its own Refuse (pr_git.git)`
+ci_start.py:23: `full_pass = functools.partial(merge_ask.full_pass, err=Refuse)   # ci-start's full pass (merge_ask, Interface)` -> `full_pass = functools.partial(pr_git.full_pass, err=Refuse)   # ci-start's full pass (pr_git)`
+ci_start.py:24: `pr_base = merge_ask.pr_base   # the base a PR's commits are read against (its docstring)` -> `pr_base = pr_git.pr_base   # the base a PR's commits are read against (its docstring)`
+ci_start.py:12: `import merge_ask` -> `import pr_git`
+lane_reflection.py:25: `from merge_ask import stamp` -> `from gate_time import stamp`
+lane_reporting.py:543: `check_waits = [f"  waits: check {c} on head {head}" for c in merge_ask.bad_checks(cast("list[dict[str, object]]", rollup))[1]]` -> `check_waits = [f"  waits: check {c} on head {head}" for c in gate_time.bad_checks(cast("list[dict[str, object]]", rollup))[1]]`
+lane_reporting.py:17: `from merge_ask import BUDGET, budget_lines, budget_parse, numbered_jsonl, passed_full, stamp` -> `from gate_time import BUDGET, budget_lines, budget_parse, numbered_jsonl, passed_full, stamp`
+lane_reporting.py:13: `import merge_ask` -> `import gate_time`
+lane_review.py:40: `git = functools.partial(merge_ask.git, err=Refuse)   # the lane's git calls raise its own Refuse (merge_ask.git)` -> `git = functools.partial(pr_git.git, err=Refuse)   # the lane's git calls raise its own Refuse (pr_git.git)`
+lane_review.py:41: `resolution_files = functools.partial(merge_ask.resolution_files, err=Refuse)   # verdict, resolution (merge_ask)` -> `resolution_files = functools.partial(pr_git.resolution_files, err=Refuse)   # verdict, resolution (pr_git)`
+lane_review.py:90: `decided, cleared, dwhy = merge_ask.decision_lines(report)` -> `decided, cleared, dwhy = pr_report.decision_lines(report)`
+lane_review.py:102: `pr_base = merge_ask.pr_base   # the base a PR's commits are read against (its docstring)` -> `pr_base = pr_git.pr_base   # the base a PR's commits are read against (its docstring)`
+lane_review.py:129: `decided, cleared, dwhy = merge_ask.decision_lines(report)` -> `decided, cleared, dwhy = pr_report.decision_lines(report)`
+lane_review.py:137: `covers = merge_ask.ruling_covers(report)` -> `covers = pr_report.ruling_covers(report)`
+lane_review.py:138: `if bad := [u for u in covers if not merge_ask.ruling_form(u)]:` -> `if bad := [u for u in covers if not pr_report.ruling_form(u)]:`
+lane_review.py:162: `was = merge_ask.decision_lines(posted.split(f"\n{merge_ask.ROUNDS}", 1)[0])   # kept: only the check lowers a tier` -> `was = pr_report.decision_lines(posted.split(f"\n{pr_report.ROUNDS}", 1)[0])   # kept: only the check lowers a tier`
+lane_review.py:165: `+ "".join(f"{c}\n" for c in [*merge_ask.check_set(rounds), *carried]) + "".join(f"Ruling covers: {u}\n" for u in covers)` -> `+ "".join(f"{c}\n" for c in [*pr_report.check_set(rounds), *carried]) + "".join(f"Ruling covers: {u}\n" for u in covers)`
+lane_review.py:166: `+ f"\n{merge_ask.ROUNDS}\n\n" + "".join(f"{x}\n" for x in lines)` -> `+ f"\n{pr_report.ROUNDS}\n\n" + "".join(f"{x}\n" for x in lines)`
+lane_review.py:178: `def review_rounds(report: str, judged: str, base: str, posted: str, verdict: str, checks: tuple[str, ...]) -> list[merge_ask.Round]:` -> `def review_rounds(report: str, judged: str, base: str, posted: str, verdict: str, checks: tuple[str, ...]) -> list[pr_report.Round]:`
+lane_review.py:204: `rounds = merge_ask.posted_rounds(posted)[0]` -> `rounds = pr_report.posted_rounds(posted)[0]`
+lane_review.py:210: `kind: merge_ask.Kind` -> `kind: pr_report.Kind`
+lane_review.py:223: `return [*rounds, merge_ask.Round(start, end, kind, verdict, checks)]` -> `return [*rounds, pr_report.Round(start, end, kind, verdict, checks)]`
+lane_review.py:107: `from merge_ask import pr_commits` -> `from pr_git import pr_commits`
+lane_review.py:21: `from merge_ask import ( CHECK_SHAPE, COMMENT_URL, HEAD_LINE, MARKER, OWNED, check_lines, outside, verdicts, )` -> `from pr_report import CHECK_SHAPE, COMMENT_URL, HEAD_LINE, MARKER, OWNED, check_lines, outside, verdicts`
+lane_review.py:18: `import merge_ask` -> `import pr_git | import pr_report`
+lane_ticketing.py:20: `from merge_ask import OWNED, markdown` -> `from pr_report import OWNED, markdown`
+post_merge.py:2639: `from merge_ask import lane_git as git # noqa: PLC0415` -> `from pr_git import lane_git as git  # noqa: PLC0415`
+pr_git.py: 27 statements from merge_ask.py, text unchanged; imports: from dataclasses import dataclass; from lane_cli import Refuse; from tracker_calls import KIT; from typing import cast; import dataclasses; import functools; import hashlib; import json; import os; import re; import subprocess; import sys; __all__: Commit, Gate, Git, Merge, QC_COMMIT, Unread, _AbortError, _RefusedError, _Unread, _gate_facts, _git_facts, full_pass, full_pass_of, git, head_proof, pr_base, pr_commits, resolution_files
+pr_report.py: 31 statements from merge_ask.py, text unchanged; imports: from dataclasses import dataclass; from tracker_calls import KIT; from typing import Literal, Protocol, cast; import dataclasses; import functools; import importlib.machinery; import importlib.util; import re; __all__: CHECK_FORM, CHECK_SHAPE, COMMENT_URL, HEAD_LINE, Kind, MARKER, OWNER_DECISION, Round, _spec_status, check_lines, check_set, decision_lines, posted_rounds, ruling_covers, verdicts
+gate_time.py: the section comment above BUDGET goes along (its whole section does)
+gate_time.py: read in type strings only, imported under TYPE_CHECKING: import datetime as dt
+gate_time.py: 13 statements from merge_ask.py, text unchanged; imports: from pathlib import Path; from tracker_calls import utc; from typing import cast; import datetime as dt; import json; import statistics; import tomllib; __all__: BUDGET, TREND, bad_checks, budget_lines, budget_parse, numbered_jsonl, passed_full, stamp
+merge_ask.py: `missing` item; `verdict` and `fields` share the review comment's and the report's parsers below, and` -> `missing` item; `verdict` and `fields` share the review comment's and the report's parsers, and `verd`
+merge_ask.py: `Shared with octo-feather-lane's other commands: bad_checks (lane status), check_runs, git, resolutio` -> `Shared with octo-feather-lane's other commands from small modules this one imports (#1335), which th`
+merge_ask.py: `from lane_reporting import ReportSources # noqa: PLC0415` -> ``
+merge_ask.py: `trend=state_dir() / ReportSources.TREND,` -> `trend=state_dir() / TREND,`
+merge_ask.py:126: `from typing import Any, Literal, NamedTuple, ParamSpec, Protocol, TypedDict, TypeVar, cast` -> `from typing import Any, NamedTuple, ParamSpec, Protocol, TypedDict, TypeVar, cast`: the code left no longer reads the rest
+merge_ask.py:119: `import statistics` -> `(removed)`: the code left no longer reads the rest
+merge_ask.py:111: `import hashlib` -> `(removed)`: the code left no longer reads the rest
+merge_ask.py:110: `import functools` -> `(removed)`: the code left no longer reads the rest
+merge_ask.py: imports `from gate_time import BUDGET, TREND, bad_checks, budget_lines, budget_parse, numbered_jsonl, passed_full, stamp | from pr_git import QC_COMMIT, Commit, Gate, Git, Merge, Unread, _AbortError, _RefusedError, _Unread, _gate_facts, _git_facts, full_pass, full_pass_of, git, head_proof, pr_base, pr_commits, resolution_files | from pr_report import CHECK_FORM, CHECK_SHAPE, COMMENT_URL, HEAD_LINE, MARKER, OWNER_DECISION, Kind, Round, _spec_status, check_lines, check_set, decision_lines, posted_rounds, ruling_covers, verdicts`
+lane_reporting.py: `LEDGER, TREND = "spend.jsonl", "check-runs.jsonl"` -> `LEDGER, TREND = "spend.jsonl", gate_time.TREND`
+baseline: basedpyright entries moved to ./scripts/lane_reflection.py, ./scripts/lane_reporting.py, ./scripts/lane_review.py, ./scripts/lane_ticketing.py, ./scripts/merge_ask.py

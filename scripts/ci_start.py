@@ -9,7 +9,7 @@ import time
 from typing import TYPE_CHECKING, Any, cast
 
 import lane_cli
-import merge_ask
+import pr_git
 from lane_cli import KIT, Refuse, gh, pr_number, pr_view, take_repo
 
 if TYPE_CHECKING:
@@ -19,9 +19,9 @@ if TYPE_CHECKING:
 no_traceback = cast("Callable[[Any], Callable[[list[str]], int]]", lane_cli.no_traceback)
 
 
-git = functools.partial(merge_ask.git, err=Refuse)   # the lane's git calls raise its own Refuse (merge_ask.git)
-full_pass = functools.partial(merge_ask.full_pass, err=Refuse)   # ci-start's full pass (merge_ask, Interface)
-pr_base = merge_ask.pr_base   # the base a PR's commits are read against (its docstring)
+git = functools.partial(pr_git.git, err=Refuse)   # the lane's git calls raise its own Refuse (pr_git.git)
+full_pass = functools.partial(pr_git.full_pass, err=Refuse)   # ci-start's full pass (pr_git)
+pr_base = pr_git.pr_base   # the base a PR's commits are read against (its docstring)
 
 
 @no_traceback
